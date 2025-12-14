@@ -4,18 +4,63 @@
  * Comprehensive regex patterns for detecting various types of observables
  * in text content. These patterns are designed to be accurate while
  * minimizing false positives.
+ * 
+ * Also supports defanged indicators (e.g., example[.]com, hxxp://, 192[.]168[.]1[.]1)
  */
 
 import type { ObservableType, HashType } from '../types';
 
 // ============================================================================
+// Defanging/Refanging Utilities
+// ============================================================================
+
+/**
+ * Refang a defanged indicator - convert it back to normal format
+ * Used to convert detected defanged indicators to their real form for OpenCTI lookup
+ * 
+ * Common defanging patterns:
+ * - [.] or (.) or {.} → .
+ * - [@] or (@) or {@} → @
+ * - hxxp:// or hXXp:// → http://
+ * - hxxps:// or hXXps:// → https://
+ * - [://] or (:/) → ://
+ * - [/] → /
+ */
+export function refangIndicator(value: string): string {
+  return value
+    // Replace bracketed/parenthesized/braced dots: [.] (.) {.}
+    .replace(/\[\.\]|\(\.\)|\{\.\}/g, '.')
+    // Replace bracketed/parenthesized/braced at signs: [@] (@) {@}
+    .replace(/\[@\]|\(@\)|\{@\}/g, '@')
+    // Replace hxxp/hXXp variants with http
+    .replace(/hxxps?:\/\//gi, (match) => match.toLowerCase().replace('xx', 'tt'))
+    .replace(/h\[xx\]ps?:\/\//gi, (match) => match.toLowerCase().replace('[xx]', 'tt'))
+    // Replace [://] or (:/) with ://
+    .replace(/\[:\/\/\]|\(:\/\)/g, '://')
+    // Replace [/] or (/) with /
+    .replace(/\[\/\]|\(\/\)/g, '/')
+    // Replace meow with http (another common defang)
+    .replace(/^meow:\/\//gi, 'http://')
+    // Remove any remaining square brackets that might wrap parts
+    .replace(/\[([^\]]+)\]/g, '$1');
+}
+
+/**
+ * Check if a value appears to be defanged
+ */
+export function isDefanged(value: string): boolean {
+  return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]/i.test(value);
+}
+
+// ============================================================================
 // IP Address Patterns
 // ============================================================================
 
-// IPv4: Standard dotted decimal notation
+// IPv4: Standard dotted decimal notation AND defanged versions
 // Matches: 192.168.1.1, 10.0.0.1, 255.255.255.255
+// Defanged: 192[.]168[.]1[.]1, 192(.)168(.)1(.)1
 // Excludes: Version numbers like 1.2.3.4 when preceded by 'v' or followed by common extensions
-export const IPV4_PATTERN = /(?<![.\d\w])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![.\d]|\.(?:js|css|html|php|asp|json|xml|txt|pdf|doc|exe|dll|zip|tar|gz|png|jpg|gif|svg|woff|ttf))/g;
+export const IPV4_PATTERN = /(?<![.\d\w])(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.|\[\.\]|\(\.\)|\{\.\})){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?![.\d\]]|\.(?:js|css|html|php|asp|json|xml|txt|pdf|doc|exe|dll|zip|tar|gz|png|jpg|gif|svg|woff|ttf))/g;
 
 // IPv6: Full and compressed formats
 // Matches: 2001:0db8:85a3:0000:0000:8a2e:0370:7334, ::1, fe80::1
@@ -25,22 +70,31 @@ export const IPV6_PATTERN = /(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9
 // Domain and URL Patterns
 // ============================================================================
 
-// Domain name: Standard domain with TLD
-// Matches: example.com, sub.domain.co.uk
-// Excludes: Common file paths and partial matches
-export const DOMAIN_PATTERN = /(?<![.\w@/])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|net|org|edu|gov|mil|int|co|io|ai|app|dev|cloud|tech|info|biz|name|pro|museum|aero|coop|travel|jobs|mobi|tel|asia|cat|xxx|post|mail|onion|bit|i2p|eth|crypto|nft|web3|zil|crypto|luxe|xyz|online|site|website|store|shop|blog|news|media|agency|studio|design|digital|marketing|consulting|solutions|services|systems|network|technology|software|hardware|security|cyber|data|analytics|platform|exchange|finance|bank|money|capital|fund|invest|trade|market|forex|crypto|token|coin|chain|block|ledger|wallet|pay|cash|credit|debit|loan|insurance|health|medical|pharma|bio|life|care|clinic|hospital|doctor|nurse|patient|therapy|fitness|gym|sport|game|play|music|video|photo|art|design|fashion|beauty|food|restaurant|cafe|bar|hotel|travel|tour|flight|car|auto|moto|bike|boat|ship|plane|train|bus|taxi|uber|lyft|amazon|google|apple|microsoft|facebook|twitter|instagram|linkedin|youtube|tiktok|snapchat|whatsapp|telegram|signal|discord|slack|zoom|teams|meet|webex|skype|outlook|gmail|yahoo|hotmail|icloud|proton|tutanota|fastmail|zoho|mailchimp|sendgrid|mailgun|postmark|ses|sns|sqs|s3|ec2|rds|lambda|cloudfront|route53|elb|alb|nlb|vpc|iam|kms|ssm|secrets|parameter|config|cloudwatch|cloudtrail|guardduty|inspector|macie|securityhub|detective|artifact|codepipeline|codebuild|codecommit|codedeploy|codestar|cloud9|cloudshell|amplify|appsync|cognito|pinpoint|lex|polly|rekognition|textract|comprehend|translate|transcribe|personalize|forecast|fraud|lookout|panorama|robomaker|ground|iot|greengrass|freertos|sitewise|twinmaker|fleetwise|healthlake|omics|braket|deadline|simspace|nimble|thinkbox|lumberyard|gamelift|gamesparks|uk|us|eu|de|fr|it|es|nl|be|at|ch|pl|cz|sk|hu|ro|bg|hr|si|rs|ua|ru|by|kz|uz|tm|tj|kg|az|ge|am|md|ee|lv|lt|fi|se|no|dk|is|ie|pt|gr|cy|mt|tr|il|ae|sa|qa|kw|bh|om|jo|lb|sy|iq|ir|pk|in|bd|lk|np|bt|mm|th|vn|la|kh|my|sg|id|ph|tw|hk|mo|jp|kr|kp|mn|cn|au|nz|fj|pg|sb|vu|nc|pf|ws|to|tv|ki|nr|fm|mh|pw|gu|mp|as|vi|pr|mx|gt|bz|sv|hn|ni|cr|pa|cu|jm|ht|do|tt|bb|gd|vc|lc|dm|ag|kn|bs|tc|ky|vg|ai|ms|aw|cw|sx|bq|gp|mq|gf|sr|gy|br|ar|cl|pe|ec|co|ve|bo|py|uy|fk|gs|sh|ac|io|sc|mu|re|yt|km|mg|mz|zw|za|na|bw|sz|ls|ao|zm|mw|tz|ke|ug|rw|bi|cd|cg|ga|gq|cm|cf|td|ne|ng|bj|tg|gh|ci|bf|ml|sn|gm|gw|gn|sl|lr|mr|eh|ma|dz|tn|ly|eg|sd|ss|er|et|dj|so)(?![.\w])/gi;
+// Common TLDs for domain matching
+const TLD_LIST = 'com|net|org|edu|gov|mil|int|co|io|ai|app|dev|cloud|tech|info|biz|name|pro|museum|aero|coop|travel|jobs|mobi|tel|asia|cat|xxx|post|mail|onion|bit|i2p|eth|crypto|nft|web3|zil|crypto|luxe|xyz|online|site|website|store|shop|blog|news|media|agency|studio|design|digital|marketing|consulting|solutions|services|systems|network|technology|software|hardware|security|cyber|data|analytics|platform|exchange|finance|bank|money|capital|fund|invest|trade|market|forex|crypto|token|coin|chain|block|ledger|wallet|pay|cash|credit|debit|loan|insurance|health|medical|pharma|bio|life|care|clinic|hospital|doctor|nurse|patient|therapy|fitness|gym|sport|game|play|music|video|photo|art|design|fashion|beauty|food|restaurant|cafe|bar|hotel|travel|tour|flight|car|auto|moto|bike|boat|ship|plane|train|bus|taxi|uber|lyft|amazon|google|apple|microsoft|facebook|twitter|instagram|linkedin|youtube|tiktok|snapchat|whatsapp|telegram|signal|discord|slack|zoom|teams|meet|webex|skype|outlook|gmail|yahoo|hotmail|icloud|proton|tutanota|fastmail|zoho|mailchimp|sendgrid|mailgun|postmark|ses|sns|sqs|s3|ec2|rds|lambda|cloudfront|route53|elb|alb|nlb|vpc|iam|kms|ssm|secrets|parameter|config|cloudwatch|cloudtrail|guardduty|inspector|macie|securityhub|detective|artifact|codepipeline|codebuild|codecommit|codedeploy|codestar|cloud9|cloudshell|amplify|appsync|cognito|pinpoint|lex|polly|rekognition|textract|comprehend|translate|transcribe|personalize|forecast|fraud|lookout|panorama|robomaker|ground|iot|greengrass|freertos|sitewise|twinmaker|fleetwise|healthlake|omics|braket|deadline|simspace|nimble|thinkbox|lumberyard|gamelift|gamesparks|uk|us|eu|de|fr|it|es|nl|be|at|ch|pl|cz|sk|hu|ro|bg|hr|si|rs|ua|ru|by|kz|uz|tm|tj|kg|az|ge|am|md|ee|lv|lt|fi|se|no|dk|is|ie|pt|gr|cy|mt|tr|il|ae|sa|qa|kw|bh|om|jo|lb|sy|iq|ir|pk|in|bd|lk|np|bt|mm|th|vn|la|kh|my|sg|id|ph|tw|hk|mo|jp|kr|kp|mn|cn|au|nz|fj|pg|sb|vu|nc|pf|ws|to|tv|ki|nr|fm|mh|pw|gu|mp|as|vi|pr|mx|gt|bz|sv|hn|ni|cr|pa|cu|jm|ht|do|tt|bb|gd|vc|lc|dm|ag|kn|bs|tc|ky|vg|ai|ms|aw|cw|sx|bq|gp|mq|gf|sr|gy|br|ar|cl|pe|ec|co|ve|bo|py|uy|fk|gs|sh|ac|io|sc|mu|re|yt|km|mg|mz|zw|za|na|bw|sz|ls|ao|zm|mw|tz|ke|ug|rw|bi|cd|cg|ga|gq|cm|cf|td|ne|ng|bj|tg|gh|ci|bf|ml|sn|gm|gw|gn|sl|lr|mr|eh|ma|dz|tn|ly|eg|sd|ss|er|et|dj|so|sbs';
 
-// URL: Full URL with protocol
+// Domain name: Standard domain with TLD AND defanged versions
+// Matches: example.com, sub.domain.co.uk
+// Defanged: example[.]com, sub[.]domain[.]co[.]uk, example(.)com
+// Excludes: Common file paths and partial matches
+export const DOMAIN_PATTERN = new RegExp(
+  `(?<![.\\w@/\\]])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.|\\[\\.\\]|\\(\\.\\)|\\{\\.\\}))+(?:${TLD_LIST})(?![.\\w\\]])`,
+  'gi'
+);
+
+// URL: Full URL with protocol AND defanged versions
 // Matches: https://example.com/path?query=value
-export const URL_PATTERN = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/g;
+// Defanged: hxxps://example[.]com/path, hxxp://evil[.]com
+export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=\[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()\[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=\[\]]*)/gi;
 
 // ============================================================================
 // Email Pattern
 // ============================================================================
 
-// Email addresses
+// Email addresses AND defanged versions
 // Matches: user@example.com, user.name+tag@sub.domain.co.uk
-export const EMAIL_PATTERN = /(?<![.\w])[\w.+-]+@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?![.\w])/g;
+// Defanged: user[@]example[.]com, user[@]example(.)com
+export const EMAIL_PATTERN = /(?<![.\w\]])[\w.+-]+(?:@|\[@\]|\(@\)|\{@\})(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.|\[\.\]|\(\.\)|\{\.\}))+[a-zA-Z]{2,}(?![.\w\]])/g;
 
 // ============================================================================
 // Hash Patterns

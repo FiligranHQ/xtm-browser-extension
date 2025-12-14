@@ -291,20 +291,46 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Helper function to ensure content script is loaded before sending messages
+  const ensureContentScriptAndSendMessage = async (tabId: number, message: { type: string; payload?: unknown }) => {
+    try {
+      // First try to send the message directly
+      await chrome.tabs.sendMessage(tabId, message);
+    } catch {
+      // Content script not loaded - inject it first
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'INJECT_CONTENT_SCRIPT',
+          payload: { tabId },
+        });
+        
+        // Wait a bit for the script to initialize
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Try sending the message again
+        await chrome.tabs.sendMessage(tabId, message);
+      } catch (error) {
+        console.error('Failed to inject content script or send message:', error);
+      }
+    }
+  };
+
   const handleScanPage = async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    window.close();
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'SCAN_PAGE' });
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_PAGE' });
     }
+    window.close();
   };
 
   const handleSearch = async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'OPEN_SEARCH_PANEL' });
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_SEARCH_PANEL' });
     }
     window.close();
   };
@@ -313,7 +339,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
     }
     window.close();
   };
@@ -322,7 +349,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
     }
     window.close();
   };
@@ -331,7 +359,7 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
     }
   };
 
@@ -344,7 +372,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'GENERATE_SCENARIO' });
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'GENERATE_SCENARIO' });
     }
     window.close();
   };
@@ -353,8 +382,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Use SCAN_OAEV for OpenAEV-only scanning
-      chrome.tabs.sendMessage(tab.id, { type: 'SCAN_OAEV' });
+      // Use SCAN_OAEV for OpenAEV-only scanning - fire and forget
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_OAEV' });
     }
     window.close();
   };
@@ -363,8 +392,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Trigger atomic testing scan and panel
-      chrome.tabs.sendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
+      // Trigger atomic testing scan and panel - fire and forget
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
     }
     window.close();
   };
@@ -451,8 +480,15 @@ const App: React.FC = () => {
       
       setSetupSuccess(true);
       
+      // Inject content scripts into all open tabs so scanning works without reload
+      try {
+        await chrome.runtime.sendMessage({ type: 'INJECT_ALL_TABS' });
+      } catch (error) {
+        console.log('Note: Could not inject content scripts into existing tabs:', error);
+      }
+      
       // Move to next step after a short delay
-      setTimeout(() => {
+      setTimeout(async () => {
         setSetupUrl('');
         setSetupToken('');
         setSetupName('');
@@ -461,10 +497,22 @@ const App: React.FC = () => {
         if (platformType === 'opencti') {
           setSetupStep('openaev');
         } else {
-          // Reload status and go back to welcome/main
+          // Refresh status and close the popup to complete setup
           setSetupStep('complete');
-          // Reload the page to refresh status
-          window.location.reload();
+          
+          // Wait for cache to start building, then reload status
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Reload status by fetching connection status again
+          try {
+            const response = await chrome.runtime.sendMessage({ type: 'GET_CONNECTION_STATUS' });
+            if (response?.success && response.data) {
+              setStatus(response.data);
+            }
+          } catch {
+            // If status fetch fails, reload the popup
+            window.location.reload();
+          }
         }
       }, 1000);
       

@@ -49,6 +49,8 @@ import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const log = loggers.panel;
 
@@ -72,7 +74,7 @@ interface EntityData {
   standard_id?: string;
   objectMarking?: Array<{ definition: string; x_opencti_color?: string }>;
   objectLabel?: Array<{ value: string; color: string }>;
-  createdBy?: { name: string };
+  createdBy?: { id: string; name: string };
   creators?: Array<{ id: string; name: string }>;
   representative?: { main?: string };
   // Vulnerability CVSS fields
@@ -100,7 +102,7 @@ interface ContainerData {
   name: string;
   created: string;
   modified: string;
-  createdBy?: { name: string };
+  createdBy?: { id: string; name: string };
 }
 
 interface SearchResult extends EntityData {
@@ -173,6 +175,8 @@ const App: React.FC = () => {
   // Existing containers found for current page
   const [existingContainers, setExistingContainers] = useState<ContainerData[]>([]);
   const [checkingExisting, setCheckingExisting] = useState(false);
+  // Container being updated (for upsert mode)
+  const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
   // Container-specific fields
   const [containerSpecificFields, setContainerSpecificFields] = useState<{
     // Report
@@ -501,6 +505,13 @@ const App: React.FC = () => {
   const fetchEntityContainers = async (entityId: string, platformId?: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
+    log.debug(' fetchEntityContainers called:', { entityId, platformId });
+    
+    if (!entityId) {
+      log.warn(' fetchEntityContainers: No entityId provided');
+      return;
+    }
+    
     setLoadingContainers(true);
     setEntityContainers([]); // Clear previous containers
     try {
@@ -508,8 +519,12 @@ const App: React.FC = () => {
         type: 'FETCH_ENTITY_CONTAINERS',
         payload: { entityId, limit: 10, platformId },
       });
+      log.debug(' fetchEntityContainers response:', response);
       if (response?.success && response.data) {
+        log.debug(' fetchEntityContainers: Found', response.data.length, 'containers');
         setEntityContainers(response.data);
+      } else if (response?.error) {
+        log.warn(' fetchEntityContainers failed:', response.error);
       }
     } catch (error) {
       log.error('Failed to fetch containers:', error);
@@ -1955,16 +1970,49 @@ const App: React.FC = () => {
           </Box>
         )}
 
-        {/* Description */}
+        {/* Description - Rendered as Markdown */}
         {description && (
           <Box sx={{ mb: 2.5 }}>
             <Typography variant="caption" sx={sectionTitleStyle}>
               Description
             </Typography>
-            <Typography variant="body2" sx={contentTextStyle}>
-              {description.slice(0, 400)}
-              {description.length > 400 && '...'}
-            </Typography>
+            <Box 
+              className="markdown-content"
+              sx={{ 
+                ...contentTextStyle,
+                '& p': { margin: '0 0 8px 0' },
+                '& p:last-child': { margin: 0 },
+                '& a': { color: 'primary.main', textDecoration: 'none' },
+                '& a:hover': { textDecoration: 'underline' },
+                '& code': { 
+                  bgcolor: 'action.hover', 
+                  px: 0.5, 
+                  py: 0.25, 
+                  borderRadius: 0.5,
+                  fontSize: '0.875em',
+                },
+                '& pre': { 
+                  bgcolor: 'action.hover', 
+                  p: 1, 
+                  borderRadius: 1,
+                  overflow: 'auto',
+                  fontSize: '0.875em',
+                },
+                '& ul, & ol': { pl: 2, my: 1 },
+                '& li': { mb: 0.5 },
+                '& blockquote': { 
+                  borderLeft: 3, 
+                  borderColor: 'divider', 
+                  pl: 1.5, 
+                  my: 1,
+                  color: 'text.secondary',
+                },
+              }}
+            >
+              <Markdown remarkPlugins={[remarkGfm]}>
+                {description.length > 500 ? description.slice(0, 500) + '...' : description}
+              </Markdown>
+            </Box>
           </Box>
         )}
 
@@ -2006,9 +2054,29 @@ const App: React.FC = () => {
                 <Typography variant="caption" sx={sectionTitleStyle}>
                   Author
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
-                  {author.name}
-                </Typography>
+                {author.id && platformUrl ? (
+                  <Typography 
+                    variant="body2" 
+                    onClick={() => handleOpenInPlatform(author.id)}
+                    sx={{ 
+                      fontWeight: 500, 
+                      ...contentTextStyle,
+                      color: 'primary.main',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    {author.name}
+                    <OpenInNewOutlined sx={{ fontSize: 14 }} />
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
+                    {author.name}
+                  </Typography>
+                )}
               </Box>
             )}
             {creators && creators.length > 0 && (
@@ -2016,9 +2084,34 @@ const App: React.FC = () => {
                 <Typography variant="caption" sx={sectionTitleStyle}>
                   Creator{creators.length > 1 ? 's' : ''}
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
-                  {creators.map((c: { name: string }) => c.name).join(', ')}
-                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {creators.map((c: { id: string; name: string }, idx: number) => (
+                    c.id && platformUrl ? (
+                      <Typography 
+                        key={c.id || idx}
+                        variant="body2" 
+                        onClick={() => handleOpenInPlatform(c.id)}
+                        sx={{ 
+                          fontWeight: 500, 
+                          ...contentTextStyle,
+                          color: 'primary.main',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          '&:hover': { textDecoration: 'underline' },
+                        }}
+                      >
+                        {c.name}
+                        <OpenInNewOutlined sx={{ fontSize: 14 }} />
+                      </Typography>
+                    ) : (
+                      <Typography key={c.id || idx} variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
+                        {c.name}
+                      </Typography>
+                    )
+                  ))}
+                </Box>
               </Box>
             )}
           </Box>
@@ -2806,14 +2899,118 @@ const App: React.FC = () => {
       setPanelMode('entity');
     };
 
-    const handleRefreshContainer = (container: ContainerData) => {
-      // Pre-fill the form with the container's data and go to creation with same name
+    const handleRefreshContainer = async (container: ContainerData) => {
+      // Set the container ID for upsert mode
+      setUpdatingContainerId(container.id);
+      
+      // Set container type first
+      setContainerType(container.entity_type);
+      
+      // Get platform info
+      const containerPlatformId = (container as any)._platformId || selectedPlatformId;
+      if (containerPlatformId) {
+        const platform = availablePlatforms.find(p => p.id === containerPlatformId);
+        if (platform) {
+          setPlatformUrl(platform.url);
+          setSelectedPlatformId(platform.id);
+        }
+      }
+      
+      // Show loading while fetching full container details
+      setPanelMode('loading');
+      
+      // Fetch full container details from OpenCTI
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && container.id) {
+        try {
+          const response = await chrome.runtime.sendMessage({
+            type: 'GET_ENTITY_DETAILS',
+            payload: {
+              id: container.id,
+              entityType: container.entity_type,
+              platformId: containerPlatformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            const fullContainer = response.data;
+            log.debug(' handleRefreshContainer: Full container data:', fullContainer);
+            
+            // Pre-fill the form with the container's existing data (but keep new content)
+            setContainerForm({
+              name: fullContainer.name || container.name,
+              description: fullContainer.description || '',
+              content: containerForm.content, // Keep the new content from page
+            });
+            
+            // Pre-fill labels if available
+            if (fullContainer.objectLabel && fullContainer.objectLabel.length > 0) {
+              setSelectedLabels(fullContainer.objectLabel.map((l: any) => ({
+                id: l.id || l.value,
+                value: l.value,
+                color: l.color,
+              })));
+            }
+            
+            // Pre-fill markings if available
+            if (fullContainer.objectMarking && fullContainer.objectMarking.length > 0) {
+              setSelectedMarkings(fullContainer.objectMarking.map((m: any) => ({
+                id: m.id || m.definition,
+                definition: m.definition,
+              })));
+            }
+            
+            // Pre-fill container-specific fields based on type
+            const newSpecificFields = { ...containerSpecificFields };
+            
+            // Report types
+            if (fullContainer.report_types) {
+              newSpecificFields.report_types = fullContainer.report_types;
+            }
+            
+            // Grouping context
+            if (fullContainer.context) {
+              newSpecificFields.context = fullContainer.context;
+            }
+            
+            // Case fields
+            if (fullContainer.severity) {
+              newSpecificFields.severity = fullContainer.severity;
+            }
+            if (fullContainer.priority) {
+              newSpecificFields.priority = fullContainer.priority;
+            }
+            if (fullContainer.response_types) {
+              newSpecificFields.response_types = fullContainer.response_types;
+            }
+            
+            // Author (createdBy)
+            if (fullContainer.createdBy?.id) {
+              newSpecificFields.createdBy = fullContainer.createdBy.id;
+            }
+            
+            setContainerSpecificFields(newSpecificFields);
+            
+            // Load labels and markings for the platform (if not already loaded)
+            loadLabelsAndMarkings(containerPlatformId);
+            
+            setPanelMode('container-form');
+            return;
+          }
+        } catch (error) {
+          log.error(' handleRefreshContainer: Failed to fetch container details:', error);
+        }
+      }
+      
+      // Fallback: Use basic container data
       setContainerForm({
         name: container.name,
-        description: containerForm.description, // Keep the new description
-        content: containerForm.content, // Keep the new content
+        description: (container as any).description || '',
+        content: containerForm.content,
       });
-      setContainerType(container.entity_type);
+      
+      // Load labels and markings for the platform
+      loadLabelsAndMarkings(containerPlatformId);
+      
       setPanelMode('container-form');
     };
 

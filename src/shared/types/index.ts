@@ -108,6 +108,13 @@ export interface PlatformMatch {
 export interface DetectedObservable {
   type: ObservableType;
   value: string;
+  /** 
+   * Refanged value for cache/API lookups (e.g., example.com from example[.]com)
+   * If not defanged, this is the same as value
+   */
+  refangedValue?: string;
+  /** True if the detected value was defanged (e.g., example[.]com) */
+  isDefanged?: boolean;
   hashType?: HashType;
   startIndex: number;
   endIndex: number;
@@ -524,7 +531,11 @@ export type MessageType =
   | 'FETCH_OAEV_ASSETS'
   | 'FETCH_OAEV_ASSET_GROUPS'
   | 'CREATE_OAEV_PAYLOAD'
-  | 'CREATE_ATOMIC_TESTING';
+  | 'CREATE_ATOMIC_TESTING'
+  // Content Script Injection
+  | 'INJECT_CONTENT_SCRIPT'
+  | 'INJECT_ALL_TABS'
+  | 'PING';
 
 export interface ExtensionMessage {
   type: MessageType;

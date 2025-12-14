@@ -7,6 +7,7 @@
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
 import { DetectionEngine } from '../shared/detection/detector';
+import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
 
 const log = loggers.background;
@@ -667,6 +668,8 @@ async function handleMessage(
         resetOpenCTIClient();
         await initializeClient();
         
+        log.debug(`SAVE_SETTINGS: After initializeClient - OpenCTI clients: ${openCTIClients.size}, OpenAEV clients: ${openAEVClients.size}`);
+        
         // Force cache refresh if we have any OpenCTI clients
         if (openCTIClients.size > 0) {
           log.debug('Forcing SDO cache refresh after settings save...');
@@ -677,13 +680,123 @@ async function handleMessage(
         
         // Force OpenAEV cache refresh if we have any OpenAEV clients
         if (openAEVClients.size > 0) {
-          log.debug('Forcing OpenAEV cache refresh after settings save...');
+          log.info(`Forcing OpenAEV cache refresh after settings save (${openAEVClients.size} clients)...`);
           refreshOAEVCache().catch(err => {
             log.error('OpenAEV cache refresh failed:', err);
           });
+        } else {
+          log.debug('SAVE_SETTINGS: No OpenAEV clients to refresh cache for');
         }
         
         sendResponse({ success: true });
+        break;
+      }
+      
+      case 'INJECT_CONTENT_SCRIPT': {
+        // Inject content script into a specific tab if not already present
+        const { tabId } = (message.payload as { tabId: number }) || {};
+        
+        if (!tabId) {
+          sendResponse({ success: false, error: 'No tab ID provided' });
+          break;
+        }
+        
+        try {
+          // First try to ping the content script to see if it's already loaded
+          try {
+            await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+            // Content script is already loaded
+            log.debug(`Content script already loaded in tab ${tabId}`);
+            sendResponse({ success: true, alreadyLoaded: true });
+          } catch {
+            // Content script not loaded, inject it
+            log.debug(`Injecting content script into tab ${tabId}`);
+            
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content/index.js'],
+            });
+            
+            // Also inject the CSS if needed
+            try {
+              await chrome.scripting.insertCSS({
+                target: { tabId },
+                files: ['assets/content.css'],
+              });
+            } catch {
+              // CSS might not exist or already be injected, ignore
+            }
+            
+            log.debug(`Content script injected successfully into tab ${tabId}`);
+            sendResponse({ success: true, injected: true });
+          }
+        } catch (error) {
+          log.error(`Failed to inject content script into tab ${tabId}:`, error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Failed to inject content script' 
+          });
+        }
+        break;
+      }
+      
+      case 'INJECT_ALL_TABS': {
+        // Inject content script into all tabs - useful after first configuration
+        try {
+          const tabs = await chrome.tabs.query({});
+          let injectedCount = 0;
+          let alreadyLoadedCount = 0;
+          let failedCount = 0;
+          
+          for (const tab of tabs) {
+            if (!tab.id || !tab.url) continue;
+            
+            // Skip chrome:// and extension pages
+            if (tab.url.startsWith('chrome://') || 
+                tab.url.startsWith('chrome-extension://') ||
+                tab.url.startsWith('about:') ||
+                tab.url.startsWith('edge://') ||
+                tab.url.startsWith('moz-extension://')) {
+              continue;
+            }
+            
+            try {
+              // Try to ping first
+              try {
+                await chrome.tabs.sendMessage(tab.id, { type: 'PING' });
+                alreadyLoadedCount++;
+              } catch {
+                // Inject content script
+                await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  files: ['content/index.js'],
+                });
+                
+                try {
+                  await chrome.scripting.insertCSS({
+                    target: { tabId: tab.id },
+                    files: ['assets/content.css'],
+                  });
+                } catch {
+                  // Ignore CSS errors
+                }
+                
+                injectedCount++;
+              }
+            } catch {
+              failedCount++;
+            }
+          }
+          
+          log.debug(`Content script injection complete: ${injectedCount} injected, ${alreadyLoadedCount} already loaded, ${failedCount} failed`);
+          sendResponse({ success: true, injectedCount, alreadyLoadedCount, failedCount });
+        } catch (error) {
+          log.error('Failed to inject content scripts into all tabs:', error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Failed to inject content scripts' 
+          });
+        }
         break;
       }
       
@@ -909,6 +1022,11 @@ async function handleMessage(
               Players: cache.entities['Player']?.length || 0,
               AttackPatterns: cache.entities['AttackPattern']?.length || 0,
             });
+            // Debug: Log first few asset names to verify cache content
+            if (cache.entities['Asset']?.length > 0) {
+              log.debug(`SCAN_OAEV: First 5 Asset names in ${platformId}:`, 
+                cache.entities['Asset'].slice(0, 5).map(a => ({ name: a.name, aliases: a.aliases })));
+            }
           }
           
           const includeAttackPatterns = payload.includeAttackPatterns === true;
@@ -916,7 +1034,9 @@ async function handleMessage(
           
           const oaevEntities: ScanResultPayload['oaevEntities'] = [];
           const originalText = payload.content;
+          const textLower = originalText.toLowerCase();
           const seenEntities = new Set<string>();
+          const seenRanges = new Set<string>();
           
           // Sort by name length (longest first) to match longer names before substrings
           const sortedEntities = Array.from(oaevEntityMap.entries()).sort((a, b) => b[0].length - a[0].length);
@@ -930,27 +1050,61 @@ async function handleMessage(
             // Skip short names and already seen entities
             if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
             
-            // Escape special regex characters in the name
-            const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Use indexOf for simple, reliable matching (case-insensitive)
+            // This handles names with hyphens, underscores, dots etc. properly
+            let searchStart = 0;
+            let matchIndex = textLower.indexOf(nameLower, searchStart);
             
-            // Use strict word boundary matching for ALL entity types
-            // This ensures exact matches only (no partial matches)
-            const regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
-            
-            const match = regex.exec(originalText);
-            if (match) {
-              log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${match.index}`);
-              oaevEntities.push({
-                type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
-                name: entity.name,
-                value: match[0],
-                startIndex: match.index,
-                endIndex: match.index + match[0].length,
-                found: true,
-                entityId: entity.id,
-                platformId: entity.platformId,
-              });
-              seenEntities.add(entity.id);
+            while (matchIndex !== -1) {
+              const endIndex = matchIndex + nameLower.length;
+              
+              // Check character boundaries to ensure exact word match
+              // (not part of a larger word)
+              const charBefore = matchIndex > 0 ? originalText[matchIndex - 1] : ' ';
+              const charAfter = endIndex < originalText.length ? originalText[endIndex] : ' ';
+              
+              // Valid boundary: whitespace, punctuation, or start/end of string
+              const isValidBoundary = (c: string) => 
+                /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+              
+              // For names with hyphens/underscores, also check if the boundary char is NOT alphanumeric
+              const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
+              const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
+              
+              if (beforeOk && afterOk) {
+                // Check for overlapping ranges (longer matches win)
+                const rangeKey = `${matchIndex}-${endIndex}`;
+                let hasOverlap = false;
+                for (const existingRange of seenRanges) {
+                  const [existStart, existEnd] = existingRange.split('-').map(Number);
+                  if (!(endIndex <= existStart || matchIndex >= existEnd)) {
+                    hasOverlap = true;
+                    break;
+                  }
+                }
+                
+                if (!hasOverlap) {
+                  const matchedText = originalText.substring(matchIndex, endIndex);
+                  log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
+                  oaevEntities.push({
+                    type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
+                    name: entity.name,
+                    value: matchedText,
+                    startIndex: matchIndex,
+                    endIndex: endIndex,
+                    found: true,
+                    entityId: entity.id,
+                    platformId: entity.platformId,
+                  });
+                  seenEntities.add(entity.id);
+                  seenRanges.add(rangeKey);
+                  break; // Only first match per entity
+                }
+              }
+              
+              // Continue searching from after this position
+              searchStart = matchIndex + 1;
+              matchIndex = textLower.indexOf(nameLower, searchStart);
             }
           }
           
@@ -1273,9 +1427,11 @@ async function handleMessage(
         
         const obsPayload = message.payload as AddObservablePayload;
         try {
+          // Refang the value before creating (OpenCTI stores clean values)
+          const cleanValue = refangIndicator(obsPayload.value);
           const created = await openCTIClient.createObservable({
             type: obsPayload.type,
-            value: obsPayload.value,
+            value: cleanValue,
             hashType: obsPayload.hashType,
             createIndicator: obsPayload.createIndicator,
           });
@@ -1461,6 +1617,9 @@ async function handleMessage(
         const TIMEOUT_MS = 8000; // 8 second timeout for search
         
         try {
+          // Refang search term in case user searches for defanged indicator
+          const cleanSearchTerm = refangIndicator(searchTerm);
+          
           // Search across all OpenCTI platforms in PARALLEL with timeout
           const clientsToSearch = platformId 
             ? [[platformId, openCTIClients.get(platformId)] as const].filter(([_, c]) => c)
@@ -1473,7 +1632,7 @@ async function handleMessage(
               const timeoutPromise = new Promise<never>((_, reject) => 
                 setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
               );
-              const results = await Promise.race([client.globalSearch(searchTerm, types, limit), timeoutPromise]);
+              const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
               return { platformId: pId, results: results.map((r: any) => ({ ...r, _platformId: pId })) };
             } catch (e) {
               log.warn(`Search timeout/error for platform ${pId}:`, e);
@@ -2013,7 +2172,11 @@ async function handleMessage(
         
         try {
           const results = await Promise.all(
-            entities.map(e => openCTIClient!.createObservable({ type: e.type as any, value: e.value }))
+            // Refang values before creating (OpenCTI stores clean values)
+            entities.map(e => openCTIClient!.createObservable({ 
+              type: e.type as any, 
+              value: refangIndicator(e.value) 
+            }))
           );
           sendResponse({ success: true, data: results });
         } catch (error) {
@@ -2117,7 +2280,10 @@ async function handleMessage(
       }
       
       case 'FETCH_ENTITY_CONTAINERS': {
+        log.debug(' FETCH_ENTITY_CONTAINERS received:', message.payload);
+        
         if (openCTIClients.size === 0) {
+          log.warn(' FETCH_ENTITY_CONTAINERS: No OpenCTI clients configured');
           sendResponse({ success: false, error: 'Not configured' });
           break;
         }
@@ -2128,6 +2294,12 @@ async function handleMessage(
           platformId?: string;
         };
         
+        if (!entityId) {
+          log.warn(' FETCH_ENTITY_CONTAINERS: No entityId provided');
+          sendResponse({ success: false, error: 'No entityId provided' });
+          break;
+        }
+        
         const TIMEOUT_MS = 5000; // 5 second timeout for container fetch
         
         try {
@@ -2135,6 +2307,8 @@ async function handleMessage(
           const clientsToSearch = specificPlatformId 
             ? [[specificPlatformId, openCTIClients.get(specificPlatformId)] as const].filter(([_, c]) => c)
             : Array.from(openCTIClients.entries());
+          
+          log.debug(' FETCH_ENTITY_CONTAINERS: Searching', clientsToSearch.length, 'platforms for entity', entityId);
           
           const fetchPromises = clientsToSearch.map(async ([pId, client]) => {
             if (!client) return { platformId: pId, containers: [] };
@@ -2144,10 +2318,11 @@ async function handleMessage(
                 setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
               );
               const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
+              log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers for ${entityId} in platform ${pId}`);
               return { platformId: pId, containers: containers.map((c: any) => ({ ...c, _platformId: pId })) };
             } catch (e) {
               // Entity might not exist or timeout
-              log.debug(`No containers/timeout for ${entityId} in platform ${pId}`);
+              log.debug(`No containers/timeout for ${entityId} in platform ${pId}:`, e);
               return { platformId: pId, containers: [] };
             }
           });
@@ -2155,8 +2330,10 @@ async function handleMessage(
           const results = await Promise.all(fetchPromises);
           const allContainers = results.flatMap(r => r.containers);
           
+          log.debug(' FETCH_ENTITY_CONTAINERS: Total containers found:', allContainers.length);
           sendResponse({ success: true, data: allContainers });
         } catch (error) {
+          log.error(' FETCH_ENTITY_CONTAINERS error:', error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to fetch containers',

@@ -234,6 +234,36 @@ const SDO_PROPERTIES = `
     x_opencti_score
     x_opencti_main_observable_type
   }
+  ... on Report {
+    name
+    description
+    report_types
+    published
+  }
+  ... on Grouping {
+    name
+    description
+    context
+  }
+  ... on CaseIncident {
+    name
+    description
+    severity
+    priority
+    response_types
+  }
+  ... on CaseRfi {
+    name
+    description
+    severity
+    priority
+  }
+  ... on CaseRft {
+    name
+    description
+    severity
+    priority
+  }
 `;
 
 // ============================================================================
@@ -1872,7 +1902,7 @@ export class OpenCTIClient {
     name: string;
     created: string;
     modified: string;
-    createdBy?: { name: string };
+    createdBy?: { id: string; name: string };
   }>> {
     const query = `
       query GetContainersForEntity($id: String!, $first: Int) {
@@ -1886,6 +1916,7 @@ export class OpenCTIClient {
                 modified
                 createdBy {
                   ... on Identity {
+                    id
                     name
                   }
                 }
@@ -1942,7 +1973,7 @@ export class OpenCTIClient {
                 last_observed?: string;
                 created: string;
                 modified: string;
-                createdBy?: { name: string };
+                createdBy?: { id: string; name: string };
               };
             }>;
           };

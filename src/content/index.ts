@@ -16,6 +16,7 @@ import type {
 import { getTextNodes } from '../shared/detection/detector';
 import { Readability } from '@mozilla/readability';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // ============================================================================
 // Article Extraction & PDF Generation Utilities
@@ -30,6 +31,27 @@ function extractArticleContent(): { title: string; content: string; textContent:
     // Clone the document to avoid modifying the original
     const documentClone = document.cloneNode(true) as Document;
     
+    // Pre-clean: remove obvious non-content elements from the clone
+    const selectorsToRemove = [
+      // Paywall/subscription elements (common class names)
+      '[class*="paywall"]', '[class*="subscribe"]', '[class*="subscription"]',
+      '[class*="premium"]', '[class*="teaser"]', '[class*="restricted"]',
+      '[class*="locked"]', '[class*="meter"]', '[class*="regwall"]',
+      '[id*="paywall"]', '[id*="subscribe"]', '[id*="subscription"]',
+      // Le Monde specific
+      '[class*="article__status"]', '[class*="article__wrapper--premium"]',
+      '.article__content-paywall', '.paywall', '.subscriber-only',
+      // Generic ads and promotions
+      '[class*="promo"]', '[class*="newsletter"]', '[class*="signup"]',
+      '[class*="cta-"]', '[class*="call-to-action"]',
+    ];
+    
+    selectorsToRemove.forEach(selector => {
+      try {
+        documentClone.querySelectorAll(selector).forEach(el => el.remove());
+      } catch { /* Skip invalid selectors */ }
+    });
+    
     // Create a Readability instance and parse the article
     const reader = new Readability(documentClone, {
       debug: false,
@@ -39,12 +61,15 @@ function extractArticleContent(): { title: string; content: string; textContent:
     const article = reader.parse();
     
     if (article) {
-      log.debug(' Readability extracted article:', article.title, 'length:', article.textContent?.length);
+      // Apply additional text cleaning to remove paywall messages
+      const cleanedTextContent = cleanArticleText(article.textContent || '');
+      
+      log.debug(' Readability extracted article:', article.title, 'raw length:', article.textContent?.length, 'cleaned length:', cleanedTextContent.length);
       return {
         title: article.title || document.title,
         content: article.content || '',
-        textContent: article.textContent || '',
-        excerpt: article.excerpt || '',
+        textContent: cleanedTextContent,
+        excerpt: cleanArticleText(article.excerpt || ''),
         byline: article.byline || '',
       };
     }
@@ -101,6 +126,113 @@ function getFallbackContent(): string {
 }
 
 /**
+ * Clean article text by removing paywall/subscription messages and other boilerplate
+ * This function handles common patterns from news sites (Le Monde, NYT, WSJ, etc.)
+ */
+function cleanArticleText(text: string): string {
+  if (!text) return '';
+  
+  // Common paywall/subscription patterns to remove (multiple languages)
+  const patternsToRemove = [
+    // French patterns (Le Monde, Le Figaro, etc.)
+    /Cet article (vous est offert|est réservé|est accessible)[^.]*\./gi,
+    /Pour lire gratuitement[^.]*\./gi,
+    /connectez-vous/gi,
+    /Se connecter/gi,
+    /Vous n['']êtes pas inscrit[^.]*\./gi,
+    /Inscrivez-vous gratuitement/gi,
+    /réservé aux abonnés/gi,
+    /Abonnez-vous/gi,
+    /article réservé/gi,
+    /Accédez à l['']intégralité[^.]*\./gi,
+    /Offre spéciale[^.]*\./gi,
+    /Profitez de[^.]*abonnement[^.]*\./gi,
+    /Découvrez nos offres/gi,
+    /S['']abonner/gi,
+    /Déjà abonné \?/gi,
+    /Pour soutenir[^.]*journalisme[^.]*\./gi,
+    
+    // English patterns (NYT, WSJ, Guardian, etc.)
+    /This article is for subscribers/gi,
+    /Subscribe to continue reading/gi,
+    /Already a subscriber\?/gi,
+    /Sign in to read/gi,
+    /Create a free account/gi,
+    /Subscribe now/gi,
+    /Members only/gi,
+    /Premium content/gi,
+    /Unlock this article/gi,
+    /Get unlimited access/gi,
+    /Start your free trial/gi,
+    /Register for free/gi,
+    /Continue reading with a subscription/gi,
+    /You['']ve reached your limit of free articles/gi,
+    /This is a subscriber-only story/gi,
+    
+    // German patterns
+    /Dieser Artikel ist nur für Abonnenten/gi,
+    /Jetzt abonnieren/gi,
+    /Zum Weiterlesen/gi,
+    
+    // Spanish patterns
+    /Este artículo es solo para suscriptores/gi,
+    /Suscríbete/gi,
+    
+    // Common UI elements that slip through
+    /Share this article/gi,
+    /Partager cet article/gi,
+    /Newsletter/gi,
+    /Suivez-nous/gi,
+    /Follow us/gi,
+    /More stories/gi,
+    /Related articles/gi,
+    /Lire aussi/gi,
+    /Read more/gi,
+    /À lire aussi/gi,
+    /Sur le même sujet/gi,
+    
+    // Navigation elements
+    /Économie\s+Économie/gi,
+    /Politique\s+Politique/gi,
+    /International\s+International/gi,
+    /Culture\s+Culture/gi,
+    /Sport\s+Sport/gi,
+    /Sciences\s+Sciences/gi,
+    
+    // Social media prompts
+    /Share on Facebook/gi,
+    /Share on Twitter/gi,
+    /Share on LinkedIn/gi,
+    /Partager sur Facebook/gi,
+    /Partager sur Twitter/gi,
+    
+    // Cookie/GDPR notices that might slip through
+    /Nous utilisons des cookies/gi,
+    /We use cookies/gi,
+    /Accepter et continuer/gi,
+    /Accept and continue/gi,
+  ];
+  
+  let cleanedText = text;
+  
+  // Apply all pattern removals
+  for (const pattern of patternsToRemove) {
+    cleanedText = cleanedText.replace(pattern, '');
+  }
+  
+  // Clean up whitespace artifacts left by removals
+  cleanedText = cleanedText
+    .replace(/\n{3,}/g, '\n\n')  // Multiple newlines to double
+    .replace(/[ \t]{2,}/g, ' ')  // Multiple spaces to single
+    .replace(/^\s+/gm, '')       // Leading whitespace on lines
+    .replace(/\s+$/gm, '')       // Trailing whitespace on lines
+    .replace(/\n\s*\n\s*\n/g, '\n\n')  // Clean up empty lines
+    .trim();
+  
+  return cleanedText;
+}
+
+/**
  * Fallback text content extraction - returns clean text
  */
 function getFallbackTextContent(): string {
@@ -131,7 +263,8 @@ function getFallbackTextContent(): string {
     .replace(/[ ]{2,}/g, ' ')
     .trim();
   
-  return text;
+  // Apply article text cleaning to remove paywall messages
+  return cleanArticleText(text);
 }
 
 /**
@@ -140,15 +273,42 @@ function getFallbackTextContent(): string {
 function extractFirstParagraph(textContent: string, maxLength = 500): string {
   if (!textContent) return '';
   
+  // First, apply text cleaning to remove any remaining boilerplate
+  const cleanedContent = cleanArticleText(textContent);
+  
   // Split by double newlines to get paragraphs
-  const paragraphs = textContent
+  const paragraphs = cleanedContent
     .split(/\n\n+/)
     .map(p => p.trim())
-    .filter(p => p.length > 50); // Skip short fragments
+    .filter(p => {
+      // Skip short fragments (likely navigation or section labels)
+      if (p.length < 80) return false;
+      
+      // Skip paragraphs that look like navigation or labels
+      const lowerP = p.toLowerCase();
+      if (/^(économie|politique|international|culture|sport|sciences|société|monde|france|europe|opinion|idées|environnement|planète|afrique|amérique|asie|style|immobilier|emploi|argent)\b/i.test(p)) {
+        return false;
+      }
+      
+      // Skip paragraphs that are mostly capitalized (likely headers/labels)
+      const words = p.split(/\s+/);
+      const capitalizedWords = words.filter(w => w.length > 1 && w === w.toUpperCase());
+      if (capitalizedWords.length > words.length * 0.5) {
+        return false;
+      }
+      
+      // Skip if paragraph is just a date/byline
+      if (/^(publié|published|par |by |le \d|on \d|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i.test(p)) {
+        return false;
+      }
+      
+      return true;
+    });
   
   if (paragraphs.length === 0) {
-    // Fall back to first chunk of text
-    const text = textContent.replace(/\s+/g, ' ').trim();
+    // Fall back to first chunk of cleaned text
+    const text = cleanedContent.replace(/\s+/g, ' ').trim();
+    if (text.length < 80) return '';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   }
   
@@ -177,7 +337,259 @@ function extractFirstParagraph(textContent: string, maxLength = 500): string {
 }
 
 /**
- * Generate PDF from article content using jsPDF directly (no html2canvas dependency)
+ * Convert image to base64 data URL to avoid CORS issues
+ */
+async function imageToBase64(imgElement: HTMLImageElement): Promise<string | null> {
+  try {
+    // If already a data URL, return as-is
+    if (imgElement.src.startsWith('data:')) {
+      return imgElement.src;
+    }
+    
+    // Try to fetch the image and convert to base64
+    const response = await fetch(imgElement.src, { mode: 'cors' });
+    if (!response.ok) return null;
+    
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    // CORS error or other issue - try canvas approach
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = imgElement.naturalWidth || imgElement.width || 300;
+      canvas.height = imgElement.naturalHeight || imgElement.height || 200;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(imgElement, 0, 0);
+        return canvas.toDataURL('image/png');
+      }
+    } catch {
+      // Canvas is tainted, skip this image
+    }
+    return null;
+  }
+}
+
+/**
+ * Clean HTML content for PDF rendering - remove unwanted elements and fix images
+ */
+async function prepareHtmlForPdf(htmlContent: string, title: string): Promise<HTMLElement> {
+  // Create a container for the PDF content
+  const container = document.createElement('div');
+  container.id = 'xtm-pdf-container';
+  
+  // Apply styles for clean PDF rendering
+  container.style.cssText = `
+    width: 595px;
+    padding: 40px;
+    background: white;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    box-sizing: border-box;
+  `;
+  
+  // Build the PDF content with header, article, and footer
+  const sourceUrl = window.location.href;
+  const truncatedUrl = sourceUrl.length > 70 ? sourceUrl.substring(0, 67) + '...' : sourceUrl;
+  
+  container.innerHTML = `
+    <style>
+      #xtm-pdf-container * {
+        box-sizing: border-box;
+      }
+      #xtm-pdf-container h1, #xtm-pdf-container h2, #xtm-pdf-container h3, 
+      #xtm-pdf-container h4, #xtm-pdf-container h5, #xtm-pdf-container h6 {
+        color: #1a1a1a;
+        margin-top: 16px;
+        margin-bottom: 8px;
+        line-height: 1.3;
+      }
+      #xtm-pdf-container h1 { font-size: 22px; }
+      #xtm-pdf-container h2 { font-size: 18px; }
+      #xtm-pdf-container h3 { font-size: 16px; }
+      #xtm-pdf-container p {
+        margin: 0 0 12px 0;
+        text-align: justify;
+      }
+      #xtm-pdf-container strong, #xtm-pdf-container b {
+        font-weight: 700;
+      }
+      #xtm-pdf-container em, #xtm-pdf-container i {
+        font-style: italic;
+      }
+      #xtm-pdf-container ul, #xtm-pdf-container ol {
+        margin: 8px 0 12px 20px;
+        padding-left: 20px;
+      }
+      #xtm-pdf-container li {
+        margin-bottom: 4px;
+      }
+      #xtm-pdf-container blockquote {
+        margin: 12px 0;
+        padding: 10px 20px;
+        border-left: 4px solid #001bda;
+        background: #f5f5f5;
+        font-style: italic;
+      }
+      #xtm-pdf-container img {
+        max-width: 100%;
+        height: auto;
+        margin: 12px 0;
+        display: block;
+      }
+      #xtm-pdf-container a {
+        color: #001bda;
+        text-decoration: none;
+      }
+      #xtm-pdf-container figure {
+        margin: 12px 0;
+      }
+      #xtm-pdf-container figcaption {
+        font-size: 10px;
+        color: #666;
+        text-align: center;
+        margin-top: 4px;
+      }
+      #xtm-pdf-container pre, #xtm-pdf-container code {
+        background: #f5f5f5;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 11px;
+        padding: 2px 4px;
+        border-radius: 2px;
+      }
+      #xtm-pdf-container pre {
+        padding: 12px;
+        overflow-x: auto;
+        margin: 12px 0;
+      }
+      #xtm-pdf-container table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+      #xtm-pdf-container th, #xtm-pdf-container td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      #xtm-pdf-container th {
+        background: #f5f5f5;
+        font-weight: 600;
+      }
+      .xtm-pdf-header {
+        border-bottom: 2px solid #001bda;
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+      }
+      .xtm-pdf-header-title {
+        color: #001bda;
+        font-size: 11px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+      }
+      .xtm-pdf-header-date {
+        color: #666;
+        font-size: 10px;
+        margin: 0;
+      }
+      .xtm-pdf-article-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin: 0 0 12px 0;
+        line-height: 1.2;
+      }
+      .xtm-pdf-meta {
+        color: #666;
+        font-size: 10px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .xtm-pdf-content {
+        margin-bottom: 30px;
+      }
+      .xtm-pdf-footer {
+        border-top: 1px solid #e0e0e0;
+        padding-top: 12px;
+        margin-top: 20px;
+        color: #999;
+        font-size: 9px;
+        text-align: center;
+      }
+    </style>
+    
+    <div class="xtm-pdf-header">
+      <p class="xtm-pdf-header-title">Filigran XTM Browser Extension</p>
+      <p class="xtm-pdf-header-date">Captured on ${new Date().toLocaleDateString()}</p>
+    </div>
+    
+    <h1 class="xtm-pdf-article-title">${escapeHtml(title)}</h1>
+    
+    <div class="xtm-pdf-meta">
+      <div>Source: ${escapeHtml(truncatedUrl)}</div>
+      <div>Captured: ${new Date().toLocaleString()}</div>
+    </div>
+    
+    <div class="xtm-pdf-content">
+      ${htmlContent}
+    </div>
+    
+    <div class="xtm-pdf-footer">
+      Generated by Filigran XTM Browser Extension | ${window.location.hostname}
+    </div>
+  `;
+  
+  // Clean up the content section - remove scripts, iframes, etc.
+  const contentDiv = container.querySelector('.xtm-pdf-content');
+  if (contentDiv) {
+    // Remove unwanted elements
+    const toRemove = contentDiv.querySelectorAll('script, iframe, noscript, object, embed, video, audio, svg, canvas, form, input, button, [style*="display: none"], [style*="display:none"], [hidden]');
+    toRemove.forEach(el => el.remove());
+    
+    // Remove empty elements
+    contentDiv.querySelectorAll('p, div, span').forEach(el => {
+      if (!el.textContent?.trim() && !el.querySelector('img')) {
+        el.remove();
+      }
+    });
+  }
+  
+  // Process images - convert to base64 to avoid CORS issues
+  const images = container.querySelectorAll('img');
+  for (const img of images) {
+    try {
+      const base64 = await imageToBase64(img as HTMLImageElement);
+      if (base64) {
+        img.src = base64;
+        // Ensure reasonable size for PDF
+        const imgEl = img as HTMLImageElement;
+        if (imgEl.naturalWidth > 500 || !imgEl.style.maxWidth) {
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+        }
+      } else {
+        // Remove images that couldn't be converted (CORS issues)
+        img.remove();
+      }
+    } catch {
+      img.remove();
+    }
+  }
+  
+  return container;
+}
+
+/**
+ * Generate PDF from article content using jsPDF with html2canvas
+ * Preserves text formatting (bold, italic, headings) and includes images
  * Returns base64 encoded PDF data
  */
 async function generateArticlePDF(): Promise<{ data: string; filename: string } | null> {
@@ -185,15 +597,110 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     // Extract article content
     const article = extractArticleContent();
     
-    if (!article.textContent && !article.content) {
+    if (!article.content && !article.textContent) {
       log.warn(' No article content to generate PDF');
       return null;
     }
     
-    log.debug(' Starting PDF generation with jsPDF, article title:', article.title);
-    log.debug(' Text content length:', article.textContent?.length || 0);
+    log.debug(' Starting PDF generation with HTML rendering, article title:', article.title);
+    log.debug(' HTML content length:', article.content?.length || 0);
     
-    // Use textContent for cleaner text, or fall back to extracting text from HTML
+    // Prepare the HTML content for PDF rendering
+    const container = await prepareHtmlForPdf(article.content, article.title);
+    
+    // Temporarily add container to DOM for rendering (hidden)
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
+    
+    try {
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      // Use html2canvas to capture the styled content
+      const canvas = await html2canvas(container, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: 595, // A4 width in pixels at 72 DPI
+        windowWidth: 595,
+      });
+      
+      // Calculate how to fit the content on PDF pages
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      
+      // Add image to PDF, handling multiple pages if needed
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      // Add first page
+      pdf.addImage(
+        canvas.toDataURL('image/jpeg', 0.95),
+        'JPEG',
+        0,
+        position,
+        imgWidth,
+        imgHeight
+      );
+      heightLeft -= pageHeight;
+      
+      // Add additional pages if content is longer than one page
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight; // Negative offset for subsequent pages
+        pdf.addPage();
+        pdf.addImage(
+          canvas.toDataURL('image/jpeg', 0.95),
+          'JPEG',
+          0,
+          position,
+          imgWidth,
+          imgHeight
+        );
+        heightLeft -= pageHeight;
+      }
+      
+      // Generate filename
+      const filename = `${sanitizeFilename(article.title)}.pdf`;
+      
+      // Get PDF as base64
+      const pdfOutput = pdf.output('datauristring');
+      const base64Data = pdfOutput.split(',')[1];
+      
+      log.debug(' PDF generated successfully with HTML rendering, base64 length:', base64Data.length);
+      
+      return {
+        data: base64Data,
+        filename: filename,
+      };
+    } finally {
+      // Always remove the temporary container
+      document.body.removeChild(container);
+    }
+  } catch (error) {
+    log.error(' Failed to generate PDF with HTML rendering:', error);
+    // Fallback to simple text-based PDF
+    return generateSimpleTextPDF();
+  }
+}
+
+/**
+ * Fallback: Generate simple text-based PDF when HTML rendering fails
+ */
+async function generateSimpleTextPDF(): Promise<{ data: string; filename: string } | null> {
+  try {
+    const article = extractArticleContent();
+    
     let textContent = article.textContent || '';
     if (!textContent && article.content) {
       const temp = document.createElement('div');
@@ -201,19 +708,17 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
       textContent = temp.textContent || temp.innerText || '';
     }
     
-    // Clean up the text content
-    textContent = textContent
+    textContent = cleanArticleText(textContent)
       .replace(/[\t\r]/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ ]{2,}/g, ' ')
       .trim();
     
     if (!textContent || textContent.length < 50) {
-      log.warn(' Text content too short for PDF');
+      log.warn(' Text content too short for fallback PDF');
       return null;
     }
     
-    // Create PDF using jsPDF directly (no html2canvas)
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -227,7 +732,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     let yPosition = margin;
     
     // Header
-    pdf.setFillColor(0, 27, 218); // Filigran blue
+    pdf.setFillColor(0, 27, 218);
     pdf.rect(margin, margin, contentWidth, 0.5, 'F');
     yPosition += 5;
     
@@ -248,19 +753,16 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     pdf.text(titleLines, margin, yPosition);
     yPosition += (titleLines.length * 7) + 5;
     
-    // Source and date
+    // Source
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
-    
     const sourceUrl = window.location.href;
     const truncatedUrl = sourceUrl.length > 80 ? sourceUrl.substring(0, 77) + '...' : sourceUrl;
     pdf.text(`Source: ${truncatedUrl}`, margin, yPosition);
     yPosition += 5;
-    
     pdf.text(`Captured: ${new Date().toLocaleString()}`, margin, yPosition);
     yPosition += 3;
     
-    // Separator line
     pdf.setDrawColor(200, 200, 200);
     pdf.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 10;
@@ -269,24 +771,22 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     pdf.setFontSize(11);
     pdf.setTextColor(30, 30, 30);
     
-    // Split content into paragraphs
     const paragraphs = textContent.split(/\n\n+/).filter(p => p.trim().length > 0);
     
     for (const paragraph of paragraphs) {
       const lines = pdf.splitTextToSize(paragraph.trim(), contentWidth);
-      
-      // Check if we need a new page
       const textHeight = lines.length * 5;
+      
       if (yPosition + textHeight > pageHeight - margin) {
         pdf.addPage();
         yPosition = margin;
       }
       
       pdf.text(lines, margin, yPosition);
-      yPosition += textHeight + 5; // Add paragraph spacing
+      yPosition += textHeight + 5;
     }
     
-    // Footer on last page
+    // Footer
     const footerY = pageHeight - 10;
     pdf.setFontSize(8);
     pdf.setTextColor(150, 150, 150);
@@ -294,22 +794,18 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     pdf.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
     pdf.text(`Generated by Filigran XTM Browser Extension | ${window.location.hostname}`, margin, footerY);
     
-    // Generate filename
     const filename = `${sanitizeFilename(article.title)}.pdf`;
-    
-    // Get PDF as base64
     const pdfOutput = pdf.output('datauristring');
-    // Extract just the base64 data (remove the data URI prefix)
     const base64Data = pdfOutput.split(',')[1];
     
-    log.debug(' PDF generated successfully with jsPDF, base64 length:', base64Data.length);
+    log.debug(' Fallback text PDF generated, base64 length:', base64Data.length);
     
     return {
       data: base64Data,
       filename: filename,
     };
   } catch (error) {
-    log.error(' Failed to generate PDF:', error);
+    log.error(' Fallback PDF generation failed:', error);
     return null;
   }
 }
@@ -2475,6 +2971,11 @@ async function showSearchPanel(): Promise<void> {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   switch (message.type) {
+    case 'PING':
+      // Simple ping to check if content script is loaded
+      sendResponse({ success: true, loaded: true });
+      break;
+      
     case 'SCAN_PAGE':
     case 'AUTO_SCAN_PAGE':
       // For auto-scan, scan silently without opening panels

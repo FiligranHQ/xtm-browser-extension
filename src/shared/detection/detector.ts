@@ -19,6 +19,8 @@ import {
   CVE_CONFIG,
   SDO_SEARCH_TYPES,
   createNamePattern,
+  refangIndicator,
+  isDefanged,
   type PatternConfig,
 } from './patterns';
 import { OpenCTIClient } from '../api/opencti-client';
@@ -145,8 +147,12 @@ export class DetectionEngine {
     while ((match = pattern.exec(text)) !== null) {
       const value = match[0];
       
-      // Validate if validator is provided
-      if (config.validate && !config.validate(value)) {
+      // Check if the value is defanged and get the refanged version
+      const defanged = isDefanged(value);
+      const refangedValue = defanged ? refangIndicator(value) : value;
+      
+      // Validate using the refanged value (the "real" indicator)
+      if (config.validate && !config.validate(refangedValue)) {
         continue;
       }
 
@@ -157,7 +163,9 @@ export class DetectionEngine {
 
       matches.push({
         type: config.type,
-        value,
+        value, // Original value as found in text (may be defanged)
+        refangedValue, // Clean value for cache/API lookups
+        isDefanged: defanged,
         hashType: config.hashType,
         startIndex: match.index,
         endIndex: match.index + value.length,
@@ -231,18 +239,21 @@ export class DetectionEngine {
       // Search across ALL platforms and collect all matches
       const platformMatches: Array<{ platformId: string; entityId: string; entityData: StixCyberObservable }> = [];
       
+      // Use refanged value for lookups (OpenCTI stores clean values, not defanged)
+      const searchValue = obs.refangedValue || obs.value;
+      
       for (const [platformId, client] of this.clients) {
         try {
           let result: StixCyberObservable | null = null;
 
           if (obs.hashType) {
             result = await client.searchObservableByHash(
-              obs.value,
+              searchValue,
               obs.hashType
             );
           } else {
             result = await client.searchObservableByValue(
-              obs.value,
+              searchValue,
               obs.type
             );
           }

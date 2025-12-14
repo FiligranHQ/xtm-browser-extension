@@ -379,9 +379,26 @@ const App: React.FC = () => {
       await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
     }
     
-    updateSetting('openctiPlatforms', []);
-    await handleSave();
+    // Create updated settings with empty OpenCTI platforms
+    const updatedSettings = {
+      ...settings,
+      openctiPlatforms: [],
+    };
+    
+    // Update local state
+    setSettings(updatedSettings);
+    
+    // Save directly to avoid async state issues
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+      setSnackbar({ open: true, message: 'All OpenCTI platforms removed', severity: 'success' });
+    }
+    
     setTestResults({});
+    setTestedPlatforms(new Set());
     setCacheStats(null);
   };
 
@@ -394,9 +411,26 @@ const App: React.FC = () => {
       await chrome.runtime.sendMessage({ type: 'CLEAR_OAEV_CACHE' });
     }
     
-    updateSetting('openaevPlatforms', []);
-    await handleSave();
+    // Create updated settings with empty OpenAEV platforms
+    const updatedSettings = {
+      ...settings,
+      openaevPlatforms: [],
+    };
+    
+    // Update local state
+    setSettings(updatedSettings);
+    
+    // Save directly to avoid async state issues
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+      setSnackbar({ open: true, message: 'All OpenAEV platforms removed', severity: 'success' });
+    }
+    
     setTestResults({});
+    setTestedPlatforms(new Set());
   };
   
   const handleRemoveAllPlatforms = async () => {
@@ -901,15 +935,15 @@ const App: React.FC = () => {
                         </Typography>
                       </Box>
                     }
-                    sx={{ alignItems: 'flex-start', mb: 2 }}
+                    sx={{ alignItems: 'flex-start' }}
                   />
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <Button variant="contained" size="small" onClick={handleSave}>
-                      Save Scan Behavior
-                    </Button>
-                  </Box>
                 </Paper>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+                  <Button variant="contained" onClick={handleSave}>
+                    Save Scan Behavior
+                  </Button>
+                </Box>
 
                 <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Entity Cache</Typography>

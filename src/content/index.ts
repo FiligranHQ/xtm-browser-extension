@@ -859,6 +859,22 @@ let selectedForImport: Set<string> = new Set(); // Track selected items for bulk
 let highlightClickInProgress = false; // Prevent panel close during highlight navigation
 
 // ============================================================================
+// Panel Communication Utility
+// ============================================================================
+
+/**
+ * Send a message to the panel iframe.
+ * This utility function centralizes panel communication and handles null checks.
+ */
+function sendPanelMessage(type: string, payload?: unknown): void {
+  if (!panelFrame?.contentWindow) {
+    log.debug(`Cannot send panel message '${type}': panel not available`);
+    return;
+  }
+  panelFrame.contentWindow.postMessage({ type, payload }, '*');
+}
+
+// ============================================================================
 // CSS Styles
 // ============================================================================
 
@@ -2107,10 +2123,7 @@ function handleAtomicTestingClick(e: Event, element: HTMLSpanElement, target: { 
   atomicTestingTarget = target;
   
   // Update panel with selected target
-  panelFrame?.contentWindow?.postMessage(
-    { type: 'ATOMIC_TESTING_SELECT', payload: target },
-    '*'
-  );
+  sendPanelMessage('ATOMIC_TESTING_SELECT', target);
 }
 
 /**
@@ -2123,13 +2136,7 @@ async function showAtomicTestingPanel(targets: Array<{ type: string; value: stri
   const theme = await getCurrentTheme();
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { 
-        type: 'SHOW_ATOMIC_TESTING_PANEL',
-        payload: { targets, theme }
-      },
-      '*'
-    );
+    sendPanelMessage('SHOW_ATOMIC_TESTING_PANEL', { targets, theme });
   }, 100);
 }
 
@@ -2231,10 +2238,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       ].filter(e => e.id); // Only include entities with valid IDs
       
       // Send results to panel
-      panelFrame?.contentWindow?.postMessage({
-        type: 'INVESTIGATION_SCAN_RESULTS',
-        payload: { entities: allFoundEntities },
-      }, '*');
+      sendPanelMessage('INVESTIGATION_SCAN_RESULTS', { entities: allFoundEntities });
       
       const totalFound = allFoundEntities.length;
       
@@ -2247,18 +2251,12 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
     } else {
       updateScanOverlay('Scan failed: ' + response.error);
       // Send empty results to panel
-      panelFrame?.contentWindow?.postMessage({
-        type: 'INVESTIGATION_SCAN_RESULTS',
-        payload: { entities: [] },
-      }, '*');
+      sendPanelMessage('INVESTIGATION_SCAN_RESULTS', { entities: [] });
     }
   } catch (error) {
     log.error(' Investigation scan error:', error);
     updateScanOverlay('Scan failed');
-    panelFrame?.contentWindow?.postMessage({
-      type: 'INVESTIGATION_SCAN_RESULTS',
-      payload: { entities: [] },
-    }, '*');
+    sendPanelMessage('INVESTIGATION_SCAN_RESULTS', { entities: [] });
   }
 }
 
@@ -2336,13 +2334,10 @@ function highlightForInvestigation(fullText: string, searchValue: string, nodeMa
           highlight.classList.toggle('xtm-selected');
           
           // Sync with panel - send toggle message
-          panelFrame?.contentWindow?.postMessage({
-            type: 'INVESTIGATION_TOGGLE_ENTITY',
-            payload: { 
-              entityId: highlight.dataset.entityId,
-              selected: isNowSelected,
-            },
-          }, '*');
+          sendPanelMessage('INVESTIGATION_TOGGLE_ENTITY', { 
+            entityId: highlight.dataset.entityId,
+            selected: isNowSelected,
+          });
         });
         
         range.surroundContents(highlight);
@@ -2723,10 +2718,7 @@ async function showPanel(entity: DetectedObservable | DetectedSDO): Promise<void
   
   // Send entity data to panel with existsInPlatform flag based on 'found'
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { type: 'SHOW_ENTITY', payload: { ...entity, existsInPlatform: entity.found ?? false, theme } },
-      '*'
-    );
+    sendPanelMessage('SHOW_ENTITY', { ...entity, existsInPlatform: entity.found ?? false, theme });
   }, 100);
 }
 
@@ -2781,10 +2773,7 @@ function showAddPanel(entity: DetectedObservable | DetectedSDO): void {
   
   // Send entity data to panel in add mode
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { type: 'SHOW_ADD_ENTITY', payload: entity },
-      '*'
-    );
+    sendPanelMessage('SHOW_ADD_ENTITY', entity);
   }, 100);
 }
 
@@ -2840,22 +2829,16 @@ async function showPreviewPanel(): Promise<void> {
   log.debug(' showPreviewPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { 
-        type: 'SHOW_PREVIEW', 
-        payload: { 
-          entities: selectedEntities, 
-          pageUrl: window.location.href, 
-          pageTitle: article.title,
-          pageContent: article.textContent, // Use clean text content instead of HTML
-          pageHtmlContent: article.content, // Also pass HTML for content field
-          pageDescription: description, // Pre-computed description
-          pageExcerpt: article.excerpt,
-          theme: theme,
-        } 
-      },
-      '*'
-    );
+    sendPanelMessage('SHOW_PREVIEW', { 
+      entities: selectedEntities, 
+      pageUrl: window.location.href, 
+      pageTitle: article.title,
+      pageContent: article.textContent, // Use clean text content instead of HTML
+      pageHtmlContent: article.content, // Also pass HTML for content field
+      pageDescription: description, // Pre-computed description
+      pageExcerpt: article.excerpt,
+      theme: theme,
+    });
   }, 100);
 }
 
@@ -2873,21 +2856,15 @@ async function showContainerPanel(): Promise<void> {
   log.debug(' showContainerPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { 
-        type: 'SHOW_CREATE_CONTAINER', 
-        payload: { 
-          pageUrl: window.location.href, 
-          pageTitle: article.title,
-          pageContent: article.textContent, // Use clean text content instead of HTML
-          pageHtmlContent: article.content, // Also pass HTML for content field
-          pageDescription: description, // Pre-computed description
-          pageExcerpt: article.excerpt,
-          theme: theme,
-        } 
-      },
-      '*'
-    );
+    sendPanelMessage('SHOW_CREATE_CONTAINER', { 
+      pageUrl: window.location.href, 
+      pageTitle: article.title,
+      pageContent: article.textContent, // Use clean text content instead of HTML
+      pageHtmlContent: article.content, // Also pass HTML for content field
+      pageDescription: description, // Pre-computed description
+      pageExcerpt: article.excerpt,
+      theme: theme,
+    });
   }, 100);
 }
 
@@ -2901,10 +2878,7 @@ async function showInvestigationPanel(): Promise<void> {
   const theme = await getCurrentTheme();
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { type: 'SHOW_INVESTIGATION_PANEL', payload: { theme } },
-      '*'
-    );
+    sendPanelMessage('SHOW_INVESTIGATION_PANEL', { theme });
   }, 100);
   
   // Note: We don't auto-scan here anymore
@@ -2920,10 +2894,7 @@ async function showSearchPanel(): Promise<void> {
   const theme = await getCurrentTheme();
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { type: 'SHOW_SEARCH_PANEL', payload: { theme } },
-      '*'
-    );
+    sendPanelMessage('SHOW_SEARCH_PANEL', { theme });
   }, 100);
 }
 
@@ -2935,10 +2906,7 @@ async function showOAEVSearchPanel(): Promise<void> {
   const theme = await getCurrentTheme();
   
   setTimeout(() => {
-    panelFrame?.contentWindow?.postMessage(
-      { type: 'SHOW_OAEV_SEARCH_PANEL', payload: { theme } },
-      '*'
-    );
+    sendPanelMessage('SHOW_OAEV_SEARCH_PANEL', { theme });
   }, 100);
 }
 

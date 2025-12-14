@@ -11,6 +11,15 @@ import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTest
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
+import {
+  CONNECTION_TIMEOUT_MS,
+  ENTITY_FETCH_TIMEOUT_MS,
+  SEARCH_TIMEOUT_MS,
+  CONTAINER_FETCH_TIMEOUT_MS,
+  CACHE_REFRESH_TIMEOUT_MS,
+  OPERATION_DELAY_MS,
+  RETRY_DELAY_MS,
+} from '../shared/constants';
 
 const log = loggers.background;
 import {
@@ -382,8 +391,8 @@ async function checkAndRefreshAllOAEVCaches(forceRefresh: boolean = false): Prom
   if (forceRefresh && isOAEVCacheRefreshing) {
     log.debug('Forced OpenAEV cache refresh requested, waiting for previous to finish...');
     const startTime = Date.now();
-    while (isOAEVCacheRefreshing && (Date.now() - startTime < 30000)) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+    while (isOAEVCacheRefreshing && (Date.now() - startTime < CACHE_REFRESH_TIMEOUT_MS)) {
+      await new Promise(resolve => setTimeout(resolve, OPERATION_DELAY_MS));
     }
   }
 
@@ -888,7 +897,6 @@ async function handleMessage(
       
       case 'TEST_PLATFORM_CONNECTION': {
         const { platformId, platformType } = message.payload as { platformId: string; platformType: 'opencti' | 'openaev' };
-        const TIMEOUT_MS = 8000; // 8 second timeout for connection tests
         
         try {
           // Get settings to find the platform configuration
@@ -896,7 +904,7 @@ async function handleMessage(
           
           // Create timeout promise
           const timeoutPromise = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Connection timeout')), TIMEOUT_MS)
+            setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT_MS)
           );
           
           if (platformType === 'opencti') {
@@ -964,9 +972,8 @@ async function handleMessage(
           apiToken: string;
         };
         
-        const TIMEOUT_MS = 8000; // 8 second timeout for connection tests
         const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), TIMEOUT_MS)
+          setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT_MS)
         );
         
         try {
@@ -1351,8 +1358,6 @@ async function handleMessage(
           platformId?: string;
         };
         
-        const TIMEOUT_MS = 8000; // 8 second timeout for entity details
-        
         try {
           // If a specific platform is requested, use that
           // Otherwise, search all platforms in PARALLEL with timeout
@@ -1365,7 +1370,7 @@ async function handleMessage(
             }
             
             const timeoutPromise = new Promise<null>((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+              setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
             );
             
             try {
@@ -1398,7 +1403,7 @@ async function handleMessage(
             // Search all platforms in PARALLEL
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
               const timeoutPromise = new Promise<null>((resolve) => 
-                setTimeout(() => resolve(null), TIMEOUT_MS)
+                setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
               );
               
               try {
@@ -1637,8 +1642,6 @@ async function handleMessage(
           platformId?: string;
         };
         
-        const TIMEOUT_MS = 8000; // 8 second timeout for search
-        
         try {
           // Refang search term in case user searches for defanged indicator
           const cleanSearchTerm = refangIndicator(searchTerm);
@@ -1653,7 +1656,7 @@ async function handleMessage(
             
             try {
               const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
               );
               const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
               return { platformId: pId, results: results.map((r: any) => ({ ...r, _platformId: pId })) };
@@ -1727,8 +1730,6 @@ async function handleMessage(
           platformId?: string;
         };
         
-        const TIMEOUT_MS = 8000; // 8 second timeout for search
-        
         try {
           // Search across all OpenAEV platforms in PARALLEL with timeout
           const clientsToSearch = platformId 
@@ -1740,7 +1741,7 @@ async function handleMessage(
             
             try {
               const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
               );
               const searchResult = await Promise.race([
                 client.fullTextSearch(searchTerm),
@@ -2103,11 +2104,10 @@ async function handleMessage(
             sendResponse({ success: true, data: labels.map(l => ({ ...l, _platformId: labelsPlatformId })) });
           } else {
             // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
-            const TIMEOUT_MS = 5000;
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
               try {
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                  setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                  setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
                 );
                 const labels = await Promise.race([client.fetchLabels(), timeoutPromise]);
                 return { platformId: pId, labels, error: null };
@@ -2162,11 +2162,10 @@ async function handleMessage(
             sendResponse({ success: true, data: markings.map(m => ({ ...m, _platformId: markingsPlatformId })) });
           } else {
             // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
-            const TIMEOUT_MS = 5000;
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
               try {
                 const timeoutPromise = new Promise<never>((_, reject) => 
-                  setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                  setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
                 );
                 const markings = await Promise.race([client.fetchMarkingDefinitions(), timeoutPromise]);
                 return { platformId: pId, markings, error: null };
@@ -2396,8 +2395,6 @@ async function handleMessage(
           break;
         }
         
-        const TIMEOUT_MS = 5000; // 5 second timeout for container fetch
-        
         try {
           // Search across platforms in PARALLEL with timeout
           const clientsToSearch = specificPlatformId 
@@ -2411,7 +2408,7 @@ async function handleMessage(
             
             try {
               const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
               );
               const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
               log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers for ${entityId} in platform ${pId}`);
@@ -2445,14 +2442,13 @@ async function handleMessage(
         }
         
         const { url } = message.payload as { url: string };
-        const TIMEOUT_MS = 5000;
         
         try {
           // Search across all platforms in parallel with timeout
           const searchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
             try {
               const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
               );
               const containers = await Promise.race([
                 client.findContainersByExternalReferenceUrl(url),

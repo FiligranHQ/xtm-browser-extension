@@ -47,10 +47,12 @@ import {
 import {
   CenterFocusStrongOutlined,
   GitHub,
+  AutoAwesomeOutlined,
+  KeyOutlined,
 } from '@mui/icons-material';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
-import type { ExtensionSettings, PlatformConfig } from '../shared/types';
+import type { ExtensionSettings, PlatformConfig, AIProvider, AISettings } from '../shared/types';
 
 // Observable types that can be detected - sorted alphabetically by label
 const OBSERVABLE_TYPES = [
@@ -93,6 +95,7 @@ const ENTITY_TYPES = [
 const OAEV_ENTITY_TYPES = [
   { value: 'AssetGroup', label: 'Asset Groups' },
   { value: 'Asset', label: 'Assets (Endpoints)' },
+  { value: 'Finding', label: 'Findings' },
   { value: 'Player', label: 'People' },
   { value: 'Team', label: 'Teams' },
 ];
@@ -103,7 +106,7 @@ const DEFAULT_DETECTION = {
   oaevEntityTypes: OAEV_ENTITY_TYPES.map(o => o.value),
 };
 
-type TabType = 'opencti' | 'openaev' | 'detection' | 'appearance' | 'about';
+type TabType = 'opencti' | 'openaev' | 'detection' | 'ai' | 'appearance' | 'about';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
@@ -754,6 +757,20 @@ const App: React.FC = () => {
                 icon: <CenterFocusStrongOutlined sx={{ fontSize: 20 }} />,
                 disabled: (settings?.openctiPlatforms?.length || 0) === 0 && (settings?.openaevPlatforms?.length || 0) === 0,
               },
+              { 
+                id: 'ai', 
+                label: 'AI Assistant', 
+                icon: <AutoAwesomeOutlined sx={{ fontSize: 20 }} />,
+                // AI is only available if at least one platform is Enterprise Edition
+                disabled: ![
+                  ...(settings?.openctiPlatforms || []),
+                  ...(settings?.openaevPlatforms || []),
+                ].some((p: any) => p.isEnterprise),
+                badge: ![
+                  ...(settings?.openctiPlatforms || []),
+                  ...(settings?.openaevPlatforms || []),
+                ].some((p: any) => p.isEnterprise) ? 'EE' : undefined,
+              },
               { id: 'appearance', label: 'Appearance', icon: <PaletteOutlined sx={{ fontSize: 20 }} /> },
               { id: 'about', label: 'About', icon: <InfoOutlined sx={{ fontSize: 20 }} /> },
             ].map((item) => (
@@ -1140,6 +1157,192 @@ const App: React.FC = () => {
                 </Button>
                 <Button variant="contained" onClick={handleSave}>
                   Save Detection Settings
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* AI Assistant Tab */}
+          {activeTab === 'ai' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>AI Assistant</Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+                Configure AI-powered features for content generation and scenario creation
+              </Typography>
+
+              {/* Check if any platform has EE */}
+              {![
+                ...(settings?.openctiPlatforms || []),
+                ...(settings?.openaevPlatforms || []),
+              ].some((p: any) => p.isEnterprise) ? (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  AI features require at least one Enterprise Edition (EE) platform. 
+                  Connect an EE platform to enable AI capabilities.
+                </Alert>
+              ) : (
+                <Box sx={{ flex: 1 }}>
+                  {/* AI Provider Selection */}
+                  <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mb: 3 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>AI Provider</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+                      Select your preferred AI provider and enter your API key
+                    </Typography>
+
+                    <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                      {[
+                        { value: 'openai', label: 'OpenAI', sublabel: 'GPT-4o' },
+                        { value: 'anthropic', label: 'Anthropic', sublabel: 'Claude' },
+                        { value: 'gemini', label: 'Google', sublabel: 'Gemini' },
+                        { value: 'xtm-one', label: 'XTM One', sublabel: 'Coming Soon', disabled: true },
+                      ].map((provider) => (
+                        <Paper
+                          key={provider.value}
+                          onClick={() => !provider.disabled && updateSetting('ai', { 
+                            ...settings?.ai, 
+                            provider: provider.value as AIProvider,
+                            enabled: true,
+                          })}
+                          sx={{
+                            p: 2,
+                            minWidth: 140,
+                            cursor: provider.disabled ? 'not-allowed' : 'pointer',
+                            opacity: provider.disabled ? 0.5 : 1,
+                            border: settings?.ai?.provider === provider.value ? '2px solid' : '1px solid',
+                            borderColor: settings?.ai?.provider === provider.value ? 'primary.main' : 'divider',
+                            bgcolor: settings?.ai?.provider === provider.value ? 'action.selected' : 'background.paper',
+                            borderRadius: 1,
+                            textAlign: 'center',
+                            transition: 'all 0.2s',
+                            '&:hover': !provider.disabled ? {
+                              borderColor: 'primary.main',
+                              bgcolor: 'action.hover',
+                            } : {},
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {provider.label}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {provider.sublabel}
+                          </Typography>
+                          {provider.disabled && (
+                            <Chip 
+                              label="Soon" 
+                              size="small" 
+                              sx={{ 
+                                mt: 1, 
+                                fontSize: '0.65rem',
+                                height: 18,
+                                bgcolor: 'warning.main',
+                                color: 'warning.contrastText',
+                              }} 
+                            />
+                          )}
+                        </Paper>
+                      ))}
+                    </Box>
+
+                    {/* API Key Input */}
+                    {settings?.ai?.provider && settings.ai.provider !== 'xtm-one' && (
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label={`${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API Key`}
+                        placeholder={`Enter your ${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API key`}
+                        value={settings?.ai?.apiKey || ''}
+                        onChange={(e) => updateSetting('ai', { 
+                          ...settings?.ai, 
+                          apiKey: e.target.value,
+                        })}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <KeyOutlined sx={{ color: 'text.secondary' }} />
+                            </InputAdornment>
+                          ),
+                        }}
+                        helperText={
+                          settings.ai.provider === 'openai' 
+                            ? 'Get your API key from platform.openai.com' 
+                            : settings.ai.provider === 'anthropic'
+                            ? 'Get your API key from console.anthropic.com'
+                            : 'Get your API key from aistudio.google.com'
+                        }
+                        sx={{ mb: 2 }}
+                      />
+                    )}
+
+                    {/* Enable/Disable Toggle */}
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={settings?.ai?.enabled && !!settings?.ai?.apiKey}
+                          onChange={(e) => updateSetting('ai', { 
+                            ...settings?.ai, 
+                            enabled: e.target.checked,
+                          })}
+                          disabled={!settings?.ai?.apiKey}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">Enable AI Features</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {!settings?.ai?.apiKey 
+                              ? 'Enter an API key to enable AI features' 
+                              : settings?.ai?.enabled 
+                                ? 'AI features are active' 
+                                : 'AI features are disabled'}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Paper>
+
+                  {/* AI Capabilities Info */}
+                  <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>AI Capabilities</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                      When enabled, AI powers the following features:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <DescriptionOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Container Description</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Generate intelligent descriptions when creating containers in OpenCTI
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <AutoAwesomeOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Scenario Generation</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Create complete OpenAEV scenarios with injects based on page content
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <CenterFocusStrongOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>On-the-fly Atomic Testing</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Generate custom atomic tests with executable commands
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Box>
+              )}
+
+              <Divider sx={{ my: 3 }} />
+
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="contained" onClick={handleSave}>
+                  Save AI Settings
                 </Button>
               </Box>
             </Box>

@@ -388,6 +388,16 @@ const App: React.FC = () => {
     window.close();
   };
 
+  const handleSearchOAEV = async () => {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      // Fire and forget - don't await, close popup immediately
+      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_OAEV_SEARCH_PANEL' });
+    }
+    window.close();
+  };
+
   const handleAtomicTesting = async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -811,8 +821,8 @@ const App: React.FC = () => {
             <ActionButton
               icon={<CenterFocusStrongOutlined />}
               label="Scan"
-              subtitle="Detect entities"
-              tooltip="Scan page for observables and entities"
+              subtitle="Find entities"
+              tooltip="Scan page for entities and observables"
               onClick={handleScanPage}
               color="#00bcd4"
             />
@@ -872,12 +882,21 @@ const App: React.FC = () => {
             }}
           >
             <ActionButton
-              icon={<DevicesOutlined />}
-              label="Assets"
-              subtitle="Find endpoints"
-              tooltip="Search for assets matching page content"
+              icon={<CenterFocusStrongOutlined />}
+              label="Scan"
+              subtitle="Find entities"
+              tooltip="Scan page for assets and findings"
               onClick={handleSearchAssets}
-              color="#2196f3"
+              color="#00bcd4"
+              disabled={!hasOpenAEV}
+            />
+            <ActionButton
+              icon={<SearchOutlined />}
+              label="Search"
+              subtitle="Query platform"
+              tooltip="Search in OpenAEV"
+              onClick={handleSearchOAEV}
+              color="#9c27b0"
               disabled={!hasOpenAEV}
             />
             <ActionButton
@@ -897,15 +916,6 @@ const App: React.FC = () => {
               onClick={handleGenerateScenario}
               color="#e91e63"
               disabled={!hasOpenAEV}
-            />
-            <ActionButton
-              icon={<MoreHorizOutlined />}
-              label="More"
-              subtitle="Coming soon"
-              tooltip="More OpenAEV actions coming soon"
-              onClick={() => {}}
-              color="#9e9e9e"
-              disabled={true}
             />
           </Box>
         </Box>

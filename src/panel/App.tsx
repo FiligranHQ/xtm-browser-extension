@@ -38,11 +38,14 @@ import {
   PictureAsPdfOutlined,
   RefreshOutlined,
   TravelExploreOutlined,
-  DevicesOutlined,
-  FolderOutlined,
+  ComputerOutlined,
+  LanOutlined,
   PersonOutlined,
   GroupsOutlined,
   BugReportOutlined,
+  MovieFilterOutlined,
+  Kayaking,
+  DomainOutlined,
 } from '@mui/icons-material';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
@@ -54,7 +57,7 @@ import remarkGfm from 'remark-gfm';
 
 const log = loggers.panel;
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search';
 
 interface EntityData {
   id?: string;
@@ -125,6 +128,9 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [oaevSearchQuery, setOaevSearchQuery] = useState('');
+  const [oaevSearchResults, setOaevSearchResults] = useState<any[]>([]);
+  const [oaevSearching, setOaevSearching] = useState(false);
   const [containerType, setContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState({
     name: '',
@@ -861,6 +867,11 @@ const App: React.FC = () => {
       case 'SHOW_SEARCH_PANEL':
         setPanelMode('search');
         break;
+      case 'SHOW_OAEV_SEARCH_PANEL':
+        setOaevSearchQuery('');
+        setOaevSearchResults([]);
+        setPanelMode('oaev-search');
+        break;
       case 'LOADING':
         setPanelMode('loading');
         break;
@@ -933,6 +944,100 @@ const App: React.FC = () => {
       setSearchResults(response.data || []);
     }
     setSearching(false);
+  };
+
+  const handleOaevSearch = async () => {
+    if (!oaevSearchQuery.trim()) return;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setOaevSearching(true);
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'SEARCH_OAEV',
+      payload: { searchTerm: oaevSearchQuery },
+    });
+
+    if (chrome.runtime.lastError) {
+      setOaevSearching(false);
+      return;
+    }
+
+    if (response?.success) {
+      setOaevSearchResults(response.data || []);
+    }
+    setOaevSearching(false);
+  };
+
+  const handleOaevSearchResultClick = (result: any) => {
+    // Determine entity type from _entityClass
+    const entityClass = result._entityClass || '';
+    const oaevType = getOaevTypeFromClass(entityClass);
+    
+    // Get platform info
+    const platformId = result._platformId;
+    const platformInfo = availablePlatforms.find(p => p.id === platformId);
+    if (platformInfo) {
+      setSelectedPlatformId(platformInfo.id);
+      setPlatformUrl(platformInfo.url);
+    }
+    
+    // Navigate to entity view
+    setEntity({
+      ...result,
+      type: `oaev-${oaevType}`,
+      name: getOaevEntityName(result, oaevType),
+      entityData: result,
+      existsInPlatform: true,
+      _platformId: platformId,
+      _isOAEV: true,
+    });
+    setPanelMode('entity');
+  };
+
+  // Helper to get OAEV entity type from Java class name
+  const getOaevTypeFromClass = (className: string): string => {
+    const simpleName = className.split('.').pop() || className;
+    switch (simpleName) {
+      case 'Endpoint': return 'Asset';
+      case 'AssetGroup': return 'AssetGroup';
+      case 'User': return 'User'; // Keep as User for search results display
+      case 'Player': return 'Player';
+      case 'Team': return 'Team';
+      case 'Organization': return 'Organization';
+      case 'AttackPattern': return 'AttackPattern';
+      case 'Finding': return 'Finding';
+      case 'Scenario': return 'Scenario';
+      case 'Exercise': return 'Exercise';
+      default: return simpleName;
+    }
+  };
+
+  // Helper to get display name for OAEV entity
+  const getOaevEntityName = (result: any, oaevType: string): string => {
+    switch (oaevType) {
+      case 'Asset':
+        return result.endpoint_name || result.asset_name || result.name || 'Unknown Asset';
+      case 'AssetGroup':
+        return result.asset_group_name || result.name || 'Unknown Asset Group';
+      case 'Player':
+        return [result.user_firstname, result.user_lastname].filter(Boolean).join(' ') || result.user_email || 'Unknown Player';
+      case 'User':
+        return [result.user_firstname, result.user_lastname].filter(Boolean).join(' ') || result.user_email || result.name || 'Unknown User';
+      case 'Team':
+        return result.team_name || result.name || 'Unknown Team';
+      case 'Organization':
+        return result.organization_name || result.name || 'Unknown Organization';
+      case 'AttackPattern':
+        return result.attack_pattern_name || result.name || 'Unknown Attack Pattern';
+      case 'Finding':
+        return result.finding_value || result.value || result.name || 'Unknown Finding';
+      case 'Scenario':
+        return result.scenario_name || result.name || 'Unknown Scenario';
+      case 'Exercise':
+        return result.exercise_name || result.name || 'Unknown Simulation';
+      default:
+        return result.name || 'Unknown';
+    }
   };
 
   const handleSearchResultClick = async (merged: MergedSearchResult) => {
@@ -1295,9 +1400,14 @@ const App: React.FC = () => {
       switch (oaevType) {
         case 'Asset': return '#00bcd4'; // Cyan
         case 'AssetGroup': return '#009688'; // Teal
-        case 'Player': return '#ff9800'; // Orange
+        case 'Player':
+        case 'User': return '#ff9800'; // Orange
         case 'Team': return '#4caf50'; // Green
+        case 'Organization': return '#3f51b5'; // Indigo
+        case 'Scenario': return '#9c27b0'; // Purple
+        case 'Exercise': return '#ff5722'; // Deep Orange
         case 'AttackPattern': return '#d4e157'; // Yellow-green (matches OpenCTI Attack-Pattern)
+        case 'Finding': return '#e91e63'; // Pink
         default: return '#00bcd4';
       }
     };
@@ -1352,17 +1462,73 @@ const App: React.FC = () => {
         entityUrl = `${platformUrl}/admin/attack_patterns/${entityId}`;
         break;
       }
+      case 'Finding': {
+        const finding = entityData as any;
+        name = finding.finding_value || finding.name || 'Unknown Finding';
+        description = finding.finding_description || `Type: ${finding.finding_type || 'Unknown'}`;
+        entityId = finding.finding_id || finding.id || '';
+        entityUrl = `${platformUrl}/admin/findings/${entityId}`;
+        break;
+      }
+      case 'Scenario': {
+        const scenario = entityData as any;
+        name = scenario.scenario_name || scenario.name || 'Unknown Scenario';
+        description = scenario.scenario_description || scenario.description || '';
+        entityId = scenario.scenario_id || scenario.id || '';
+        entityUrl = `${platformUrl}/admin/scenarios/${entityId}`;
+        break;
+      }
+      case 'Exercise': {
+        const exercise = entityData as any;
+        name = exercise.exercise_name || exercise.name || 'Unknown Simulation';
+        description = exercise.exercise_description || exercise.description || '';
+        entityId = exercise.exercise_id || exercise.id || '';
+        entityUrl = `${platformUrl}/admin/simulations/${entityId}`;
+        break;
+      }
+      case 'Organization': {
+        const org = entityData as any;
+        name = org.organization_name || org.name || 'Unknown Organization';
+        description = org.organization_description || org.description || '';
+        entityId = org.organization_id || org.id || '';
+        entityUrl = `${platformUrl}/admin/teams/organizations/${entityId}`;
+        break;
+      }
+      case 'User': {
+        // User is returned from search, same as Player
+        const user = entityData as any;
+        name = [user.user_firstname, user.user_lastname].filter(Boolean).join(' ') || user.user_email || user.name || 'Unknown User';
+        description = user.user_organization || user.description || '';
+        entityId = user.user_id || user.id || '';
+        entityUrl = `${platformUrl}/admin/teams/players/${entityId}`;
+        break;
+      }
+      default: {
+        // Generic fallback for any other entity type from search
+        // FullTextSearchResult has: id, name, description, clazz, tags
+        name = entityData.name || 'Unknown';
+        description = entityData.description || '';
+        entityId = entityData.id || '';
+        // Generic URL, just go to the platform
+        entityUrl = platformUrl;
+        break;
+      }
     }
     
-    // Get OpenAEV icon based on type
+    // Get OpenAEV icon based on type (matches OpenAEV's useEntityIcon.tsx)
     const getOAEVIcon = () => {
       switch (oaevType) {
-        case 'Asset': return <DevicesOutlined sx={{ fontSize: 20, color }} />;
-        case 'AssetGroup': return <FolderOutlined sx={{ fontSize: 20, color }} />;
-        case 'Player': return <PersonOutlined sx={{ fontSize: 20, color }} />;
+        case 'Asset': return <ComputerOutlined sx={{ fontSize: 20, color }} />;
+        case 'AssetGroup': return <LanOutlined sx={{ fontSize: 20, color }} />;
+        case 'Player':
+        case 'User': return <PersonOutlined sx={{ fontSize: 20, color }} />;
         case 'Team': return <GroupsOutlined sx={{ fontSize: 20, color }} />;
+        case 'Organization': return <DomainOutlined sx={{ fontSize: 20, color }} />;
+        case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: 20, color }} />;
+        case 'Exercise': return <Kayaking sx={{ fontSize: 20, color }} />;
         case 'AttackPattern': return <SecurityOutlined sx={{ fontSize: 20, color }} />;
-        default: return <DevicesOutlined sx={{ fontSize: 20, color }} />;
+        case 'Finding': return <TravelExploreOutlined sx={{ fontSize: 20, color }} />;
+        default: return <ComputerOutlined sx={{ fontSize: 20, color }} />;
       }
     };
     
@@ -1605,6 +1771,164 @@ const App: React.FC = () => {
                     <Chip key={i} label={platform} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
                   ))}
                 </Box>
+              </Box>
+            )}
+          </>
+        )}
+        
+        {oaevType === 'Scenario' && (
+          <>
+            {/* Subtitle */}
+            {(entityData.scenario_subtitle) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Subtitle
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.scenario_subtitle}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Category */}
+            {(entityData.scenario_category) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Category
+                </Typography>
+                <Chip label={entityData.scenario_category} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              </Box>
+            )}
+            
+            {/* Severity */}
+            {(entityData.scenario_severity) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Severity
+                </Typography>
+                <Chip label={entityData.scenario_severity} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              </Box>
+            )}
+            
+            {/* Tags */}
+            {((entityData.scenario_tags) && entityData.scenario_tags.length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Tags
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.scenario_tags.map((tag: string, i: number) => (
+                    <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </>
+        )}
+        
+        {oaevType === 'Exercise' && (
+          <>
+            {/* Subtitle */}
+            {(entityData.exercise_subtitle) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Subtitle
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.exercise_subtitle}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Category */}
+            {(entityData.exercise_category) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Category
+                </Typography>
+                <Chip label={entityData.exercise_category} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              </Box>
+            )}
+            
+            {/* Severity */}
+            {(entityData.exercise_severity) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Severity
+                </Typography>
+                <Chip label={entityData.exercise_severity} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              </Box>
+            )}
+            
+            {/* Start date */}
+            {(entityData.exercise_start_date) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Start Date
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {new Date(entityData.exercise_start_date).toLocaleDateString()}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Tags */}
+            {((entityData.exercise_tags) && entityData.exercise_tags.length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Tags
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.exercise_tags.map((tag: string, i: number) => (
+                    <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </>
+        )}
+        
+        {oaevType === 'Organization' && (
+          <>
+            {/* No specific extra fields for now, description is handled below */}
+          </>
+        )}
+        
+        {(oaevType === 'User') && (
+          <>
+            {/* Email */}
+            {entityData.user_email && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Email
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.user_email}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Phone */}
+            {entityData.user_phone && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Phone
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.user_phone}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Organization */}
+            {entityData.user_organization && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Organization
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.user_organization}
+                </Typography>
               </Box>
             )}
           </>
@@ -4376,6 +4700,139 @@ const App: React.FC = () => {
   // Keep for backwards compatibility but redirect to search view
   const renderSearchResultsView = () => renderSearchView();
 
+  // Helper to get icon for OAEV entity type (matches OpenAEV's useEntityIcon.tsx)
+  const getOaevSearchIcon = (entityClass: string) => {
+    const simpleName = entityClass.split('.').pop() || entityClass;
+    const iconSize = 20;
+    switch (simpleName) {
+      case 'Endpoint': return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
+      case 'Asset': return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
+      case 'AssetGroup': return <LanOutlined sx={{ fontSize: iconSize, color: '#009688' }} />;
+      case 'User': return <PersonOutlined sx={{ fontSize: iconSize, color: '#ff9800' }} />;
+      case 'Player': return <PersonOutlined sx={{ fontSize: iconSize, color: '#ff9800' }} />;
+      case 'Team': return <GroupsOutlined sx={{ fontSize: iconSize, color: '#4caf50' }} />;
+      case 'Organization': return <DomainOutlined sx={{ fontSize: iconSize, color: '#3f51b5' }} />;
+      case 'AttackPattern': return <SecurityOutlined sx={{ fontSize: iconSize, color: '#d4e157' }} />;
+      case 'Finding': return <TravelExploreOutlined sx={{ fontSize: iconSize, color: '#e91e63' }} />;
+      case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: iconSize, color: '#9c27b0' }} />;
+      case 'Exercise': return <Kayaking sx={{ fontSize: iconSize, color: '#ff5722' }} />;
+      default: return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
+    }
+  };
+
+  const renderOAEVSearchView = () => {
+    const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
+    const hasSearched = oaevSearchResults.length > 0 || (oaevSearchQuery.trim() && !oaevSearching);
+    
+    return (
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Search OpenAEV</Typography>
+
+        <TextField
+          placeholder="Search entities..."
+          value={oaevSearchQuery}
+          onChange={(e) => setOaevSearchQuery(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleOaevSearch()}
+          fullWidth
+          autoFocus
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton onClick={handleOaevSearch} edge="end" disabled={oaevSearching}>
+                  {oaevSearching ? <CircularProgress size={20} /> : <SearchOutlined />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2 }}
+        />
+        
+        {/* Results section */}
+        {oaevSearching ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
+            <CircularProgress size={32} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Searching across {oaevPlatforms.length} platform{oaevPlatforms.length > 1 ? 's' : ''}...
+            </Typography>
+          </Box>
+        ) : hasSearched && oaevSearchResults.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              No results found for "{oaevSearchQuery}"
+            </Typography>
+          </Box>
+        ) : oaevSearchResults.length > 0 ? (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {oaevSearchResults.length} result{oaevSearchResults.length !== 1 ? 's' : ''} found
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {oaevSearchResults.map((result, i) => {
+                const entityClass = result._entityClass || '';
+                const oaevType = getOaevTypeFromClass(entityClass);
+                const displayName = getOaevEntityName(result, oaevType);
+                const platformInfo = result._platform;
+                
+                return (
+                  <Paper
+                    key={result.id || i}
+                    onClick={() => handleOaevSearchResultClick(result)}
+                    elevation={0}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      mb: 1,
+                      cursor: 'pointer',
+                      borderRadius: 1,
+                      border: 1,
+                      borderColor: 'divider',
+                      transition: 'all 0.15s',
+                      '&:hover': { 
+                        bgcolor: 'action.hover',
+                        borderColor: 'primary.main',
+                      },
+                    }}
+                  >
+                    {getOaevSearchIcon(entityClass)}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                        {displayName}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                          {oaevType.replace(/([A-Z])/g, ' $1').trim()}
+                        </Typography>
+                        {platformInfo && (
+                          <>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {platformInfo.name || platformInfo.url}
+                            </Typography>
+                          </>
+                        )}
+                      </Box>
+                    </Box>
+                    <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </Paper>
+                );
+              })}
+            </Box>
+          </>
+        ) : (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Enter a search term and press Enter or click the search icon
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
   const renderEmptyView = () => (
     <Box
       sx={{
@@ -4440,6 +4897,8 @@ const App: React.FC = () => {
         return renderSearchView();
       case 'search-results':
         return renderSearchResultsView();
+      case 'oaev-search':
+        return renderOAEVSearchView();
       case 'loading':
         return renderLoadingView();
       default:

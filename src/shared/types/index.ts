@@ -19,6 +19,49 @@ export interface DetectionSettings {
   oaevEntityTypes?: string[];
 }
 
+// ============================================================================
+// AI Configuration Types
+// ============================================================================
+
+export type AIProvider = 'openai' | 'anthropic' | 'gemini' | 'xtm-one';
+
+export interface AISettings {
+  enabled: boolean;
+  provider?: AIProvider;
+  apiKey?: string;
+  // Model selection (optional, uses provider defaults if not set)
+  model?: string;
+}
+
+// Platform affinity options for scenario generation (matching OpenAEV/OpenCTI)
+export const PLATFORM_AFFINITIES = [
+  { value: 'windows', label: 'Windows' },
+  { value: 'linux', label: 'Linux' },
+  { value: 'macos', label: 'macOS' },
+  { value: 'android', label: 'Android' },
+  { value: 'ios', label: 'iOS' },
+  { value: 'network', label: 'Network' },
+  { value: 'containers', label: 'Containers' },
+  { value: 'office-365', label: 'Office 365' },
+  { value: 'azure-ad', label: 'Azure AD' },
+  { value: 'google-workspace', label: 'Google Workspace' },
+  { value: 'saas', label: 'SaaS' },
+  { value: 'iaas', label: 'IaaS' },
+  { value: 'pre', label: 'PRE' },
+] as const;
+
+// Type affinity options for scenario generation
+export const TYPE_AFFINITIES = [
+  { value: 'attack-scenario', label: 'Attack Scenario' },
+  { value: 'incident-response', label: 'Incident Response' },
+  { value: 'detection-validation', label: 'Detection Validation' },
+  { value: 'threat-hunting', label: 'Threat Hunting' },
+  { value: 'red-team', label: 'Red Team Exercise' },
+  { value: 'purple-team', label: 'Purple Team Exercise' },
+  { value: 'tabletop', label: 'Tabletop Exercise' },
+  { value: 'crisis-management', label: 'Crisis Management' },
+] as const;
+
 export interface ExtensionSettings {
   // Multi-platform support
   openctiPlatforms: PlatformConfig[];
@@ -40,6 +83,8 @@ export interface ExtensionSettings {
   scanOnLoad: boolean;
   showNotifications: boolean;
   detection?: DetectionSettings;
+  // AI configuration (available only with EE platforms)
+  ai?: AISettings;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -62,6 +107,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       'StixFile', 'Url', 'User-Agent'
     ],
     oaevEntityTypes: ['Asset', 'AssetGroup', 'Player', 'Team', 'Finding'],
+  },
+  ai: {
+    enabled: false,
   },
 };
 
@@ -523,7 +571,10 @@ export type MessageType =
   | 'PREVIEW_SELECTION'
   | 'SHOW_BULK_IMPORT_PANEL'
   | 'OPEN_SEARCH_PANEL'
+  | 'OPEN_OAEV_SEARCH_PANEL'
   | 'SHOW_SEARCH_PANEL'
+  | 'SHOW_OAEV_SEARCH_PANEL'
+  | 'SEARCH_OAEV'
   | 'SHOW_CONTAINER_PANEL'
   | 'SHOW_INVESTIGATION_PANEL'
   | 'GET_PANEL_STATE'
@@ -553,7 +604,16 @@ export type MessageType =
   // Content Script Injection
   | 'INJECT_CONTENT_SCRIPT'
   | 'INJECT_ALL_TABS'
-  | 'PING';
+  | 'PING'
+  // AI Features
+  | 'AI_GENERATE_DESCRIPTION'
+  | 'AI_GENERATE_SCENARIO'
+  | 'AI_GENERATE_ATOMIC_TEST'
+  | 'AI_CHECK_STATUS'
+  // Scenario Generation
+  | 'OPEN_SCENARIO_PANEL'
+  | 'SHOW_SCENARIO_PANEL'
+  | 'CREATE_SCENARIO';
 
 export interface ExtensionMessage {
   type: MessageType;

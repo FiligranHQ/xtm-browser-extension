@@ -1904,6 +1904,7 @@ let atomicTestingTarget: { value: string; type: string; data: any } | null = nul
 /**
  * Scan page for atomic testing targets
  * Scans for: attack patterns (from OpenAEV cache) and domain/hostname observables (regex)
+ * Uses SAME approach as scanPage() (innerText) for consistency with OpenCTI
  */
 async function scanPageForAtomicTesting(): Promise<void> {
   showScanOverlay();
@@ -1914,12 +1915,8 @@ async function scanPageForAtomicTesting(): Promise<void> {
     selectedForImport.clear();
     atomicTestingTarget = null;
     
-    // Get page content - build from text nodes for consistency with highlighting
-    const textNodes = getTextNodes(document.body);
-    let content = '';
-    textNodes.forEach((node) => {
-      content += node.textContent || '';
-    });
+    // Get page content - use innerText just like OpenCTI's scanPage()
+    const content = document.body.innerText;
     const url = window.location.href;
     
     log.debug(' Starting atomic testing scan...');
@@ -2619,10 +2616,19 @@ function handleHighlightClick(event: MouseEvent): void {
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  // Get the type from dataset (includes oaev- prefix for OpenAEV entities)
+  const highlightType = target.dataset.type || '';
   
   if (entityData) {
     try {
       const entity = JSON.parse(entityData);
+      
+      // IMPORTANT: Use the type from the highlight dataset, which includes the 'oaev-' prefix
+      // for OpenAEV entities. This ensures the panel correctly identifies it as OpenAEV.
+      if (highlightType) {
+        entity.type = highlightType;
+      }
+      
       selectedEntity = entity;
       
       if (found) {
@@ -2921,6 +2927,21 @@ async function showSearchPanel(): Promise<void> {
   }, 100);
 }
 
+async function showOAEVSearchPanel(): Promise<void> {
+  ensurePanelElements();
+  showPanelElements();
+  
+  // Get current theme to pass to panel
+  const theme = await getCurrentTheme();
+  
+  setTimeout(() => {
+    panelFrame?.contentWindow?.postMessage(
+      { type: 'SHOW_OAEV_SEARCH_PANEL', payload: { theme } },
+      '*'
+    );
+  }, 100);
+}
+
 // ============================================================================
 // Message Handling
 // ============================================================================
@@ -3058,6 +3079,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'OPEN_SEARCH_PANEL':
       showSearchPanel();
+      sendResponse({ success: true });
+      break;
+    
+    case 'OPEN_OAEV_SEARCH_PANEL':
+      showOAEVSearchPanel();
       sendResponse({ success: true });
       break;
     

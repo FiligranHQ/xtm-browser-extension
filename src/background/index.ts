@@ -6,6 +6,8 @@
 
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
+import { AIClient, isAIAvailable, parseAIJsonResponse } from '../shared/api/ai-client';
+import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest } from '../shared/api/ai-client';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
@@ -1714,6 +1716,79 @@ async function handleMessage(
         break;
       }
       
+      case 'SEARCH_OAEV': {
+        if (openAEVClients.size === 0) {
+          sendResponse({ success: false, error: 'Not configured' });
+          break;
+        }
+        
+        const { searchTerm, platformId } = message.payload as {
+          searchTerm: string;
+          platformId?: string;
+        };
+        
+        const TIMEOUT_MS = 8000; // 8 second timeout for search
+        
+        try {
+          // Search across all OpenAEV platforms in PARALLEL with timeout
+          const clientsToSearch = platformId 
+            ? [[platformId, openAEVClients.get(platformId)] as const].filter(([_, c]) => c)
+            : Array.from(openAEVClients.entries());
+          
+          const searchPromises = clientsToSearch.map(async ([pId, client]) => {
+            if (!client) return { platformId: pId, results: [] };
+            
+            try {
+              const timeoutPromise = new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+              );
+              const searchResult = await Promise.race([
+                client.fullTextSearch(searchTerm),
+                timeoutPromise
+              ]);
+              
+              // Transform the result into a list of entities
+              const results: any[] = [];
+              const platformInfo = client.getPlatformInfo();
+              
+              for (const [className, data] of Object.entries(searchResult)) {
+                if (data && (data as any).count > 0) {
+                  // Fetch actual results for this class
+                  const classResults = await client.fullTextSearchByClass(className, {
+                    textSearch: searchTerm,
+                    page: 0,
+                    size: 20,
+                  });
+                  
+                  results.push(...classResults.content.map((r: any) => ({
+                    ...r,
+                    _platformId: pId,
+                    _platform: platformInfo,
+                    _entityClass: className,
+                  })));
+                }
+              }
+              
+              return { platformId: pId, results };
+            } catch (e) {
+              log.warn(`OAEV Search timeout/error for platform ${pId}:`, e);
+              return { platformId: pId, results: [] };
+            }
+          });
+          
+          const searchResults = await Promise.all(searchPromises);
+          const allResults = searchResults.flatMap(r => r.results);
+          
+          sendResponse({ success: true, data: allResults });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'OAEV Search failed',
+          });
+        }
+        break;
+      }
+      
       case 'GENERATE_SCENARIO': {
         const { pageTitle, pageContent, pageUrl, platformId } = message.payload as {
           pageTitle: string;
@@ -2398,6 +2473,99 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to search containers',
+          });
+        }
+        break;
+      }
+      
+      // ========================================================================
+      // AI Feature Handlers
+      // ========================================================================
+      
+      case 'AI_CHECK_STATUS': {
+        const settings = await getSettings();
+        const available = isAIAvailable(settings.ai);
+        sendResponse({ 
+          success: true, 
+          data: { 
+            available,
+            provider: settings.ai?.provider,
+            enabled: settings.ai?.enabled,
+          } 
+        });
+        break;
+      }
+      
+      case 'AI_GENERATE_DESCRIPTION': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse({ success: false, error: 'AI not configured' });
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as ContainerDescriptionRequest;
+          const response = await aiClient.generateContainerDescription(request);
+          sendResponse({ success: response.success, data: response.content, error: response.error });
+        } catch (error) {
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI generation failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'AI_GENERATE_SCENARIO': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse({ success: false, error: 'AI not configured' });
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as ScenarioGenerationRequest;
+          const response = await aiClient.generateScenario(request);
+          
+          if (response.success && response.content) {
+            const scenario = parseAIJsonResponse(response.content);
+            sendResponse({ success: true, data: scenario });
+          } else {
+            sendResponse({ success: false, error: response.error || 'Failed to parse scenario' });
+          }
+        } catch (error) {
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI generation failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'AI_GENERATE_ATOMIC_TEST': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse({ success: false, error: 'AI not configured' });
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as AtomicTestRequest;
+          const response = await aiClient.generateAtomicTest(request);
+          
+          if (response.success && response.content) {
+            const atomicTest = parseAIJsonResponse(response.content);
+            sendResponse({ success: true, data: atomicTest });
+          } else {
+            sendResponse({ success: false, error: response.error || 'Failed to parse atomic test' });
+          }
+        } catch (error) {
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI generation failed' 
           });
         }
         break;

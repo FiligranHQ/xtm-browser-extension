@@ -478,6 +478,48 @@ export class OpenAEVClient {
   }
 
   // ============================================================================
+  // Full Text Search
+  // ============================================================================
+
+  /**
+   * Full text search across all OpenAEV entities
+   * Returns counts for each entity type
+   */
+  async fullTextSearch(searchTerm: string): Promise<Record<string, { count: number }>> {
+    try {
+      return await this.request<Record<string, { count: number }>>('/api/fulltextsearch', {
+        method: 'POST',
+        body: JSON.stringify({ searchTerm }),
+      });
+    } catch (error) {
+      log.error(' Full text search failed:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Full text search for a specific entity class
+   * Returns paginated results
+   */
+  async fullTextSearchByClass(
+    className: string,
+    searchPaginationInput: { textSearch?: string; page?: number; size?: number }
+  ): Promise<{ content: any[]; totalElements: number; totalPages: number }> {
+    try {
+      return await this.request<{ content: any[]; totalElements: number; totalPages: number }>(
+        `/api/fulltextsearch/${className}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(searchPaginationInput),
+        }
+      );
+    } catch (error) {
+      log.error(` Full text search for ${className} failed:`, error);
+      return { content: [], totalElements: 0, totalPages: 0 };
+    }
+  }
+
+  // ============================================================================
   // Scenarios
   // ============================================================================
 
@@ -669,6 +711,51 @@ export class OpenAEVClient {
 
   getScenarioUrl(scenarioId: string): string {
     return `${this.baseUrl}/admin/scenarios/${scenarioId}`;
+  }
+
+  getExerciseUrl(exerciseId: string): string {
+    return `${this.baseUrl}/admin/simulations/${exerciseId}`;
+  }
+
+  getOrganizationUrl(organizationId: string): string {
+    return `${this.baseUrl}/admin/teams/organizations/${organizationId}`;
+  }
+
+  getAttackPatternUrl(attackPatternId: string): string {
+    return `${this.baseUrl}/admin/attack_patterns/${attackPatternId}`;
+  }
+
+  getFindingUrl(findingId: string): string {
+    return `${this.baseUrl}/admin/findings/${findingId}`;
+  }
+
+  /**
+   * Get URL for any entity type
+   */
+  getEntityUrl(entityClass: string, entityId: string): string {
+    switch (entityClass) {
+      case 'Asset':
+        return this.getAssetUrl(entityId);
+      case 'AssetGroup':
+        return this.getAssetGroupUrl(entityId);
+      case 'User':
+      case 'Player':
+        return this.getPlayerUrl(entityId);
+      case 'Team':
+        return this.getTeamUrl(entityId);
+      case 'Organization':
+        return this.getOrganizationUrl(entityId);
+      case 'Scenario':
+        return this.getScenarioUrl(entityId);
+      case 'Exercise':
+        return this.getExerciseUrl(entityId);
+      case 'AttackPattern':
+        return this.getAttackPatternUrl(entityId);
+      case 'Finding':
+        return this.getFindingUrl(entityId);
+      default:
+        return this.baseUrl;
+    }
   }
 
   getPlatformInfo(): { id: string; name: string; url: string } {

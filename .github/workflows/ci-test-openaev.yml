@@ -75,7 +75,7 @@ jobs:
           --health-retries 5
 
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.8
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.16.0
         env:
           discovery.type: single-node
           xpack.ml.enabled: 'false'
@@ -85,7 +85,7 @@ jobs:
         ports:
           - 9200:9200
         options: >-
-          --health-cmd "curl -sF http://localhost:9200 || exit 1"
+          --health-cmd "curl -sf http://localhost:9200 || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 30
@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Waiting for Elasticsearch..."
           for i in {1..60}; do
-            if curl -sF http://elasticsearch:9200; then
+            if curl -sf http://localhost:9200 >/dev/null 2>&1; then
               echo "Elasticsearch is ready!"
               break
             fi
@@ -147,7 +147,7 @@ jobs:
         run: |
           echo "Waiting for MinIO..."
           for i in {1..30}; do
-            if curl -sf http://minio:9000/minio/health/live; then
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null 2>&1; then
               echo "MinIO is ready!"
               break
             fi
@@ -165,16 +165,16 @@ jobs:
             -e OPENAEV_ADMIN_PASSWORD=admin \
             -e OPENAEV_ADMIN_TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
             -e OPENAEV_HEALTHCHECK_KEY=healthcheck \
-            -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/openaev \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/openaev \
             -e SPRING_DATASOURCE_USERNAME=openaev \
             -e SPRING_DATASOURCE_PASSWORD=openaev \
-            -e MINIO_ENDPOINT=minio \
+            -e MINIO_ENDPOINT=localhost \
             -e MINIO_ACCESS-KEY=minioadmin \
             -e MINIO_ACCESS-SECRET=minioadmin \
-            -e OPENAEV_RABBITMQ_HOSTNAME=rabbitmq \
+            -e OPENAEV_RABBITMQ_HOSTNAME=localhost \
             -e OPENAEV_RABBITMQ_USER=guest \
             -e OPENAEV_RABBITMQ_PASS=guest \
-            -e ENGINE_URL=http://elasticsearch:9200 \
+            -e ENGINE_URL=http://localhost:9200 \
             openaev/platform:latest || echo "OpenAEV image may not be available, running mock tests only"
 
       - name: Wait for OpenAEV to be ready

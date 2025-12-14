@@ -71,7 +71,7 @@ jobs:
           --health-retries 5
 
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.8
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.16.0
         env:
           discovery.type: single-node
           xpack.ml.enabled: 'false'
@@ -81,7 +81,7 @@ jobs:
         ports:
           - 9200:9200
         options: >-
-          --health-cmd "curl -sF http://localhost:9200 || exit 1"
+          --health-cmd "curl -sf http://localhost:9200 || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 30
@@ -131,7 +131,7 @@ jobs:
         run: |
           echo "Waiting for Elasticsearch..."
           for i in {1..60}; do
-            if curl -s http://elasticsearch:9200 >/dev/null || 1; then
+            if curl -sf http://localhost:9200 >/dev/null 2>&1; then
               echo "Elasticsearch is ready!"
               break
             fi
@@ -143,7 +143,7 @@ jobs:
         run: |
           echo "Waiting for MinIO..."
           for i in {1..30}; do
-            if curl -sf http://minio:9000/minio/health/live; then
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null 2>&1; then
               echo "MinIO is ready!"
               break
             fi
@@ -162,16 +162,16 @@ jobs:
             -e APP__ADMIN__PASSWORD=admin \
             -e APP__ADMIN__TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
             -e APP__HEALTH_ACCESS_KEY=healthcheck \
-            -e REDIS__HOSTNAME=redis \
+            -e REDIS__HOSTNAME=localhost \
             -e REDIS__PORT=6379 \
-            -e ELASTICSEARCH__URL=http://elasticsearch:9200 \
+            -e ELASTICSEARCH__URL=http://localhost:9200 \
             -e ELASTICSEARCH__NUMBER_OF_REPLICAS=0 \
-            -e MINIO__ENDPOINT=minio \
+            -e MINIO__ENDPOINT=localhost \
             -e MINIO__PORT=9000 \
             -e MINIO__USE_SSL=false \
             -e MINIO__ACCESS_KEY=minioadmin \
             -e MINIO__SECRET_KEY=minioadmin \
-            -e RABBITMQ__HOSTNAME=rabbitmq \
+            -e RABBITMQ__HOSTNAME=localhost \
             -e RABBITMQ__PORT=5672 \
             -e RABBITMQ__PORT_MANAGEMENT=15672 \
             -e RABBITMQ__MANAGEMENT_SSL=false \

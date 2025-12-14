@@ -1340,7 +1340,7 @@ const App: React.FC = () => {
         name = team.team_name || team.name || 'Unknown Team';
         description = team.team_description || '';
         entityId = team.team_id || team.id || '';
-        entityUrl = `${platformUrl}/admin/teams/teams/${entityId}`;
+        entityUrl = `${platformUrl}/admin/teams/${entityId}`;
         break;
       }
       case 'AttackPattern': {
@@ -1663,7 +1663,6 @@ const App: React.FC = () => {
                 }
               }}
               fullWidth
-              sx={{ bgcolor: color, '&:hover': { bgcolor: color, opacity: 0.9 } }}
             >
               Open in OpenAEV
             </Button>

@@ -1831,6 +1831,7 @@ async function scanPage(): Promise<void> {
 /**
  * Scan page for OpenAEV entities ONLY (no OpenCTI)
  * This is triggered when user clicks "Assets" in the popup
+ * Uses SAME approach as scanPage() for consistency with OpenCTI highlighting
  */
 async function scanPageForOAEV(): Promise<void> {
   showScanOverlay();
@@ -1840,15 +1841,12 @@ async function scanPageForOAEV(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    // Get page content - build from text nodes for consistency with highlighting
-    const textNodes = getTextNodes(document.body);
-    let content = '';
-    textNodes.forEach((node) => {
-      content += node.textContent || '';
-    });
+    // Get page content - use innerText just like OpenCTI's scanPage()
+    const content = document.body.innerText;
     const url = window.location.href;
     
     log.debug(' Starting OpenAEV scan...');
+    log.debug(` Content length: ${content.length}`);
     
     // Send to background for OpenAEV-only scanning
     const response = await chrome.runtime.sendMessage({
@@ -1874,9 +1872,9 @@ async function scanPageForOAEV(): Promise<void> {
         url: data.url || url,
       };
       
-      // Highlight OpenAEV entities
+      // Highlight using the same method as OpenCTI (highlightResults handles oaevEntities)
       if (entities.length > 0) {
-        highlightOAEVResults(entities);
+        highlightResults(scanResults);
       }
       
       const totalFound = entities.length;
@@ -1894,48 +1892,6 @@ async function scanPageForOAEV(): Promise<void> {
     log.error(' SCAN_OAEV exception:', error);
     updateScanOverlay('OpenAEV scan error: ' + (error instanceof Error ? error.message : 'Unknown'), false);
   }
-}
-
-/**
- * Highlight only OpenAEV entities
- */
-function highlightOAEVResults(oaevEntities: any[]): void {
-  log.debug(`highlightOAEVResults called with ${oaevEntities.length} entities`);
-  
-  if (oaevEntities.length === 0) return;
-  
-  const textNodes = getTextNodes(document.body);
-  
-  // Build fullText from actual text nodes (not innerText which has different whitespace)
-  const nodeMap: Array<{ node: Text; start: number; end: number }> = [];
-  let fullText = '';
-  let offset = 0;
-  
-  textNodes.forEach((node) => {
-    const text = node.textContent || '';
-    nodeMap.push({ node, start: offset, end: offset + text.length });
-    fullText += text;
-    offset += text.length;
-  });
-  
-  log.debug(`Got ${textNodes.length} text nodes, built fullText length: ${fullText.length}`);
-  
-  let highlightedCount = 0;
-  for (const entity of oaevEntities) {
-    log.debug(`Attempting to highlight: "${entity.name}" (${entity.type}), value: "${entity.value}"`);
-    
-    // Use value (the matched text) if available, otherwise name
-    const searchValue = entity.value || entity.name;
-    
-    highlightInText(fullText, searchValue, nodeMap, {
-      type: `oaev-${entity.type}`,
-      found: true,
-      data: entity as unknown as DetectedSDO,
-    });
-    highlightedCount++;
-  }
-  
-  log.debug(`Highlighting complete, processed ${highlightedCount} entities`);
 }
 
 // ============================================================================

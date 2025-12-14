@@ -442,7 +442,7 @@ export interface CachedOAEVEntity {
   id: string;
   name: string;
   aliases?: string[]; // For hostnames, IPs on assets
-  type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern';
+  type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding';
   platformId: string;
 }
 
@@ -456,6 +456,7 @@ export interface OAEVCache {
     'Team': CachedOAEVEntity[];
     'Player': CachedOAEVEntity[];
     'AttackPattern': CachedOAEVEntity[];
+    'Finding': CachedOAEVEntity[];
   };
 }
 
@@ -528,6 +529,7 @@ export function createEmptyOAEVCache(platformId: string = 'default'): OAEVCache 
       'Team': [],
       'Player': [],
       'AttackPattern': [],
+      'Finding': [],
     },
   };
 }

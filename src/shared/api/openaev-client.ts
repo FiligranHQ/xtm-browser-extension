@@ -15,6 +15,7 @@ import type {
   OAEVPlayer,
   OAEVTeam,
   OAEVAttackPattern,
+  OAEVFinding,
   OAEVScenario,
   OAEVScenarioInput,
 } from '../types';
@@ -444,6 +445,36 @@ export class OpenAEVClient {
 
   getAttackPatternUrl(attackPatternId: string): string {
     return `${this.baseUrl}/admin/attack_patterns/${attackPatternId}`;
+  }
+
+  // ============================================================================
+  // Findings
+  // ============================================================================
+
+  async getFinding(findingId: string): Promise<OAEVFinding | null> {
+    try {
+      return await this.request<OAEVFinding>(`/api/findings/${findingId}`);
+    } catch (error) {
+      log.error(' Get finding failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all findings with full pagination support (distinct by finding_value)
+   * Uses the search endpoint with distinct=true to get unique findings
+   */
+  async getAllFindings(): Promise<OAEVFinding[]> {
+    try {
+      return await this.fetchAllWithPagination<OAEVFinding>('/api/findings/search?distinct=true', 'Findings');
+    } catch (error) {
+      log.error(' Get all findings failed:', error);
+      return [];
+    }
+  }
+
+  getFindingUrl(findingId: string): string {
+    return `${this.baseUrl}/admin/findings/${findingId}`;
   }
 
   // ============================================================================

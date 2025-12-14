@@ -412,13 +412,14 @@ async function refreshOAEVCacheForPlatform(platformId: string, client: OpenAEVCl
   const cache: OAEVCache = createEmptyOAEVCache(platformId);
   
   try {
-    // Fetch all entities including attack patterns
-    const [{ assets, assetGroups, teams, players }, attackPatterns] = await Promise.all([
+    // Fetch all entities including attack patterns and findings
+    const [{ assets, assetGroups, teams, players }, attackPatterns, findings] = await Promise.all([
       client.fetchAllEntitiesForCache(),
       client.getAllAttackPatterns(),
+      client.getAllFindings(),
     ]);
     
-    log.debug(`[${platformId}] Fetched ${assets.length} Assets, ${assetGroups.length} AssetGroups, ${teams.length} Teams, ${players.length} Players, ${attackPatterns.length} AttackPatterns`);
+    log.debug(`[${platformId}] Fetched ${assets.length} Assets, ${assetGroups.length} AssetGroups, ${teams.length} Teams, ${players.length} Players, ${attackPatterns.length} AttackPatterns, ${findings.length} Findings`);
     
     // Debug: Log first few raw assets to see field names
     if (assets.length > 0) {
@@ -426,13 +427,21 @@ async function refreshOAEVCacheForPlatform(platformId: string, client: OpenAEVCl
     }
     
     // Map assets (endpoints) - match on NAME, HOSTNAME, IPs, or MAC addresses (exact match)
+    // Note: API may return endpoint_name OR asset_name - use whichever is available
     cache.entities['Asset'] = assets.map(a => {
+      // Primary name: prefer endpoint_name, fall back to asset_name
+      const primaryName = a.endpoint_name || a.asset_name;
       const hostname = a.endpoint_hostname || a.asset_hostname;
       const ips = a.endpoint_ips || a.asset_ips || [];
       const aliases: string[] = [];
       
+      // Add the alternate name field as alias if different
+      if (a.asset_name && a.endpoint_name && a.asset_name.toLowerCase() !== a.endpoint_name.toLowerCase()) {
+        aliases.push(a.asset_name);
+      }
+      
       // Add hostname as alias if different from name
-      if (hostname && hostname.toLowerCase() !== a.asset_name?.toLowerCase()) {
+      if (hostname && hostname.toLowerCase() !== primaryName?.toLowerCase()) {
         aliases.push(hostname);
       }
       
@@ -449,9 +458,13 @@ async function refreshOAEVCacheForPlatform(platformId: string, client: OpenAEVCl
         aliases.push(macAddress);
       }
       
+      const assetId = a.endpoint_id || a.asset_id;
+      
+      log.debug(`[${platformId}] Caching asset: name="${primaryName}", id="${assetId}", aliases=${JSON.stringify(aliases)}`);
+      
       return {
-        id: a.asset_id,
-        name: a.asset_name,
+        id: assetId,
+        name: primaryName,
         aliases: aliases.length > 0 ? aliases : undefined,
         type: 'Asset' as const,
         platformId,
@@ -499,6 +512,14 @@ async function refreshOAEVCacheForPlatform(platformId: string, client: OpenAEVCl
       name: ap.attack_pattern_name,
       aliases: ap.attack_pattern_external_id ? [ap.attack_pattern_external_id] : undefined,
       type: 'AttackPattern' as const,
+      platformId,
+    }));
+    
+    // Map findings - match on finding_value (the main attribute for matching)
+    cache.entities['Finding'] = findings.map(f => ({
+      id: f.finding_id,
+      name: f.finding_value, // Match on the finding value
+      type: 'Finding' as const,
       platformId,
     }));
     

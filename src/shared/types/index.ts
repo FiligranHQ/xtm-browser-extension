@@ -61,7 +61,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       'Hostname', 'IPv4-Addr', 'IPv6-Addr', 'Mac-Addr', 'Phone-Number',
       'StixFile', 'Url', 'User-Agent'
     ],
-    oaevEntityTypes: ['Asset', 'AssetGroup', 'Player', 'Team'],
+    oaevEntityTypes: ['Asset', 'AssetGroup', 'Player', 'Team', 'Finding'],
   },
 };
 
@@ -161,7 +161,7 @@ export interface DetectedSDO {
 // OpenAEV Entity Types
 // ============================================================================
 
-export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'AttackPattern';
+export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'AttackPattern' | 'Finding';
 
 export interface OAEVAsset {
   asset_id: string;
@@ -170,8 +170,11 @@ export interface OAEVAsset {
   asset_hostname?: string;
   asset_ips?: string[];
   // Alternative field names from different API versions/endpoints
+  endpoint_id?: string;
+  endpoint_name?: string;
   endpoint_hostname?: string;
   endpoint_ips?: string[];
+  endpoint_platform?: string;
   asset_platform?: string;
   asset_type?: string;
   asset_tags?: string[];
@@ -213,6 +216,21 @@ export interface OAEVAttackPattern {
   attack_pattern_kill_chain_phases?: string[];
 }
 
+export interface OAEVFinding {
+  finding_id: string;
+  finding_type: string; // text, number, port, portscan, ipv4, ipv6, credentials, cve
+  finding_value: string; // Main attribute for matching
+  finding_created_at?: string;
+  finding_assets?: Array<{
+    asset_id: string;
+    asset_name: string;
+  }>;
+  finding_asset_groups?: Array<{
+    asset_group_id: string;
+    asset_group_name: string;
+  }>;
+}
+
 export interface DetectedOAEVEntity {
   type: OAEVEntityType;
   name: string;
@@ -221,7 +239,7 @@ export interface DetectedOAEVEntity {
   endIndex: number;
   found: boolean;
   entityId?: string;
-  entityData?: OAEVAsset | OAEVAssetGroup | OAEVPlayer | OAEVTeam;
+  entityData?: OAEVAsset | OAEVAssetGroup | OAEVPlayer | OAEVTeam | OAEVFinding;
   platformId?: string;
 }
 

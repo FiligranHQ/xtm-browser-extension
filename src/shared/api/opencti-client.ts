@@ -804,7 +804,7 @@ export class OpenCTIClient {
       }>(query, { types: [entityType], first: pageSize, after });
 
       const pageResults = data.stixDomainObjects.edges
-        .map(edge => {
+        .map((edge: { node: { id: string; entity_type: string; name?: string; aliases?: string[]; x_opencti_aliases?: string[]; x_mitre_id?: string } }) => {
           const node = edge.node;
           // Merge aliases, x_opencti_aliases, and x_mitre_id (for attack patterns)
           const allAliases = [
@@ -929,7 +929,7 @@ export class OpenCTIClient {
         };
       }>(query, { first: pageSize, after });
 
-      const pageResults = data.locations.edges.map(edge => ({
+      const pageResults = data.locations.edges.map((edge: { node: { id: string; entity_type: string; name: string; x_opencti_aliases?: string[] } }) => ({
         id: edge.node.id,
         name: edge.node.name,
         aliases: edge.node.x_opencti_aliases,
@@ -1057,7 +1057,7 @@ export class OpenCTIClient {
         };
       }>(query, { first: pageSize, after });
 
-      const pageResults = data.labels.edges.map(e => e.node);
+      const pageResults = data.labels.edges.map((e: { node: { id: string; value: string; color: string } }) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.labels.pageInfo.hasNextPage;
       after = data.labels.pageInfo.endCursor;
@@ -1111,7 +1111,7 @@ export class OpenCTIClient {
         };
       }>(query, { first: pageSize, after });
 
-      const pageResults = data.markingDefinitions.edges.map(e => e.node);
+      const pageResults = data.markingDefinitions.edges.map((e: { node: { id: string; definition: string; definition_type: string; x_opencti_color: string } }) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.markingDefinitions.pageInfo.hasNextPage;
       after = data.markingDefinitions.pageInfo.endCursor;
@@ -1163,7 +1163,7 @@ export class OpenCTIClient {
         };
       }>(query, { category, first: pageSize, after });
 
-      const pageResults = data.vocabularies.edges.map(e => e.node);
+      const pageResults = data.vocabularies.edges.map((e: { node: { id: string; name: string; description?: string } }) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.vocabularies.pageInfo.hasNextPage;
       after = data.vocabularies.pageInfo.endCursor;
@@ -1214,7 +1214,7 @@ export class OpenCTIClient {
         };
       }>(query, { first: pageSize, after });
 
-      const pageResults = data.identities.edges.map(e => e.node);
+      const pageResults = data.identities.edges.map((e: { node: { id: string; name: string; entity_type: string } }) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.identities.pageInfo.hasNextPage;
       after = data.identities.pageInfo.endCursor;

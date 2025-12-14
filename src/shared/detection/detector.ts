@@ -45,7 +45,7 @@ export interface DetectionResult {
 
 // OpenAEV Entity Detection
 export interface DetectedOAEVEntity {
-  type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern';
+  type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding';
   name: string;
   value: string; // The matched text
   startIndex: number;

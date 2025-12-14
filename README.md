@@ -1,6 +1,6 @@
 # Filigran XTM Browser Extension
 
-A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. Detect threats, observables, and security entities directly from any web page.
+A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. Detect threats, observables, and security entities directly from any web page. Features AI-powered content analysis and scenario generation for Enterprise Edition users.
 
 [![OpenCTI Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml)
 [![OpenAEV Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml)
@@ -19,6 +19,7 @@ A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. De
 - 📋 **Quick Actions** - Create reports, cases, groupings, and investigations
 - 📊 **Entity Details** - View author, creator, confidence/score, labels, markings, and containers
 - 🔄 **Entity Cache** - Fast offline detection with background refresh
+- 🤖 **AI Description Generation** - Generate container descriptions using AI (Enterprise Edition)
 
 **Detected Entity Types:**
 - **Threat Entities**: Threat Actor Groups, Intrusion Sets (APT29, Cozy Bear...), Malware, Campaigns
@@ -31,13 +32,24 @@ A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. De
 - 🖥️ **Asset Detection** - Find endpoints matching by name, hostname, IP addresses, and MAC addresses
 - 👥 **Team & Player Matching** - Detect teams and players from page content
 - 🎯 **Attack Pattern Matching** - Match MITRE ATT&CK patterns by ID (T1566, T1059.001)
+- 🔍 **Findings Detection** - Match security findings by value with exact matching
 - 🎮 **Scenario Generation** - Create attack scenarios from web page content
+- 🤖 **AI-Powered Scenarios** - Generate comprehensive attack scenarios using AI (Enterprise Edition)
+- ⚡ **Atomic Testing** - Create on-the-fly atomic tests with AI-generated command lines
+
+### AI Features (Enterprise Edition)
+- 🧠 **Multiple LLM Support** - OpenAI, Anthropic (Claude), and Google Gemini
+- 📝 **Container Description AI** - Generate intelligent descriptions for OpenCTI containers
+- 🎬 **Scenario AI** - Generate full attack scenarios with proper injects and affinities
+- ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests
+- 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
 ### General
 - 🎨 **Theme Integration** - Follows your preferred theme (auto/dark/light)
 - 🔗 **Multi-Platform** - Connect to multiple OpenCTI and OpenAEV instances
 - 📱 **Side Panel** - Detailed entity view with metadata, labels, markings, and containers
 - 🔎 **MITRE ID Detection** - Exact word-boundary matching for MITRE ATT&CK IDs
+- 🏢 **Enterprise Edition Detection** - Automatic detection of EE platforms for AI features
 
 ## Development
 
@@ -132,10 +144,24 @@ Full documentation is available in the [docs](./docs) folder:
 ### OpenCTI
 - Version 6.0+ recommended
 - API token with read access (write for creating entities)
+- Enterprise Edition required for AI features
 
 ### OpenAEV  
 - Version 2.0+ recommended
 - API token with appropriate permissions
+- Enterprise Edition required for AI features
+
+### AI Configuration (Enterprise Edition Only)
+
+AI features require at least one connected Enterprise Edition platform. Configure your preferred LLM provider in Settings > AI Assistant:
+
+| Provider | Models | API Key Required |
+|----------|--------|------------------|
+| OpenAI | GPT-4, GPT-4 Turbo | Yes |
+| Anthropic | Claude 3.5 Sonnet, Claude 3 Opus | Yes |
+| Google | Gemini 1.5 Pro, Gemini 1.5 Flash | Yes |
+
+> **Note**: If you don't have an Enterprise Edition license, clicking AI buttons will show a dialog to start a free 30-day trial at [filigran.io/enterprise-editions-trial](https://filigran.io/enterprise-editions-trial/)
 
 ## Project Structure
 

@@ -108,6 +108,55 @@ Enable/disable detection of OpenAEV entities:
 - Asset Groups
 - Players (People)
 - Teams
+- Findings (matched by exact value)
+
+## AI Assistant Settings (Enterprise Edition)
+
+AI features require at least one connected Enterprise Edition (EE) platform. The AI Assistant section is only available if you have at least one EE platform connected.
+
+### Enabling AI
+
+1. Connect to at least one Enterprise Edition platform (OpenCTI EE or OpenAEV EE)
+2. Go to **Settings → AI Assistant**
+3. Select your LLM provider
+4. Enter your API key
+5. Click **Save Settings**
+
+### Supported LLM Providers
+
+| Provider | API Key | Models |
+|----------|---------|--------|
+| **OpenAI** | Required | GPT-4, GPT-4 Turbo |
+| **Anthropic** | Required | Claude 3.5 Sonnet, Claude 3 Opus |
+| **Google Gemini** | Required | Gemini 1.5 Pro, Gemini 1.5 Flash |
+| **XTM One** | Coming Soon | Filigran Agentic AI Platform |
+
+### Getting API Keys
+
+#### OpenAI
+1. Go to [platform.openai.com](https://platform.openai.com)
+2. Navigate to **API Keys**
+3. Create a new secret key
+4. Copy and paste into the extension settings
+
+#### Anthropic
+1. Go to [console.anthropic.com](https://console.anthropic.com)
+2. Navigate to **API Keys**
+3. Create a new key
+4. Copy and paste into the extension settings
+
+#### Google Gemini
+1. Go to [makersuite.google.com](https://makersuite.google.com)
+2. Navigate to **API Keys**
+3. Create a new key
+4. Copy and paste into the extension settings
+
+### No Enterprise Edition?
+
+If you don't have an Enterprise Edition license:
+- AI buttons will appear clickable but show an "Unlock AI Features" dialog
+- The dialog offers a link to start a free 30-day EE trial
+- Visit [filigran.io/enterprise-editions-trial](https://filigran.io/enterprise-editions-trial/) to get started
 
 ## Appearance Settings
 

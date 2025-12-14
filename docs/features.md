@@ -121,15 +121,65 @@ Add multiple observables to OpenCTI at once.
 
 ## OpenAEV Features
 
-### Asset Search
-Search for assets (endpoints) and asset groups that match content from the current page:
-1. Click **Assets** in the popup (requires OpenAEV connection)
-2. View matching assets from your organization
+### Asset & Findings Search
+Search for assets (endpoints), asset groups, and security findings that match content from the current page:
+1. Click **Scan** in the OpenAEV section of the popup
+2. The extension detects assets by name, hostname, IP, and MAC address
+3. Findings are matched by their exact value
+4. View matching entities from your organization
 
 ### Scenario Generation
 Create attack scenarios from web page content:
 1. Click **Scenario** in the popup
-2. A new scenario is created with page context
+2. Configure type affinity and platform affinity
+3. Without AI: A basic scenario is generated with related injects
+4. With AI (EE): A comprehensive scenario is generated using AI
+
+### Atomic Testing
+Create on-the-fly atomic tests:
+1. Click **Atomic Test** in the popup
+2. Select attack patterns from the page
+3. Without AI: View available atomic tests for the pattern
+4. With AI (EE): Generate custom command lines for testing
+
+## AI Features (Enterprise Edition)
+
+AI-powered features require at least one Enterprise Edition platform. If not configured, AI buttons will guide you to either:
+- Configure AI in Settings (if you have EE)
+- Start a free 30-day trial (if you don't have EE)
+
+### Supported LLM Providers
+
+| Provider | Description |
+|----------|-------------|
+| **OpenAI** | GPT-4 and GPT-4 Turbo models |
+| **Anthropic** | Claude 3.5 Sonnet and Claude 3 Opus |
+| **Google Gemini** | Gemini 1.5 Pro and Flash |
+| **XTM One** | Filigran Agentic AI Platform (coming soon) |
+
+### AI Container Description (OpenCTI)
+When creating containers in OpenCTI, you can use AI to generate intelligent descriptions:
+1. Start creating a container (Report, Case, etc.)
+2. Click the AI generation button next to the description field
+3. AI analyzes the page content and generates a relevant description
+
+### AI Scenario Generation (OpenAEV)
+Generate comprehensive attack scenarios using AI:
+1. Click **Scenario** in the popup
+2. Configure affinities (type and platform)
+3. AI generates a full scenario with:
+   - Contextual injects based on page content
+   - Attack patterns matched from the page
+   - Proper sequencing and dependencies
+
+### AI Atomic Testing (OpenAEV)
+Generate on-the-fly atomic tests with AI:
+1. Click **Atomic Test** in the popup
+2. Select target attack pattern
+3. AI generates:
+   - Custom command lines (PowerShell, Bash, etc.)
+   - Test procedures tailored to your environment
+   - Cleanup commands
 
 ## Context Menu
 

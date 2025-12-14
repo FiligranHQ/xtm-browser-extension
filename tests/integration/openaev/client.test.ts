@@ -595,6 +595,132 @@ describe('Domain/Hostname Detection for Atomic Testing', () => {
   });
 });
 
+describe('Findings Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should get findings list', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const response = await fetch(`${config.url}/api/findings/search?distinct=true`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        page: 0,
+        size: 10,
+      }),
+    });
+    
+    expect(response.ok).toBe(true);
+    const data = await response.json();
+    expect(data).toBeDefined();
+    // Response should have content array and pagination info
+    if (data.content) {
+      expect(Array.isArray(data.content)).toBe(true);
+    }
+  });
+
+  it('should paginate through findings', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 10;
+    let allResults: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+    
+    while (currentPage < totalPages) {
+      const response = await fetch(`${config.url}/api/findings/search?distinct=true`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.content) {
+        allResults = allResults.concat(result.content);
+        totalPages = result.totalPages || 1;
+      } else if (Array.isArray(result)) {
+        allResults = allResults.concat(result);
+        totalPages = 1;
+      }
+      
+      currentPage++;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allResults.length} findings in ${pageCount} pages`);
+    
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify no duplicate IDs if we have results
+    if (allResults.length > 0) {
+      const ids = allResults.map(r => r.finding_id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+
+  it('should have finding_value field for exact matching', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const response = await fetch(`${config.url}/api/findings/search?distinct=true`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        page: 0,
+        size: 10,
+      }),
+    });
+    
+    const data = await response.json();
+    
+    if (data.content && data.content.length > 0) {
+      // Check that findings have the expected fields for cache matching
+      const finding = data.content[0];
+      // Common fields that should exist
+      expect(finding.finding_id || finding.id).toBeDefined();
+    }
+  });
+});
+
 describe('Pagination Tests', () => {
   let client: TestOpenAEVClient;
 

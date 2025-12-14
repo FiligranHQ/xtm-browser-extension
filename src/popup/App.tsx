@@ -17,6 +17,10 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   SettingsOutlined,
@@ -32,6 +36,8 @@ import {
   SkipNextOutlined,
   MovieFilterOutlined,
   MoreHorizOutlined,
+  AutoAwesomeOutlined,
+  RocketLaunchOutlined,
 } from '@mui/icons-material';
 import { Target } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
@@ -134,6 +140,10 @@ const App: React.FC = () => {
   const [setupTesting, setSetupTesting] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState(false);
+  
+  // AI and EE state
+  const [aiConfigured, setAiConfigured] = useState(false);
+  const [showEETrialDialog, setShowEETrialDialog] = useState(false);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -145,6 +155,7 @@ const App: React.FC = () => {
   const hasAnyOpenCTIConfigured = status.opencti.length > 0;
   const hasAnyOpenAEVConfigured = status.openaev.length > 0;
   const hasAnyPlatformConfigured = hasAnyOpenCTIConfigured || hasAnyOpenAEVConfigured;
+  const hasEnterprise = status.opencti.some(p => p.isEnterprise) || status.openaev.some(p => p.isEnterprise);
 
   useEffect(() => {
     // Check if we're running in an extension context
@@ -173,6 +184,10 @@ const App: React.FC = () => {
         const settings = response.data;
         const openctiPlatforms = settings.openctiPlatforms || [];
         const openaevPlatforms = settings.openaevPlatforms || [];
+        
+        // Check AI configuration
+        const aiSettings = settings.aiSettings;
+        setAiConfigured(!!(aiSettings?.enabled && aiSettings?.provider && aiSettings?.apiKey));
 
         // Build initial platform lists
         const openctiList: PlatformStatus[] = openctiPlatforms.map((p: any) => ({
@@ -368,14 +383,39 @@ const App: React.FC = () => {
     chrome.runtime.openOptionsPage();
   };
 
-  const handleGenerateScenario = async () => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      // Fire and forget - don't await, close popup immediately
-      ensureContentScriptAndSendMessage(tab.id, { type: 'GENERATE_SCENARIO' });
+  // Helper to handle AI-powered actions with proper status checks
+  const handleAIAction = async (action: () => Promise<void>) => {
+    // If AI is configured, proceed with action
+    if (aiConfigured) {
+      await action();
+      return;
     }
-    window.close();
+    
+    // If not configured but has EE, redirect to AI config in settings
+    if (hasEnterprise) {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+        // The settings page will open on the default tab, but we can't specify the AI tab directly
+        // User will see the AI section in the left menu
+      }
+      window.close();
+      return;
+    }
+    
+    // No EE - show trial dialog
+    setShowEETrialDialog(true);
+  };
+
+  const handleGenerateScenario = async () => {
+    await handleAIAction(async () => {
+      if (typeof chrome === 'undefined' || !chrome.tabs) return;
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        // Fire and forget - don't await, close popup immediately
+        ensureContentScriptAndSendMessage(tab.id, { type: 'GENERATE_SCENARIO' });
+      }
+      window.close();
+    });
   };
 
   const handleSearchAssets = async () => {
@@ -399,13 +439,15 @@ const App: React.FC = () => {
   };
 
   const handleAtomicTesting = async () => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      // Trigger atomic testing scan and panel - fire and forget
-      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
-    }
-    window.close();
+    await handleAIAction(async () => {
+      if (typeof chrome === 'undefined' || !chrome.tabs) return;
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        // Trigger atomic testing scan and panel - fire and forget
+        ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
+      }
+      window.close();
+    });
   };
 
   const handleOpenPlatform = (url: string) => {
@@ -1245,6 +1287,95 @@ const App: React.FC = () => {
             </Box>
           </Box>
         </Popover>
+
+        {/* Enterprise Edition Trial Dialog */}
+        <Dialog
+          open={showEETrialDialog}
+          onClose={() => setShowEETrialDialog(false)}
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              minWidth: 380,
+              background: mode === 'dark' 
+                ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' 
+                : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            textAlign: 'center', 
+            pt: 4,
+            pb: 1,
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: 2 
+            }}>
+              <Box sx={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #00bcd4, #0097a7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 20px rgba(0, 188, 212, 0.3)',
+              }}>
+                <AutoAwesomeOutlined sx={{ fontSize: 32, color: '#fff' }} />
+              </Box>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Unlock AI Features
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ textAlign: 'center', px: 4, pb: 2 }}>
+            <Typography variant="body1" sx={{ color: 'text.secondary', mb: 2 }}>
+              AI-powered features like scenario generation and on-the-fly atomic testing require an{' '}
+              <strong>Enterprise Edition</strong> license.
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Start your free 30-day trial to experience the full power of Filigran's XTM platform with AI capabilities.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ 
+            flexDirection: 'column', 
+            gap: 1.5, 
+            px: 4, 
+            pb: 4,
+            pt: 1,
+          }}>
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
+              startIcon={<RocketLaunchOutlined />}
+              onClick={() => {
+                window.open('https://filigran.io/enterprise-editions-trial/', '_blank');
+                setShowEETrialDialog(false);
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #00bcd4, #0097a7)',
+                py: 1.5,
+                fontWeight: 600,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #0097a7, #00838f)',
+                },
+              }}
+            >
+              Start Free Trial
+            </Button>
+            <Button
+              fullWidth
+              variant="text"
+              onClick={() => setShowEETrialDialog(false)}
+              sx={{ color: 'text.secondary' }}
+            >
+              Maybe later
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );

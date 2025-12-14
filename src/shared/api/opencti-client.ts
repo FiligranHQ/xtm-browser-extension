@@ -25,6 +25,92 @@ import type {
 } from '../types';
 
 // ============================================================================
+// Query Result Types (for strict type checking)
+// ============================================================================
+
+interface SDOQueryResponse {
+  stixDomainObjects: {
+    edges: Array<{
+      node: {
+        id: string;
+        entity_type: string;
+        name?: string;
+        aliases?: string[];
+        x_opencti_aliases?: string[];
+        x_mitre_id?: string;
+      };
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+      globalCount: number;
+    };
+  };
+}
+
+interface LocationQueryResponse {
+  locations: {
+    edges: Array<{
+      node: {
+        id: string;
+        entity_type: string;
+        name: string;
+        x_opencti_aliases?: string[];
+      };
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+      globalCount: number;
+    };
+  };
+}
+
+interface LabelQueryResponse {
+  labels: {
+    edges: Array<{
+      node: { id: string; value: string; color: string };
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+    };
+  };
+}
+
+interface MarkingQueryResponse {
+  markingDefinitions: {
+    edges: Array<{
+      node: { id: string; definition: string; definition_type: string; x_opencti_color: string };
+    }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+    };
+  };
+}
+
+interface VocabularyQueryResponse {
+  vocabularies: {
+    edges: Array<{ node: { id: string; name: string; description?: string } }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+    };
+  };
+}
+
+interface IdentityQueryResponse {
+  identities: {
+    edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+    };
+  };
+}
+
+// ============================================================================
 // GraphQL Fragments
 // ============================================================================
 
@@ -783,28 +869,10 @@ export class OpenCTIClient {
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data = await this.query<{
-        stixDomainObjects: {
-          edges: Array<{
-            node: {
-              id: string;
-              entity_type: string;
-              name?: string;
-              aliases?: string[];
-              x_opencti_aliases?: string[];
-              x_mitre_id?: string;
-            };
-          }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-            globalCount: number;
-          };
-        };
-      }>(query, { types: [entityType], first: pageSize, after });
+      const data: SDOQueryResponse = await this.query<SDOQueryResponse>(query, { types: [entityType], first: pageSize, after });
 
       const pageResults = data.stixDomainObjects.edges
-        .map((edge: { node: { id: string; entity_type: string; name?: string; aliases?: string[]; x_opencti_aliases?: string[]; x_mitre_id?: string } }) => {
+        .map((edge) => {
           const node = edge.node;
           // Merge aliases, x_opencti_aliases, and x_mitre_id (for attack patterns)
           const allAliases = [
@@ -911,25 +979,9 @@ export class OpenCTIClient {
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data = await this.query<{
-        locations: {
-          edges: Array<{
-            node: {
-              id: string;
-              entity_type: string;
-              name: string;
-              x_opencti_aliases?: string[];
-            };
-          }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-            globalCount: number;
-          };
-        };
-      }>(query, { first: pageSize, after });
+      const data: LocationQueryResponse = await this.query<LocationQueryResponse>(query, { first: pageSize, after });
 
-      const pageResults = data.locations.edges.map((edge: { node: { id: string; entity_type: string; name: string; x_opencti_aliases?: string[] } }) => ({
+      const pageResults = data.locations.edges.map((edge) => ({
         id: edge.node.id,
         name: edge.node.name,
         aliases: edge.node.x_opencti_aliases,
@@ -1045,19 +1097,9 @@ export class OpenCTIClient {
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data = await this.query<{
-        labels: {
-          edges: Array<{
-            node: { id: string; value: string; color: string };
-          }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-          };
-        };
-      }>(query, { first: pageSize, after });
+      const data: LabelQueryResponse = await this.query<LabelQueryResponse>(query, { first: pageSize, after });
 
-      const pageResults = data.labels.edges.map((e: { node: { id: string; value: string; color: string } }) => e.node);
+      const pageResults = data.labels.edges.map((e) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.labels.pageInfo.hasNextPage;
       after = data.labels.pageInfo.endCursor;
@@ -1099,19 +1141,9 @@ export class OpenCTIClient {
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data = await this.query<{
-        markingDefinitions: {
-          edges: Array<{
-            node: { id: string; definition: string; definition_type: string; x_opencti_color: string };
-          }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-          };
-        };
-      }>(query, { first: pageSize, after });
+      const data: MarkingQueryResponse = await this.query<MarkingQueryResponse>(query, { first: pageSize, after });
 
-      const pageResults = data.markingDefinitions.edges.map((e: { node: { id: string; definition: string; definition_type: string; x_opencti_color: string } }) => e.node);
+      const pageResults = data.markingDefinitions.edges.map((e) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.markingDefinitions.pageInfo.hasNextPage;
       after = data.markingDefinitions.pageInfo.endCursor;
@@ -1153,17 +1185,9 @@ export class OpenCTIClient {
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data = await this.query<{
-        vocabularies: {
-          edges: Array<{ node: { id: string; name: string; description?: string } }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-          };
-        };
-      }>(query, { category, first: pageSize, after });
+      const data: VocabularyQueryResponse = await this.query<VocabularyQueryResponse>(query, { category, first: pageSize, after });
 
-      const pageResults = data.vocabularies.edges.map((e: { node: { id: string; name: string; description?: string } }) => e.node);
+      const pageResults = data.vocabularies.edges.map((e) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.vocabularies.pageInfo.hasNextPage;
       after = data.vocabularies.pageInfo.endCursor;
@@ -1203,8 +1227,7 @@ export class OpenCTIClient {
     let hasNextPage = true;
     let pageCount = 0;
 
-    while (hasNextPage) {
-      const data = await this.query<{
+    type IdentityQueryResult = {
         identities: {
           edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
           pageInfo: {
@@ -1212,9 +1235,11 @@ export class OpenCTIClient {
             endCursor: string;
           };
         };
-      }>(query, { first: pageSize, after });
+      };
+    while (hasNextPage) {
+      const data: IdentityQueryResult = await this.query<IdentityQueryResult>(query, { first: pageSize, after });
 
-      const pageResults = data.identities.edges.map((e: { node: { id: string; name: string; entity_type: string } }) => e.node);
+      const pageResults = data.identities.edges.map((e) => e.node);
       allResults.push(...pageResults);
       hasNextPage = data.identities.pageInfo.hasNextPage;
       after = data.identities.pageInfo.endCursor;

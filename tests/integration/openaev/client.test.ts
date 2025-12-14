@@ -58,22 +58,32 @@ class TestOpenAEVClient {
     return this.request('/api/settings');
   }
 
-  async getAssets(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/assets?size=${limit}`);
+  async getEndpoints(): Promise<any[]> {
+    // GET /api/endpoints returns a direct list of endpoints (not paginated)
+    const response = await this.request('/api/endpoints');
     return this.extractArray(response);
   }
 
-  async getAsset(id: string): Promise<any> {
-    return this.request(`/api/assets/${id}`);
+  async getEndpoint(id: string): Promise<any> {
+    return this.request(`/api/endpoints/${id}`);
   }
 
-  async searchAssets(searchTerm: string, limit = 10): Promise<any[]> {
-    const response = await this.request(`/api/assets?searchPaginationInput.textSearch=${encodeURIComponent(searchTerm)}&size=${limit}`);
+  async searchEndpoints(searchTerm: string, limit = 10): Promise<any[]> {
+    // POST /api/endpoints/search with SearchPaginationInput body
+    const response = await this.request('/api/endpoints/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        textSearch: searchTerm,
+        size: limit,
+        page: 0,
+      }),
+    });
     return this.extractArray(response);
   }
 
-  async getAssetGroups(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/asset_groups?size=${limit}`);
+  async getAssetGroups(): Promise<any[]> {
+    // GET /api/asset_groups returns a direct list
+    const response = await this.request('/api/asset_groups');
     return this.extractArray(response);
   }
 
@@ -81,8 +91,9 @@ class TestOpenAEVClient {
     return this.request(`/api/asset_groups/${id}`);
   }
 
-  async getPlayers(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/players?size=${limit}`);
+  async getPlayers(): Promise<any[]> {
+    // GET /api/players returns a direct list
+    const response = await this.request('/api/players');
     return this.extractArray(response);
   }
 
@@ -90,8 +101,9 @@ class TestOpenAEVClient {
     return this.request(`/api/players/${id}`);
   }
 
-  async getTeams(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/teams?size=${limit}`);
+  async getTeams(): Promise<any[]> {
+    // GET /api/teams returns a direct list
+    const response = await this.request('/api/teams');
     return this.extractArray(response);
   }
 
@@ -99,8 +111,9 @@ class TestOpenAEVClient {
     return this.request(`/api/teams/${id}`);
   }
 
-  async getAttackPatterns(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/attack_patterns?size=${limit}`);
+  async getAttackPatterns(): Promise<any[]> {
+    // GET /api/attack_patterns returns a direct list
+    const response = await this.request('/api/attack_patterns');
     return this.extractArray(response);
   }
 
@@ -109,7 +122,14 @@ class TestOpenAEVClient {
   }
 
   async getScenarios(limit = 100): Promise<any[]> {
-    const response = await this.request(`/api/scenarios?size=${limit}`);
+    // POST /api/scenarios/search with SearchPaginationInput body
+    const response = await this.request('/api/scenarios/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        size: limit,
+        page: 0,
+      }),
+    });
     return this.extractArray(response);
   }
 
@@ -117,15 +137,21 @@ class TestOpenAEVClient {
     return this.request(`/api/scenarios/${id}`);
   }
 
-  async createAsset(asset: { asset_name: string; asset_description?: string }): Promise<any> {
-    return this.request('/api/assets', {
+  async createEndpoint(endpoint: { 
+    asset_name: string; 
+    asset_description?: string;
+    endpoint_platform: string;
+    endpoint_arch: string;
+  }): Promise<any> {
+    // POST /api/endpoints/agentless for creating agentless endpoints
+    return this.request('/api/endpoints/agentless', {
       method: 'POST',
-      body: JSON.stringify(asset),
+      body: JSON.stringify(endpoint),
     });
   }
 
-  async deleteAsset(id: string): Promise<void> {
-    await this.request(`/api/assets/${id}`, { method: 'DELETE' });
+  async deleteEndpoint(id: string): Promise<void> {
+    await this.request(`/api/endpoints/${id}`, { method: 'DELETE' });
   }
 }
 
@@ -179,7 +205,7 @@ async function checkOpenAEVConnection(): Promise<boolean> {
 // Integration tests that require OpenAEV to be running
 describe('OpenAEV Client Integration Tests', () => {
   let client: TestOpenAEVClient;
-  let createdAssetIds: string[] = [];
+  let createdEndpointIds: string[] = [];
 
   beforeAll(async () => {
     await checkOpenAEVConnection();
@@ -189,11 +215,11 @@ describe('OpenAEV Client Integration Tests', () => {
   });
 
   afterAll(async () => {
-    // Cleanup created assets
-    if (client && createdAssetIds.length > 0) {
-      for (const id of createdAssetIds) {
+    // Cleanup created endpoints
+    if (client && createdEndpointIds.length > 0) {
+      for (const id of createdEndpointIds) {
         try {
-          await client.deleteAsset(id);
+          await client.deleteEndpoint(id);
         } catch {
           // Ignore cleanup errors
         }
@@ -202,9 +228,10 @@ describe('OpenAEV Client Integration Tests', () => {
   });
 
   describe('Connection', () => {
-    it('should connect to OpenAEV and get settings', async ({ skip }) => {
+    it('should connect to OpenAEV and get settings', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -213,125 +240,136 @@ describe('OpenAEV Client Integration Tests', () => {
     });
   });
 
-  describe('Assets', () => {
-    it('should get assets list', async ({ skip }) => {
+  describe('Endpoints', () => {
+    it('should get endpoints list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const assets = await client.getAssets(10);
-      expect(Array.isArray(assets)).toBe(true);
+      const endpoints = await client.getEndpoints();
+      expect(Array.isArray(endpoints)).toBe(true);
     });
 
-    it('should search assets', async ({ skip }) => {
+    it('should search endpoints', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const assets = await client.searchAssets('test', 5);
-      expect(Array.isArray(assets)).toBe(true);
+      const endpoints = await client.searchEndpoints('test', 5);
+      expect(Array.isArray(endpoints)).toBe(true);
     });
 
-    it('should create and delete an asset', async ({ skip }) => {
+    it('should create and delete an endpoint', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const testAsset = {
-        asset_name: `Test Asset ${Date.now()}`,
+      const testEndpoint = {
+        asset_name: `Test Endpoint ${Date.now()}`,
         asset_description: 'Created by integration test',
+        endpoint_platform: 'Linux',
+        endpoint_arch: 'x86_64',
       };
       
-      const created = await client.createAsset(testAsset);
+      const created = await client.createEndpoint(testEndpoint);
       expect(created).toBeDefined();
       expect(created.asset_id || created.id).toBeDefined();
       
-      const assetId = created.asset_id || created.id;
-      createdAssetIds.push(assetId);
+      const endpointId = created.asset_id || created.id;
+      createdEndpointIds.push(endpointId);
       
       // Verify we can retrieve it
-      const retrieved = await client.getAsset(assetId);
+      const retrieved = await client.getEndpoint(endpointId);
       expect(retrieved).toBeDefined();
-      expect(retrieved.asset_name).toBe(testAsset.asset_name);
+      expect(retrieved.asset_name).toBe(testEndpoint.asset_name);
     });
   });
 
   describe('Asset Groups', () => {
-    it('should get asset groups list', async ({ skip }) => {
+    it('should get asset groups list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const groups = await client.getAssetGroups(10);
+      const groups = await client.getAssetGroups();
       expect(Array.isArray(groups)).toBe(true);
     });
   });
 
   describe('Players', () => {
-    it('should get players list', async ({ skip }) => {
+    it('should get players list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const players = await client.getPlayers(10);
+      const players = await client.getPlayers();
       expect(Array.isArray(players)).toBe(true);
     });
   });
 
   describe('Teams', () => {
-    it('should get teams list', async ({ skip }) => {
+    it('should get teams list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const teams = await client.getTeams(10);
+      const teams = await client.getTeams();
       expect(Array.isArray(teams)).toBe(true);
     });
   });
 
   describe('Attack Patterns', () => {
-    it('should get attack patterns list', async ({ skip }) => {
+    it('should get attack patterns list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const patterns = await client.getAttackPatterns(10);
+      const patterns = await client.getAttackPatterns();
       expect(Array.isArray(patterns)).toBe(true);
     });
   });
 
   describe('Scenarios', () => {
-    it('should get scenarios list', async ({ skip }) => {
+    it('should get scenarios list', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const scenarios = await client.getScenarios(10);
+      const scenarios = await client.getScenarios();
       expect(Array.isArray(scenarios)).toBe(true);
     });
   });
 
   describe('Cache Simulation', () => {
-    it('should fetch all cacheable entity types', async ({ skip }) => {
+    it('should fetch all cacheable entity types', async (context) => {
       if (!isOpenAEVAvailable) {
-        skip(`OpenAEV not available: ${connectionError}`);
+        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
-      const [assets, assetGroups, players, teams, attackPatterns] = await Promise.all([
-        client.getAssets(50),
-        client.getAssetGroups(50),
-        client.getPlayers(50),
-        client.getTeams(50),
-        client.getAttackPatterns(50),
+      const [endpoints, assetGroups, players, teams, attackPatterns] = await Promise.all([
+        client.getEndpoints(),
+        client.getAssetGroups(),
+        client.getPlayers(),
+        client.getTeams(),
+        client.getAttackPatterns(),
       ]);
       
       // Build a cache map
@@ -346,7 +384,7 @@ describe('OpenAEV Client Integration Tests', () => {
         }
       };
       
-      addToCache(assets, 'Asset', 'asset_name');
+      addToCache(endpoints, 'Endpoint', 'asset_name');
       addToCache(assetGroups, 'AssetGroup', 'asset_group_name');
       addToCache(players, 'Player', 'user_email');
       addToCache(teams, 'Team', 'team_name');
@@ -367,63 +405,69 @@ describe('Seeded Data Tests', () => {
     }
   });
 
-  it('should find seeded Production Web Server asset', async ({ skip }) => {
+  it('should find seeded Production Web Server endpoint', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const assets = await client.searchAssets('Production Web Server', 5);
-    expect(Array.isArray(assets)).toBe(true);
+    const endpoints = await client.searchEndpoints('Production Web Server', 5);
+    expect(Array.isArray(endpoints)).toBe(true);
   });
 
-  it('should find seeded Database Server asset with IPs', async ({ skip }) => {
+  it('should find seeded Database Server endpoint with IPs', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const assets = await client.searchAssets('Database Server', 5);
-    expect(Array.isArray(assets)).toBe(true);
+    const endpoints = await client.searchEndpoints('Database Server', 5);
+    expect(Array.isArray(endpoints)).toBe(true);
   });
 
-  it('should find seeded Production Servers asset group', async ({ skip }) => {
+  it('should find seeded Production Servers asset group', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const groups = await client.getAssetGroups(10);
+    const groups = await client.getAssetGroups();
     expect(Array.isArray(groups)).toBe(true);
   });
 
-  it('should find seeded Red Team Alpha', async ({ skip }) => {
+  it('should find seeded Red Team Alpha', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const teams = await client.getTeams(10);
+    const teams = await client.getTeams();
     expect(Array.isArray(teams)).toBe(true);
   });
 
-  it('should find seeded attack patterns T1566 and T1059', async ({ skip }) => {
+  it('should find seeded attack patterns T1566 and T1059', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const patterns = await client.getAttackPatterns(10);
+    const patterns = await client.getAttackPatterns();
     expect(Array.isArray(patterns)).toBe(true);
   });
 
-  it('should find seeded scenarios', async ({ skip }) => {
+  it('should find seeded scenarios', async (context) => {
     if (!isOpenAEVAvailable) {
-      skip(`OpenAEV not available: ${connectionError}`);
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
-    const scenarios = await client.getScenarios(10);
+    const scenarios = await client.getScenarios();
     expect(Array.isArray(scenarios)).toBe(true);
   });
 });

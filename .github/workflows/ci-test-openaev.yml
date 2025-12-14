@@ -204,35 +204,38 @@ jobs:
             exit 0
           fi
           
-          # Create test Assets
-          echo "Creating test Assets..."
-          curl -s -X POST "$API_URL/assets" \
+          # Create test Endpoints (agentless)
+          echo "Creating test Endpoints..."
+          curl -s -X POST "$API_URL/endpoints/agentless" \
             -H "$AUTH_HEADER" \
             -H "Content-Type: application/json" \
             -d '{
               "asset_name": "Production Web Server",
               "asset_description": "Main production web server",
-              "asset_type": "Endpoint"
+              "endpoint_platform": "Linux",
+              "endpoint_arch": "x86_64"
             }' || true
           
-          curl -s -X POST "$API_URL/assets" \
+          curl -s -X POST "$API_URL/endpoints/agentless" \
             -H "$AUTH_HEADER" \
             -H "Content-Type: application/json" \
             -d '{
               "asset_name": "Database Server",
               "asset_description": "PostgreSQL database server",
-              "asset_type": "Endpoint",
+              "endpoint_platform": "Linux",
+              "endpoint_arch": "x86_64",
               "endpoint_hostname": "db-server-01",
               "endpoint_ips": ["192.168.1.100", "10.0.0.50"]
             }' || true
           
-          curl -s -X POST "$API_URL/assets" \
+          curl -s -X POST "$API_URL/endpoints/agentless" \
             -H "$AUTH_HEADER" \
             -H "Content-Type: application/json" \
             -d '{
               "asset_name": "Workstation Alpha",
               "asset_description": "Developer workstation",
-              "asset_type": "Endpoint",
+              "endpoint_platform": "Windows",
+              "endpoint_arch": "x86_64",
               "endpoint_hostname": "ws-alpha",
               "endpoint_mac_addresses": ["00:1A:2B:3C:4D:5E"]
             }' || true
@@ -273,7 +276,8 @@ jobs:
               "team_description": "Defensive security team"
             }' || true
           
-          # Create test Attack Patterns
+          # Create test Attack Patterns (note: attack patterns usually come from MITRE ATT&CK import, 
+          # but we'll try to create them via API if supported)
           echo "Creating test Attack Patterns..."
           curl -s -X POST "$API_URL/attack_patterns" \
             -H "$AUTH_HEADER" \
@@ -281,6 +285,7 @@ jobs:
             -d '{
               "attack_pattern_name": "Phishing",
               "attack_pattern_external_id": "T1566",
+              "attack_pattern_stix_id": "attack-pattern--a62a8db3-f23a-4d8f-afd6-9dbc77e7813b",
               "attack_pattern_description": "Phishing attack technique"
             }' || true
           
@@ -290,6 +295,7 @@ jobs:
             -d '{
               "attack_pattern_name": "Command and Scripting Interpreter",
               "attack_pattern_external_id": "T1059",
+              "attack_pattern_stix_id": "attack-pattern--d1fcf083-a721-4223-aedf-bf8960798d62",
               "attack_pattern_description": "Execution via command interpreter"
             }' || true
           
@@ -299,6 +305,7 @@ jobs:
             -d '{
               "attack_pattern_name": "PowerShell",
               "attack_pattern_external_id": "T1059.001",
+              "attack_pattern_stix_id": "attack-pattern--970a3432-3237-47ad-bcca-7d8cbb217736",
               "attack_pattern_description": "Execution via PowerShell"
             }' || true
           
@@ -334,20 +341,20 @@ jobs:
             exit 0
           fi
           
-          echo "Querying Assets..."
-          curl -s -H "$AUTH_HEADER" "$API_URL/assets?size=10" || true
+          echo "Querying Endpoints..."
+          curl -s -H "$AUTH_HEADER" "$API_URL/endpoints" || true
           
           echo ""
           echo "Querying Asset Groups..."
-          curl -s -H "$AUTH_HEADER" "$API_URL/asset_groups?size=10" || true
+          curl -s -H "$AUTH_HEADER" "$API_URL/asset_groups" || true
           
           echo ""
           echo "Querying Teams..."
-          curl -s -H "$AUTH_HEADER" "$API_URL/teams?size=10" || true
+          curl -s -H "$AUTH_HEADER" "$API_URL/teams" || true
           
           echo ""
           echo "Querying Attack Patterns..."
-          curl -s -H "$AUTH_HEADER" "$API_URL/attack_patterns?size=10" || true
+          curl -s -H "$AUTH_HEADER" "$API_URL/attack_patterns" || true
 
       - name: Run OpenAEV integration tests
         env:

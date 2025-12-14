@@ -11,6 +11,7 @@ export interface PlatformConfig {
   lastConnected?: string;
   platformName?: string;
   platformVersion?: string;
+  isEnterprise?: boolean;
 }
 
 export interface DetectionSettings {

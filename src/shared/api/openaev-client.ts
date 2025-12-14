@@ -465,11 +465,39 @@ export class OpenAEVClient {
    * Uses the search endpoint with distinct=true to get unique findings
    */
   async getAllFindings(): Promise<OAEVFinding[]> {
+    const allFindings: OAEVFinding[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+
     try {
-      return await this.fetchAllWithPagination<OAEVFinding>('/api/findings/search?distinct=true', 'Findings');
+      while (currentPage < totalPages) {
+        const response = await this.request<{
+          content: OAEVFinding[];
+          totalPages: number;
+          totalElements: number;
+        }>('/api/findings/search?distinct=true', {
+          method: 'POST',
+          body: JSON.stringify({
+            page: currentPage,
+            size: 200, // Larger page size for findings
+          }),
+        });
+
+        if (response.content && Array.isArray(response.content)) {
+          allFindings.push(...response.content);
+        }
+        totalPages = response.totalPages || 1;
+        currentPage++;
+
+        log.debug(`[OpenAEV] Fetched findings page ${currentPage}/${totalPages}: ${response.content?.length || 0} items (total: ${allFindings.length})`);
+      }
+
+      log.info(`[OpenAEV] Completed fetching Findings: ${allFindings.length} total items`);
+      return allFindings;
     } catch (error) {
-      log.error(' Get all findings failed:', error);
-      return [];
+      log.error('[OpenAEV] Get all findings failed:', error);
+      // Return whatever we collected so far
+      return allFindings;
     }
   }
 
@@ -719,14 +747,6 @@ export class OpenAEVClient {
 
   getOrganizationUrl(organizationId: string): string {
     return `${this.baseUrl}/admin/teams/organizations/${organizationId}`;
-  }
-
-  getAttackPatternUrl(attackPatternId: string): string {
-    return `${this.baseUrl}/admin/attack_patterns/${attackPatternId}`;
-  }
-
-  getFindingUrl(findingId: string): string {
-    return `${this.baseUrl}/admin/findings/${findingId}`;
   }
 
   /**

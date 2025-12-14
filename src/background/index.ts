@@ -421,7 +421,7 @@ async function refreshOAEVCacheForPlatform(platformId: string, client: OpenAEVCl
       client.getAllFindings(),
     ]);
     
-    log.debug(`[${platformId}] Fetched ${assets.length} Assets, ${assetGroups.length} AssetGroups, ${teams.length} Teams, ${players.length} Players, ${attackPatterns.length} AttackPatterns, ${findings.length} Findings`);
+    log.info(`[${platformId}] Fetched ${assets.length} Assets, ${assetGroups.length} AssetGroups, ${teams.length} Teams, ${players.length} Players, ${attackPatterns.length} AttackPatterns, ${findings.length} Findings`);
     
     // Debug: Log first few raw assets to see field names
     if (assets.length > 0) {

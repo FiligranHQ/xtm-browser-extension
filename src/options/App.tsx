@@ -277,8 +277,16 @@ const App: React.FC = () => {
                            currentPlatform?.name === 'New OpenAEV' ||
                            !currentPlatform?.name;
       
-      if (remotePlatformName && isDefaultName && platformIndex >= 0) {
-        updatePlatform(type, platformIndex, { name: remotePlatformName });
+      // Get enterprise edition status from response
+      const isEnterprise = response.data?.enterprise_edition ?? false;
+      
+      // Update platform with name (if default) and enterprise status
+      if (platformIndex >= 0) {
+        const updates: Partial<PlatformConfig> = { isEnterprise };
+        if (remotePlatformName && isDefaultName) {
+          updates.name = remotePlatformName;
+        }
+        updatePlatform(type, platformIndex, updates);
       }
       
       setTestResults({

@@ -469,11 +469,11 @@ export class OpenAEVClient {
     let currentPage = 0;
     let totalPages = 1;
 
-    console.log('[OpenAEV] Starting to fetch findings...');
+    log.info('[OpenAEV] Starting to fetch findings...');
 
     try {
       while (currentPage < totalPages) {
-        console.log(`[OpenAEV] Fetching findings page ${currentPage}...`);
+        log.debug(`[OpenAEV] Fetching findings page ${currentPage}...`);
         
         const response = await this.request<{
           content: OAEVFinding[];
@@ -487,13 +487,13 @@ export class OpenAEVClient {
           }),
         });
 
-        console.log(`[OpenAEV] Findings response:`, response);
+        log.debug(`[OpenAEV] Findings response:`, response);
 
         if (response.content && Array.isArray(response.content)) {
           allFindings.push(...response.content);
-          console.log(`[OpenAEV] Added ${response.content.length} findings, total now: ${allFindings.length}`);
+          log.debug(`[OpenAEV] Added ${response.content.length} findings, total now: ${allFindings.length}`);
         } else {
-          console.warn('[OpenAEV] No content in findings response or not an array');
+          log.warn('[OpenAEV] No content in findings response or not an array');
         }
         
         totalPages = response.totalPages || 1;
@@ -502,11 +502,9 @@ export class OpenAEVClient {
         log.debug(`[OpenAEV] Fetched findings page ${currentPage}/${totalPages}: ${response.content?.length || 0} items (total: ${allFindings.length})`);
       }
 
-      console.log(`[OpenAEV] Completed fetching Findings: ${allFindings.length} total items`);
       log.info(`[OpenAEV] Completed fetching Findings: ${allFindings.length} total items`);
       return allFindings;
     } catch (error) {
-      console.error('[OpenAEV] Get all findings failed:', error);
       log.error('[OpenAEV] Get all findings failed:', error);
       // Return whatever we collected so far
       return allFindings;

@@ -325,7 +325,7 @@ const App: React.FC = () => {
         // Try sending the message again
         await chrome.tabs.sendMessage(tabId, message);
       } catch (error) {
-        console.error('Failed to inject content script or send message:', error);
+        log.error('Failed to inject content script or send message:', error);
       }
     }
   };
@@ -536,7 +536,7 @@ const App: React.FC = () => {
       try {
         await chrome.runtime.sendMessage({ type: 'INJECT_ALL_TABS' });
       } catch (error) {
-        console.log('Note: Could not inject content scripts into existing tabs:', error);
+        log.debug('Note: Could not inject content scripts into existing tabs:', error);
       }
       
       // Move to next step after a short delay

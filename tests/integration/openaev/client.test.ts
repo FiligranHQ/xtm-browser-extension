@@ -128,18 +128,32 @@ async function checkOpenAEVConnection(): Promise<boolean> {
   }
   
   try {
-    const response = await fetch(`${config.url}/api/settings`, {
+    // Check settings endpoint
+    const settingsResponse = await fetch(`${config.url}/api/settings`, {
       headers: {
         'Authorization': `Bearer ${config.token}`,
         'Content-Type': 'application/json',
       },
     });
-    if (response.ok) {
-      isOpenAEVAvailable = true;
-      return true;
+    if (!settingsResponse.ok) {
+      connectionError = `OpenAEV settings returned status ${settingsResponse.status}`;
+      return false;
     }
-    connectionError = `OpenAEV returned status ${response.status}`;
-    return false;
+    
+    // Also verify that the assets endpoint exists (to ensure full API is available)
+    const assetsResponse = await fetch(`${config.url}/api/assets?size=1`, {
+      headers: {
+        'Authorization': `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!assetsResponse.ok) {
+      connectionError = `OpenAEV assets API returned status ${assetsResponse.status} - API may not be fully available`;
+      return false;
+    }
+    
+    isOpenAEVAvailable = true;
+    return true;
   } catch (error) {
     connectionError = error instanceof Error ? error.message : 'Unknown connection error';
     return false;

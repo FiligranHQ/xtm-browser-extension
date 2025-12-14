@@ -85,7 +85,7 @@ jobs:
         ports:
           - 9200:9200
         options: >-
-          --health-cmd "curl -sF http://localhost:9200/_cluster/health || exit 1"
+          --health-cmd "curl -sF http://localhost:9200 || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 30
@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Waiting for Elasticsearch..."
           for i in {1..60}; do
-            if curl -sF http://elasticsearch:9200/_cluster/health; then
+            if curl -sF http://elasticsearch:9200; then
               echo "Elasticsearch is ready!"
               break
             fi

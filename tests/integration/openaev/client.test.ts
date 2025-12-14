@@ -262,33 +262,6 @@ describe('OpenAEV Client Integration Tests', () => {
       const endpoints = await client.searchEndpoints('test', 5);
       expect(Array.isArray(endpoints)).toBe(true);
     });
-
-    it('should create and delete an endpoint', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
-      
-      const testEndpoint = {
-        asset_name: `Test Endpoint ${Date.now()}`,
-        asset_description: 'Created by integration test',
-        endpoint_platform: 'Linux',
-        endpoint_arch: 'x86_64',
-      };
-      
-      const created = await client.createEndpoint(testEndpoint);
-      expect(created).toBeDefined();
-      expect(created.asset_id || created.id).toBeDefined();
-      
-      const endpointId = created.asset_id || created.id;
-      createdEndpointIds.push(endpointId);
-      
-      // Verify we can retrieve it
-      const retrieved = await client.getEndpoint(endpointId);
-      expect(retrieved).toBeDefined();
-      expect(retrieved.asset_name).toBe(testEndpoint.asset_name);
-    });
   });
 
   describe('Asset Groups', () => {

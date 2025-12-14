@@ -1,0 +1,62 @@
+{
+  "name": "filigran-xtm-browser-extension",
+  "version": "1.0.0",
+  "description": "Filigran XTM Browser Extension - Connect to OpenCTI and OpenAEV for threat intelligence management",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:chrome": "cross-env BROWSER=chrome vite build --watch",
+    "build": "cross-env BROWSER=chrome vite build",
+    "build:chrome": "cross-env BROWSER=chrome vite build",
+    "build:firefox": "cross-env BROWSER=firefox vite build",
+    "build:edge": "cross-env BROWSER=edge vite build",
+    "build:all": "npm run build:chrome && npm run build:firefox && npm run build:edge",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit",
+    "icons": "node scripts/generate-icons.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:opencti": "vitest run --config vitest.config.opencti.ts",
+    "test:openaev": "vitest run --config vitest.config.openaev.ts",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@fontsource/geologica": "^5.2.8",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@mozilla/readability": "^0.6.0",
+    "@mui/icons-material": "^6.4.11",
+    "@mui/material": "^6.4.11",
+    "html2pdf.js": "^0.12.1",
+    "mdi-material-ui": "^7.9.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.254",
+    "@types/mozilla-readability": "^0.2.1",
+    "@types/node": "^20.10.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.0",
+    "cross-env": "^7.0.3",
+    "sharp": "^0.33.1",
+    "terser": "^5.44.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vitest": "^2.1.0"
+  },
+  "author": "Filigran",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FiligranHQ/xtm-browser-extension"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

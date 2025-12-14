@@ -1,0 +1,669 @@
+// ============================================================================
+// Configuration Types
+// ============================================================================
+
+export interface PlatformConfig {
+  id: string;
+  name: string;
+  url: string;
+  apiToken: string;
+  enabled: boolean;
+  lastConnected?: string;
+  platformName?: string;
+  platformVersion?: string;
+}
+
+export interface DetectionSettings {
+  entityTypes?: string[];
+  observableTypes?: string[];
+  oaevEntityTypes?: string[];
+}
+
+export interface ExtensionSettings {
+  // Multi-platform support
+  openctiPlatforms: PlatformConfig[];
+  openaevPlatforms: PlatformConfig[];
+  // Legacy single platform (for backward compatibility)
+  opencti?: {
+    url: string;
+    apiToken: string;
+    enabled: boolean;
+  };
+  openaev?: {
+    url: string;
+    apiToken: string;
+    enabled: boolean;
+  };
+  theme: 'auto' | 'light' | 'dark';
+  autoScan: boolean;
+  highlightColor?: string;
+  scanOnLoad: boolean;
+  showNotifications: boolean;
+  detection?: DetectionSettings;
+}
+
+export const DEFAULT_SETTINGS: ExtensionSettings = {
+  openctiPlatforms: [],
+  openaevPlatforms: [],
+  theme: 'auto',
+  autoScan: false,
+  scanOnLoad: false,
+  showNotifications: true,
+  detection: {
+    // Entity types match the SDO cache structure (storage.ts SDOCache)
+    entityTypes: [
+      'Administrative-Area', 'Attack-Pattern', 'Campaign', 'City', 'Country', 'Event',
+      'Incident', 'Individual', 'Intrusion-Set', 'Malware', 'Organization',
+      'Position', 'Region', 'Sector', 'Threat-Actor-Group', 'Threat-Actor-Individual'
+    ],
+    observableTypes: [
+      'Bank-Account', 'Cryptocurrency-Wallet', 'Domain-Name', 'Email-Addr',
+      'Hostname', 'IPv4-Addr', 'IPv6-Addr', 'Mac-Addr', 'Phone-Number',
+      'StixFile', 'Url', 'User-Agent'
+    ],
+    oaevEntityTypes: ['Asset', 'AssetGroup', 'Player', 'Team'],
+  },
+};
+
+// ============================================================================
+// Observable Types
+// ============================================================================
+
+export type ObservableType =
+  | 'IPv4-Addr'
+  | 'IPv6-Addr'
+  | 'Domain-Name'
+  | 'Hostname'
+  | 'Url'
+  | 'Email-Addr'
+  | 'File'
+  | 'StixFile'
+  | 'Artifact'
+  | 'Mac-Addr'
+  | 'Autonomous-System'
+  | 'Cryptocurrency-Wallet'
+  | 'User-Account'
+  | 'Windows-Registry-Key'
+  | 'Directory'
+  | 'Process'
+  | 'Software'
+  | 'X509-Certificate'
+  | 'Text'
+  | 'User-Agent'
+  | 'Phone-Number'
+  | 'Bank-Account'
+  | 'Payment-Card'
+  | 'Credential'
+  | 'Tracking-Number'
+  | 'Media-Content';
+
+export type HashType = 'MD5' | 'SHA-1' | 'SHA-256' | 'SHA-512' | 'SSDEEP';
+
+export interface PlatformMatch {
+  platformId: string;
+  entityId: string;
+  entityData?: StixCyberObservable | StixDomainObject;
+}
+
+export interface DetectedObservable {
+  type: ObservableType;
+  value: string;
+  hashType?: HashType;
+  startIndex: number;
+  endIndex: number;
+  context?: string;
+  found: boolean;
+  entityId?: string;
+  entityData?: StixCyberObservable;
+  platformId?: string;
+  // All platforms where this entity was found (for multi-platform navigation)
+  platformMatches?: PlatformMatch[];
+}
+
+// ============================================================================
+// SDO Types (STIX Domain Objects)
+// ============================================================================
+
+export type SDOType =
+  | 'Intrusion-Set'
+  | 'Malware'
+  | 'Threat-Actor'
+  | 'Campaign'
+  | 'Vulnerability'
+  | 'Attack-Pattern'
+  | 'Tool'
+  | 'Incident'
+  | 'Infrastructure'
+  | 'Indicator';
+
+export interface DetectedSDO {
+  type: SDOType;
+  name: string;
+  aliases?: string[];
+  startIndex: number;
+  endIndex: number;
+  found: boolean;
+  entityId?: string;
+  entityData?: StixDomainObject;
+  platformId?: string;
+  // All platforms where this entity was found (for multi-platform navigation)
+  platformMatches?: PlatformMatch[];
+}
+
+// ============================================================================
+// OpenAEV Entity Types
+// ============================================================================
+
+export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'AttackPattern';
+
+export interface OAEVAsset {
+  asset_id: string;
+  asset_name: string;
+  asset_description?: string;
+  asset_hostname?: string;
+  asset_ips?: string[];
+  // Alternative field names from different API versions/endpoints
+  endpoint_hostname?: string;
+  endpoint_ips?: string[];
+  asset_platform?: string;
+  asset_type?: string;
+  asset_tags?: string[];
+  asset_last_seen?: string;
+}
+
+export interface OAEVAssetGroup {
+  asset_group_id: string;
+  asset_group_name: string;
+  asset_group_description?: string;
+  asset_group_assets_number?: number;
+  asset_group_tags?: string[];
+}
+
+export interface OAEVPlayer {
+  user_id: string;
+  user_email: string;
+  user_firstname?: string;
+  user_lastname?: string;
+  user_phone?: string;
+  user_organization?: string;
+  user_teams?: string[];
+}
+
+export interface OAEVTeam {
+  team_id: string;
+  team_name: string;
+  team_description?: string;
+  team_users_number?: number;
+  team_tags?: string[];
+}
+
+export interface OAEVAttackPattern {
+  attack_pattern_id: string;
+  attack_pattern_name: string;
+  attack_pattern_external_id: string; // External technique ID (e.g., T1059)
+  attack_pattern_description?: string;
+  attack_pattern_platforms?: string[];
+  attack_pattern_kill_chain_phases?: string[];
+}
+
+export interface DetectedOAEVEntity {
+  type: OAEVEntityType;
+  name: string;
+  value?: string; // The matched text in the document
+  startIndex: number;
+  endIndex: number;
+  found: boolean;
+  entityId?: string;
+  entityData?: OAEVAsset | OAEVAssetGroup | OAEVPlayer | OAEVTeam;
+  platformId?: string;
+}
+
+// ============================================================================
+// OpenCTI Entity Types
+// ============================================================================
+
+export interface BaseEntity {
+  id: string;
+  standard_id: string;
+  entity_type: string;
+  parent_types: string[];
+  created_at: string;
+  updated_at: string;
+  created?: string;
+  modified?: string;
+}
+
+export interface MarkingDefinition {
+  id: string;
+  definition_type: string;
+  definition: string;
+  x_opencti_order: number;
+  x_opencti_color: string;
+}
+
+export interface Label {
+  id: string;
+  value: string;
+  color: string;
+}
+
+export interface Identity extends BaseEntity {
+  name: string;
+  description?: string;
+  identity_class: string;
+  x_opencti_aliases?: string[];
+}
+
+export interface ExternalReference {
+  id: string;
+  source_name: string;
+  description?: string;
+  url?: string;
+  external_id?: string;
+}
+
+export interface StixCyberObservable extends BaseEntity {
+  observable_value: string;
+  x_opencti_description?: string;
+  x_opencti_score?: number;
+  objectMarking?: MarkingDefinition[];
+  objectLabel?: Label[];
+  createdBy?: Identity;
+  indicators?: Indicator[];
+  // Type-specific fields
+  value?: string;
+  name?: string;
+  hashes?: Record<string, string>;
+}
+
+export interface StixDomainObject extends BaseEntity {
+  name: string;
+  description?: string;
+  aliases?: string[];
+  x_opencti_aliases?: string[];
+  objectMarking?: MarkingDefinition[];
+  objectLabel?: Label[];
+  createdBy?: Identity;
+  externalReferences?: ExternalReference[];
+  confidence?: number;
+  revoked?: boolean;
+  // Images
+  x_opencti_files?: FileData[];
+  // Type-specific fields
+  first_seen?: string;
+  last_seen?: string;
+  goals?: string[];
+  resource_level?: string;
+  primary_motivation?: string;
+  secondary_motivations?: string[];
+  threat_actor_types?: string[];
+  malware_types?: string[];
+  is_family?: boolean;
+  // Vulnerability specific
+  x_opencti_cvss_base_score?: number;
+  x_opencti_cvss_base_severity?: string;
+  x_opencti_epss_score?: number;
+  x_opencti_cisa_kev?: boolean;
+}
+
+export interface Indicator extends BaseEntity {
+  name: string;
+  description?: string;
+  pattern: string;
+  pattern_type: string;
+  valid_from?: string;
+  valid_until?: string;
+  x_opencti_score?: number;
+  x_opencti_main_observable_type?: string;
+}
+
+export interface FileData {
+  id: string;
+  name: string;
+  metaData?: {
+    mimetype?: string;
+  };
+}
+
+// ============================================================================
+// Container Types
+// ============================================================================
+
+export type ContainerType = 'Report' | 'Case-Incident' | 'Case-Rfi' | 'Case-Rft' | 'Grouping';
+
+export interface ContainerCreateInput {
+  type: ContainerType;
+  name: string;
+  description?: string;
+  content?: string;
+  published?: string;
+  // Report-specific
+  report_types?: string[];
+  // Grouping-specific (mandatory)
+  context?: string;
+  // Case-specific
+  severity?: string;
+  priority?: string;
+  response_types?: string[];
+  // Common fields
+  objects?: string[];
+  objectMarking?: string[];
+  objectLabel?: string[];
+  createdBy?: string;
+  externalReferences?: ExternalReferenceInput[];
+}
+
+export interface ExternalReferenceInput {
+  source_name: string;
+  description?: string;
+  url?: string;
+  external_id?: string;
+}
+
+// ============================================================================
+// API Response Types
+// ============================================================================
+
+export interface GraphQLResponse<T> {
+  data?: T;
+  errors?: GraphQLError[];
+}
+
+export interface GraphQLError {
+  message: string;
+  name?: string;
+  data?: Record<string, unknown>;
+}
+
+export interface PlatformInfo {
+  version: string;
+  enterprise_edition?: boolean;
+  me?: {
+    name?: string;
+    user_email?: string;
+  };
+  settings?: {
+    platform_theme?: string;
+    platform_title?: string;
+  };
+}
+
+// ============================================================================
+// Theme Types (from OpenCTI platform)
+// ============================================================================
+
+export interface OpenCTITheme {
+  id: string;
+  name: string;
+  theme_background: string;
+  theme_paper: string;
+  theme_nav: string;
+  theme_primary: string;
+  theme_secondary: string;
+  theme_accent: string;
+  theme_text_color: string;
+  theme_logo?: string | null;
+  theme_logo_collapsed?: string | null;
+  theme_logo_login?: string | null;
+}
+
+export interface PlatformSettings {
+  platform_title?: string;
+  platform_theme?: OpenCTITheme;
+  platform_url?: string;
+}
+
+// ============================================================================
+// Investigation (Workbench) Types
+// ============================================================================
+
+export interface InvestigationCreateInput {
+  name: string;
+  description?: string;
+  investigated_entities_ids?: string[];
+}
+
+export interface Investigation {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'investigation';
+  investigated_entities_ids?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SearchResult {
+  id: string;
+  entity_type: string;
+  name?: string;
+  observable_value?: string;
+  x_opencti_score?: number;
+  objectMarking?: MarkingDefinition[];
+}
+
+// ============================================================================
+// OpenAEV Scenario Types
+// ============================================================================
+
+export interface OAEVScenarioInput {
+  scenario_name: string;
+  scenario_description?: string;
+  scenario_subtitle?: string;
+  scenario_category?: string;
+  scenario_tags?: string[];
+}
+
+export interface OAEVScenario {
+  scenario_id: string;
+  scenario_name: string;
+  scenario_description?: string;
+  scenario_subtitle?: string;
+  scenario_category?: string;
+  scenario_created_at?: string;
+  scenario_updated_at?: string;
+}
+
+// ============================================================================
+// Message Types (for extension communication)
+// ============================================================================
+
+export type MessageType =
+  | 'SCAN_PAGE'
+  | 'SCAN_RESULT'
+  | 'HIGHLIGHT_OBSERVABLE'
+  | 'SHOW_ENTITY_PANEL'
+  | 'HIDE_PANEL'
+  | 'ADD_OBSERVABLE'
+  | 'ADD_OBSERVABLES_BULK'
+  | 'CREATE_CONTAINER'
+  | 'CREATE_INVESTIGATION'
+  | 'ADD_TO_INVESTIGATION'
+  | 'GET_SETTINGS'
+  | 'SAVE_SETTINGS'
+  | 'TEST_CONNECTION'
+  | 'TEST_OPENAEV_CONNECTION'
+  | 'TEST_PLATFORM_CONNECTION'
+  | 'TEST_PLATFORM_CONNECTION_TEMP'
+  | 'GET_ENTITY_DETAILS'
+  | 'SEARCH_ENTITIES'
+  | 'SEARCH_ASSETS'
+  | 'GENERATE_SCENARIO'
+  | 'GET_PLATFORM_THEME'
+  | 'GET_PLATFORM_SETTINGS'
+  | 'REFRESH_SDO_CACHE'
+  | 'GET_SDO_CACHE_STATS'
+  | 'SELECTION_CHANGED'
+  | 'SHOW_PREVIEW_PANEL'
+  | 'PREVIEW_SELECTION'
+  | 'SHOW_BULK_IMPORT_PANEL'
+  | 'OPEN_SEARCH_PANEL'
+  | 'SHOW_SEARCH_PANEL'
+  | 'SHOW_CONTAINER_PANEL'
+  | 'SHOW_INVESTIGATION_PANEL'
+  | 'GET_PANEL_STATE'
+  | 'FETCH_LABELS'
+  | 'FETCH_MARKINGS'
+  | 'CREATE_OBSERVABLES_BULK'
+  | 'CREATE_INVESTIGATION_WITH_ENTITIES'
+  | 'GET_LABELS_AND_MARKINGS'
+  | 'FETCH_ENTITY_CONTAINERS'
+  | 'FIND_CONTAINERS_BY_URL'
+  | 'FETCH_VOCABULARY'
+  | 'FETCH_IDENTITIES'
+  | 'GET_CACHE_REFRESH_STATUS'
+  | 'CLEAR_SDO_CACHE'
+  | 'CLEAR_OAEV_CACHE'
+  | 'CREATE_WORKBENCH'
+  | 'SCAN_OAEV'
+  | 'GET_OAEV_ENTITY_DETAILS'
+  // Atomic Testing
+  | 'SCAN_ATOMIC_TESTING'
+  | 'SHOW_ATOMIC_TESTING_PANEL'
+  | 'FETCH_INJECTOR_CONTRACTS'
+  | 'FETCH_OAEV_ASSETS'
+  | 'FETCH_OAEV_ASSET_GROUPS'
+  | 'CREATE_OAEV_PAYLOAD'
+  | 'CREATE_ATOMIC_TESTING';
+
+export interface ExtensionMessage {
+  type: MessageType;
+  payload?: unknown;
+}
+
+export interface ScanPagePayload {
+  url: string;
+  title: string;
+  content: string;
+}
+
+export interface ScanResultPayload {
+  observables: DetectedObservable[];
+  sdos: DetectedSDO[];
+  cves?: DetectedSDO[]; // CVEs (Vulnerabilities) - separate array for special handling
+  oaevEntities?: DetectedOAEVEntity[];
+  scanTime: number;
+  url: string;
+}
+
+export interface ShowEntityPanelPayload {
+  entityType: 'observable' | 'sdo' | 'oaev';
+  entity: DetectedObservable | DetectedSDO | DetectedOAEVEntity;
+}
+
+export interface AddObservablePayload {
+  type: ObservableType;
+  value: string;
+  hashType?: HashType;
+  createIndicator?: boolean;
+}
+
+export interface CreateContainerPayload {
+  type: ContainerType;
+  name: string;
+  description?: string;
+  content?: string;
+  pageUrl: string;
+  pageTitle: string;
+  observableIds?: string[];
+  generatePdf?: boolean;
+}
+
+// ============================================================================
+// UI State Types
+// ============================================================================
+
+export interface ScanState {
+  isScanning: boolean;
+  lastScanTime?: string;
+  results?: ScanResultPayload;
+  error?: string;
+}
+
+export interface PanelState {
+  isOpen: boolean;
+  entity?: DetectedObservable | DetectedSDO | DetectedOAEVEntity;
+  entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
+  loading: boolean;
+}
+
+// ============================================================================
+// Atomic Testing Types (OpenAEV)
+// ============================================================================
+
+export interface InjectorContract {
+  injector_contract_id: string;
+  injector_contract_labels?: Record<string, string>;
+  injector_contract_injector_type?: string;
+  injector_contract_injector?: {
+    injector_id: string;
+    injector_name: string;
+    injector_type: string;
+  };
+  injector_contract_payload_type?: string;
+  injector_contract_platforms?: string[];
+  injector_contract_attack_patterns?: Array<{
+    attack_pattern_id: string;
+    attack_pattern_name: string;
+    attack_pattern_external_id?: string;
+  }>;
+  injector_contract_content?: any;
+}
+
+export interface AtomicTestingInput {
+  inject_title: string;
+  inject_description?: string;
+  inject_injector_contract: string;
+  inject_content?: Record<string, any>;
+  inject_teams?: string[];
+  inject_assets?: string[];
+  inject_asset_groups?: string[];
+  inject_all_teams?: boolean;
+  inject_tags?: string[];
+}
+
+export interface PayloadCreateInput {
+  payload_type: 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
+  payload_name: string;
+  payload_source: 'COMMUNITY' | 'FILIGRAN' | 'MANUAL';
+  payload_status: 'VERIFIED' | 'UNVERIFIED' | 'DEPRECATED';
+  payload_platforms: string[];
+  payload_execution_arch?: 'ALL_ARCHITECTURES' | 'x86_64' | 'arm64';
+  payload_expectations?: string[];
+  payload_description?: string;
+  dns_resolution_hostname?: string;
+  payload_attack_patterns?: string[];
+  payload_tags?: string[];
+}
+
+export interface OAEVPayload {
+  payload_id: string;
+  payload_name: string;
+  payload_type: string;
+  payload_platforms: string[];
+  payload_injector_contract?: InjectorContract;
+}
+
+export interface AtomicTestingResult {
+  inject_id: string;
+  inject_title: string;
+  inject_type: string;
+  inject_status?: {
+    name: string;
+    label: string;
+  };
+}
+
+// Atomic testing scan detection
+export interface DetectedAtomicTarget {
+  id: string;
+  type: 'attack-pattern' | 'domain' | 'hostname';
+  name: string;
+  value: string;
+  platformId: string;
+  platformName: string;
+  // For attack patterns - linked injector contracts
+  injectorContracts?: InjectorContract[];
+  // Original entity data if from cache
+  entityData?: OAEVAttackPattern;
+}

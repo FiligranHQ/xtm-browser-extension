@@ -1,0 +1,370 @@
+name: OpenCTI Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/shared/api/opencti-client.ts'
+      - 'src/shared/detection/**'
+      - 'src/shared/utils/storage.ts'
+      - 'tests/**'
+      - '.github/workflows/ci-test-opencti.yml'
+      - 'package.json'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/shared/api/opencti-client.ts'
+      - 'src/shared/detection/**'
+      - 'src/shared/utils/storage.ts'
+      - 'tests/**'
+      - '.github/workflows/ci-test-opencti.yml'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-coverage
+          path: coverage/
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Integration tests run on all events but are non-blocking
+    continue-on-error: true
+
+    services:
+      redis:
+        image: redis:8.4.0
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.8
+        env:
+          discovery.type: single-node
+          xpack.ml.enabled: 'false'
+          xpack.security.enabled: 'false'
+          thread_pool.search.queue_size: '5000'
+          ES_JAVA_OPTS: -Xms2g -Xmx2g
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -sF http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+      minio:
+        image: lazybit/minio
+        ports:
+          - 9000:9000
+          - 9001:9001
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        options: >-
+          --health-cmd "curl -sf http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      rabbitmq:
+        image: rabbitmq:4.2-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for Elasticsearch to be ready
+        run: |
+          echo "Waiting for Elasticsearch..."
+          for i in {1..60}; do
+            if curl -s http://elasticsearch:9200 >/dev/null || 1; then
+              echo "Elasticsearch is ready!"
+              break
+            fi
+            echo "Attempt $i: Elasticsearch not ready yet..."
+            sleep 5
+          done
+
+      - name: Wait for MinIO to be ready
+        run: |
+          echo "Waiting for MinIO..."
+          for i in {1..30}; do
+            if curl -sf http://minio:9000/minio/health/live; then
+              echo "MinIO is ready!"
+              break
+            fi
+            echo "Attempt $i: MinIO not ready yet..."
+            sleep 2
+          done
+
+      - name: Pull and run OpenCTI
+        run: |
+          docker run -d --name opencti \
+            --network host \
+            -e NODE_OPTIONS=--max-old-space-size=8096 \
+            -e APP__PORT=8080 \
+            -e APP__BASE_URL=http://localhost:8080 \
+            -e APP__ADMIN__EMAIL=admin@opencti.io \
+            -e APP__ADMIN__PASSWORD=admin \
+            -e APP__ADMIN__TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
+            -e APP__HEALTH_ACCESS_KEY=healthcheck \
+            -e REDIS__HOSTNAME=redis \
+            -e REDIS__PORT=6379 \
+            -e ELASTICSEARCH__URL=http://elasticsearch:9200 \
+            -e ELASTICSEARCH__NUMBER_OF_REPLICAS=0 \
+            -e MINIO__ENDPOINT=minio \
+            -e MINIO__PORT=9000 \
+            -e MINIO__USE_SSL=false \
+            -e MINIO__ACCESS_KEY=minioadmin \
+            -e MINIO__SECRET_KEY=minioadmin \
+            -e RABBITMQ__HOSTNAME=rabbitmq \
+            -e RABBITMQ__PORT=5672 \
+            -e RABBITMQ__PORT_MANAGEMENT=15672 \
+            -e RABBITMQ__MANAGEMENT_SSL=false \
+            -e RABBITMQ__USERNAME=guest \
+            -e RABBITMQ__PASSWORD=guest \
+            -e SMTP__HOSTNAME=localhost \
+            -e SMTP__PORT=25 \
+            -e PROVIDERS__LOCAL__STRATEGY=LocalStrategy \
+            opencti/platform:latest
+
+      - name: Wait for OpenCTI to be ready
+        run: |
+          echo "Waiting for OpenCTI to be ready..."
+          for i in {1..120}; do
+            if curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json" | grep -q "version"; then
+              echo "OpenCTI is ready!"
+              curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json"
+              break
+            fi
+            echo "Attempt $i: OpenCTI not ready yet..."
+            docker logs opencti --tail 20 2>/dev/null || true
+            sleep 10
+          done
+
+      - name: Seed test data in OpenCTI
+        run: |
+          echo "Creating test data in OpenCTI..."
+          API_URL="http://localhost:8080/graphql"
+          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          
+          # Create Threat Actor Groups (actual organizations)
+          echo "Creating Threat Actor Group GRU..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { threatActorGroupAdd(input: { name: \"GRU\", aliases: [\"Main Intelligence Directorate\", \"Unit 26165\", \"Unit 74455\"], description: \"Russian military intelligence agency\" }) { id name } }"}' || true
+          
+          echo "Creating Threat Actor Group Lazarus Group..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { threatActorGroupAdd(input: { name: \"Lazarus Group\", aliases: [\"HIDDEN COBRA\", \"Guardians of Peace\"], description: \"North Korean state-sponsored threat actor\" }) { id name } }"}' || true
+          
+          # Create Intrusion Sets (adversary campaigns/operations)
+          echo "Creating Intrusion Set APT29..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { intrusionSetAdd(input: { name: \"APT29\", aliases: [\"Cozy Bear\", \"The Dukes\", \"IRON HEMLOCK\"], description: \"Russian cyber espionage group attributed to SVR\" }) { id name } }"}' || true
+          
+          echo "Creating Intrusion Set APT28..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { intrusionSetAdd(input: { name: \"APT28\", aliases: [\"Fancy Bear\", \"Sofacy\", \"IRON TWILIGHT\"], description: \"Russian cyber espionage group attributed to GRU\" }) { id name } }"}' || true
+          
+          # Create Malware
+          echo "Creating Malware Emotet..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { malwareAdd(input: { name: \"Emotet\", aliases: [\"Heodo\", \"Geodo\"], description: \"Banking trojan turned malware distribution service\", malware_types: [\"trojan\"], is_family: true }) { id name } }"}' || true
+          
+          echo "Creating Malware Ryuk..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { malwareAdd(input: { name: \"Ryuk\", aliases: [\"WIZARD SPIDER\"], description: \"Ransomware targeting enterprises\", malware_types: [\"ransomware\"], is_family: true }) { id name } }"}' || true
+          
+          # Create Attack Patterns (MITRE ATT&CK)
+          echo "Creating Attack Pattern T1566 Phishing..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { attackPatternAdd(input: { name: \"Phishing\", x_mitre_id: \"T1566\", description: \"Adversaries may send phishing messages to gain access to victim systems\" }) { id name } }"}' || true
+          
+          echo "Creating Attack Pattern T1059 Command and Scripting Interpreter..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { attackPatternAdd(input: { name: \"Command and Scripting Interpreter\", x_mitre_id: \"T1059\", description: \"Adversaries may abuse command and script interpreters to execute commands\" }) { id name } }"}' || true
+          
+          # Create an Indicator
+          echo "Creating test Indicator..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { indicatorAdd(input: { name: \"Malicious Domain\", pattern: \"[domain-name:value = '\''evil-domain.com'\'']\", pattern_type: \"stix\", valid_from: \"2024-01-01T00:00:00.000Z\" }) { id name } }"}' || true
+          
+          # Create a Campaign
+          echo "Creating Campaign SolarWinds..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { campaignAdd(input: { name: \"SolarWinds Campaign\", aliases: [\"SUNBURST\", \"Solorigate\"], description: \"Supply chain attack discovered in December 2020\" }) { id name } }"}' || true
+          
+          # Create Vulnerabilities (CVEs)
+          echo "Creating Vulnerability CVE-2021-44228..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { vulnerabilityAdd(input: { name: \"CVE-2021-44228\", description: \"Log4Shell - Remote code execution in Apache Log4j\" }) { id name } }"}' || true
+          
+          echo "Creating Vulnerability CVE-2023-23397..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { vulnerabilityAdd(input: { name: \"CVE-2023-23397\", description: \"Microsoft Outlook privilege escalation vulnerability\" }) { id name } }"}' || true
+          
+          # Create Tools
+          echo "Creating Tool Cobalt Strike..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { toolAdd(input: { name: \"Cobalt Strike\", aliases: [\"CS\", \"Beacon\"], description: \"Commercial adversary simulation and red team operations tool\" }) { id name } }"}' || true
+          
+          echo "Creating Tool Mimikatz..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { toolAdd(input: { name: \"Mimikatz\", description: \"Credential dumping tool for Windows\" }) { id name } }"}' || true
+          
+          # Create Labels
+          echo "Creating Labels..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { labelAdd(input: { value: \"apt\", color: \"#ff0000\" }) { id value } }"}' || true
+          
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { labelAdd(input: { value: \"ransomware\", color: \"#ff6600\" }) { id value } }"}' || true
+          
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"mutation { labelAdd(input: { value: \"state-sponsored\", color: \"#9900ff\" }) { id value } }"}' || true
+          
+          echo "Test data seeding completed!"
+
+      - name: Verify test data
+        run: |
+          echo "Verifying test data..."
+          API_URL="http://localhost:8080/graphql"
+          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          
+          # Query Threat Actor Groups (organizations like GRU)
+          echo "Querying Threat Actor Groups..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"{ threatActorsGroup(first: 5) { edges { node { id name aliases } } } }"}'
+          
+          echo ""
+          # Query Intrusion Sets (APT29, APT28, etc.)
+          echo "Querying Intrusion Sets..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"{ intrusionSets(first: 5) { edges { node { id name aliases } } } }"}'
+          
+          echo ""
+          echo "Querying Malware..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"{ malwares(first: 5) { edges { node { id name aliases } } } }"}'
+          
+          echo ""
+          echo "Querying Attack Patterns..."
+          curl -s -X POST "$API_URL" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"{ attackPatterns(first: 5) { edges { node { id name x_mitre_id } } } }"}'
+
+      - name: Run OpenCTI integration tests
+        env:
+          OPENCTI_URL: http://localhost:8080
+          OPENCTI_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
+        run: npm run test:opencti
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: opencti-test-results
+          path: |
+            coverage/
+            test-results/
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop opencti || true
+          docker rm opencti || true

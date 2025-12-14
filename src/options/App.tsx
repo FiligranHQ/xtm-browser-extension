@@ -1259,7 +1259,8 @@ const App: React.FC = () => {
                         placeholder={`Enter your ${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API key`}
                         value={settings?.ai?.apiKey || ''}
                         onChange={(e) => updateSetting('ai', { 
-                          ...settings?.ai, 
+                          ...settings?.ai,
+                          enabled: settings?.ai?.enabled ?? false,
                           apiKey: e.target.value,
                         })}
                         InputProps={{

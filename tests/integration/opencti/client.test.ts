@@ -71,7 +71,28 @@ class TestOpenCTIClient {
             node {
               id
               entity_type
-              ... on StixDomainObject {
+              ... on ThreatActor {
+                name
+              }
+              ... on IntrusionSet {
+                name
+              }
+              ... on Malware {
+                name
+              }
+              ... on Tool {
+                name
+              }
+              ... on AttackPattern {
+                name
+              }
+              ... on Campaign {
+                name
+              }
+              ... on Vulnerability {
+                name
+              }
+              ... on Indicator {
                 name
               }
               ... on StixCyberObservable {
@@ -97,8 +118,48 @@ class TestOpenCTIClient {
             node {
               id
               entity_type
-              name
-              aliases
+              ... on ThreatActor {
+                name
+                aliases
+              }
+              ... on IntrusionSet {
+                name
+                aliases
+              }
+              ... on Malware {
+                name
+                aliases
+              }
+              ... on Tool {
+                name
+                aliases
+              }
+              ... on AttackPattern {
+                name
+                aliases
+                x_mitre_id
+              }
+              ... on Campaign {
+                name
+                aliases
+              }
+              ... on Incident {
+                name
+                aliases
+              }
+              ... on Vulnerability {
+                name
+              }
+              ... on Sector {
+                name
+              }
+              ... on Country {
+                name
+              }
+              ... on Organization {
+                name
+                aliases
+              }
             }
           }
         }

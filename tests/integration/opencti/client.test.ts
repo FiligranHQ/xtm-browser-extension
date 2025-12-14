@@ -158,7 +158,6 @@ class TestOpenCTIClient {
               }
               ... on Organization {
                 name
-                aliases
               }
             }
           }

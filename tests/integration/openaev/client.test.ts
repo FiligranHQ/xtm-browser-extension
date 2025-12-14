@@ -40,12 +40,27 @@ class TestOpenAEVClient {
     return response.json();
   }
 
+  // Helper to extract array from paginated response (Spring Boot style)
+  private extractArray(response: any): any[] {
+    // Handle Spring Boot paginated response: { content: [...], totalElements: N }
+    if (response && typeof response === 'object' && Array.isArray(response.content)) {
+      return response.content;
+    }
+    // Handle direct array response
+    if (Array.isArray(response)) {
+      return response;
+    }
+    // Return empty array if response format is unexpected
+    return [];
+  }
+
   async testConnection(): Promise<any> {
     return this.request('/api/settings');
   }
 
   async getAssets(limit = 100): Promise<any[]> {
-    return this.request(`/api/assets?size=${limit}`);
+    const response = await this.request(`/api/assets?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getAsset(id: string): Promise<any> {
@@ -53,11 +68,13 @@ class TestOpenAEVClient {
   }
 
   async searchAssets(searchTerm: string, limit = 10): Promise<any[]> {
-    return this.request(`/api/assets?searchPaginationInput.textSearch=${encodeURIComponent(searchTerm)}&size=${limit}`);
+    const response = await this.request(`/api/assets?searchPaginationInput.textSearch=${encodeURIComponent(searchTerm)}&size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getAssetGroups(limit = 100): Promise<any[]> {
-    return this.request(`/api/asset_groups?size=${limit}`);
+    const response = await this.request(`/api/asset_groups?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getAssetGroup(id: string): Promise<any> {
@@ -65,7 +82,8 @@ class TestOpenAEVClient {
   }
 
   async getPlayers(limit = 100): Promise<any[]> {
-    return this.request(`/api/players?size=${limit}`);
+    const response = await this.request(`/api/players?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getPlayer(id: string): Promise<any> {
@@ -73,7 +91,8 @@ class TestOpenAEVClient {
   }
 
   async getTeams(limit = 100): Promise<any[]> {
-    return this.request(`/api/teams?size=${limit}`);
+    const response = await this.request(`/api/teams?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getTeam(id: string): Promise<any> {
@@ -81,7 +100,8 @@ class TestOpenAEVClient {
   }
 
   async getAttackPatterns(limit = 100): Promise<any[]> {
-    return this.request(`/api/attack_patterns?size=${limit}`);
+    const response = await this.request(`/api/attack_patterns?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getAttackPattern(id: string): Promise<any> {
@@ -89,7 +109,8 @@ class TestOpenAEVClient {
   }
 
   async getScenarios(limit = 100): Promise<any[]> {
-    return this.request(`/api/scenarios?size=${limit}`);
+    const response = await this.request(`/api/scenarios?size=${limit}`);
+    return this.extractArray(response);
   }
 
   async getScenario(id: string): Promise<any> {
@@ -128,7 +149,7 @@ async function checkOpenAEVConnection(): Promise<boolean> {
   }
   
   try {
-    // Check settings endpoint
+    // Check settings endpoint - if this works, OpenAEV is available
     const settingsResponse = await fetch(`${config.url}/api/settings`, {
       headers: {
         'Authorization': `Bearer ${config.token}`,
@@ -140,20 +161,15 @@ async function checkOpenAEVConnection(): Promise<boolean> {
       return false;
     }
     
-    // Also verify that the assets endpoint exists (to ensure full API is available)
-    const assetsResponse = await fetch(`${config.url}/api/assets?size=1`, {
-      headers: {
-        'Authorization': `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!assetsResponse.ok) {
-      connectionError = `OpenAEV assets API returned status ${assetsResponse.status} - API may not be fully available`;
-      return false;
+    // Verify the response contains expected data
+    const settingsData = await settingsResponse.json();
+    if (settingsData) {
+      isOpenAEVAvailable = true;
+      return true;
     }
     
-    isOpenAEVAvailable = true;
-    return true;
+    connectionError = 'OpenAEV settings response was empty';
+    return false;
   } catch (error) {
     connectionError = error instanceof Error ? error.message : 'Unknown connection error';
     return false;

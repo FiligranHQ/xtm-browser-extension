@@ -644,19 +644,25 @@ export class OpenCTIClient {
   }
 
   // ==========================================================================
-  // SDO Bulk Fetch for Caching
+  // SDO Bulk Fetch for Caching (with full pagination support)
   // ==========================================================================
 
   /**
-   * Fetch SDOs of a specific type for caching (id, name, and aliases only - minimal data)
+   * Default page size for pagination (balance between efficiency and API limits)
+   */
+  private static readonly DEFAULT_PAGE_SIZE = 500;
+
+  /**
+   * Fetch SDOs of a specific type for caching with full pagination
+   * Iterates through all pages to ensure no entities are missed
    */
   async fetchSDOsForCache(
     entityType: string,
-    first: number = 5000
+    pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE
   ): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
     const query = `
-      query FetchSDOsForCache($types: [String], $first: Int) {
-        stixDomainObjects(types: $types, first: $first) {
+      query FetchSDOsForCache($types: [String], $first: Int, $after: ID) {
+        stixDomainObjects(types: $types, first: $first, after: $after) {
           edges {
             node {
               id
@@ -732,99 +738,126 @@ export class OpenCTIClient {
               }
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+            globalCount
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      stixDomainObjects: {
-        edges: Array<{
-          node: {
-            id: string;
-            entity_type: string;
-            name?: string;
-            aliases?: string[];
-            x_opencti_aliases?: string[];
-            x_mitre_id?: string;
+    const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
+
+    while (hasNextPage) {
+      const data = await this.query<{
+        stixDomainObjects: {
+          edges: Array<{
+            node: {
+              id: string;
+              entity_type: string;
+              name?: string;
+              aliases?: string[];
+              x_opencti_aliases?: string[];
+              x_mitre_id?: string;
+            };
+          }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+            globalCount: number;
           };
-        }>;
-      };
-    }>(query, { types: [entityType], first });
-
-    return data.stixDomainObjects.edges
-      .map(edge => {
-        const node = edge.node;
-        // Merge aliases, x_opencti_aliases, and x_mitre_id (for attack patterns)
-        const allAliases = [
-          ...(node.aliases || []), 
-          ...(node.x_opencti_aliases || []),
-          ...(node.x_mitre_id ? [node.x_mitre_id] : []),
-        ];
-        return {
-          id: node.id,
-          name: node.name || '',
-          aliases: allAliases.length > 0 ? allAliases : undefined,
         };
-      })
-      .filter(node => node.name) as Array<{ id: string; name: string; aliases?: string[] }>;
+      }>(query, { types: [entityType], first: pageSize, after });
+
+      const pageResults = data.stixDomainObjects.edges
+        .map(edge => {
+          const node = edge.node;
+          // Merge aliases, x_opencti_aliases, and x_mitre_id (for attack patterns)
+          const allAliases = [
+            ...(node.aliases || []), 
+            ...(node.x_opencti_aliases || []),
+            ...(node.x_mitre_id ? [node.x_mitre_id] : []),
+          ];
+          return {
+            id: node.id,
+            name: node.name || '',
+            aliases: allAliases.length > 0 ? allAliases : undefined,
+          };
+        })
+        .filter(node => node.name) as Array<{ id: string; name: string; aliases?: string[] }>;
+
+      allResults.push(...pageResults);
+      hasNextPage = data.stixDomainObjects.pageInfo.hasNextPage;
+      after = data.stixDomainObjects.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for ${entityType}: ${pageResults.length} items (total: ${allResults.length}, hasMore: ${hasNextPage})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching ${entityType}: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   /**
-   * Fetch all threat actor groups for caching
+   * Fetch all threat actor groups for caching (with full pagination)
    */
-  async fetchThreatActorGroups(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Threat-Actor-Group', first);
+  async fetchThreatActorGroups(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Threat-Actor-Group');
   }
 
   /**
-   * Fetch all threat actor individuals for caching
+   * Fetch all threat actor individuals for caching (with full pagination)
    */
-  async fetchThreatActorIndividuals(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Threat-Actor-Individual', first);
+  async fetchThreatActorIndividuals(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Threat-Actor-Individual');
   }
 
   /**
-   * Fetch all intrusion sets for caching
+   * Fetch all intrusion sets for caching (with full pagination)
    */
-  async fetchIntrusionSets(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Intrusion-Set', first);
+  async fetchIntrusionSets(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Intrusion-Set');
   }
 
   /**
-   * Fetch all campaigns for caching
+   * Fetch all campaigns for caching (with full pagination)
    */
-  async fetchCampaigns(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Campaign', first);
+  async fetchCampaigns(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Campaign');
   }
 
   /**
-   * Fetch all incidents for caching
+   * Fetch all incidents for caching (with full pagination)
    */
-  async fetchIncidents(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Incident', first);
+  async fetchIncidents(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Incident');
   }
 
   /**
-   * Fetch all malware for caching
+   * Fetch all malware for caching (with full pagination)
    */
-  async fetchMalware(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Malware', first);
+  async fetchMalware(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Malware');
   }
 
   /**
-   * Fetch all vulnerabilities for caching
+   * Fetch all vulnerabilities for caching (with full pagination)
    */
-  async fetchVulnerabilities(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Vulnerability', first);
+  async fetchVulnerabilities(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Vulnerability');
   }
 
   /**
-   * Fetch all locations (countries, regions, cities) for caching
+   * Fetch all locations (countries, regions, cities) for caching with full pagination
    */
-  async fetchLocations(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+  async fetchLocations(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
     const query = `
-      query FetchLocations($first: Int) {
-        locations(first: $first) {
+      query FetchLocations($first: Int, $after: ID) {
+        locations(first: $first, after: $after) {
           edges {
             node {
               id
@@ -833,107 +866,134 @@ export class OpenCTIClient {
               x_opencti_aliases
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+            globalCount
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      locations: {
-        edges: Array<{
-          node: {
-            id: string;
-            entity_type: string;
-            name: string;
-            x_opencti_aliases?: string[];
+    const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
+
+    while (hasNextPage) {
+      const data = await this.query<{
+        locations: {
+          edges: Array<{
+            node: {
+              id: string;
+              entity_type: string;
+              name: string;
+              x_opencti_aliases?: string[];
+            };
+          }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+            globalCount: number;
           };
-        }>;
-      };
-    }>(query, { first });
+        };
+      }>(query, { first: pageSize, after });
 
-    return data.locations.edges.map(edge => ({
-      id: edge.node.id,
-      name: edge.node.name,
-      aliases: edge.node.x_opencti_aliases,
-    }));
+      const pageResults = data.locations.edges.map(edge => ({
+        id: edge.node.id,
+        name: edge.node.name,
+        aliases: edge.node.x_opencti_aliases,
+      }));
+
+      allResults.push(...pageResults);
+      hasNextPage = data.locations.pageInfo.hasNextPage;
+      after = data.locations.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for Locations: ${pageResults.length} items (total: ${allResults.length}, hasMore: ${hasNextPage})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching Locations: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   /**
-   * Fetch all sectors for caching
+   * Fetch all sectors for caching (with full pagination)
    */
-  async fetchSectors(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Sector', first);
+  async fetchSectors(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Sector');
   }
 
   /**
-   * Fetch all organizations for caching
+   * Fetch all organizations for caching (with full pagination)
    */
-  async fetchOrganizations(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Organization', first);
+  async fetchOrganizations(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Organization');
   }
 
   /**
-   * Fetch all individuals for caching
+   * Fetch all individuals for caching (with full pagination)
    */
-  async fetchIndividuals(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Individual', first);
+  async fetchIndividuals(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Individual');
   }
 
   /**
-   * Fetch all events for caching
+   * Fetch all events for caching (with full pagination)
    */
-  async fetchEvents(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Event', first);
+  async fetchEvents(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Event');
   }
 
   /**
-   * Fetch all attack patterns for caching (includes x_mitre_id as alias)
+   * Fetch all attack patterns for caching with full pagination (includes x_mitre_id as alias)
    */
-  async fetchAttackPatterns(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Attack-Pattern', first);
+  async fetchAttackPatterns(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Attack-Pattern');
   }
 
   /**
-   * Fetch all countries for caching
+   * Fetch all countries for caching (with full pagination)
    */
-  async fetchCountries(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Country', first);
+  async fetchCountries(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Country');
   }
 
   /**
-   * Fetch all regions for caching
+   * Fetch all regions for caching (with full pagination)
    */
-  async fetchRegions(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Region', first);
+  async fetchRegions(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Region');
   }
 
   /**
-   * Fetch all cities for caching
+   * Fetch all cities for caching (with full pagination)
    */
-  async fetchCities(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('City', first);
+  async fetchCities(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('City');
   }
 
   /**
-   * Fetch all administrative areas for caching
+   * Fetch all administrative areas for caching (with full pagination)
    */
-  async fetchAdministrativeAreas(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Administrative-Area', first);
+  async fetchAdministrativeAreas(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Administrative-Area');
   }
 
   /**
-   * Fetch all positions for caching
+   * Fetch all positions for caching (with full pagination)
    */
-  async fetchPositions(first: number = 5000): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Position', first);
+  async fetchPositions(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+    return this.fetchSDOsForCache('Position');
   }
 
   /**
-   * Fetch all labels
+   * Fetch all labels with full pagination
    */
-  async fetchLabels(): Promise<Array<{ id: string; value: string; color: string }>> {
+  async fetchLabels(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; value: string; color: string }>> {
     const query = `
-      query FetchLabels {
-        labels(first: 500) {
+      query FetchLabels($first: Int, $after: ID) {
+        labels(first: $first, after: $after) {
           edges {
             node {
               id
@@ -941,28 +1001,52 @@ export class OpenCTIClient {
               color
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      labels: {
-        edges: Array<{
-          node: { id: string; value: string; color: string };
-        }>;
-      };
-    }>(query);
+    const allResults: Array<{ id: string; value: string; color: string }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
 
-    return data.labels.edges.map(e => e.node);
+    while (hasNextPage) {
+      const data = await this.query<{
+        labels: {
+          edges: Array<{
+            node: { id: string; value: string; color: string };
+          }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+          };
+        };
+      }>(query, { first: pageSize, after });
+
+      const pageResults = data.labels.edges.map(e => e.node);
+      allResults.push(...pageResults);
+      hasNextPage = data.labels.pageInfo.hasNextPage;
+      after = data.labels.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for Labels: ${pageResults.length} items (total: ${allResults.length})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching Labels: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   /**
-   * Fetch all marking definitions
+   * Fetch all marking definitions with full pagination
    */
-  async fetchMarkingDefinitions(): Promise<Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }>> {
+  async fetchMarkingDefinitions(pageSize: number = 100): Promise<Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }>> {
     const query = `
-      query FetchMarkingDefinitions {
-        markingDefinitions(first: 100) {
+      query FetchMarkingDefinitions($first: Int, $after: ID) {
+        markingDefinitions(first: $first, after: $after) {
           edges {
             node {
               id
@@ -971,29 +1055,53 @@ export class OpenCTIClient {
               x_opencti_color
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      markingDefinitions: {
-        edges: Array<{
-          node: { id: string; definition: string; definition_type: string; x_opencti_color: string };
-        }>;
-      };
-    }>(query);
+    const allResults: Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
 
-    return data.markingDefinitions.edges.map(e => e.node);
+    while (hasNextPage) {
+      const data = await this.query<{
+        markingDefinitions: {
+          edges: Array<{
+            node: { id: string; definition: string; definition_type: string; x_opencti_color: string };
+          }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+          };
+        };
+      }>(query, { first: pageSize, after });
+
+      const pageResults = data.markingDefinitions.edges.map(e => e.node);
+      allResults.push(...pageResults);
+      hasNextPage = data.markingDefinitions.pageInfo.hasNextPage;
+      after = data.markingDefinitions.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for MarkingDefinitions: ${pageResults.length} items (total: ${allResults.length})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching MarkingDefinitions: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   /**
-   * Fetch open vocabulary values by category
+   * Fetch open vocabulary values by category with full pagination
    * Used for report_types, grouping context, case severity/priority, etc.
    */
-  async fetchVocabulary(category: string): Promise<Array<{ id: string; name: string; description?: string }>> {
+  async fetchVocabulary(category: string, pageSize: number = 100): Promise<Array<{ id: string; name: string; description?: string }>> {
     const query = `
-      query FetchVocabulary($category: VocabularyCategory!) {
-        vocabularies(category: $category, first: 100) {
+      query FetchVocabulary($category: VocabularyCategory!, $first: Int, $after: ID) {
+        vocabularies(category: $category, first: $first, after: $after) {
           edges {
             node {
               id
@@ -1001,26 +1109,50 @@ export class OpenCTIClient {
               description
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      vocabularies: {
-        edges: Array<{ node: { id: string; name: string; description?: string } }>;
-      };
-    }>(query, { category });
+    const allResults: Array<{ id: string; name: string; description?: string }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
 
-    return data.vocabularies.edges.map(e => e.node);
+    while (hasNextPage) {
+      const data = await this.query<{
+        vocabularies: {
+          edges: Array<{ node: { id: string; name: string; description?: string } }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+          };
+        };
+      }>(query, { category, first: pageSize, after });
+
+      const pageResults = data.vocabularies.edges.map(e => e.node);
+      allResults.push(...pageResults);
+      hasNextPage = data.vocabularies.pageInfo.hasNextPage;
+      after = data.vocabularies.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for Vocabulary(${category}): ${pageResults.length} items (total: ${allResults.length})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching Vocabulary(${category}): ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   /**
-   * Fetch identities (Organizations, Individuals, Systems) for the createdBy field
+   * Fetch identities (Organizations, Individuals, Systems) for the createdBy field with full pagination
    */
-  async fetchIdentities(first: number = 100): Promise<Array<{ id: string; name: string; entity_type: string }>> {
+  async fetchIdentities(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; entity_type: string }>> {
     const query = `
-      query FetchIdentities($first: Int) {
-        identities(first: $first, types: ["Organization", "Individual", "System"]) {
+      query FetchIdentities($first: Int, $after: ID) {
+        identities(first: $first, after: $after, types: ["Organization", "Individual", "System"]) {
           edges {
             node {
               id
@@ -1028,17 +1160,41 @@ export class OpenCTIClient {
               entity_type
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     `;
 
-    const data = await this.query<{
-      identities: {
-        edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
-      };
-    }>(query, { first });
+    const allResults: Array<{ id: string; name: string; entity_type: string }> = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
 
-    return data.identities.edges.map(e => e.node);
+    while (hasNextPage) {
+      const data = await this.query<{
+        identities: {
+          edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor: string;
+          };
+        };
+      }>(query, { first: pageSize, after });
+
+      const pageResults = data.identities.edges.map(e => e.node);
+      allResults.push(...pageResults);
+      hasNextPage = data.identities.pageInfo.hasNextPage;
+      after = data.identities.pageInfo.endCursor;
+      pageCount++;
+
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for Identities: ${pageResults.length} items (total: ${allResults.length})`);
+    }
+
+    log.info(`[OpenCTI] Completed fetching Identities: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   // ==========================================================================

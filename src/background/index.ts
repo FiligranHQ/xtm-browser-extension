@@ -1833,36 +1833,50 @@ async function handleMessage(
           break;
         }
         
+        const { platformId: labelsPlatformId } = (message.payload || {}) as { platformId?: string };
+        
         try {
-          // Fetch from all platforms in PARALLEL with timeout
-          const TIMEOUT_MS = 5000;
-          const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-            try {
-              const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
-              );
-              const labels = await Promise.race([client.fetchLabels(), timeoutPromise]);
-              return { platformId: pId, labels, error: null };
-            } catch (e) {
-              log.warn(`Failed to fetch labels from platform ${pId}:`, e);
-              return { platformId: pId, labels: [], error: e };
+          // If a specific platform is requested, fetch only from that platform
+          if (labelsPlatformId) {
+            const client = openCTIClients.get(labelsPlatformId);
+            if (!client) {
+              sendResponse({ success: false, error: 'Platform not found' });
+              break;
             }
-          });
-          
-          const results = await Promise.all(fetchPromises);
-          
-          const allLabels: any[] = [];
-          const seenIds = new Set<string>();
-          for (const result of results) {
-            for (const label of result.labels) {
-              if (!seenIds.has(label.id)) {
-                seenIds.add(label.id);
-                allLabels.push({ ...label, _platformId: result.platformId });
+            
+            const labels = await client.fetchLabels();
+            sendResponse({ success: true, data: labels.map(l => ({ ...l, _platformId: labelsPlatformId })) });
+          } else {
+            // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
+            const TIMEOUT_MS = 5000;
+            const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
+              try {
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                );
+                const labels = await Promise.race([client.fetchLabels(), timeoutPromise]);
+                return { platformId: pId, labels, error: null };
+              } catch (e) {
+                log.warn(`Failed to fetch labels from platform ${pId}:`, e);
+                return { platformId: pId, labels: [], error: e };
+              }
+            });
+            
+            const results = await Promise.all(fetchPromises);
+            
+            const allLabels: any[] = [];
+            const seenIds = new Set<string>();
+            for (const result of results) {
+              for (const label of result.labels) {
+                if (!seenIds.has(label.id)) {
+                  seenIds.add(label.id);
+                  allLabels.push({ ...label, _platformId: result.platformId });
+                }
               }
             }
+            
+            sendResponse({ success: true, data: allLabels });
           }
-          
-          sendResponse({ success: true, data: allLabels });
         } catch (error) {
           sendResponse({
             success: false,
@@ -1878,36 +1892,50 @@ async function handleMessage(
           break;
         }
         
+        const { platformId: markingsPlatformId } = (message.payload || {}) as { platformId?: string };
+        
         try {
-          // Fetch from all platforms in PARALLEL with timeout
-          const TIMEOUT_MS = 5000;
-          const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-            try {
-              const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
-              );
-              const markings = await Promise.race([client.fetchMarkingDefinitions(), timeoutPromise]);
-              return { platformId: pId, markings, error: null };
-            } catch (e) {
-              log.warn(`Failed to fetch markings from platform ${pId}:`, e);
-              return { platformId: pId, markings: [], error: e };
+          // If a specific platform is requested, fetch only from that platform
+          if (markingsPlatformId) {
+            const client = openCTIClients.get(markingsPlatformId);
+            if (!client) {
+              sendResponse({ success: false, error: 'Platform not found' });
+              break;
             }
-          });
-          
-          const results = await Promise.all(fetchPromises);
-          
-          const allMarkings: any[] = [];
-          const seenIds = new Set<string>();
-          for (const result of results) {
-            for (const marking of result.markings) {
-              if (!seenIds.has(marking.id)) {
-                seenIds.add(marking.id);
-                allMarkings.push({ ...marking, _platformId: result.platformId });
+            
+            const markings = await client.fetchMarkingDefinitions();
+            sendResponse({ success: true, data: markings.map(m => ({ ...m, _platformId: markingsPlatformId })) });
+          } else {
+            // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
+            const TIMEOUT_MS = 5000;
+            const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
+              try {
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), TIMEOUT_MS)
+                );
+                const markings = await Promise.race([client.fetchMarkingDefinitions(), timeoutPromise]);
+                return { platformId: pId, markings, error: null };
+              } catch (e) {
+                log.warn(`Failed to fetch markings from platform ${pId}:`, e);
+                return { platformId: pId, markings: [], error: e };
+              }
+            });
+            
+            const results = await Promise.all(fetchPromises);
+            
+            const allMarkings: any[] = [];
+            const seenIds = new Set<string>();
+            for (const result of results) {
+              for (const marking of result.markings) {
+                if (!seenIds.has(marking.id)) {
+                  seenIds.add(marking.id);
+                  allMarkings.push({ ...marking, _platformId: result.platformId });
+                }
               }
             }
+            
+            sendResponse({ success: true, data: allMarkings });
           }
-          
-          sendResponse({ success: true, data: allMarkings });
         } catch (error) {
           sendResponse({
             success: false,

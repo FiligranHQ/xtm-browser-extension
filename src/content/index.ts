@@ -15,8 +15,7 @@ import type {
 } from '../shared/types';
 import { getTextNodes } from '../shared/detection/detector';
 import { Readability } from '@mozilla/readability';
-// @ts-ignore - html2pdf.js doesn't have TypeScript types
-import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 
 // ============================================================================
 // Article Extraction & PDF Generation Utilities
@@ -26,7 +25,7 @@ import html2pdf from 'html2pdf.js';
  * Extract clean article content using Mozilla Readability
  * This extracts just the main article content, removing menus, sidebars, etc.
  */
-function extractArticleContent(): { title: string; content: string; textContent: string; excerpt: string } {
+function extractArticleContent(): { title: string; content: string; textContent: string; excerpt: string; byline: string } {
   try {
     // Clone the document to avoid modifying the original
     const documentClone = document.cloneNode(true) as Document;
@@ -40,11 +39,13 @@ function extractArticleContent(): { title: string; content: string; textContent:
     const article = reader.parse();
     
     if (article) {
+      log.debug(' Readability extracted article:', article.title, 'length:', article.textContent?.length);
       return {
         title: article.title || document.title,
         content: article.content || '',
         textContent: article.textContent || '',
         excerpt: article.excerpt || '',
+        byline: article.byline || '',
       };
     }
   } catch (error) {
@@ -52,30 +53,40 @@ function extractArticleContent(): { title: string; content: string; textContent:
   }
   
   // Fallback: return basic cleaned content
+  log.debug(' Using fallback content extraction');
   return {
     title: document.title,
     content: getFallbackContent(),
-    textContent: document.body.innerText,
+    textContent: getFallbackTextContent(),
     excerpt: '',
+    byline: '',
   };
 }
 
 /**
- * Fallback content extraction when Readability fails
+ * Fallback content extraction when Readability fails - returns HTML
  */
 function getFallbackContent(): string {
   const clone = document.body.cloneNode(true) as HTMLElement;
   
   // Remove non-content elements
   const selectorsToRemove = [
-    'script', 'style', 'noscript', 'iframe', 'svg',
-    'nav', 'header', 'footer', 'aside',
-    '.sidebar', '.navigation', '.menu', '.advertisement', '.ad',
+    'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
+    'nav', 'header', 'footer', 'aside', 'menu',
+    '.sidebar', '.navigation', '.menu', '.advertisement', '.ad', '.advert',
+    '.share', '.social', '.comments', '.related', '.recommended',
+    '.newsletter', '.subscribe', '.popup', '.modal', '.cookie', '.banner',
     '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
+    '[role="search"]', '[role="form"]', '[role="menu"]',
+    '[class*="share"]', '[class*="social"]', '[class*="comment"]', '[class*="sidebar"]',
+    '[class*="advert"]', '[class*="cookie"]', '[class*="newsletter"]', '[class*="popup"]',
+    '[id*="share"]', '[id*="social"]', '[id*="comment"]', '[id*="sidebar"]',
   ];
   
   selectorsToRemove.forEach(selector => {
-    clone.querySelectorAll(selector).forEach(el => el.remove());
+    try {
+      clone.querySelectorAll(selector).forEach(el => el.remove());
+    } catch { /* Skip invalid selectors */ }
   });
   
   // Clean attributes
@@ -90,7 +101,83 @@ function getFallbackContent(): string {
 }
 
 /**
- * Generate PDF from article content using jsPDF directly
+ * Fallback text content extraction - returns clean text
+ */
+function getFallbackTextContent(): string {
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  
+  // Remove non-content elements
+  const selectorsToRemove = [
+    'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
+    'nav', 'header', 'footer', 'aside', 'menu',
+    '.sidebar', '.navigation', '.menu', '.advertisement', '.ad', '.advert',
+    '.share', '.social', '.comments', '.related', '.recommended',
+    '.newsletter', '.subscribe', '.popup', '.modal', '.cookie', '.banner',
+    '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
+    '[role="search"]', '[role="form"]', '[role="menu"]',
+  ];
+  
+  selectorsToRemove.forEach(selector => {
+    try {
+      clone.querySelectorAll(selector).forEach(el => el.remove());
+    } catch { /* Skip invalid selectors */ }
+  });
+  
+  // Get and clean text
+  let text = clone.textContent || clone.innerText || '';
+  text = text
+    .replace(/[\t\r]/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ ]{2,}/g, ' ')
+    .trim();
+  
+  return text;
+}
+
+/**
+ * Extract the first meaningful paragraph from article text for description
+ */
+function extractFirstParagraph(textContent: string, maxLength = 500): string {
+  if (!textContent) return '';
+  
+  // Split by double newlines to get paragraphs
+  const paragraphs = textContent
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 50); // Skip short fragments
+  
+  if (paragraphs.length === 0) {
+    // Fall back to first chunk of text
+    const text = textContent.replace(/\s+/g, ' ').trim();
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  }
+  
+  // Get first paragraph or combine first few short ones
+  let description = paragraphs[0];
+  
+  // If first paragraph is short, try to combine with next
+  if (description.length < 200 && paragraphs.length > 1) {
+    description = paragraphs.slice(0, 2).join(' ');
+  }
+  
+  // Truncate if needed
+  if (description.length > maxLength) {
+    // Try to cut at sentence boundary
+    let cutPoint = description.lastIndexOf('. ', maxLength);
+    if (cutPoint < maxLength / 2) {
+      cutPoint = description.lastIndexOf(' ', maxLength);
+    }
+    if (cutPoint < maxLength / 2) {
+      cutPoint = maxLength;
+    }
+    description = description.substring(0, cutPoint).trim() + '...';
+  }
+  
+  return description;
+}
+
+/**
+ * Generate PDF from article content using jsPDF directly (no html2canvas dependency)
  * Returns base64 encoded PDF data
  */
 async function generateArticlePDF(): Promise<{ data: string; filename: string } | null> {
@@ -103,7 +190,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
       return null;
     }
     
-    log.debug(' Starting PDF generation, article title:', article.title);
+    log.debug(' Starting PDF generation with jsPDF, article title:', article.title);
     log.debug(' Text content length:', article.textContent?.length || 0);
     
     // Use textContent for cleaner text, or fall back to extracting text from HTML
@@ -126,117 +213,103 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
       return null;
     }
     
-    // Create PDF container that will be temporarily visible
-    const pdfContainer = document.createElement('div');
-    pdfContainer.id = 'xtm-pdf-container';
-    pdfContainer.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 210mm;
-      min-height: 297mm;
-      padding: 20mm;
-      background: white;
-      color: black;
-      font-family: Georgia, 'Times New Roman', Times, serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      z-index: 2147483647;
-      overflow: auto;
-      box-sizing: border-box;
-    `;
+    // Create PDF using jsPDF directly (no html2canvas)
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
     
-    // Build simple HTML content with pure text
-    const paragraphs = textContent
-      .split(/\n\n+/)
-      .filter(p => p.trim().length > 0)
-      .map(p => `<p style="margin: 0 0 12px 0; text-align: justify; color: black;">${escapeHtml(p.trim())}</p>`)
-      .join('\n');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
     
-    pdfContainer.innerHTML = `
-      <div style="border-bottom: 2px solid #001bda; padding-bottom: 10px; margin-bottom: 20px;">
-        <div style="font-size: 10pt; color: #001bda; font-weight: bold;">XTM Browser Extension</div>
-        <div style="font-size: 9pt; color: #666;">Captured on ${new Date().toLocaleDateString()}</div>
-      </div>
-      
-      <h1 style="font-size: 18pt; margin: 0 0 15px 0; color: black; font-weight: bold; line-height: 1.3;">${escapeHtml(article.title)}</h1>
-      
-      <div style="font-size: 9pt; color: #666; margin-bottom: 5px;">
-        <strong>Source:</strong> <span style="color: #0066cc;">${escapeHtml(window.location.href)}</span>
-      </div>
-      <div style="font-size: 9pt; color: #666; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e0e0e0;">
-        <strong>Captured:</strong> ${new Date().toLocaleString()}
-      </div>
-      
-      <div style="color: black;">${paragraphs}</div>
-      
-      <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 8pt; color: #999; text-align: center;">
-        Generated by Filigran XTM Browser Extension | ${window.location.hostname}
-      </div>
-    `;
+    // Header
+    pdf.setFillColor(0, 27, 218); // Filigran blue
+    pdf.rect(margin, margin, contentWidth, 0.5, 'F');
+    yPosition += 5;
     
-    // Append to body - temporarily visible
-    document.body.appendChild(pdfContainer);
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 27, 218);
+    pdf.text('XTM Browser Extension', margin, yPosition);
+    yPosition += 5;
     
-    log.debug(' PDF container created, waiting for render...');
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Captured on ${new Date().toLocaleDateString()}`, margin, yPosition);
+    yPosition += 10;
     
-    // Wait for render
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Title
+    pdf.setFontSize(16);
+    pdf.setTextColor(0, 0, 0);
+    const titleLines = pdf.splitTextToSize(article.title, contentWidth);
+    pdf.text(titleLines, margin, yPosition);
+    yPosition += (titleLines.length * 7) + 5;
     
-    // Generate PDF
-    const filename = `${sanitizeFilename(article.title)}.pdf`;
+    // Source and date
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 100, 100);
     
-    try {
-      log.debug(' Calling html2pdf...');
+    const sourceUrl = window.location.href;
+    const truncatedUrl = sourceUrl.length > 80 ? sourceUrl.substring(0, 77) + '...' : sourceUrl;
+    pdf.text(`Source: ${truncatedUrl}`, margin, yPosition);
+    yPosition += 5;
+    
+    pdf.text(`Captured: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 3;
+    
+    // Separator line
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 10;
+    
+    // Content
+    pdf.setFontSize(11);
+    pdf.setTextColor(30, 30, 30);
+    
+    // Split content into paragraphs
+    const paragraphs = textContent.split(/\n\n+/).filter(p => p.trim().length > 0);
+    
+    for (const paragraph of paragraphs) {
+      const lines = pdf.splitTextToSize(paragraph.trim(), contentWidth);
       
-      const pdfBlob = await html2pdf()
-        .set({
-          margin: 10,
-          filename: filename,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { 
-            scale: 2,
-            logging: true,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-          },
-          jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: 'portrait',
-          },
-        })
-        .from(pdfContainer)
-        .outputPdf('blob');
-      
-      log.debug(' PDF blob generated, size:', pdfBlob.size, 'bytes');
-      
-      // Remove the container
-      pdfContainer.remove();
-      
-      if (pdfBlob.size < 1000) {
-        log.error(' PDF blob too small, generation likely failed');
-        return null;
+      // Check if we need a new page
+      const textHeight = lines.length * 5;
+      if (yPosition + textHeight > pageHeight - margin) {
+        pdf.addPage();
+        yPosition = margin;
       }
       
-      // Convert blob to base64
-      const base64 = await blobToBase64(pdfBlob);
-      
-      log.debug(' PDF generated successfully, base64 length:', base64.length);
-      
-      return {
-        data: base64,
-        filename: filename,
-      };
-    } catch (pdfError) {
-      log.error(' html2pdf error:', pdfError);
-      pdfContainer.remove();
-      return null;
+      pdf.text(lines, margin, yPosition);
+      yPosition += textHeight + 5; // Add paragraph spacing
     }
+    
+    // Footer on last page
+    const footerY = pageHeight - 10;
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    pdf.text(`Generated by Filigran XTM Browser Extension | ${window.location.hostname}`, margin, footerY);
+    
+    // Generate filename
+    const filename = `${sanitizeFilename(article.title)}.pdf`;
+    
+    // Get PDF as base64
+    const pdfOutput = pdf.output('datauristring');
+    // Extract just the base64 data (remove the data URI prefix)
+    const base64Data = pdfOutput.split(',')[1];
+    
+    log.debug(' PDF generated successfully with jsPDF, base64 length:', base64Data.length);
+    
+    return {
+      data: base64Data,
+      filename: filename,
+    };
   } catch (error) {
     log.error(' Failed to generate PDF:', error);
-    const container = document.getElementById('xtm-pdf-container');
-    if (container) container.remove();
     return null;
   }
 }
@@ -2301,9 +2374,12 @@ async function showPreviewPanel(): Promise<void> {
   
   // Extract clean article content
   const article = extractArticleContent();
+  const description = extractFirstParagraph(article.textContent);
   
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
+  
+  log.debug(' showPreviewPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
   setTimeout(() => {
     panelFrame?.contentWindow?.postMessage(
@@ -2313,7 +2389,9 @@ async function showPreviewPanel(): Promise<void> {
           entities: selectedEntities, 
           pageUrl: window.location.href, 
           pageTitle: article.title,
-          pageContent: article.content,
+          pageContent: article.textContent, // Use clean text content instead of HTML
+          pageHtmlContent: article.content, // Also pass HTML for content field
+          pageDescription: description, // Pre-computed description
           pageExcerpt: article.excerpt,
           theme: theme,
         } 
@@ -2329,9 +2407,12 @@ async function showContainerPanel(): Promise<void> {
   
   // Extract clean article content
   const article = extractArticleContent();
+  const description = extractFirstParagraph(article.textContent);
   
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
+  
+  log.debug(' showContainerPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
   setTimeout(() => {
     panelFrame?.contentWindow?.postMessage(
@@ -2340,7 +2421,9 @@ async function showContainerPanel(): Promise<void> {
         payload: { 
           pageUrl: window.location.href, 
           pageTitle: article.title,
-          pageContent: article.content,
+          pageContent: article.textContent, // Use clean text content instead of HTML
+          pageHtmlContent: article.content, // Also pass HTML for content field
+          pageDescription: description, // Pre-computed description
           pageExcerpt: article.excerpt,
           theme: theme,
         } 
@@ -2461,17 +2544,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ success: true });
       break;
       
-    case 'GET_PAGE_CONTENT':
+    case 'GET_PAGE_CONTENT': {
+      // Use Readability to extract clean article content
+      const articleData = extractArticleContent();
+      const description = extractFirstParagraph(articleData.textContent);
+      
       sendResponse({
         success: true,
         data: {
           url: window.location.href,
-          title: document.title,
-          content: document.body.innerText,
-          html: document.documentElement.outerHTML,
+          title: articleData.title,
+          content: articleData.textContent, // Clean text content
+          html: articleData.content, // Clean HTML content from Readability
+          description: description, // First paragraph for container description
+          excerpt: articleData.excerpt,
+          byline: articleData.byline,
         },
       });
       break;
+    }
+    
+    case 'GET_ARTICLE_CONTENT': {
+      // Get structured article data with Readability
+      const article = extractArticleContent();
+      const firstParagraph = extractFirstParagraph(article.textContent);
+      
+      sendResponse({
+        success: true,
+        data: {
+          url: window.location.href,
+          title: article.title,
+          textContent: article.textContent,
+          htmlContent: article.content,
+          description: firstParagraph,
+          excerpt: article.excerpt,
+          byline: article.byline,
+        },
+      });
+      break;
+    }
       
     case 'CREATE_CONTAINER_FROM_PAGE':
       showContainerPanel();

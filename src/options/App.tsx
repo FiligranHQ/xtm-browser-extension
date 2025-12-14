@@ -820,14 +820,7 @@ const App: React.FC = () => {
               </Typography>
 
               <Box sx={{ flex: 1 }}>
-                {settings.openaevPlatforms.length === 0 && (
-                  <Alert severity="info" sx={{ mb: 3, borderRadius: 1 }}>
-                    No OpenAEV platforms configured. Add one to enable asset detection and scenario generation.
-                  </Alert>
-                )}
-
                 {settings.openaevPlatforms.map((platform, index) => renderPlatformCard(platform, 'openaev', index))}
-
                 <Button
                   variant="outlined"
                   startIcon={<AddOutlined />}

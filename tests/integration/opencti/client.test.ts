@@ -316,9 +316,10 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 
   describe('Connection', () => {
-    it('should connect to OpenCTI and get version', async ({ skip }) => {
+    it('should connect to OpenCTI and get version', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -329,9 +330,10 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 
   describe('Search', () => {
-    it('should search for entities', async ({ skip }) => {
+    it('should search for entities', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -341,9 +343,10 @@ describe('OpenCTI Client Integration Tests', () => {
       expect(Array.isArray(result.stixCoreObjects.edges)).toBe(true);
     });
 
-    it('should search with type filter', async ({ skip }) => {
+    it('should search with type filter', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -358,9 +361,10 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 
   describe('SDO Retrieval', () => {
-    it('should get SDOs by types', async ({ skip }) => {
+    it('should get SDOs by types', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -369,9 +373,10 @@ describe('OpenCTI Client Integration Tests', () => {
       expect(result.stixDomainObjects.edges).toBeDefined();
     });
 
-    it('should get labels', async ({ skip }) => {
+    it('should get labels', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -380,9 +385,10 @@ describe('OpenCTI Client Integration Tests', () => {
       expect(result.labels.edges).toBeDefined();
     });
 
-    it('should get markings', async ({ skip }) => {
+    it('should get markings', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -393,9 +399,10 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 
   describe('Entity Creation', () => {
-    it('should create an indicator', async ({ skip }) => {
+    it('should create an indicator', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -416,9 +423,10 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 
   describe('Cache Simulation', () => {
-    it('should fetch all cacheable SDO types', async ({ skip }) => {
+    it('should fetch all cacheable SDO types', async (context) => {
       if (!isOpenCTIAvailable) {
-        skip(`OpenCTI not available: ${connectionError}`);
+        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+        context.skip();
         return;
       }
       
@@ -458,6 +466,218 @@ describe('OpenCTI Client Integration Tests', () => {
   });
 });
 
+describe('Pagination Tests', () => {
+  let client: TestOpenCTIClient;
+
+  beforeAll(async () => {
+    await checkOpenCTIConnection();
+    if (isOpenCTIAvailable) {
+      client = new TestOpenCTIClient(config);
+    }
+  });
+
+  it('should paginate through SDOs using cursor-based pagination', async (context) => {
+    if (!isOpenCTIAvailable) {
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    // First, get the total count
+    const countQuery = `
+      query CountSDOs($types: [String]) {
+        stixDomainObjects(types: $types, first: 1) {
+          pageInfo {
+            globalCount
+          }
+        }
+      }
+    `;
+    
+    const countResult = await client.query<{
+      stixDomainObjects: { pageInfo: { globalCount: number } }
+    }>(countQuery, { types: ['Malware'] });
+    
+    const totalCount = countResult.stixDomainObjects.pageInfo.globalCount;
+    console.log(`Total Malware entities: ${totalCount}`);
+    
+    // Now paginate through all results using small page size
+    const pageSize = 5;
+    let allResults: any[] = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
+    
+    const paginatedQuery = `
+      query PaginatedSDOs($types: [String], $first: Int, $after: ID) {
+        stixDomainObjects(types: $types, first: $first, after: $after) {
+          edges {
+            node {
+              id
+              entity_type
+              ... on Malware {
+                name
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+            globalCount
+          }
+        }
+      }
+    `;
+    
+    while (hasNextPage) {
+      const result = await client.query<{
+        stixDomainObjects: {
+          edges: Array<{ node: any }>;
+          pageInfo: { hasNextPage: boolean; endCursor: string; globalCount: number };
+        };
+      }>(paginatedQuery, { types: ['Malware'], first: pageSize, after });
+      
+      allResults = allResults.concat(result.stixDomainObjects.edges.map(e => e.node));
+      hasNextPage = result.stixDomainObjects.pageInfo.hasNextPage;
+      after = result.stixDomainObjects.pageInfo.endCursor;
+      pageCount++;
+      
+      // Safety limit to prevent infinite loops in tests
+      if (pageCount > 100) {
+        console.warn('Pagination safety limit reached');
+        break;
+      }
+    }
+    
+    console.log(`Fetched ${allResults.length} entities in ${pageCount} pages`);
+    
+    // Verify we got all entities (or close to it for safety)
+    expect(allResults.length).toBeGreaterThanOrEqual(Math.min(totalCount, pageCount * pageSize - pageSize));
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify no duplicate IDs
+    const ids = allResults.map(r => r.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  it('should paginate through labels', async (context) => {
+    if (!isOpenCTIAvailable) {
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 5;
+    let allLabels: any[] = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
+    
+    const query = `
+      query PaginatedLabels($first: Int, $after: ID) {
+        labels(first: $first, after: $after) {
+          edges {
+            node {
+              id
+              value
+              color
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+    
+    while (hasNextPage) {
+      const result = await client.query<{
+        labels: {
+          edges: Array<{ node: any }>;
+          pageInfo: { hasNextPage: boolean; endCursor: string };
+        };
+      }>(query, { first: pageSize, after });
+      
+      allLabels = allLabels.concat(result.labels.edges.map(e => e.node));
+      hasNextPage = result.labels.pageInfo.hasNextPage;
+      after = result.labels.pageInfo.endCursor;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allLabels.length} labels in ${pageCount} pages`);
+    
+    // Verify pagination worked
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify no duplicate IDs
+    const ids = allLabels.map(l => l.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  it('should paginate through locations', async (context) => {
+    if (!isOpenCTIAvailable) {
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 10;
+    let allLocations: any[] = [];
+    let after: string | undefined = undefined;
+    let hasNextPage = true;
+    let pageCount = 0;
+    
+    const query = `
+      query PaginatedLocations($first: Int, $after: ID) {
+        locations(first: $first, after: $after) {
+          edges {
+            node {
+              id
+              entity_type
+              name
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+    
+    while (hasNextPage) {
+      const result = await client.query<{
+        locations: {
+          edges: Array<{ node: any }>;
+          pageInfo: { hasNextPage: boolean; endCursor: string };
+        };
+      }>(query, { first: pageSize, after });
+      
+      allLocations = allLocations.concat(result.locations.edges.map(e => e.node));
+      hasNextPage = result.locations.pageInfo.hasNextPage;
+      after = result.locations.pageInfo.endCursor;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allLocations.length} locations in ${pageCount} pages`);
+    
+    // Verify pagination worked
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify no duplicate IDs
+    const ids = allLocations.map(l => l.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+});
+
 describe('Seeded Data Tests', () => {
   let client: TestOpenCTIClient;
 
@@ -468,9 +688,10 @@ describe('Seeded Data Tests', () => {
     }
   });
 
-  it('should find seeded APT29 intrusion set', async ({ skip }) => {
+  it('should find seeded APT29 intrusion set', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
@@ -487,9 +708,10 @@ describe('Seeded Data Tests', () => {
     }
   });
 
-  it('should find seeded GRU threat actor group', async ({ skip }) => {
+  it('should find seeded GRU threat actor group', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
@@ -505,9 +727,10 @@ describe('Seeded Data Tests', () => {
     }
   });
 
-  it('should find seeded Emotet malware', async ({ skip }) => {
+  it('should find seeded Emotet malware', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
@@ -522,9 +745,10 @@ describe('Seeded Data Tests', () => {
     }
   });
 
-  it('should find seeded attack pattern T1566', async ({ skip }) => {
+  it('should find seeded attack pattern T1566', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
@@ -532,9 +756,10 @@ describe('Seeded Data Tests', () => {
     expect(result.stixCoreObjects).toBeDefined();
   });
 
-  it('should find seeded vulnerability CVE-2021-44228', async ({ skip }) => {
+  it('should find seeded vulnerability CVE-2021-44228', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     
@@ -542,9 +767,10 @@ describe('Seeded Data Tests', () => {
     expect(result.stixCoreObjects).toBeDefined();
   });
 
-  it('should find seeded Cobalt Strike tool', async ({ skip }) => {
+  it('should find seeded Cobalt Strike tool', async (context) => {
     if (!isOpenCTIAvailable) {
-      skip(`OpenCTI not available: ${connectionError}`);
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
       return;
     }
     

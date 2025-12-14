@@ -594,3 +594,246 @@ describe('Domain/Hostname Detection for Atomic Testing', () => {
     expect(matches).toBeNull();
   });
 });
+
+describe('Pagination Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should paginate through endpoints using page-based pagination', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 5;
+    let allResults: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+    
+    while (currentPage < totalPages) {
+      const response = await fetch(`${config.url}/api/endpoints/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Handle paginated response
+      if (result.content) {
+        allResults = allResults.concat(result.content);
+        totalPages = result.totalPages || 1;
+      } else if (Array.isArray(result)) {
+        allResults = allResults.concat(result);
+        totalPages = 1; // No pagination info
+      }
+      
+      currentPage++;
+      pageCount++;
+      
+      // Safety limit
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allResults.length} endpoints in ${pageCount} pages`);
+    
+    // Verify pagination worked
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    // Verify no duplicate IDs if we have results
+    if (allResults.length > 0) {
+      const ids = allResults.map(r => r.asset_id || r.endpoint_id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+
+  it('should paginate through teams', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 5;
+    let allResults: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+    
+    while (currentPage < totalPages) {
+      const response = await fetch(`${config.url}/api/teams/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.content) {
+        allResults = allResults.concat(result.content);
+        totalPages = result.totalPages || 1;
+      } else if (Array.isArray(result)) {
+        allResults = allResults.concat(result);
+        totalPages = 1;
+      }
+      
+      currentPage++;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allResults.length} teams in ${pageCount} pages`);
+    
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    if (allResults.length > 0) {
+      const ids = allResults.map(r => r.team_id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+
+  it('should paginate through attack patterns', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 10;
+    let allResults: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+    
+    while (currentPage < totalPages) {
+      const response = await fetch(`${config.url}/api/attack_patterns/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.content) {
+        allResults = allResults.concat(result.content);
+        totalPages = result.totalPages || 1;
+      } else if (Array.isArray(result)) {
+        allResults = allResults.concat(result);
+        totalPages = 1;
+      }
+      
+      currentPage++;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allResults.length} attack patterns in ${pageCount} pages`);
+    
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    if (allResults.length > 0) {
+      const ids = allResults.map(r => r.attack_pattern_id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+
+  it('should paginate through players', async (context) => {
+    if (!isOpenAEVAvailable) {
+      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    const pageSize = 5;
+    let allResults: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+    
+    while (currentPage < totalPages) {
+      const response = await fetch(`${config.url}/api/players/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`,
+        },
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.content) {
+        allResults = allResults.concat(result.content);
+        totalPages = result.totalPages || 1;
+      } else if (Array.isArray(result)) {
+        allResults = allResults.concat(result);
+        totalPages = 1;
+      }
+      
+      currentPage++;
+      pageCount++;
+      
+      if (pageCount > 100) break;
+    }
+    
+    console.log(`Fetched ${allResults.length} players in ${pageCount} pages`);
+    
+    expect(pageCount).toBeGreaterThanOrEqual(1);
+    
+    if (allResults.length > 0) {
+      const ids = allResults.map(r => r.user_id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+});

@@ -19,11 +19,31 @@ import type {
   OAEVScenarioInput,
 } from '../types';
 
+/**
+ * Spring Boot paginated response format
+ */
+interface PaginatedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+  numberOfElements: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
 export class OpenAEVClient {
   private baseUrl: string;
   private token: string;
   private platformId: string;
   private platformName: string;
+
+  /**
+   * Default page size for pagination
+   */
+  private static readonly DEFAULT_PAGE_SIZE = 500;
 
   constructor(config: PlatformConfig) {
     this.baseUrl = config.url.replace(/\/+$/, '');
@@ -55,6 +75,41 @@ export class OpenAEVClient {
     }
 
     return response.json();
+  }
+
+  /**
+   * Generic paginated search method that iterates through all pages
+   * Used for building complete cache data
+   */
+  private async fetchAllWithPagination<T>(
+    searchEndpoint: string,
+    entityType: string,
+    pageSize: number = OpenAEVClient.DEFAULT_PAGE_SIZE
+  ): Promise<T[]> {
+    const allResults: T[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+
+    while (currentPage < totalPages) {
+      const response = await this.request<PaginatedResponse<T>>(searchEndpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          page: currentPage,
+          size: pageSize,
+        }),
+      });
+
+      allResults.push(...response.content);
+      totalPages = response.totalPages;
+      currentPage++;
+      pageCount++;
+
+      log.debug(`[OpenAEV] Fetched page ${pageCount}/${totalPages} for ${entityType}: ${response.content.length} items (total: ${allResults.length})`);
+    }
+
+    log.info(`[OpenAEV] Completed fetching ${entityType}: ${allResults.length} total items in ${pageCount} pages`);
+    return allResults;
   }
 
   // ============================================================================
@@ -182,9 +237,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all assets with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllAssets(): Promise<OAEVAsset[]> {
     try {
-      return await this.request<OAEVAsset[]>('/api/endpoints');
+      return await this.fetchAllWithPagination<OAEVAsset>('/api/endpoints/search', 'Assets');
     } catch (error) {
       log.error(' Get all assets failed:', error);
       return [];
@@ -230,9 +289,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all asset groups with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllAssetGroups(): Promise<OAEVAssetGroup[]> {
     try {
-      return await this.request<OAEVAssetGroup[]>('/api/asset_groups');
+      return await this.fetchAllWithPagination<OAEVAssetGroup>('/api/asset_groups/search', 'AssetGroups');
     } catch (error) {
       log.error(' Get all asset groups failed:', error);
       return [];
@@ -288,9 +351,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all players with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllPlayers(): Promise<OAEVPlayer[]> {
     try {
-      return await this.request<OAEVPlayer[]>('/api/players');
+      return await this.fetchAllWithPagination<OAEVPlayer>('/api/players/search', 'Players');
     } catch (error) {
       log.error(' Get all players failed:', error);
       return [];
@@ -336,9 +403,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all teams with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllTeams(): Promise<OAEVTeam[]> {
     try {
-      return await this.request<OAEVTeam[]>('/api/teams');
+      return await this.fetchAllWithPagination<OAEVTeam>('/api/teams/search', 'Teams');
     } catch (error) {
       log.error(' Get all teams failed:', error);
       return [];
@@ -358,9 +429,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all attack patterns with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllAttackPatterns(): Promise<OAEVAttackPattern[]> {
     try {
-      return await this.request<OAEVAttackPattern[]>('/api/attack_patterns');
+      return await this.fetchAllWithPagination<OAEVAttackPattern>('/api/attack_patterns/search', 'AttackPatterns');
     } catch (error) {
       log.error(' Get all attack patterns failed:', error);
       return [];
@@ -391,9 +466,13 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Get all scenarios with full pagination support
+   * Uses the search endpoint to iterate through all pages
+   */
   async getAllScenarios(): Promise<OAEVScenario[]> {
     try {
-      return await this.request<OAEVScenario[]>('/api/scenarios');
+      return await this.fetchAllWithPagination<OAEVScenario>('/api/scenarios/search', 'Scenarios');
     } catch (error) {
       log.error(' Get all scenarios failed:', error);
       return [];
@@ -404,6 +483,10 @@ export class OpenAEVClient {
   // Unified Search (for cache building)
   // ============================================================================
 
+  /**
+   * Fetch all entities for cache building with full pagination support
+   * Ensures no entities are missed regardless of the total count
+   */
   async fetchAllEntitiesForCache(): Promise<{
     assets: OAEVAsset[];
     assetGroups: OAEVAssetGroup[];
@@ -411,12 +494,16 @@ export class OpenAEVClient {
     players: OAEVPlayer[];
   }> {
     try {
+      log.info('[OpenAEV] Starting full cache fetch with pagination...');
+      
       const [assets, assetGroups, teams, players] = await Promise.all([
         this.getAllAssets(),
         this.getAllAssetGroups(),
         this.getAllTeams(),
         this.getAllPlayers(),
       ]);
+      
+      log.info(`[OpenAEV] Cache fetch complete: ${assets.length} assets, ${assetGroups.length} asset groups, ${teams.length} teams, ${players.length} players`);
       
       return { assets, assetGroups, teams, players };
     } catch (error) {

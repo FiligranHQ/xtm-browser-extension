@@ -30,7 +30,7 @@
     "@mozilla/readability": "^0.6.0",
     "@mui/icons-material": "^6.4.11",
     "@mui/material": "^6.4.11",
-    "html2pdf.js": "^0.12.1",
+    "jspdf": "^3.0.4",
     "mdi-material-ui": "^7.9.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

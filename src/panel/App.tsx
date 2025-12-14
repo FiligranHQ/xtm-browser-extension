@@ -211,11 +211,15 @@ const App: React.FC = () => {
   const [markingsLoaded, setMarkingsLoaded] = useState(false);
 
   // Lazy load labels, markings, vocabularies and authors when container form is needed
-  const loadLabelsAndMarkings = () => {
+  // Must pass platformId to ensure we fetch from the correct platform
+  const loadLabelsAndMarkings = (platformId?: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
+    const targetPlatformId = platformId || selectedPlatformId;
+    
+    // Always refetch when platformId changes (reset loaded flags externally if needed)
     if (!labelsLoaded) {
-      chrome.runtime.sendMessage({ type: 'FETCH_LABELS' }, (response) => {
+      chrome.runtime.sendMessage({ type: 'FETCH_LABELS', payload: { platformId: targetPlatformId } }, (response) => {
         if (chrome.runtime.lastError) return;
         if (response?.success && response.data) {
           setAvailableLabels(response.data);
@@ -225,7 +229,7 @@ const App: React.FC = () => {
     }
     
     if (!markingsLoaded) {
-      chrome.runtime.sendMessage({ type: 'FETCH_MARKINGS' }, (response) => {
+      chrome.runtime.sendMessage({ type: 'FETCH_MARKINGS', payload: { platformId: targetPlatformId } }, (response) => {
         if (chrome.runtime.lastError) return;
         if (response?.success && response.data) {
           setAvailableMarkings(response.data);
@@ -235,43 +239,43 @@ const App: React.FC = () => {
     }
     
     // Load vocabularies (don't check if loaded - they're type-specific anyway)
-    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'report_types_ov' } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'report_types_ov', platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailableReportTypes(response.data);
       }
     });
     
-    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'grouping_context_ov' } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'grouping_context_ov', platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailableContexts(response.data);
       }
     });
     
-    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'case_severity_ov' } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'case_severity_ov', platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailableSeverities(response.data);
       }
     });
     
-    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'case_priority_ov' } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'case_priority_ov', platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailablePriorities(response.data);
       }
     });
     
-    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'incident_response_types_ov' } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: 'incident_response_types_ov', platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailableResponseTypes(response.data);
       }
     });
     
-    // Load identities (authors)
-    chrome.runtime.sendMessage({ type: 'FETCH_IDENTITIES' }, (response) => {
+    // Load identities (authors) from the selected platform
+    chrome.runtime.sendMessage({ type: 'FETCH_IDENTITIES', payload: { platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) {
         setAvailableAuthors(response.data);
@@ -396,11 +400,19 @@ const App: React.FC = () => {
   }, []);
 
   // Load labels and markings lazily when container form is needed
+  // Also reload when the selected platform changes to ensure we get data from the correct platform
   useEffect(() => {
     if (panelMode === 'container-form' || panelMode === 'container-type') {
-      loadLabelsAndMarkings();
+      // Reset loaded flags when platform changes to force refetch
+      setLabelsLoaded(false);
+      setMarkingsLoaded(false);
+      // Clear previously selected values to prevent using data from a different platform
+      setSelectedLabels([]);
+      setSelectedMarkings([]);
+      setContainerSpecificFields(prev => ({ ...prev, createdBy: '' }));
+      loadLabelsAndMarkings(selectedPlatformId);
     }
-  }, [panelMode]);
+  }, [panelMode, selectedPlatformId]);
 
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;
@@ -654,28 +666,41 @@ const App: React.FC = () => {
         setPanelMode('add');
         break;
       case 'SHOW_PREVIEW':
-      case 'SHOW_PREVIEW_PANEL':
+      case 'SHOW_PREVIEW_PANEL': {
         setEntitiesToAdd(data.payload?.entities || []);
         // Store page info for potential container creation
         setCurrentPageUrl(data.payload?.pageUrl || '');
         setCurrentPageTitle(data.payload?.pageTitle || '');
+        
+        // Use pre-computed description if available, otherwise generate from content
+        const previewDescription = data.payload?.pageDescription || 
+          generateDescription(data.payload?.pageContent || '');
+        // Use HTML content for content field if available, otherwise use text content
+        const previewContent = data.payload?.pageHtmlContent || data.payload?.pageContent || '';
+        
         setContainerForm({
           name: data.payload?.pageTitle || '',
-          description: generateDescription(data.payload?.pageContent || ''),
-          content: cleanHtmlContent(data.payload?.pageContent || ''),
+          description: previewDescription,
+          content: cleanHtmlContent(previewContent),
         });
         setPanelMode('preview');
         break;
+      }
       case 'SHOW_CREATE_CONTAINER':
       case 'SHOW_CONTAINER_PANEL': {
         const pageContent = data.payload?.pageContent || '';
+        const pageHtmlContent = data.payload?.pageHtmlContent || pageContent;
         const pageUrl = data.payload?.pageUrl || '';
         const pageTitle = data.payload?.pageTitle || '';
         
+        // Use pre-computed description if available, otherwise generate from content
+        const containerDescription = data.payload?.pageDescription || 
+          generateDescription(pageContent);
+        
         setContainerForm({
           name: pageTitle,
-          description: generateDescription(pageContent),
-          content: cleanHtmlContent(pageContent),
+          description: containerDescription,
+          content: cleanHtmlContent(pageHtmlContent),
         });
         setEntitiesToAdd(data.payload?.entities || []);
         setCurrentPageUrl(pageUrl);

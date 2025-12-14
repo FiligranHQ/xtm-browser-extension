@@ -397,10 +397,12 @@ const App: React.FC = () => {
       const platformId = `${platformType}-setup-${Date.now()}`;
       
       // Create platform with temporary name first
+      // Normalize URL: remove trailing slashes
+      const normalizedUrl = setupUrl.trim().replace(/\/+$/, '');
       const newPlatform = {
         id: platformId,
         name: setupName.trim() || (platformType === 'opencti' ? 'OpenCTI' : 'OpenAEV'),
-        url: setupUrl.trim(),
+        url: normalizedUrl,
         apiToken: setupToken.trim(),
         enabled: true,
       };

@@ -12,6 +12,12 @@ import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
 import {
+  PLATFORM_REGISTRY,
+  createPrefixedType,
+  getPlatformDefinition,
+  type PlatformType,
+} from '../shared/platform';
+import {
   CONNECTION_TIMEOUT_MS,
   ENTITY_FETCH_TIMEOUT_MS,
   SEARCH_TIMEOUT_MS,
@@ -61,17 +67,48 @@ import type {
 } from '../shared/types';
 
 // ============================================================================
-// Global State
+// Global State - Multi-Platform Architecture
+// ============================================================================
+// Platform clients are stored in Maps keyed by platform instance ID
+// Each platform type (opencti, openaev, opengrc, etc.) has its own client map
+// When adding a new platform, add a new client map and initialization logic
 // ============================================================================
 
-// Multi-platform clients
-let openCTIClients: Map<string, OpenCTIClient> = new Map();
-let openAEVClients: Map<string, OpenAEVClient> = new Map();
-// Primary client for backward compatibility
+/**
+ * Platform client registry - stores client instances by platform type
+ * Key: Platform type from PLATFORM_REGISTRY (e.g., 'opencti', 'openaev')
+ * Value: Map of platform instance ID to client instance
+ */
+type PlatformClientRegistry = {
+  opencti: Map<string, OpenCTIClient>;
+  openaev: Map<string, OpenAEVClient>;
+  // Add new platform client maps here as they are integrated
+  // opengrc: Map<string, OpenGRCClient>;
+};
+
+// Platform clients - each platform type has its own client map
+const platformClients: PlatformClientRegistry = {
+  opencti: new Map(),
+  openaev: new Map(),
+};
+
+// Legacy references for backward compatibility
+let openCTIClients: Map<string, OpenCTIClient> = platformClients.opencti;
+let openAEVClients: Map<string, OpenAEVClient> = platformClients.openaev;
+// Primary OpenCTI client for backward compatibility
 let openCTIClient: OpenCTIClient | null = null;
 let detectionEngine: DetectionEngine | null = null;
 let isInitialized = false;
 let cacheRefreshInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Get all configured platforms of a specific type
+ */
+function getPlatformsOfType(settings: ExtensionSettings, platformType: PlatformType): PlatformConfig[] {
+  const platformDef = PLATFORM_REGISTRY[platformType];
+  const settingsKey = platformDef.settingsKey as keyof ExtensionSettings;
+  return (settings[settingsKey] as PlatformConfig[] | undefined) || [];
+}
 
 // ============================================================================
 // Initialization
@@ -896,64 +933,68 @@ async function handleMessage(
       }
       
       case 'TEST_PLATFORM_CONNECTION': {
-        const { platformId, platformType } = message.payload as { platformId: string; platformType: 'opencti' | 'openaev' };
+        // Multi-platform connection test handler
+        // To add a new platform: add a case in the switch below
+        const { platformId, platformType } = message.payload as { 
+          platformId: string; 
+          platformType: PlatformType;
+        };
         
         try {
-          // Get settings to find the platform configuration
           const currentSettings = await getSettings();
-          
-          // Create timeout promise
           const timeoutPromise = new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT_MS)
           );
           
-          if (platformType === 'opencti') {
-            // First try the cached client
-            let client = openCTIClients.get(platformId);
-            
-            // If no cached client, create one from settings
-            if (!client) {
-              const platformConfig = currentSettings.openctiPlatforms?.find(p => p.id === platformId);
-              if (platformConfig?.url && platformConfig?.apiToken) {
-                client = new OpenCTIClient({
-                  url: platformConfig.url,
-                  apiToken: platformConfig.apiToken,
-                });
-                // Cache it for future use
-                openCTIClients.set(platformId, client);
+          // Platform-specific connection test
+          switch (platformType) {
+            case 'opencti': {
+              let client = openCTIClients.get(platformId);
+              if (!client) {
+                const platformConfig = currentSettings.openctiPlatforms?.find(p => p.id === platformId);
+                if (platformConfig?.url && platformConfig?.apiToken) {
+                  client = new OpenCTIClient({
+                    url: platformConfig.url,
+                    apiToken: platformConfig.apiToken,
+                  });
+                  openCTIClients.set(platformId, client);
+                }
               }
-            }
-            
-            if (!client) {
-              sendResponse({ success: false, error: 'Platform not configured' });
+              if (!client) {
+                sendResponse({ success: false, error: 'Platform not configured' });
+                break;
+              }
+              const info = await Promise.race([client.testConnection(), timeoutPromise]);
+              sendResponse({ success: true, data: info });
               break;
             }
-            // Race between connection test and timeout
-            const info = await Promise.race([client.testConnection(), timeoutPromise]);
-            sendResponse({ success: true, data: info });
-          } else if (platformType === 'openaev') {
-            // First try the cached client
-            let client = openAEVClients.get(platformId);
             
-            // If no cached client, create one from settings
-            if (!client) {
-              const platformConfig = currentSettings.openaevPlatforms?.find(p => p.id === platformId);
-              if (platformConfig?.url && platformConfig?.apiToken) {
-                client = new OpenAEVClient(platformConfig);
-                // Cache it for future use
-                openAEVClients.set(platformId, client);
+            case 'openaev': {
+              let client = openAEVClients.get(platformId);
+              if (!client) {
+                const platformConfig = currentSettings.openaevPlatforms?.find(p => p.id === platformId);
+                if (platformConfig?.url && platformConfig?.apiToken) {
+                  client = new OpenAEVClient(platformConfig);
+                  openAEVClients.set(platformId, client);
+                }
               }
-            }
-            
-            if (!client) {
-              sendResponse({ success: false, error: 'Platform not configured' });
+              if (!client) {
+                sendResponse({ success: false, error: 'Platform not configured' });
+                break;
+              }
+              const info = await Promise.race([client.testConnection(), timeoutPromise]);
+              sendResponse({ success: true, data: info });
               break;
             }
-            // Race between connection test and timeout
-            const info = await Promise.race([client.testConnection(), timeoutPromise]);
-            sendResponse({ success: true, data: info });
-          } else {
-            sendResponse({ success: false, error: 'Invalid platform type' });
+            
+            // Add new platform cases here:
+            // case 'opengrc': {
+            //   // Similar pattern for OpenGRC
+            //   break;
+            // }
+            
+            default:
+              sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
           }
         } catch (error) {
           sendResponse({
@@ -1153,6 +1194,138 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'OpenAEV scan failed',
+          });
+        }
+        break;
+      }
+      
+      // UNIFIED SCAN - Scans BOTH OpenCTI AND OpenAEV
+      case 'SCAN_ALL': {
+        const payload = message.payload as { content: string; url: string };
+        try {
+          log.info('SCAN_ALL: Starting unified scan across all platforms...');
+          
+          // Initialize results
+          let openctiResult: { observables: any[]; sdos: any[]; cves: any[] } = {
+            observables: [],
+            sdos: [],
+            cves: [],
+          };
+          const oaevEntities: ScanResultPayload['oaevEntities'] = [];
+          
+          // 1. Scan OpenCTI (if detection engine is available)
+          if (detectionEngine) {
+            try {
+              const octiResult = await detectionEngine.scan(payload.content);
+              openctiResult = {
+                observables: octiResult.observables || [],
+                sdos: octiResult.sdos || [],
+                cves: octiResult.cves || [],
+              };
+              log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.sdos.length} SDOs, ${openctiResult.cves.length} CVEs`);
+            } catch (octiError) {
+              log.warn('SCAN_ALL: OpenCTI scan failed:', octiError);
+            }
+          } else {
+            log.debug('SCAN_ALL: No OpenCTI detection engine available');
+          }
+          
+          // 2. Scan OpenAEV (from cache)
+          try {
+            const { getAllCachedOAEVEntityNamesForMatching } = await import('../shared/utils/storage');
+            const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
+            
+            if (oaevEntityMap.size > 0) {
+              const originalText = payload.content;
+              const textLower = originalText.toLowerCase();
+              const seenEntities = new Set<string>();
+              const seenRanges = new Set<string>();
+              
+              // Sort by name length (longest first)
+              const sortedEntities = Array.from(oaevEntityMap.entries()).sort((a, b) => b[0].length - a[0].length);
+              
+              for (const [nameLower, entity] of sortedEntities) {
+                // Skip short names and already seen entities
+                if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
+                
+                let searchStart = 0;
+                let matchIndex = textLower.indexOf(nameLower, searchStart);
+                
+                while (matchIndex !== -1) {
+                  const endIndex = matchIndex + nameLower.length;
+                  
+                  const charBefore = matchIndex > 0 ? originalText[matchIndex - 1] : ' ';
+                  const charAfter = endIndex < originalText.length ? originalText[endIndex] : ' ';
+                  
+                  const isValidBoundary = (c: string) => 
+                    /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+                  
+                  const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
+                  const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
+                  
+                  if (beforeOk && afterOk) {
+                    const rangeKey = `${matchIndex}-${endIndex}`;
+                    let hasOverlap = false;
+                    for (const existingRange of seenRanges) {
+                      const [existStart, existEnd] = existingRange.split('-').map(Number);
+                      if (!(endIndex <= existStart || matchIndex >= existEnd)) {
+                        hasOverlap = true;
+                        break;
+                      }
+                    }
+                    
+                    if (!hasOverlap) {
+                      const matchedText = originalText.substring(matchIndex, endIndex);
+                      oaevEntities.push({
+                        type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding',
+                        name: entity.name,
+                        value: matchedText,
+                        startIndex: matchIndex,
+                        endIndex: endIndex,
+                        found: true,
+                        entityId: entity.id,
+                        platformId: entity.platformId,
+                      });
+                      seenEntities.add(entity.id);
+                      seenRanges.add(rangeKey);
+                      break;
+                    }
+                  }
+                  
+                  searchStart = matchIndex + 1;
+                  matchIndex = textLower.indexOf(nameLower, searchStart);
+                }
+              }
+              log.debug(`SCAN_ALL: OpenAEV found ${oaevEntities.length} entities`);
+            } else {
+              log.debug('SCAN_ALL: No OpenAEV entities in cache');
+            }
+          } catch (oaevError) {
+            log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
+          }
+          
+          // Combine results
+          const scanResult: ScanResultPayload = {
+            observables: openctiResult.observables,
+            sdos: openctiResult.sdos,
+            cves: openctiResult.cves,
+            oaevEntities,
+            scanTime: 0,
+            url: payload.url,
+          };
+          
+          const totalFound = 
+            scanResult.observables.filter(o => o.found).length +
+            scanResult.sdos.filter(s => s.found).length +
+            scanResult.oaevEntities.length;
+          log.info(`SCAN_ALL: Unified scan complete. Total found: ${totalFound}`);
+          
+          sendResponse({ success: true, data: scanResult });
+        } catch (error) {
+          log.error('SCAN_ALL error:', error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unified scan failed',
           });
         }
         break;

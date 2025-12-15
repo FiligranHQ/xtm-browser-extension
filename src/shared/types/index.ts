@@ -2,6 +2,8 @@
 // Configuration Types
 // ============================================================================
 
+import { PlatformType } from '../platform/registry';
+
 export interface PlatformConfig {
   id: string;
   name: string;
@@ -12,11 +14,22 @@ export interface PlatformConfig {
   platformName?: string;
   platformVersion?: string;
   isEnterprise?: boolean;
+  /** Platform type for identification */
+  type?: PlatformType;
 }
 
+/**
+ * Detection settings for entity scanning
+ * Platform-agnostic - uses string arrays for entity type configuration
+ */
 export interface DetectionSettings {
+  /** OpenCTI SDO entity types to detect */
   entityTypes?: string[];
+  /** OpenCTI observable types to detect */
   observableTypes?: string[];
+  /** Entity types to detect by platform (keyed by platform type) */
+  platformEntityTypes?: Record<string, string[]>;
+  /** @deprecated Use platformEntityTypes instead */
   oaevEntityTypes?: string[];
 }
 
@@ -64,9 +77,12 @@ export const TYPE_AFFINITIES = [
 ] as const;
 
 export interface ExtensionSettings {
-  // Multi-platform support
+  // Multi-platform support - keyed by platform type
+  // Each platform type has its own array of configured instances
   openctiPlatforms: PlatformConfig[];
   openaevPlatforms: PlatformConfig[];
+  opengrcPlatforms?: PlatformConfig[]; // Future platform
+  
   // Legacy single platform (for backward compatibility)
   opencti?: {
     url: string;
@@ -207,10 +223,20 @@ export interface DetectedSDO {
 }
 
 // ============================================================================
-// OpenAEV Entity Types
+// Platform-Specific Entity Types
 // ============================================================================
 
-export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'AttackPattern' | 'Finding';
+/**
+ * Entity types for OpenAEV platform
+ * When adding new entity types, update the registry's entityTypes array as well
+ */
+export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'AttackPattern' | 'Finding' | 'Scenario' | 'Exercise' | 'Organization' | 'User';
+
+/**
+ * Generic platform entity type (can be from any platform)
+ * The actual type depends on the platform prefix
+ */
+export type PlatformEntityType = string;
 
 export interface OAEVAsset {
   asset_id: string;
@@ -290,6 +316,28 @@ export interface DetectedOAEVEntity {
   entityId?: string;
   entityData?: OAEVAsset | OAEVAssetGroup | OAEVPlayer | OAEVTeam | OAEVFinding;
   platformId?: string;
+}
+
+/**
+ * Generic detected platform entity (for non-OpenCTI platforms)
+ * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
+ */
+export interface DetectedPlatformEntity {
+  /** Entity type with platform prefix (e.g., 'oaev-Asset') */
+  type: string;
+  /** Display name of the entity */
+  name: string;
+  /** The matched text in the document */
+  value?: string;
+  startIndex: number;
+  endIndex: number;
+  found: boolean;
+  entityId?: string;
+  /** Raw entity data from the platform */
+  entityData?: Record<string, unknown>;
+  platformId?: string;
+  /** Platform type identifier */
+  platformType?: string;
 }
 
 // ============================================================================
@@ -628,17 +676,35 @@ export interface ScanPagePayload {
 }
 
 export interface ScanResultPayload {
+  /** OpenCTI observables detected */
   observables: DetectedObservable[];
+  /** OpenCTI SDOs (STIX Domain Objects) detected */
   sdos: DetectedSDO[];
-  cves?: DetectedSDO[]; // CVEs (Vulnerabilities) - separate array for special handling
+  /** CVEs (Vulnerabilities) - separate array for special handling */
+  cves?: DetectedSDO[];
+  /** 
+   * Platform entities detected (non-OpenCTI platforms)
+   * @deprecated Use platformEntities for multi-platform support
+   */
   oaevEntities?: DetectedOAEVEntity[];
+  /** 
+   * Generic platform entities (for all non-default platforms)
+   * Each entity has a type with platform prefix (e.g., 'oaev-Asset')
+   */
+  platformEntities?: DetectedPlatformEntity[];
   scanTime: number;
   url: string;
 }
 
 export interface ShowEntityPanelPayload {
-  entityType: 'observable' | 'sdo' | 'oaev';
-  entity: DetectedObservable | DetectedSDO | DetectedOAEVEntity;
+  /** 
+   * Entity source type
+   * 'observable' and 'sdo' are for OpenCTI
+   * 'platform' is for any non-default platform (identified by entity type prefix)
+   * @deprecated 'oaev' - use 'platform' instead
+   */
+  entityType: 'observable' | 'sdo' | 'oaev' | 'platform';
+  entity: DetectedObservable | DetectedSDO | DetectedOAEVEntity | DetectedPlatformEntity;
 }
 
 export interface AddObservablePayload {

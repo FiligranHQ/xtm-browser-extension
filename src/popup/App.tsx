@@ -82,9 +82,10 @@ interface ActionButtonProps {
   onClick: () => void;
   color: string;
   disabled?: boolean;
+  compact?: boolean;
 }
 
-const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tooltip, onClick, color, disabled }) => (
+const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tooltip, onClick, color, disabled, compact = false }) => (
   <Tooltip title={tooltip} arrow>
     <Paper
       onClick={disabled ? undefined : onClick}
@@ -93,10 +94,10 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tool
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 0.5,
-        p: 1.5,
+        gap: compact ? 0.25 : 0.5,
+        p: compact ? 1 : 1.5,
         width: '100%',
-        height: 90,
+        height: compact ? 65 : 90,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         background: `linear-gradient(135deg, ${color}20, ${color}08)`,
@@ -111,10 +112,10 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tool
       }}
     >
       <Box sx={{ color, display: 'flex' }}>{icon}</Box>
-      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 12, lineHeight: 1.2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 11 : 12, lineHeight: 1.2 }}>
         {label}
       </Typography>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 9, textAlign: 'center', lineHeight: 1.2 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 8 : 9, textAlign: 'center', lineHeight: 1.2 }}>
         {subtitle}
       </Typography>
     </Paper>
@@ -330,22 +331,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleScanPage = async () => {
+  // Unified scan across ALL platforms (OpenCTI and OpenAEV)
+  const handleUnifiedScan = async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       // Fire and forget - don't await, close popup immediately
-      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_PAGE' });
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
     }
     window.close();
   };
 
-  const handleSearch = async () => {
+  // Unified search across ALL platforms (OpenCTI and OpenAEV)
+  const handleUnifiedSearch = async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       // Fire and forget - don't await, close popup immediately
-      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_SEARCH_PANEL' });
+      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
     }
     window.close();
   };
@@ -418,25 +421,6 @@ const App: React.FC = () => {
     });
   };
 
-  const handleSearchAssets = async () => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      // Use SCAN_OAEV for OpenAEV-only scanning - fire and forget
-      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_OAEV' });
-    }
-    window.close();
-  };
-
-  const handleSearchOAEV = async () => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      // Fire and forget - don't await, close popup immediately
-      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_OAEV_SEARCH_PANEL' });
-    }
-    window.close();
-  };
 
   const handleAtomicTesting = async () => {
     await handleAIAction(async () => {
@@ -835,48 +819,65 @@ const App: React.FC = () => {
           </Box>
         )}
 
-        {/* OpenCTI Section */}
+        {/* Main Actions Section */}
         {hasAnyPlatformConfigured && (
         <>
+        {/* Global Actions - Scan & Search across all platforms */}
         <Box sx={{ p: 2, pb: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <img
-              src={`../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`}
-              alt="OpenCTI"
-              width={20}
-              height={20}
-            />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              OpenCTI
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Threat Intelligence Platform
-            </Typography>
-          </Box>
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(2, 1fr)',
               gap: 1,
             }}
           >
             <ActionButton
               icon={<CenterFocusStrongOutlined />}
               label="Scan"
-              subtitle="Find entities"
-              tooltip="Scan page for entities and observables"
-              onClick={handleScanPage}
+              subtitle="Find entities across all platforms"
+              tooltip="Scan page for entities in OpenCTI and OpenAEV"
+              onClick={handleUnifiedScan}
               color="#00bcd4"
+              compact
             />
             <ActionButton
               icon={<SearchOutlined />}
               label="Search"
-              subtitle="Query platform"
-              tooltip="Search in OpenCTI"
-              onClick={handleSearch}
+              subtitle="Query all platforms"
+              tooltip="Search across OpenCTI and OpenAEV"
+              onClick={handleUnifiedSearch}
               color="#9c27b0"
-              disabled={!hasOpenCTI}
+              disabled={!hasOpenCTI && !hasOpenAEV}
+              compact
             />
+          </Box>
+        </Box>
+
+        <Divider sx={{ mx: 2 }} />
+
+        {/* OpenCTI Section */}
+        <Box sx={{ p: 2, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <img
+              src={`../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`}
+              alt="OpenCTI"
+              width={18}
+              height={18}
+            />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
+              OpenCTI
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
+              Threat Intelligence
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 1,
+            }}
+          >
             <ActionButton
               icon={<DescriptionOutlined />}
               label="Container"
@@ -885,6 +886,7 @@ const App: React.FC = () => {
               onClick={handleCreateContainer}
               color="#4caf50"
               disabled={!hasOpenCTI}
+              compact
             />
             <ActionButton
               icon={<TravelExploreOutlined />}
@@ -894,6 +896,7 @@ const App: React.FC = () => {
               onClick={handleInvestigate}
               color="#ff9800"
               disabled={!hasOpenCTI}
+              compact
             />
           </Box>
         </Box>
@@ -906,41 +909,23 @@ const App: React.FC = () => {
             <img
               src={`../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`}
               alt="OpenAEV"
-              width={20}
-              height={20}
+              width={18}
+              height={18}
             />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
               OpenAEV
             </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
               Attack & Exposure Validation
             </Typography>
           </Box>
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(2, 1fr)',
               gap: 1,
             }}
           >
-            <ActionButton
-              icon={<CenterFocusStrongOutlined />}
-              label="Scan"
-              subtitle="Find entities"
-              tooltip="Scan page for assets and findings"
-              onClick={handleSearchAssets}
-              color="#00bcd4"
-              disabled={!hasOpenAEV}
-            />
-            <ActionButton
-              icon={<SearchOutlined />}
-              label="Search"
-              subtitle="Query platform"
-              tooltip="Search in OpenAEV"
-              onClick={handleSearchOAEV}
-              color="#9c27b0"
-              disabled={!hasOpenAEV}
-            />
             <ActionButton
               icon={<Target />}
               label="Atomic Test"
@@ -949,6 +934,7 @@ const App: React.FC = () => {
               onClick={handleAtomicTesting}
               color="#f44336"
               disabled={!hasOpenAEV}
+              compact
             />
             <ActionButton
               icon={<MovieFilterOutlined />}
@@ -958,6 +944,7 @@ const App: React.FC = () => {
               onClick={handleGenerateScenario}
               color="#e91e63"
               disabled={!hasOpenAEV}
+              compact
             />
           </Box>
         </Box>
@@ -971,10 +958,11 @@ const App: React.FC = () => {
             variant="outlined"
             onClick={handleClear}
             sx={{ 
-              height: 36,
+              height: 32,
               borderRadius: 1,
               borderColor: 'divider',
               color: 'text.secondary',
+              fontSize: 12,
               '&:hover': {
                 borderColor: 'text.secondary',
                 bgcolor: 'action.hover',

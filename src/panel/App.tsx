@@ -54,10 +54,20 @@ import { itemColor, hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  parsePrefixedType,
+  isNonDefaultPlatformEntity,
+  getPlatformFromEntity,
+  getDisplayType,
+  createPrefixedType,
+  isDefaultPlatform,
+  PLATFORM_REGISTRY,
+  type PlatformType,
+} from '../shared/platform';
 
 const log = loggers.panel;
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search';
 
 interface EntityData {
   id?: string;
@@ -131,6 +141,10 @@ const App: React.FC = () => {
   const [oaevSearchQuery, setOaevSearchQuery] = useState('');
   const [oaevSearchResults, setOaevSearchResults] = useState<any[]>([]);
   const [oaevSearching, setOaevSearching] = useState(false);
+  // Unified search state (searches both OpenCTI and OpenAEV)
+  const [unifiedSearchQuery, setUnifiedSearchQuery] = useState('');
+  const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
+  const [unifiedSearching, setUnifiedSearching] = useState(false);
   const [containerType, setContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState({
     name: '',
@@ -618,9 +632,11 @@ const App: React.FC = () => {
           }
         }
         
-        // Check if this is an OpenAEV entity (type starts with 'oaev-')
-        const isOAEVEntity = entityType?.startsWith('oaev-');
-        const actualEntityType = isOAEVEntity ? entityType.replace('oaev-', '') : entityType;
+        // Check if this is a non-default platform entity (has platform prefix)
+        const parsedType = entityType ? parsePrefixedType(entityType) : null;
+        const isNonDefaultPlatform = parsedType !== null;
+        const actualEntityType = parsedType ? parsedType.entityType : entityType;
+        const entityPlatformType = parsedType?.platformType || 'opencti';
         
         // Determine if this looks like minimal cache data (has id and name but no description/labels)
         const isMinimalData = entityId && payload?.existsInPlatform && 
@@ -634,9 +650,11 @@ const App: React.FC = () => {
           setPanelMode('loading');
           
           try {
-            // Fetch full entity details from appropriate API (OpenCTI or OpenAEV)
+            // Fetch full entity details from appropriate API based on platform
+            // TODO: When adding new platforms, add their message types here
+            const messageType = entityPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
             const response = await chrome.runtime.sendMessage({
-              type: isOAEVEntity ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS',
+              type: messageType,
               payload: { 
                 id: entityId,
                 entityId: entityId, // For OpenAEV
@@ -653,30 +671,31 @@ const App: React.FC = () => {
                 entityData: response.data,
                 existsInPlatform: true,
                 _platformId: platformId,
-                _isOAEV: isOAEVEntity,
+                _platformType: entityPlatformType,
+                _isNonDefaultPlatform: isNonDefaultPlatform,
               });
               setPanelMode('entity');
-              // Don't fetch containers for OpenAEV entities
-              if (!isOAEVEntity) {
+              // Only fetch containers for default platform (OpenCTI) entities
+              if (!isNonDefaultPlatform) {
                 fetchEntityContainers(entityId, platformId);
               }
             } else {
               // Fall back to original data
-              setEntity({ ...payload, _isOAEV: isOAEVEntity });
+              setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
               setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
             }
           } catch (error) {
             log.error(' Failed to fetch entity details:', error);
-            setEntity({ ...payload, _isOAEV: isOAEVEntity });
+            setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
             setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
           }
         } else {
           // Full data already present or not in platform
-          setEntity({ ...payload, _isOAEV: isOAEVEntity });
+          setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
           setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
           
-          // Fetch containers if entity exists in platform (not for OpenAEV)
-          if (payload?.existsInPlatform && entityId && !isOAEVEntity) {
+          // Fetch containers only for default platform (OpenCTI) entities
+          if (payload?.existsInPlatform && entityId && !isNonDefaultPlatform) {
             fetchEntityContainers(entityId, platformId);
           }
         }
@@ -872,6 +891,11 @@ const App: React.FC = () => {
         setOaevSearchResults([]);
         setPanelMode('oaev-search');
         break;
+      case 'SHOW_UNIFIED_SEARCH_PANEL':
+        setUnifiedSearchQuery('');
+        setUnifiedSearchResults([]);
+        setPanelMode('unified-search');
+        break;
       case 'LOADING':
         setPanelMode('loading');
         break;
@@ -888,6 +912,20 @@ const App: React.FC = () => {
       platformName: string;
       result: SearchResult;
     }>;
+  }
+
+  // Interface for unified search results (across OpenCTI and OpenAEV)
+  interface UnifiedSearchResult {
+    id: string;
+    name: string;
+    type: string;
+    description?: string;
+    source: 'opencti' | 'openaev';
+    platformId: string;
+    platformName: string;
+    entityId: string;
+    // Additional fields for display
+    data?: Record<string, unknown>;
   }
 
   // Merge search results by representative (name + type)
@@ -968,6 +1006,114 @@ const App: React.FC = () => {
     setOaevSearching(false);
   };
 
+  // Unified search handler - searches BOTH OpenCTI and OpenAEV
+  const handleUnifiedSearch = async () => {
+    if (!unifiedSearchQuery.trim()) return;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setUnifiedSearching(true);
+    const results: UnifiedSearchResult[] = [];
+
+    // Search OpenCTI (all platforms)
+    try {
+      const octiResponse = await chrome.runtime.sendMessage({
+        type: 'SEARCH_ENTITIES',
+        payload: { searchTerm: unifiedSearchQuery, limit: 20 },
+      });
+
+      if (octiResponse?.success && octiResponse.data) {
+        for (const result of octiResponse.data) {
+          const platformInfo = availablePlatforms.find(p => p.id === result._platformId);
+          results.push({
+            id: `opencti-${result.id}-${result._platformId}`,
+            name: result.representative?.main || result.name || result.value || 'Unknown',
+            type: result.entity_type || result.type || 'Unknown',
+            description: result.description,
+            source: 'opencti',
+            platformId: result._platformId,
+            platformName: platformInfo?.name || 'OpenCTI',
+            entityId: result.id,
+            data: result,
+          });
+        }
+      }
+    } catch (error) {
+      log.warn('OpenCTI search failed:', error);
+    }
+
+    // Search OpenAEV (all platforms)
+    try {
+      const oaevResponse = await chrome.runtime.sendMessage({
+        type: 'SEARCH_OAEV',
+        payload: { searchTerm: unifiedSearchQuery },
+      });
+
+      if (oaevResponse?.success && oaevResponse.data) {
+        for (const result of oaevResponse.data) {
+          const platformInfo = availablePlatforms.find(p => p.id === result._platformId);
+          const entityClass = result._entityClass || '';
+          const oaevType = getOaevTypeFromClass(entityClass);
+          results.push({
+            id: `openaev-${result._id || result.asset_id || result.team_id || result.player_id || Math.random()}-${result._platformId}`,
+            name: getOaevEntityName(result, oaevType),
+            type: oaevType,
+            description: result.asset_description || result.team_description || result.scenario_description || undefined,
+            source: 'openaev',
+            platformId: result._platformId,
+            platformName: platformInfo?.name || 'OpenAEV',
+            entityId: result._id || result.asset_id || result.team_id || result.player_id || '',
+            data: result,
+          });
+        }
+      }
+    } catch (error) {
+      log.warn('OpenAEV search failed:', error);
+    }
+
+    setUnifiedSearchResults(results);
+    setUnifiedSearching(false);
+  };
+
+  // Handle click on unified search result
+  const handleUnifiedSearchResultClick = (result: UnifiedSearchResult) => {
+    setEntityFromSearch(true);
+    
+    const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
+    if (platformInfo) {
+      setSelectedPlatformId(platformInfo.id);
+      setPlatformUrl(platformInfo.url);
+    }
+
+    if (result.source === 'opencti') {
+      // Handle OpenCTI result
+      const originalData = result.data as Record<string, unknown>;
+      setEntity({
+        ...originalData,
+        type: result.type,
+        name: result.name,
+        existsInPlatform: true,
+        _platformId: result.platformId,
+      } as unknown as EntityData);
+      setPanelMode('entity');
+    } else {
+      // Handle OpenAEV result
+      const originalData = result.data as Record<string, unknown>;
+      // Create prefixed type for non-default platform entities
+      const prefixedType = createPrefixedType(result.type, 'openaev');
+      setEntity({
+        ...originalData,
+        type: prefixedType,
+        name: result.name,
+        entityData: originalData,
+        existsInPlatform: true,
+        _platformId: result.platformId,
+        _platformType: 'openaev',
+        _isNonDefaultPlatform: true,
+      } as unknown as EntityData);
+      setPanelMode('entity');
+    }
+  };
+
   const handleOaevSearchResultClick = (result: any) => {
     // Determine entity type from _entityClass
     const entityClass = result._entityClass || '';
@@ -989,7 +1135,8 @@ const App: React.FC = () => {
       entityData: result,
       existsInPlatform: true,
       _platformId: platformId,
-      _isOAEV: true,
+      _platformType: 'openaev',
+      _isNonDefaultPlatform: true,
     });
     setPanelMode('entity');
   };
@@ -2009,12 +2156,28 @@ const App: React.FC = () => {
   const renderEntityView = () => {
     if (!entity) return null;
     
-    // Check if this is an OpenAEV entity
-    const isOAEVEntity = (entity as any)._isOAEV || (entity as any).type?.startsWith('oaev-');
+    // Check if this is a non-default platform entity (any platform other than OpenCTI)
+    const entityType = (entity as any).type || '';
+    const isNonDefaultPlatformEntity = (entity as any)._isNonDefaultPlatform || 
+      (entity as any)._platformType !== 'opencti' ||
+      parsePrefixedType(entityType) !== null;
     
-    // If OpenAEV entity, render OpenAEV-specific view
-    if (isOAEVEntity) {
-      return renderOAEVEntityView();
+    // If non-default platform entity, render platform-specific view
+    // TODO: When adding new platforms, add switch/case for different platform renderers
+    if (isNonDefaultPlatformEntity) {
+      const platformType = (entity as any)._platformType || 
+        (parsePrefixedType(entityType)?.platformType) || 'openaev';
+      
+      // Render appropriate view based on platform
+      switch (platformType) {
+        case 'openaev':
+          return renderOAEVEntityView();
+        // Add new platform cases here as they are implemented
+        // case 'opengrc':
+        //   return renderOpenGRCEntityView();
+        default:
+          return renderOAEVEntityView(); // Fallback to generic non-default view
+      }
     }
     
     // Entity might be a DetectedSDO/DetectedObservable with entityData, or direct entity data
@@ -4833,6 +4996,133 @@ const App: React.FC = () => {
     );
   };
 
+  // Unified search view - searches across both OpenCTI and OpenAEV
+  const renderUnifiedSearchView = () => {
+    const totalPlatforms = availablePlatforms.length;
+    const hasSearched = unifiedSearchResults.length > 0 || (unifiedSearchQuery.trim() && !unifiedSearching);
+    
+    // Group results by source for display
+    const octiResults = unifiedSearchResults.filter(r => r.source === 'opencti');
+    const oaevResults = unifiedSearchResults.filter(r => r.source === 'openaev');
+    
+    return (
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Search All Platforms</Typography>
+
+        <TextField
+          placeholder="Search entities across all platforms..."
+          value={unifiedSearchQuery}
+          onChange={(e) => setUnifiedSearchQuery(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleUnifiedSearch()}
+          fullWidth
+          autoFocus
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton onClick={handleUnifiedSearch} edge="end" disabled={unifiedSearching}>
+                  {unifiedSearching ? <CircularProgress size={20} /> : <SearchOutlined />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2 }}
+        />
+        
+        {/* Results section */}
+        {unifiedSearching ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
+            <CircularProgress size={32} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Searching across {totalPlatforms} platform{totalPlatforms > 1 ? 's' : ''}...
+            </Typography>
+          </Box>
+        ) : hasSearched && unifiedSearchResults.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              No results found for "{unifiedSearchQuery}"
+            </Typography>
+          </Box>
+        ) : unifiedSearchResults.length > 0 ? (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {unifiedSearchResults.length} result{unifiedSearchResults.length !== 1 ? 's' : ''} found
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {octiResults.length > 0 && (
+                  <Typography variant="caption" sx={{ color: '#00bcd4', fontWeight: 500 }}>
+                    {octiResults.length} in OpenCTI
+                  </Typography>
+                )}
+                {oaevResults.length > 0 && (
+                  <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 500 }}>
+                    {oaevResults.length} in OpenAEV
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {unifiedSearchResults.map((result) => (
+                <Paper
+                  key={result.id}
+                  onClick={() => handleUnifiedSearchResultClick(result)}
+                  sx={{
+                    p: 1.5,
+                    mb: 1,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    transition: 'all 0.15s',
+                    '&:hover': { 
+                      bgcolor: 'action.hover',
+                      borderColor: result.source === 'opencti' ? '#00bcd4' : '#9c27b0',
+                    },
+                  }}
+                >
+                  {/* Source indicator */}
+                  <Box
+                    sx={{
+                      width: 4,
+                      height: 40,
+                      borderRadius: 1,
+                      bgcolor: result.source === 'opencti' ? '#00bcd4' : '#9c27b0',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                      {result.name}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                        {result.type.replace(/([A-Z])/g, ' $1').trim()}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
+                      <Typography variant="caption" sx={{ color: result.source === 'opencti' ? '#00bcd4' : '#9c27b0' }}>
+                        {result.platformName}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                </Paper>
+              ))}
+            </Box>
+          </>
+        ) : (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Enter a search term and press Enter or click the search icon
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
   const renderEmptyView = () => (
     <Box
       sx={{
@@ -4899,6 +5189,8 @@ const App: React.FC = () => {
         return renderSearchResultsView();
       case 'oaev-search':
         return renderOAEVSearchView();
+      case 'unified-search':
+        return renderUnifiedSearchView();
       case 'loading':
         return renderLoadingView();
       default:

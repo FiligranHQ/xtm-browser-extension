@@ -14,6 +14,15 @@ import type {
   ScanResultPayload,
 } from '../shared/types';
 import { getTextNodes } from '../shared/detection/detector';
+import {
+  parsePrefixedType,
+  isNonDefaultPlatformEntity,
+  getPlatformFromEntity,
+  getDisplayType,
+  createPrefixedType,
+  PLATFORM_REGISTRY,
+  type PlatformType,
+} from '../shared/platform';
 import { Readability } from '@mozilla/readability';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -1102,15 +1111,48 @@ const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     OPENAEV ENTITY - Cyan/teal style for OpenAEV assets, teams, players
+     NON-DEFAULT PLATFORM ENTITIES
+     Generic styling for entities from non-OpenCTI platforms
+     Uses platform-specific colors via class modifiers
      ======================================== */
-  .xtm-highlight.xtm-oaev-found {
-    background: rgba(0, 188, 212, 0.25) !important;
-    border: 2px solid #00bcd4 !important;
-    border-color: #00bcd4 !important;
+  
+  /* Generic platform entity found - purple style (default for non-OpenCTI) */
+  .xtm-highlight.xtm-platform-found {
+    background: rgba(156, 39, 176, 0.25) !important;
+    border: 2px solid #9c27b0 !important;
+    border-color: #9c27b0 !important;
   }
   
-  /* Check icon on RIGHT for OpenAEV found */
+  .xtm-highlight.xtm-platform-found::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 14px !important;
+    height: 14px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239c27b0'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+  }
+  
+  .xtm-highlight.xtm-platform-found:hover {
+    background: rgba(156, 39, 176, 0.4) !important;
+    border-color: #7b1fa2 !important;
+    box-shadow: 0 0 8px rgba(156, 39, 176, 0.5) !important;
+  }
+  
+  /* Legacy OpenAEV class - kept for backward compatibility */
+  .xtm-highlight.xtm-oaev-found {
+    background: rgba(156, 39, 176, 0.25) !important;
+    border: 2px solid #9c27b0 !important;
+    border-color: #9c27b0 !important;
+  }
+  
   .xtm-highlight.xtm-oaev-found::after {
     content: '' !important;
     position: absolute !important;
@@ -1119,7 +1161,7 @@ const HIGHLIGHT_STYLES = `
     transform: translateY(-50%) !important;
     width: 14px !important;
     height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300bcd4'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239c27b0'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
     background-size: contain !important;
     background-repeat: no-repeat !important;
     display: block !important;
@@ -1129,9 +1171,9 @@ const HIGHLIGHT_STYLES = `
   }
   
   .xtm-highlight.xtm-oaev-found:hover {
-    background: rgba(0, 188, 212, 0.4) !important;
-    border-color: #0097a7 !important;
-    box-shadow: 0 0 8px rgba(0, 188, 212, 0.5) !important;
+    background: rgba(156, 39, 176, 0.4) !important;
+    border-color: #7b1fa2 !important;
+    box-shadow: 0 0 8px rgba(156, 39, 176, 0.5) !important;
   }
 
   /* ========================================
@@ -1911,6 +1953,71 @@ async function scanPageForOAEV(): Promise<void> {
 }
 
 // ============================================================================
+// Unified Scanning (ALL platforms - OpenCTI + OpenAEV)
+// ============================================================================
+
+/**
+ * Scan page across ALL platforms (OpenCTI and OpenAEV)
+ * Highlights entities from both platforms and handles duplicates
+ */
+async function scanAllPlatforms(): Promise<void> {
+  showScanOverlay();
+  
+  try {
+    // Clear existing highlights first
+    clearHighlights();
+    selectedForImport.clear();
+    
+    // Get page content
+    const content = document.body.innerText;
+    const url = window.location.href;
+    
+    log.debug(' Starting unified scan across all platforms...');
+    log.debug(` Content length: ${content.length}`);
+    
+    // Send to background for unified scanning
+    const response = await chrome.runtime.sendMessage({
+      type: 'SCAN_ALL',
+      payload: { content, url },
+    });
+    
+    log.debug(' SCAN_ALL response:', response);
+    
+    if (response.success && response.data) {
+      const data = response.data;
+      scanResults = data;
+      
+      // Highlight results (highlightResults already handles both OpenCTI and OpenAEV entities)
+      highlightResults(data);
+      
+      // Count total findings
+      const octiFound = [
+        ...data.observables.filter((o: { found?: boolean }) => o.found),
+        ...data.sdos.filter((s: { found?: boolean }) => s.found),
+      ].length;
+      const oaevFound = data.oaevEntities?.length || 0;
+      const totalFound = octiFound + oaevFound;
+      
+      if (totalFound === 0) {
+        updateScanOverlay('No entities found on this page', false);
+      } else {
+        // Build detailed message
+        const parts: string[] = [];
+        if (octiFound > 0) parts.push(`${octiFound} in OpenCTI`);
+        if (oaevFound > 0) parts.push(`${oaevFound} in OpenAEV`);
+        updateScanOverlay(`Found ${totalFound} entit${totalFound !== 1 ? 'ies' : 'y'} (${parts.join(', ')})`, true);
+      }
+    } else {
+      log.error(' SCAN_ALL failed:', response?.error);
+      updateScanOverlay('Scan failed: ' + (response?.error || 'Unknown error'), false);
+    }
+  } catch (error) {
+    log.error(' SCAN_ALL exception:', error);
+    updateScanOverlay('Scan error: ' + (error instanceof Error ? error.message : 'Unknown'), false);
+  }
+}
+
+// ============================================================================
 // Atomic Testing Scanning (OpenAEV)
 // ============================================================================
 
@@ -2191,10 +2298,14 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       // OpenAEV entities are also filtered by platform if specified
       const foundOAEV = (data.oaevEntities || []).filter((e: any) => {
         if (!e.found) return false;
-        // OpenAEV entities have their own platform IDs, don't mix with OpenCTI
-        // Only include if no platformId filter or if it's not an OpenCTI platform filter
-        if (platformId && !platformId.startsWith('oaev-')) {
-          return false; // Don't include OpenAEV entities when filtering for OpenCTI platform
+        // Non-default platform entities have their own platform IDs
+        // Only include if no platformId filter or if the filter matches the entity's platform
+        if (platformId) {
+          const entityPlatformDef = getPlatformFromEntity(`${e.type}`);
+          // Don't include non-default platform entities when filtering for default platform
+          if (entityPlatformDef.type === 'opencti') {
+            return false;
+          }
         }
         return true;
       });
@@ -2295,7 +2406,9 @@ function highlightResultsForInvestigation(results: ScanResultPayload): void {
   }
   if (results.oaevEntities) {
     for (const e of results.oaevEntities) {
-      highlightForInvestigation(fullText, e.name, nodeMap, `oaev-${e.type}`, e.entityId, e.platformId);
+      // Use createPrefixedType for platform entity types
+      const prefixedType = createPrefixedType(e.type, 'openaev');
+      highlightForInvestigation(fullText, e.name, nodeMap, prefixedType, e.entityId, e.platformId);
     }
   }
 }
@@ -2400,8 +2513,10 @@ function highlightResults(results: ScanResultPayload): void {
   // Find and highlight OpenAEV entities
   if (results.oaevEntities) {
     for (const oaevEntity of results.oaevEntities) {
+      // Use createPrefixedType for platform entity types
+      const prefixedType = createPrefixedType(oaevEntity.type, 'openaev');
       highlightInText(fullText, oaevEntity.name, nodeMap, {
-        type: `oaev-${oaevEntity.type}`, // Prefix to distinguish from OpenCTI types
+        type: prefixedType,
         found: oaevEntity.found,
         data: oaevEntity as unknown as DetectedSDO, // Type coercion for compatibility
       });
@@ -2465,11 +2580,11 @@ function highlightInText(
             highlight.className = 'xtm-highlight';
             
             // Apply appropriate styling based on status
-            // Green for found (OpenCTI), cyan for OpenAEV, orange for not found, gray for SDOs that cannot be added
-            const isOpenAEVType = meta.type.startsWith('oaev-');
-            if (isOpenAEVType && meta.found) {
-              // OpenAEV entity found - cyan style
-              highlight.classList.add('xtm-oaev-found');
+            // Green for found (OpenCTI), purple for non-default platforms, orange for not found, gray for SDOs that cannot be added
+            const isNonDefaultPlatform = isNonDefaultPlatformEntity(meta.type);
+            if (isNonDefaultPlatform && meta.found) {
+              // Non-default platform entity found - use platform-found class
+              highlight.classList.add('xtm-platform-found');
             } else if (meta.found) {
               // OpenCTI entity found - green style
               highlight.classList.add('xtm-found');
@@ -2523,10 +2638,12 @@ function handleHighlightHover(event: MouseEvent): void {
   const found = target.dataset.found === 'true';
   const isSelected = selectedForImport.has(value);
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
-  const isOpenAEV = rawType.startsWith('oaev-');
-  const platformName = isOpenAEV ? 'OpenAEV' : 'OpenCTI';
-  // Display clean type name (strip oaev- prefix for OpenAEV entities)
-  const displayType = isOpenAEV ? rawType.replace('oaev-', '') : rawType;
+  
+  // Use platform registry to get platform name and display type
+  const platformDef = getPlatformFromEntity(rawType);
+  const platformName = platformDef.name;
+  // Display clean type name (strip platform prefix for non-default platform entities)
+  const displayType = getDisplayType(rawType);
   
   // Different status icons based on state
   let statusIcon: string;
@@ -2914,6 +3031,18 @@ async function showOAEVSearchPanel(): Promise<void> {
   }, 100);
 }
 
+async function showUnifiedSearchPanel(): Promise<void> {
+  ensurePanelElements();
+  showPanelElements();
+  
+  // Get current theme to pass to panel
+  const theme = await getCurrentTheme();
+  
+  setTimeout(() => {
+    sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme });
+  }, 100);
+}
+
 // ============================================================================
 // Message Handling
 // ============================================================================
@@ -2934,6 +3063,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'SCAN_OAEV':
       // OpenAEV-only scanning
       scanPageForOAEV().then(() => sendResponse({ success: true }));
+      return true;
+    
+    case 'SCAN_ALL':
+      // Unified scanning across ALL platforms (OpenCTI + OpenAEV)
+      scanAllPlatforms().then(() => sendResponse({ success: true }));
       return true;
     
     case 'SCAN_ATOMIC_TESTING':
@@ -3056,6 +3190,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'OPEN_OAEV_SEARCH_PANEL':
       showOAEVSearchPanel();
+      sendResponse({ success: true });
+      break;
+    
+    case 'OPEN_UNIFIED_SEARCH_PANEL':
+      showUnifiedSearchPanel();
       sendResponse({ success: true });
       break;
     

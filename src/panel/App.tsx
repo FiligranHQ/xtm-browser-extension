@@ -26,6 +26,7 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Tooltip,
 } from '@mui/material';
 import {
   CloseOutlined,
@@ -46,7 +47,6 @@ import {
   LanOutlined,
   PersonOutlined,
   GroupsOutlined,
-  BugReportOutlined,
   MovieFilterOutlined,
   Kayaking,
   DomainOutlined,
@@ -56,8 +56,10 @@ import {
   DnsOutlined,
   ArrowBackOutlined,
   EmailOutlined,
+  InfoOutlined,
+  AutoAwesomeOutlined,
 } from '@mui/icons-material';
-import { LockPattern } from 'mdi-material-ui';
+import { LockPattern, Target } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
@@ -240,8 +242,9 @@ const App: React.FC = () => {
   const [currentPlatformIndex, setCurrentPlatformIndex] = useState(0);
   // Track container workflow origin: 'preview' (from bulk selection), 'direct' (from action button), or 'import' (import without container)
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
-  // Track if entity view came from search (to show back button)
-  const [entityFromSearch, setEntityFromSearch] = useState(false);
+  // Track which search mode the entity view came from (to show back button and return to correct mode)
+  // null = not from search, 'search' = OpenCTI search, 'oaev-search' = OpenAEV search, 'unified-search' = unified search
+  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'search' | 'oaev-search' | 'unified-search' | null>(null);
   // Track if entity view came from scan results (to show back button)
   const [entityFromScanResults, setEntityFromScanResults] = useState(false);
   // Scan results entities (from page scan)
@@ -294,6 +297,14 @@ const App: React.FC = () => {
   const [availableResponseTypes, setAvailableResponseTypes] = useState<Array<{ id: string; name: string }>>([]);
   const [availableAuthors, setAvailableAuthors] = useState<Array<{ id: string; name: string; entity_type: string }>>([]);
 
+  // AI Configuration state
+  const [aiSettings, setAiSettings] = useState<{
+    enabled: boolean;
+    provider?: string;
+    available: boolean;
+  }>({ enabled: false, available: false });
+  const [aiGeneratingDescription, setAiGeneratingDescription] = useState(false);
+
   // Scenario creation state (OpenAEV)
   const [scenarioOverviewData, setScenarioOverviewData] = useState<{
     attackPatterns: Array<{
@@ -330,6 +341,19 @@ const App: React.FC = () => {
   const [scenarioStep, setScenarioStep] = useState<0 | 1 | 2>(0); // 0: Affinity, 1: Injects, 2: Details
   const [scenarioTypeAffinity, setScenarioTypeAffinity] = useState<'ENDPOINT' | 'CLOUD' | 'WEB' | 'TABLE-TOP'>('ENDPOINT');
   const [scenarioPlatformsAffinity, setScenarioPlatformsAffinity] = useState<string[]>(['windows', 'linux', 'macos']);
+  // Scenario platform selection (when multiple OpenAEV platforms are configured)
+  const [scenarioPlatformSelected, setScenarioPlatformSelected] = useState(false);
+  const [scenarioPlatformId, setScenarioPlatformId] = useState<string | null>(null);
+  // Raw attack patterns from scan (before filtering by platform)
+  const [scenarioRawAttackPatterns, setScenarioRawAttackPatterns] = useState<Array<{
+    id: string;
+    entityId: string;
+    name: string;
+    externalId?: string;
+    description?: string;
+    killChainPhases?: string[];
+    platformId?: string;
+  }>>([]);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -468,10 +492,40 @@ const App: React.FC = () => {
         
         setAvailablePlatforms([...enabledPlatforms, ...enabledOAEVPlatforms]);
         
-        // Fetch enterprise status for each platform in background
+        // Fetch AI settings availability
+        const ai = response.data?.ai;
+        const aiAvailable = !!(ai?.enabled && ai?.provider && ai?.apiKey);
+        setAiSettings({
+          enabled: ai?.enabled || false,
+          provider: ai?.provider,
+          available: aiAvailable,
+        });
+        log.debug(' AI settings loaded:', { available: aiAvailable, provider: ai?.provider });
+        
+        // Fetch enterprise status for each OpenCTI platform in background
         enabledPlatforms.forEach((platform: PlatformInfo) => {
           chrome.runtime.sendMessage(
             { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: 'opencti' } },
+            (testResponse) => {
+              if (chrome.runtime.lastError || !testResponse?.success) return;
+              // Update platform with enterprise info
+              setAvailablePlatforms(prev => prev.map(p => 
+                p.id === platform.id 
+                  ? { 
+                      ...p, 
+                      version: testResponse.data?.version,
+                      isEnterprise: testResponse.data?.enterprise_edition,
+                    }
+                  : p
+              ));
+            }
+          );
+        });
+        
+        // Also fetch enterprise status for OpenAEV platforms
+        enabledOAEVPlatforms.forEach((platform: PlatformInfo) => {
+          chrome.runtime.sendMessage(
+            { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: 'openaev' } },
             (testResponse) => {
               if (chrome.runtime.lastError || !testResponse?.success) return;
               // Update platform with enterprise info
@@ -709,7 +763,7 @@ const App: React.FC = () => {
       case 'SHOW_ENTITY_PANEL': {
         const payload = data.payload;
         setEntityContainers([]);
-        setEntityFromSearch(false); // Not from search
+        setEntityFromSearchMode(null); // Not from search
         // If scan results exist, allow back navigation to them
         // Use ref to get latest value (avoids stale closure in event handler)
         const hasScanResults = scanResultsEntitiesRef.current.length > 0;
@@ -1209,7 +1263,7 @@ const App: React.FC = () => {
         break;
       case 'SHOW_SCENARIO_PANEL': {
         // Initialize scenario creation with attack patterns from the page
-        const { attackPatterns, pageTitle, pageUrl, pageDescription, platformId, theme: themeFromPayload } = data.payload || {};
+        const { attackPatterns, pageTitle, pageUrl, pageDescription, theme: themeFromPayload } = data.payload || {};
         
         // Set theme if provided
         if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
@@ -1228,70 +1282,94 @@ const App: React.FC = () => {
           category: 'attack-scenario',
         });
         
-        // Set platform if provided
-        if (platformId) {
-          setSelectedPlatformId(platformId);
-          const platform = availablePlatforms.find(p => p.id === platformId);
-          if (platform) {
-            setPlatformUrl(platform.url);
-          }
-        } else {
-          // Default to first OpenAEV platform
-          const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
-          if (oaevPlatforms.length > 0) {
-            setSelectedPlatformId(oaevPlatforms[0].id);
-            setPlatformUrl(oaevPlatforms[0].url);
-          }
-        }
-        
         // Reset scenario state
         setSelectedInjects([]);
         setScenarioStep(0); // Start at affinity selection step
         setScenarioTypeAffinity('ENDPOINT');
         setScenarioPlatformsAffinity(['windows', 'linux', 'macos']);
+        setScenarioOverviewData(null);
         
-        // If attack patterns provided, fetch their details and contracts
-        if (attackPatterns && attackPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-          setScenarioLoading(true);
+        // Store raw attack patterns (they have platformId from the scan)
+        setScenarioRawAttackPatterns(attackPatterns || []);
+        
+        // Check how many OpenAEV platforms are configured
+        const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
+        
+        if (oaevPlatforms.length > 1) {
+          // Multiple OpenAEV platforms - show platform selection first
+          setScenarioPlatformSelected(false);
+          setScenarioPlatformId(null);
+          setScenarioLoading(false);
           setPanelMode('scenario-overview');
+        } else if (oaevPlatforms.length === 1) {
+          // Single OpenAEV platform - auto-select and fetch contracts
+          const singlePlatformId = oaevPlatforms[0].id;
+          setScenarioPlatformSelected(true);
+          setScenarioPlatformId(singlePlatformId);
+          setSelectedPlatformId(singlePlatformId);
+          setPlatformUrl(oaevPlatforms[0].url);
           
-          const attackPatternIds = attackPatterns.map((ap: any) => ap.id || ap.entityId);
+          // Filter attack patterns to only those from this platform
+          const filteredPatterns = (attackPatterns || []).filter(
+            (ap: any) => ap.platformId === singlePlatformId
+          );
           
-          chrome.runtime.sendMessage({
-            type: 'FETCH_SCENARIO_OVERVIEW',
-            payload: { attackPatternIds, platformId: platformId || selectedPlatformId },
-          }, (response) => {
-            setScenarioLoading(false);
-            if (response?.success && response.data) {
-              setScenarioOverviewData({
-                ...response.data,
-                pageTitle: pageTitle || '',
-                pageUrl: pageUrl || '',
-                pageDescription: pageDescription || '',
-              });
-              
-              // Auto-select one inject per attack pattern (first available contract)
-              const autoSelectedInjects: typeof selectedInjects = [];
-              for (const ap of response.data.attackPatterns) {
-                if (ap.contracts && ap.contracts.length > 0) {
-                  const contract = ap.contracts[0];
-                  const contractLabel = contract.injector_contract_labels?.en || 
-                    contract.injector_contract_labels?.['en-US'] || 
-                    contract.injector_name || 
-                    'Unknown Contract';
-                  autoSelectedInjects.push({
-                    attackPatternId: ap.id,
-                    attackPatternName: ap.name,
-                    contractId: contract.injector_contract_id,
-                    contractLabel,
-                    delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
-                  });
+          // Fetch contracts for filtered attack patterns
+          if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            setScenarioLoading(true);
+            setPanelMode('scenario-overview');
+            
+            const attackPatternIds = filteredPatterns.map((ap: any) => ap.id || ap.entityId);
+            
+            chrome.runtime.sendMessage({
+              type: 'FETCH_SCENARIO_OVERVIEW',
+              payload: { attackPatternIds, platformId: singlePlatformId },
+            }, (response) => {
+              setScenarioLoading(false);
+              if (response?.success && response.data) {
+                setScenarioOverviewData({
+                  ...response.data,
+                  pageTitle: pageTitle || '',
+                  pageUrl: pageUrl || '',
+                  pageDescription: pageDescription || '',
+                });
+                
+                // Auto-select one inject per attack pattern (first available contract)
+                const autoSelectedInjects: typeof selectedInjects = [];
+                for (const ap of response.data.attackPatterns) {
+                  if (ap.contracts && ap.contracts.length > 0) {
+                    const contract = ap.contracts[0];
+                    const contractLabel = contract.injector_contract_labels?.en || 
+                      contract.injector_contract_labels?.['en-US'] || 
+                      contract.injector_name || 
+                      'Unknown Inject';
+                    autoSelectedInjects.push({
+                      attackPatternId: ap.id,
+                      attackPatternName: ap.name,
+                      contractId: contract.injector_contract_id,
+                      contractLabel,
+                      delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
+                    });
+                  }
                 }
+                setSelectedInjects(autoSelectedInjects);
               }
-              setSelectedInjects(autoSelectedInjects);
-            }
-          });
+            });
+          } else {
+            setScenarioOverviewData({
+              attackPatterns: [],
+              killChainPhases: [],
+              pageTitle: pageTitle || '',
+              pageUrl: pageUrl || '',
+              pageDescription: pageDescription || '',
+            });
+            setScenarioLoading(false);
+            setPanelMode('scenario-overview');
+          }
         } else {
+          // No OpenAEV platforms configured
+          setScenarioPlatformSelected(false);
+          setScenarioPlatformId(null);
           setScenarioOverviewData({
             attackPatterns: [],
             killChainPhases: [],
@@ -1299,6 +1377,7 @@ const App: React.FC = () => {
             pageUrl: pageUrl || '',
             pageDescription: pageDescription || '',
           });
+          setScenarioLoading(false);
           setPanelMode('scenario-overview');
         }
         break;
@@ -1501,7 +1580,7 @@ const App: React.FC = () => {
 
   // Handle click on unified search result
   const handleUnifiedSearchResultClick = async (result: UnifiedSearchResult) => {
-    setEntityFromSearch(true);
+    setEntityFromSearchMode('unified-search');
     
     const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
     if (platformInfo) {
@@ -1632,7 +1711,7 @@ const App: React.FC = () => {
   };
 
   const handleOaevSearchResultClick = async (result: any) => {
-    setEntityFromSearch(true);
+    setEntityFromSearchMode('oaev-search');
     
     // Determine entity type from _entityClass
     const entityClass = result._entityClass || '';
@@ -1710,7 +1789,7 @@ const App: React.FC = () => {
 
   const handleSearchResultClick = async (merged: MergedSearchResult) => {
     // Mark that we're coming from search (for back button)
-    setEntityFromSearch(true);
+    setEntityFromSearchMode('search');
     
     // Helper to get platform type from platformId
     const getPlatformType = (platformId: string): 'opencti' | 'openaev' => {
@@ -1928,6 +2007,53 @@ const App: React.FC = () => {
       setPanelMode('import-results');
     }
     setSubmitting(false);
+  };
+
+  // AI-powered description generation for containers
+  const handleGenerateAIDescription = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    // Get the selected OpenCTI platform to check enterprise status
+    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
+    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    
+    // Validate AI and enterprise requirements
+    if (!aiSettings.available) {
+      log.warn(' AI is not configured');
+      return;
+    }
+    if (!targetPlatform?.isEnterprise) {
+      log.warn(' AI features require Enterprise Edition');
+      return;
+    }
+    
+    setAiGeneratingDescription(true);
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'AI_GENERATE_DESCRIPTION',
+        payload: {
+          pageTitle: currentPageTitle,
+          pageUrl: currentPageUrl,
+          pageContent: containerForm.content || '',
+          containerType,
+          containerName: containerForm.name,
+          detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean),
+        },
+      });
+      
+      if (response?.success && response.data) {
+        setContainerForm(prev => ({ ...prev, description: response.data }));
+        log.debug(' AI generated description:', response.data.substring(0, 100) + '...');
+      } else {
+        log.error(' AI description generation failed:', response?.error);
+      }
+    } catch (error) {
+      log.error(' AI description generation error:', error);
+    } finally {
+      setAiGeneratingDescription(false);
+    }
   };
 
   const handleCreateContainer = async () => {
@@ -2237,7 +2363,7 @@ const App: React.FC = () => {
     return (
       <Box sx={{ p: 2, overflow: 'auto' }}>
         {/* Back to search/scan results button */}
-        {(entityFromSearch || entityFromScanResults) && (
+        {(entityFromSearchMode || entityFromScanResults) && (
           <Box sx={{ mb: 1.5 }}>
             <Button
               size="small"
@@ -2247,10 +2373,11 @@ const App: React.FC = () => {
                   setEntityFromScanResults(false);
                   setMultiPlatformResults([]);
                   setPanelMode('scan-results');
-                } else {
-                  setEntityFromSearch(false);
+                } else if (entityFromSearchMode) {
+                  // Go back to the specific search mode (preserves search results)
                   setMultiPlatformResults([]);
-                  setPanelMode('search');
+                  setPanelMode(entityFromSearchMode);
+                  setEntityFromSearchMode(null);
                 }
               }}
               sx={{ 
@@ -3375,17 +3502,18 @@ const App: React.FC = () => {
         setEntityFromScanResults(false);
         setMultiPlatformResults([]);
         setPanelMode('scan-results');
-      } else {
-        setEntityFromSearch(false);
+      } else if (entityFromSearchMode) {
+        // Go back to the specific search mode (preserves search results)
         setMultiPlatformResults([]);
-        setPanelMode('search');
+        setPanelMode(entityFromSearchMode);
+        setEntityFromSearchMode(null);
       }
     };
 
     return (
       <Box sx={{ p: 2, overflow: 'auto' }}>
         {/* Back to search/scan results button */}
-        {(entityFromSearch || entityFromScanResults) && (
+        {(entityFromSearchMode || entityFromScanResults) && (
           <Box sx={{ mb: 1.5 }}>
             <Button
               size="small"
@@ -5175,17 +5303,57 @@ const App: React.FC = () => {
           size="small"
         />
 
-        <TextField
-          label="Description"
-          value={containerForm.description}
-          onChange={(e) => setContainerForm({ ...containerForm, description: e.target.value })}
-          multiline
-          rows={4}
-          fullWidth
-          size="small"
-          placeholder="Enter description..."
-          helperText="Extracted from article content"
-        />
+        {/* Description field with AI generate button */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <TextField
+            label="Description"
+            value={containerForm.description}
+            onChange={(e) => setContainerForm({ ...containerForm, description: e.target.value })}
+            multiline
+            rows={4}
+            fullWidth
+            size="small"
+            placeholder="Enter description..."
+            helperText="Extracted from article content"
+          />
+          {(() => {
+            // Check if AI is available for the container platform
+            const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
+            const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
+            const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+            const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+            
+            let tooltipMessage = '';
+            if (!aiSettings.available) {
+              tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+            } else if (!targetPlatform?.isEnterprise) {
+              tooltipMessage = 'AI features require Enterprise Edition. The selected platform is Community Edition.';
+            } else {
+              tooltipMessage = 'Use AI to generate a summary of the page content as description';
+            }
+            
+            return (
+              <Tooltip title={tooltipMessage} placement="top">
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleGenerateAIDescription}
+                    disabled={!isAIAvailable || aiGeneratingDescription}
+                    startIcon={aiGeneratingDescription ? <CircularProgress size={14} /> : <AutoAwesomeOutlined />}
+                    sx={{ 
+                      alignSelf: 'flex-start',
+                      textTransform: 'none',
+                      opacity: !isAIAvailable ? 0.5 : 1,
+                    }}
+                  >
+                    {aiGeneratingDescription ? 'Generating...' : 'Generate with AI'}
+                  </Button>
+                </span>
+              </Tooltip>
+            );
+          })()}
+        </Box>
 
         {/* Labels Autocomplete */}
         <Autocomplete
@@ -6253,6 +6421,22 @@ const App: React.FC = () => {
   const [atomicTestingCreating, setAtomicTestingCreating] = useState(false);
   const [atomicTestingLoadingAssets, setAtomicTestingLoadingAssets] = useState(false);
   
+  // AI Payload Generation state for atomic testing
+  const [atomicTestingAIMode, setAtomicTestingAIMode] = useState(false); // Whether AI payload generation is selected
+  const [atomicTestingAIGenerating, setAtomicTestingAIGenerating] = useState(false);
+  const [atomicTestingAIPlatform, setAtomicTestingAIPlatform] = useState<string>('Windows'); // Windows, Linux, MacOS
+  const [atomicTestingAIExecutor, setAtomicTestingAIExecutor] = useState<string>('psh'); // psh, cmd, bash, sh
+  const [atomicTestingAIContext, setAtomicTestingAIContext] = useState<string>(''); // Page context for AI
+  const [atomicTestingAIGeneratedPayload, setAtomicTestingAIGeneratedPayload] = useState<{
+    name: string;
+    description: string;
+    executor: string;
+    command: string;
+    cleanupCommand?: string;
+    cleanupExecutor?: string;
+    platform: string;
+  } | null>(null);
+  
   // Get OpenAEV platforms only
   const openaevPlatforms = React.useMemo(() => 
     availablePlatforms.filter(p => p.type === 'openaev'), 
@@ -6283,17 +6467,22 @@ const App: React.FC = () => {
       }
       
       // Enrich attack patterns with contract availability
+      // Only process attack patterns from the selected platform - others won't have matching contracts
       if (allContractsRes?.success) {
         const allContracts = allContractsRes.data || [];
-        log.debug(' All contracts for atomic testing:', allContracts.length);
+        log.debug(' All contracts for atomic testing:', allContracts.length, 'for platform:', platformId);
         
         // Update targets with contract availability
         setAtomicTestingTargets(prevTargets => {
           return prevTargets.map(target => {
             if (target.type !== 'attack-pattern') return target;
             
+            // Only process attack patterns from the selected platform
+            if (target.platformId !== platformId) {
+              return target; // Keep original data, won't be displayed anyway
+            }
+            
             const targetId = target.entityId || target.data?.entityId || target.data?.attack_pattern_id || target.data?.id;
-            const targetExternalId = target.data?.attack_pattern_external_id;
             
             // Find contracts that match this attack pattern
             // NOTE: injector_contract_attack_patterns is a List<String> of UUIDs, not objects!
@@ -6303,12 +6492,24 @@ const App: React.FC = () => {
               return contractApIds.includes(targetId);
             });
             
+            // Collect all unique platforms from matching contracts
+            const availablePlatforms = new Set<string>();
+            for (const contract of matchingContracts) {
+              const platforms = contract.injector_contract_platforms || [];
+              for (const p of platforms) {
+                availablePlatforms.add(p);
+              }
+            }
+            
+            log.debug(' Attack pattern', target.name, '(', targetId, ') has', matchingContracts.length, 'contracts, platforms:', Array.from(availablePlatforms));
+            
             return {
               ...target,
               data: {
                 ...target.data,
                 hasContracts: matchingContracts.length > 0,
                 contractCount: matchingContracts.length,
+                availablePlatforms: Array.from(availablePlatforms),
               },
             };
           });
@@ -6359,31 +6560,86 @@ const App: React.FC = () => {
       let injectorContractId = atomicTestingSelectedContract;
       
       // If it's a domain/hostname, we need to create a payload first
-      if (selectedAtomicTarget.type === 'domain' || selectedAtomicTarget.type === 'hostname') {
-        // Create DNS resolution payload
-        const payloadRes = await chrome.runtime.sendMessage({
-          type: 'CREATE_OAEV_PAYLOAD',
+      // Types from content script are 'Domain-Name' and 'Hostname'
+      const isDomainOrHostname = selectedAtomicTarget.type === 'Domain-Name' || 
+                                  selectedAtomicTarget.type === 'Hostname' ||
+                                  selectedAtomicTarget.type === 'domain' || 
+                                  selectedAtomicTarget.type === 'hostname';
+      
+      if (isDomainOrHostname) {
+        log.debug(' Processing DNS resolution for:', selectedAtomicTarget.value);
+        
+        // First, check if a DNS resolution payload already exists for this hostname
+        log.debug(' Checking for existing DNS resolution payload...');
+        const existingPayloadRes = await chrome.runtime.sendMessage({
+          type: 'FIND_DNS_RESOLUTION_PAYLOAD',
           payload: {
             hostname: selectedAtomicTarget.value,
-            name: `DNS Resolution - ${selectedAtomicTarget.value}`,
-            platforms: ['Linux', 'Windows', 'MacOS'],
             platformId: atomicTestingPlatformId,
           },
         });
         
-        if (!payloadRes?.success) {
-          log.error(' Failed to create payload:', payloadRes?.error);
-          return;
+        let payload: any = null;
+        
+        if (existingPayloadRes?.success && existingPayloadRes.data) {
+          // Reuse existing payload
+          log.debug(' Found existing DNS resolution payload:', existingPayloadRes.data.payload_id);
+          payload = existingPayloadRes.data;
+        } else {
+          // Create new DNS resolution payload
+          log.debug(' No existing payload found, creating new one...');
+          const payloadRes = await chrome.runtime.sendMessage({
+            type: 'CREATE_OAEV_PAYLOAD',
+            payload: {
+              hostname: selectedAtomicTarget.value,
+              name: `DNS Resolution - ${selectedAtomicTarget.value}`,
+              platforms: ['Linux', 'Windows', 'MacOS'],
+              platformId: atomicTestingPlatformId,
+            },
+          });
+          
+          log.debug(' Payload creation response:', payloadRes);
+          
+          if (!payloadRes?.success) {
+            log.error(' Failed to create payload:', payloadRes?.error);
+            return;
+          }
+          
+          payload = payloadRes.data;
+          log.debug(' Created new payload:', payload);
         }
         
-        // Get the injector contract from the payload
-        const payload = payloadRes.data;
-        injectorContractId = payload?.payload_injector_contract?.injector_contract_id;
+        // Try to get injector contract ID from various possible locations in the response
+        injectorContractId = payload?.payload_injector_contract?.injector_contract_id ||
+                            payload?.payload_injector_contract ||
+                            payload?.injector_contract_id;
+        
+        // If not in response, search for the injector contract by payload ID
+        if (!injectorContractId && payload?.payload_id) {
+          log.debug(' Injector contract not in response, searching by payload ID...');
+          
+          // Use the API to find the injector contract for this payload
+          const findContractRes = await chrome.runtime.sendMessage({
+            type: 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD',
+            payload: {
+              payloadId: payload.payload_id,
+              platformId: atomicTestingPlatformId,
+            },
+          });
+          
+          log.debug(' Find injector contract response:', findContractRes);
+          
+          if (findContractRes?.success && findContractRes.data) {
+            injectorContractId = findContractRes.data.injector_contract_id;
+          }
+        }
         
         if (!injectorContractId) {
-          log.error(' No injector contract in created payload');
+          log.error(' No injector contract found for payload. Payload:', payload);
           return;
         }
+        
+        log.debug(' Using injector contract ID:', injectorContractId);
       }
       
       if (!injectorContractId) {
@@ -6407,13 +6663,8 @@ const App: React.FC = () => {
         // Open in new tab
         chrome.tabs.create({ url: result.data.url });
         
-        // Clear highlights and close panel
-        chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-          if (tab?.id) {
-            chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
-            chrome.tabs.sendMessage(tab.id, { type: 'HIDE_PANEL' });
-          }
-        });
+        // Close panel via postMessage to content script
+        window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
         
         // Reset state
         setAtomicTestingTargets([]);
@@ -6483,6 +6734,184 @@ const App: React.FC = () => {
     }
   };
   
+  // Handle AI payload generation
+  const handleGenerateAIPayload = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setAtomicTestingAIGenerating(true);
+    
+    try {
+      // Get page content for context
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      let pageContent = '';
+      let pageTitle = '';
+      let pageUrl = '';
+      
+      if (tab?.id) {
+        const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
+        if (contentResponse?.success) {
+          pageContent = contentResponse.data?.content || '';
+          pageTitle = contentResponse.data?.title || '';
+          pageUrl = contentResponse.data?.url || '';
+        }
+      }
+      
+      // Call AI to generate atomic test payload
+      const response = await chrome.runtime.sendMessage({
+        type: 'AI_GENERATE_ATOMIC_TEST',
+        payload: {
+          attackPattern: {
+            name: `AI Generated Payload for ${atomicTestingAIPlatform}`,
+            description: atomicTestingAIContext || 'Generate a security simulation payload based on the page content',
+          },
+          targetPlatform: atomicTestingAIPlatform.toLowerCase(),
+          context: pageContent.substring(0, 3000) + (atomicTestingAIContext ? `\n\nAdditional context: ${atomicTestingAIContext}` : ''),
+        },
+      });
+      
+      if (response?.success && response.data) {
+        const generatedTest = response.data;
+        setAtomicTestingAIGeneratedPayload({
+          name: generatedTest.name || `AI Payload - ${atomicTestingAIPlatform}`,
+          description: generatedTest.description || 'AI-generated security simulation payload',
+          executor: atomicTestingAIExecutor,
+          command: generatedTest.command || '',
+          cleanupCommand: generatedTest.cleanupCommand,
+          cleanupExecutor: atomicTestingAIExecutor,
+          platform: atomicTestingAIPlatform,
+        });
+        setAtomicTestingTitle(`Atomic Test - ${generatedTest.name || 'AI Generated'}`);
+        log.debug(' AI generated payload:', generatedTest);
+      } else {
+        log.error(' AI payload generation failed:', response?.error);
+      }
+    } catch (error) {
+      log.error(' AI payload generation error:', error);
+    } finally {
+      setAtomicTestingAIGenerating(false);
+    }
+  };
+  
+  // Handle creating atomic testing with AI-generated payload
+  const handleCreateAtomicTestingWithAIPayload = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    if (!atomicTestingAIGeneratedPayload) return;
+    
+    setAtomicTestingCreating(true);
+    
+    try {
+      // Step 1: Create the Command payload on OpenAEV
+      log.debug(' Creating AI-generated Command payload on OpenAEV...');
+      
+      const payloadData = {
+        payload_type: 'Command',
+        payload_name: atomicTestingAIGeneratedPayload.name,
+        payload_description: atomicTestingAIGeneratedPayload.description,
+        payload_platforms: [atomicTestingAIGeneratedPayload.platform],
+        command_executor: atomicTestingAIGeneratedPayload.executor,
+        command_content: atomicTestingAIGeneratedPayload.command,
+        payload_cleanup_executor: atomicTestingAIGeneratedPayload.cleanupExecutor || null,
+        payload_cleanup_command: atomicTestingAIGeneratedPayload.cleanupCommand || null,
+        payload_source: 'MANUAL',
+        payload_status: 'VERIFIED',
+        payload_execution_arch: 'ALL_ARCHITECTURES',
+        payload_expectations: ['PREVENTION', 'DETECTION'],
+      };
+      
+      const payloadRes = await chrome.runtime.sendMessage({
+        type: 'CREATE_OAEV_PAYLOAD',
+        payload: {
+          payload: payloadData,
+          platformId: atomicTestingPlatformId,
+        },
+      });
+      
+      if (!payloadRes?.success || !payloadRes.data) {
+        log.error(' Failed to create AI payload:', payloadRes?.error);
+        setAtomicTestingCreating(false);
+        return;
+      }
+      
+      log.debug(' AI payload created:', payloadRes.data);
+      const createdPayload = payloadRes.data;
+      
+      // Step 2: Get the injector contract for this payload
+      let injectorContractId = createdPayload.payload_injector_contract?.injector_contract_id ||
+        createdPayload.payload_injector_contract ||
+        createdPayload.injector_contract_id;
+      
+      // If no contract ID in response, find the injector contract for this payload
+      if (!injectorContractId) {
+        log.debug(' Searching for injector contract for created payload...');
+        const findContractRes = await chrome.runtime.sendMessage({
+          type: 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD',
+          payload: {
+            payloadId: createdPayload.payload_id,
+            platformId: atomicTestingPlatformId,
+          },
+        });
+        
+        if (findContractRes?.success && findContractRes.data) {
+          injectorContractId = findContractRes.data.injector_contract_id;
+          log.debug(' Found injector contract:', injectorContractId);
+        }
+      }
+      
+      if (!injectorContractId) {
+        log.error(' No injector contract found for AI-generated payload');
+        setAtomicTestingCreating(false);
+        return;
+      }
+      
+      // Step 3: Create the atomic testing
+      const atomicTestingData: any = {
+        atomic_title: atomicTestingTitle || `Atomic Test - ${atomicTestingAIGeneratedPayload.name}`,
+        atomic_injector_contract: injectorContractId,
+      };
+      
+      if (atomicTestingTargetType === 'asset' && atomicTestingSelectedAsset) {
+        atomicTestingData.atomic_assets = [atomicTestingSelectedAsset];
+      } else if (atomicTestingTargetType === 'asset_group' && atomicTestingSelectedAssetGroup) {
+        atomicTestingData.atomic_asset_groups = [atomicTestingSelectedAssetGroup];
+      }
+      
+      const response = await chrome.runtime.sendMessage({
+        type: 'CREATE_ATOMIC_TESTING',
+        payload: {
+          atomicTesting: atomicTestingData,
+          platformId: atomicTestingPlatformId,
+        },
+      });
+      
+      if (response?.success && response.data) {
+        log.debug(' Atomic testing created from AI payload:', response.data);
+        
+        // Close panel
+        window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
+        window.parent.postMessage({ type: 'XTM_CLEAR_HIGHLIGHTS' }, '*');
+        
+        // Open in new tab
+        const atomicTestingId = response.data.atomic_id || response.data.id;
+        if (atomicTestingId && atomicTestingPlatformId) {
+          const platformUrl = openaevPlatforms.find(p => p.id === atomicTestingPlatformId)?.url || '';
+          const atomicTestingUrl = `${platformUrl}/admin/atomic_testings/${atomicTestingId}`;
+          chrome.tabs.create({ url: atomicTestingUrl });
+        }
+        
+        // Reset state
+        setAtomicTestingAIMode(false);
+        setAtomicTestingAIGeneratedPayload(null);
+        setAtomicTestingShowList(true);
+      } else {
+        log.error(' Failed to create atomic testing from AI payload:', response?.error);
+      }
+    } catch (error) {
+      log.error(' Error creating atomic testing with AI payload:', error);
+    } finally {
+      setAtomicTestingCreating(false);
+    }
+  };
+  
   const renderAtomicTestingView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
@@ -6542,7 +6971,11 @@ const App: React.FC = () => {
     
     // Step 2: Show list of found targets (like scan results)
     if (atomicTestingShowList && atomicTestingPlatformSelected) {
-      const attackPatterns = atomicTestingTargets.filter(t => t.type === 'attack-pattern');
+      // Filter attack patterns to only show those from the selected OpenAEV platform
+      // Attack patterns from other platforms won't have matching contracts
+      const attackPatterns = atomicTestingTargets.filter(t => 
+        t.type === 'attack-pattern' && t.platformId === atomicTestingPlatformId
+      );
       const domains = atomicTestingTargets.filter(t => t.type === 'Domain-Name' || t.type === 'domain');
       const hostnames = atomicTestingTargets.filter(t => t.type === 'Hostname' || t.type === 'hostname');
       
@@ -6617,6 +7050,84 @@ const App: React.FC = () => {
               </Paper>
             )}
           </Box>
+          
+          {/* AI Generate Payload Option - Show at top when AI is available */}
+          {(() => {
+            const targetPlatform = openaevPlatforms.find(p => p.id === atomicTestingPlatformId);
+            const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+            
+            let tooltipMessage = '';
+            if (!aiSettings.available) {
+              tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+            } else if (!targetPlatform?.isEnterprise) {
+              tooltipMessage = 'AI features require Enterprise Edition.';
+            }
+            
+            return (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.5,
+                  mb: 2,
+                  borderRadius: 1,
+                  border: 1,
+                  borderColor: isAIAvailable ? 'primary.main' : 'divider',
+                  bgcolor: isAIAvailable ? 'rgba(100, 181, 246, 0.08)' : 'action.disabledBackground',
+                  opacity: isAIAvailable ? 1 : 0.6,
+                  flexShrink: 0,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <AutoAwesomeOutlined sx={{ fontSize: 24, color: isAIAvailable ? 'primary.main' : 'text.disabled' }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: isAIAvailable ? 'text.primary' : 'text.disabled' }}>
+                      Generate Payload with AI
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: isAIAvailable ? 'text.secondary' : 'text.disabled' }}>
+                      {isAIAvailable ? 'Create a custom payload based on page content' : tooltipMessage}
+                    </Typography>
+                  </Box>
+                  <Tooltip title={isAIAvailable ? 'Create payload with AI' : tooltipMessage}>
+                    <span>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={!isAIAvailable}
+                        onClick={() => {
+                          setAtomicTestingAIMode(true);
+                          setAtomicTestingShowList(false);
+                          setSelectedAtomicTarget(null);
+                        }}
+                        startIcon={<AutoAwesomeOutlined />}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Generate
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+              </Paper>
+            );
+          })()}
+          
+          {/* Loading indicator while resolving compatible injects */}
+          {atomicTestingLoadingAssets && (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1.5, 
+              p: 1.5, 
+              mb: 2, 
+              bgcolor: 'action.hover', 
+              borderRadius: 1,
+              flexShrink: 0,
+            }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Resolving compatible injects for attack patterns...
+              </Typography>
+            </Box>
+          )}
           
           {atomicTestingTargets.length === 0 ? (
             <Alert severity="info">
@@ -6703,9 +7214,9 @@ const App: React.FC = () => {
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: domains.length > 0 || hostnames.length > 0 ? 2 : 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                      Attack Patterns - Ready ({attackPatternsWithContracts.length})
+                      Attack Patterns ({attackPatternsWithContracts.length})
                     </Typography>
-                    <Chip label="Contracts available" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#4caf50', color: 'white' }} />
+                    <Chip label="Injects available" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#4caf50', color: 'white' }} />
                   </Box>
                   {attackPatternsWithContracts.map((target, i) => (
                     <Paper
@@ -6731,10 +7242,39 @@ const App: React.FC = () => {
                         <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                           {target.name}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {target.data?.attack_pattern_external_id || ''}
-                          {target.data?.contractCount && ` • ${target.data.contractCount} contract${target.data.contractCount !== 1 ? 's' : ''}`}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                          {target.data?.attack_pattern_external_id && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {target.data.attack_pattern_external_id}
+                            </Typography>
+                          )}
+                          {target.data?.contractCount && (
+                            <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 500 }}>
+                              {target.data?.attack_pattern_external_id ? ' · ' : ''}{target.data.contractCount} inject{target.data.contractCount !== 1 ? 's' : ''}
+                            </Typography>
+                          )}
+                        </Box>
+                        {/* Available platforms */}
+                        {target.data?.availablePlatforms && target.data.availablePlatforms.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                            {target.data.availablePlatforms.map((platform: string) => (
+                              <Chip
+                                key={platform}
+                                label={platform}
+                                size="small"
+                                sx={{ 
+                                  height: 16, 
+                                  fontSize: 9,
+                                  bgcolor: platform === 'Windows' ? '#0078d4' : 
+                                          platform === 'Linux' ? '#f57c00' : 
+                                          platform === 'MacOS' ? '#7b1fa2' : 
+                                          platform === 'Android' ? '#3ddc84' : 'action.selected',
+                                  color: 'white',
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        )}
                       </Box>
                       <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
                     </Paper>
@@ -6747,9 +7287,9 @@ const App: React.FC = () => {
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                      Attack Patterns - No Contracts ({attackPatternsWithoutContracts.length})
+                      Attack Patterns ({attackPatternsWithoutContracts.length})
                     </Typography>
-                    <Chip label="Not playable" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'text.disabled', color: 'white' }} />
+                    <Chip label="No injects" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'text.disabled', color: 'white' }} />
                   </Box>
                   {attackPatternsWithoutContracts.map((target, i) => (
                     <Paper
@@ -6790,7 +7330,275 @@ const App: React.FC = () => {
       );
     }
     
-    // Step 3: Show form once target is selected
+    // Step 3: Show AI generation form if AI mode is active
+    if (atomicTestingAIMode) {
+      return (
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          {/* Header */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
+            <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
+            <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>AI Payload Generation</Typography>
+          </Box>
+          
+          {/* Back to list button */}
+          <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+            <Button
+              size="small"
+              startIcon={<ChevronLeftOutlined />}
+              onClick={() => {
+                setAtomicTestingAIMode(false);
+                setAtomicTestingShowList(true);
+                setAtomicTestingAIGeneratedPayload(null);
+              }}
+              sx={{ 
+                color: 'text.secondary',
+                textTransform: 'none',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+            >
+              Back to list
+            </Button>
+          </Box>
+          
+          {/* AI Info Card */}
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 2, 
+              mb: 2, 
+              border: 1, 
+              borderColor: 'primary.main', 
+              borderRadius: 1, 
+              bgcolor: 'rgba(100, 181, 246, 0.08)', 
+              flexShrink: 0 
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <AutoAwesomeOutlined sx={{ color: 'primary.main' }} />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>AI-Generated Payload</Typography>
+            </Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              AI will analyze the page content and generate a command payload for testing. 
+              Select target platform and executor below.
+            </Typography>
+          </Paper>
+          
+          {/* Show generated payload if available, otherwise show generation form */}
+          {atomicTestingAIGeneratedPayload ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+              {/* Generated Payload Info */}
+              <Paper elevation={0} sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Generated Payload</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>{atomicTestingAIGeneratedPayload.name}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1, fontSize: 12 }}>
+                  {atomicTestingAIGeneratedPayload.description}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Chip label={atomicTestingAIGeneratedPayload.platform} size="small" sx={{ height: 20, fontSize: 10 }} />
+                  <Chip label={atomicTestingAIGeneratedPayload.executor} size="small" sx={{ height: 20, fontSize: 10 }} />
+                </Box>
+              </Paper>
+              
+              {/* Command Preview */}
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}>Command</Typography>
+                <Box 
+                  sx={{ 
+                    p: 1.5, 
+                    bgcolor: mode === 'dark' ? '#1e1e1e' : '#f5f5f5', 
+                    borderRadius: 1, 
+                    fontFamily: 'monospace', 
+                    fontSize: 11,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: 120,
+                    overflow: 'auto',
+                  }}
+                >
+                  {atomicTestingAIGeneratedPayload.command}
+                </Box>
+              </Box>
+              
+              {atomicTestingAIGeneratedPayload.cleanupCommand && (
+                <Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, display: 'block' }}>Cleanup Command</Typography>
+                  <Box 
+                    sx={{ 
+                      p: 1.5, 
+                      bgcolor: mode === 'dark' ? '#1e1e1e' : '#f5f5f5', 
+                      borderRadius: 1, 
+                      fontFamily: 'monospace', 
+                      fontSize: 11,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                      maxHeight: 80,
+                      overflow: 'auto',
+                    }}
+                  >
+                    {atomicTestingAIGeneratedPayload.cleanupCommand}
+                  </Box>
+                </Box>
+              )}
+              
+              {/* Title */}
+              <TextField
+                label="Test Title"
+                value={atomicTestingTitle}
+                onChange={(e) => setAtomicTestingTitle(e.target.value)}
+                placeholder={`Atomic Test - ${atomicTestingAIGeneratedPayload.name}`}
+                size="small"
+                fullWidth
+              />
+              
+              {/* Target Type Selection */}
+              <Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
+                  Target Type
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant={atomicTestingTargetType === 'asset' ? 'contained' : 'outlined'}
+                    size="small"
+                    onClick={() => setAtomicTestingTargetType('asset')}
+                    startIcon={<ComputerOutlined />}
+                    sx={{ flex: 1, minWidth: 0 }}
+                  >
+                    Asset
+                  </Button>
+                  <Button
+                    variant={atomicTestingTargetType === 'asset_group' ? 'contained' : 'outlined'}
+                    size="small"
+                    onClick={() => setAtomicTestingTargetType('asset_group')}
+                    startIcon={<LanOutlined />}
+                    sx={{ flex: 1, minWidth: 0 }}
+                  >
+                    Asset Group
+                  </Button>
+                </Box>
+              </Box>
+              
+              {/* Asset/Asset Group Selection */}
+              {atomicTestingTargetType === 'asset' ? (
+                <Autocomplete
+                  options={atomicTestingAssets}
+                  getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
+                  value={atomicTestingAssets.find(a => a.asset_id === atomicTestingSelectedAsset) || null}
+                  onChange={(_, value) => setAtomicTestingSelectedAsset(value?.asset_id || null)}
+                  renderInput={(params) => <TextField {...params} label="Select Asset" size="small" />}
+                  size="small"
+                />
+              ) : (
+                <Autocomplete
+                  options={atomicTestingAssetGroups}
+                  getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
+                  value={atomicTestingAssetGroups.find(g => g.asset_group_id === atomicTestingSelectedAssetGroup) || null}
+                  onChange={(_, value) => setAtomicTestingSelectedAssetGroup(value?.asset_group_id || null)}
+                  renderInput={(params) => <TextField {...params} label="Select Asset Group" size="small" />}
+                  size="small"
+                />
+              )}
+              
+              {/* Create Button */}
+              <Button
+                variant="contained"
+                fullWidth
+                disabled={
+                  atomicTestingCreating ||
+                  (atomicTestingTargetType === 'asset' && !atomicTestingSelectedAsset) ||
+                  (atomicTestingTargetType === 'asset_group' && !atomicTestingSelectedAssetGroup)
+                }
+                onClick={handleCreateAtomicTestingWithAIPayload}
+                startIcon={atomicTestingCreating ? <CircularProgress size={16} color="inherit" /> : <Target />}
+              >
+                {atomicTestingCreating ? 'Creating...' : 'Create Atomic Testing'}
+              </Button>
+              
+              {/* Regenerate Button */}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setAtomicTestingAIGeneratedPayload(null)}
+                startIcon={<RefreshOutlined />}
+                sx={{ textTransform: 'none' }}
+              >
+                Generate Different Payload
+              </Button>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+              {/* Platform Selection */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Target Platform</InputLabel>
+                <Select
+                  value={atomicTestingAIPlatform}
+                  label="Target Platform"
+                  onChange={(e) => {
+                    setAtomicTestingAIPlatform(e.target.value);
+                    // Auto-set executor based on platform
+                    if (e.target.value === 'Windows') {
+                      setAtomicTestingAIExecutor('psh');
+                    } else {
+                      setAtomicTestingAIExecutor('bash');
+                    }
+                  }}
+                >
+                  <MenuItem value="Windows">Windows</MenuItem>
+                  <MenuItem value="Linux">Linux</MenuItem>
+                  <MenuItem value="MacOS">macOS</MenuItem>
+                </Select>
+              </FormControl>
+              
+              {/* Executor Selection */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Command Executor</InputLabel>
+                <Select
+                  value={atomicTestingAIExecutor}
+                  label="Command Executor"
+                  onChange={(e) => setAtomicTestingAIExecutor(e.target.value)}
+                >
+                  {atomicTestingAIPlatform === 'Windows' ? (
+                    [
+                      <MenuItem key="psh" value="psh">PowerShell</MenuItem>,
+                      <MenuItem key="cmd" value="cmd">Command Prompt (cmd)</MenuItem>,
+                    ]
+                  ) : (
+                    [
+                      <MenuItem key="bash" value="bash">Bash</MenuItem>,
+                      <MenuItem key="sh" value="sh">Sh</MenuItem>,
+                    ]
+                  )}
+                </Select>
+              </FormControl>
+              
+              {/* Additional Context */}
+              <TextField
+                label="Additional Context (optional)"
+                value={atomicTestingAIContext}
+                onChange={(e) => setAtomicTestingAIContext(e.target.value)}
+                multiline
+                rows={3}
+                size="small"
+                placeholder="Provide any additional context or specific behavior you want the payload to simulate..."
+                helperText="AI will use the page content plus this context to generate a relevant payload"
+              />
+              
+              {/* Generate Button */}
+              <Button
+                variant="contained"
+                fullWidth
+                disabled={atomicTestingAIGenerating}
+                onClick={handleGenerateAIPayload}
+                startIcon={atomicTestingAIGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
+              >
+                {atomicTestingAIGenerating ? 'Generating Payload...' : 'Generate Payload with AI'}
+              </Button>
+            </Box>
+          )}
+        </Box>
+      );
+    }
+    
+    // Step 4: Show form once target is selected
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
@@ -6840,7 +7648,7 @@ const App: React.FC = () => {
             <CircularProgress size={32} />
           </Box>
         ) : selectedAtomicTarget && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'auto', minHeight: 0 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
             {/* Title */}
             <TextField
               label="Test Title"
@@ -6861,6 +7669,7 @@ const App: React.FC = () => {
                   variant={atomicTestingTargetType === 'asset' ? 'contained' : 'outlined'}
                   size="small"
                   onClick={() => setAtomicTestingTargetType('asset')}
+                  startIcon={<ComputerOutlined />}
                   sx={{ flex: 1, minWidth: 0 }}
                 >
                   Asset
@@ -6869,6 +7678,7 @@ const App: React.FC = () => {
                   variant={atomicTestingTargetType === 'asset_group' ? 'contained' : 'outlined'}
                   size="small"
                   onClick={() => setAtomicTestingTargetType('asset_group')}
+                  startIcon={<LanOutlined />}
                   sx={{ flex: 1, minWidth: 0 }}
                 >
                   Asset Group
@@ -6897,7 +7707,7 @@ const App: React.FC = () => {
               />
             )}
             
-            {/* Injector Contract Selection (for attack patterns) */}
+            {/* Inject Selection (for attack patterns) */}
             {selectedAtomicTarget.type === 'attack-pattern' && (
               <Box>
                 <Autocomplete
@@ -6906,7 +7716,7 @@ const App: React.FC = () => {
                     const label = option.injector_contract_labels?.en || 
                       option.injector_contract_labels?.['en-US'] || 
                       option.injector_name || 
-                      'Unknown Contract';
+                      'Unknown Inject';
                     return label;
                   }}
                   value={atomicTestingInjectorContracts.find(c => c.injector_contract_id === atomicTestingSelectedContract) || null}
@@ -6914,51 +7724,132 @@ const App: React.FC = () => {
                   renderInput={(params) => (
                     <TextField 
                       {...params} 
-                      label="Select Injector Contract" 
+                      label="Select inject" 
                       size="small"
-                      helperText={atomicTestingInjectorContracts.length === 0 ? 'No contracts available for this attack pattern' : undefined}
+                      helperText={atomicTestingInjectorContracts.length === 0 ? 'No injects available for this attack pattern' : undefined}
                     />
                   )}
                   renderOption={(props, option) => {
                     const label = option.injector_contract_labels?.en || 
                       option.injector_contract_labels?.['en-US'] || 
                       option.injector_name || 
-                      'Unknown Contract';
+                      'Unknown Inject';
                     const platforms = option.injector_contract_platforms || [];
-                    const injectorType = option.injector_type || '';
+                    const injectorType = option.injector_contract_injector_type || option.injector_type || '';
+                    const payloadType = option.injector_contract_payload_type || '';
+                    const content = option.injector_contract_content;
+                    
+                    // Build tooltip content
+                    const tooltipContent = (
+                      <Box sx={{ p: 1, maxWidth: 350 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                          {label}
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          {injectorType && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 80 }}>Injector:</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 500 }}>{injectorType}</Typography>
+                            </Box>
+                          )}
+                          {payloadType && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 80 }}>Payload type:</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 500 }}>{payloadType}</Typography>
+                            </Box>
+                          )}
+                          {platforms.length > 0 && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 80 }}>Platforms:</Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                {platforms.map((p: string) => (
+                                  <Chip key={p} label={p} size="small" sx={{ height: 16, fontSize: 9 }} />
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
+                          {content && typeof content === 'object' && (
+                            <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Configuration fields:</Typography>
+                              <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {Object.keys(content).slice(0, 5).map((key) => (
+                                  <Chip key={key} label={key} size="small" variant="outlined" sx={{ height: 16, fontSize: 9 }} />
+                                ))}
+                                {Object.keys(content).length > 5 && (
+                                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                    +{Object.keys(content).length - 5} more
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    );
                     
                     return (
-                      <li {...props} key={option.injector_contract_id}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                          <Typography variant="body2">{label}</Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                            {platforms.map((platform: string) => (
-                              <Chip
-                                key={platform}
-                                label={platform}
-                                size="small"
-                                sx={{ 
-                                  height: 18, 
-                                  fontSize: 10,
-                                  bgcolor: platform === 'Windows' ? '#0078d4' : 
-                                          platform === 'Linux' ? '#f57c00' : 
-                                          platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
-                                  color: 'white',
-                                }}
-                              />
-                            ))}
-                            {injectorType && (
-                              <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
-                                {injectorType}
-                              </Typography>
-                            )}
+                      <Tooltip 
+                        key={option.injector_contract_id}
+                        title={tooltipContent} 
+                        placement="right"
+                        arrow
+                        enterDelay={300}
+                        leaveDelay={100}
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: 'background.paper',
+                              color: 'text.primary',
+                              boxShadow: 3,
+                              border: 1,
+                              borderColor: 'divider',
+                              maxWidth: 400,
+                              '& .MuiTooltip-arrow': {
+                                color: 'background.paper',
+                                '&::before': {
+                                  border: 1,
+                                  borderColor: 'divider',
+                                },
+                              },
+                            },
+                          },
+                        }}
+                      >
+                        <li {...props}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>{label}</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                {platforms.map((platform: string) => (
+                                  <Chip
+                                    key={platform}
+                                    label={platform}
+                                    size="small"
+                                    sx={{ 
+                                      height: 18, 
+                                      fontSize: 10,
+                                      bgcolor: platform === 'Windows' ? '#0078d4' : 
+                                              platform === 'Linux' ? '#f57c00' : 
+                                              platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
+                                      color: 'white',
+                                    }}
+                                  />
+                                ))}
+                                {injectorType && (
+                                  <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                                    {injectorType}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                            <InfoOutlined fontSize="small" sx={{ color: 'text.secondary', opacity: 0.5 }} />
                           </Box>
-                        </Box>
-                      </li>
+                        </li>
+                      </Tooltip>
                     );
                   }}
                   size="small"
-                  noOptionsText="No contracts available for this attack pattern"
+                  noOptionsText="No injects available for this attack pattern"
                 />
                 {atomicTestingInjectorContracts.length > 0 && atomicTestingSelectedContract && (
                   <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
@@ -7008,7 +7899,7 @@ const App: React.FC = () => {
                   (atomicTestingTargetType === 'asset_group' && !atomicTestingSelectedAssetGroup) ||
                   (selectedAtomicTarget.type === 'attack-pattern' && !atomicTestingSelectedContract)
                 }
-                startIcon={atomicTestingCreating ? <CircularProgress size={16} color="inherit" /> : <BugReportOutlined />}
+                startIcon={atomicTestingCreating ? <CircularProgress size={16} color="inherit" /> : <Target />}
               >
                 {atomicTestingCreating ? 'Creating...' : 'Create Atomic Testing'}
               </Button>
@@ -7493,6 +8384,75 @@ const App: React.FC = () => {
     setSubmitting(false);
   };
   
+  // Handle platform selection for scenario creation
+  const handleSelectScenarioPlatform = async (platformId: string) => {
+    setScenarioPlatformId(platformId);
+    setScenarioPlatformSelected(true);
+    setSelectedPlatformId(platformId);
+    
+    const platform = availablePlatforms.find(p => p.id === platformId);
+    if (platform) {
+      setPlatformUrl(platform.url);
+    }
+    
+    // Filter attack patterns to only those from the selected platform
+    const filteredPatterns = scenarioRawAttackPatterns.filter(
+      (ap) => ap.platformId === platformId
+    );
+    
+    log.debug(' Filtered attack patterns for platform', platformId, ':', filteredPatterns.length, 'of', scenarioRawAttackPatterns.length);
+    
+    // Fetch contracts for filtered attack patterns
+    if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      setScenarioLoading(true);
+      
+      const attackPatternIds = filteredPatterns.map((ap) => ap.id || ap.entityId);
+      
+      chrome.runtime.sendMessage({
+        type: 'FETCH_SCENARIO_OVERVIEW',
+        payload: { attackPatternIds, platformId },
+      }, (response) => {
+        setScenarioLoading(false);
+        if (response?.success && response.data) {
+          setScenarioOverviewData({
+            ...response.data,
+            pageTitle: currentPageTitle || '',
+            pageUrl: currentPageUrl || '',
+            pageDescription: scenarioForm.description || '',
+          });
+          
+          // Auto-select one inject per attack pattern (first available contract)
+          const autoSelectedInjects: typeof selectedInjects = [];
+          for (const ap of response.data.attackPatterns) {
+            if (ap.contracts && ap.contracts.length > 0) {
+              const contract = ap.contracts[0];
+              const contractLabel = contract.injector_contract_labels?.en || 
+                contract.injector_contract_labels?.['en-US'] || 
+                contract.injector_name || 
+                'Unknown Inject';
+              autoSelectedInjects.push({
+                attackPatternId: ap.id,
+                attackPatternName: ap.name,
+                contractId: contract.injector_contract_id,
+                contractLabel,
+                delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
+              });
+            }
+          }
+          setSelectedInjects(autoSelectedInjects);
+        }
+      });
+    } else {
+      setScenarioOverviewData({
+        attackPatterns: [],
+        killChainPhases: [],
+        pageTitle: currentPageTitle || '',
+        pageUrl: currentPageUrl || '',
+        pageDescription: scenarioForm.description || '',
+      });
+    }
+  };
+  
   const renderScenarioOverviewView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
@@ -7525,6 +8485,70 @@ const App: React.FC = () => {
       // For technical scenarios, we already have the data loaded
       // Just proceed to step 1
     };
+    
+    // Platform selection step (if multiple OpenAEV platforms and not yet selected)
+    if (openaevPlatforms.length > 1 && !scenarioPlatformSelected) {
+      // Count attack patterns per platform
+      const patternCountByPlatform = new Map<string, number>();
+      for (const ap of scenarioRawAttackPatterns) {
+        if (ap.platformId) {
+          patternCountByPlatform.set(ap.platformId, (patternCountByPlatform.get(ap.platformId) || 0) + 1);
+        }
+      }
+      
+      return (
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
+            <Typography variant="h6" sx={{ fontSize: 16, flex: 1, fontWeight: 600 }}>Create Scenario</Typography>
+          </Box>
+          
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+            Select OpenAEV platform to create the scenario:
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {openaevPlatforms.map((platform) => {
+              const patternCount = patternCountByPlatform.get(platform.id) || 0;
+              return (
+                <Paper
+                  key={platform.id}
+                  onClick={() => handleSelectScenarioPlatform(platform.id)}
+                  elevation={0}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    p: 2,
+                    cursor: 'pointer',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
+                  }}
+                >
+                  <img src={openaevLogoPath} alt="OpenAEV" style={{ width: 24, height: 24 }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {platform.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {platform.url}
+                    </Typography>
+                    {patternCount > 0 && (
+                      <Typography variant="caption" sx={{ color: 'primary.main', display: 'block' }}>
+                        {patternCount} attack pattern{patternCount !== 1 ? 's' : ''} found
+                      </Typography>
+                    )}
+                  </Box>
+                  <ChevronRightOutlined sx={{ color: 'text.secondary' }} />
+                </Paper>
+              );
+            })}
+          </Box>
+        </Box>
+      );
+    }
     
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -7839,7 +8863,7 @@ const App: React.FC = () => {
                               {filteredContracts.map((contract: any) => {
                                 const label = contract.injector_contract_labels?.en || 
                                   contract.injector_contract_labels?.['en-US'] || 
-                                  contract.injector_name || 'Unknown Contract';
+                                  contract.injector_name || 'Unknown Inject';
                                 const platforms = contract.injector_contract_platforms || [];
                                 return (
                                   <MenuItem key={contract.injector_contract_id} value={contract.injector_contract_id}>
@@ -7863,7 +8887,7 @@ const App: React.FC = () => {
                             </TextField>
                           ) : (
                             <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                              No contracts available for selected platforms ({scenarioPlatformsAffinity.join(', ')})
+                              No injects available for selected platforms ({scenarioPlatformsAffinity.join(', ')})
                             </Typography>
                           )}
                         </Paper>

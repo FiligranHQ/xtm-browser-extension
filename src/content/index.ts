@@ -1504,53 +1504,57 @@ const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     ATOMIC TESTING MODE - Red/Orange style for test triggers
+     ATOMIC TESTING MODE - Visual-only highlights (non-clickable)
+     Clean red/orange style to show detected patterns/domains
      ======================================== */
   .xtm-highlight.xtm-atomic-testing {
     background: rgba(244, 67, 54, 0.25) !important;
     border: 2px solid #f44336 !important;
     border-color: #f44336 !important;
-    padding: 4px 8px 4px 30px !important;  /* Extra space on left for radio */
-    cursor: pointer !important;
+    padding: 2px 6px !important;  /* Simple padding, no extra space for icons */
+    cursor: default !important;  /* Not clickable */
+    pointer-events: none !important;  /* Disable all mouse events */
+    border-radius: 4px !important;
   }
   
-  /* Radio button on LEFT for atomic testing (single selection) */
-  .xtm-highlight.xtm-atomic-testing::before {
-    content: '' !important;
-    position: absolute !important;
-    left: 10px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 12px !important;
-    height: 12px !important;
-    border: 2px solid #f44336 !important;
-    border-radius: 50% !important;  /* Circle for radio button */
-    background: transparent !important;
-    box-sizing: border-box !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 2147483641 !important;
+  /* No pseudo-elements for atomic testing - keep it clean */
+  .xtm-highlight.xtm-atomic-testing::before,
+  .xtm-highlight.xtm-atomic-testing::after {
+    display: none !important;
+    content: none !important;
   }
   
-  .xtm-highlight.xtm-atomic-testing:hover {
-    background: rgba(244, 67, 54, 0.4) !important;
-    border-color: #d32f2f !important;
-    box-shadow: 0 0 8px rgba(244, 67, 54, 0.5) !important;
+  /* Domain/hostname variant - cyan/teal color */
+  .xtm-highlight.xtm-atomic-testing.xtm-atomic-domain {
+    background: rgba(0, 188, 212, 0.25) !important;
+    border-color: #00bcd4 !important;
   }
   
-  /* Selected state for atomic testing */
-  .xtm-highlight.xtm-atomic-testing.xtm-selected {
-    background: rgba(244, 67, 54, 0.35) !important;
-    border-color: #d32f2f !important;
-    box-shadow: 0 0 8px rgba(244, 67, 54, 0.6) !important;
-  }
-  
-  .xtm-highlight.xtm-atomic-testing.xtm-selected::before {
-    background: #f44336 !important;
+  /* Attack pattern variant - red/orange color */
+  .xtm-highlight.xtm-atomic-testing.xtm-atomic-attack-pattern {
+    background: rgba(244, 67, 54, 0.25) !important;
     border-color: #f44336 !important;
-    /* Filled circle for selected radio */
-    box-shadow: inset 0 0 0 3px #f44336 !important;
+  }
+
+  /* ========================================
+     SCENARIO MODE - Visual-only highlights (non-clickable)
+     Purple style to show detected attack patterns for scenario creation
+     ======================================== */
+  .xtm-highlight.xtm-scenario {
+    background: rgba(156, 39, 176, 0.25) !important;
+    border: 2px solid #9c27b0 !important;
+    border-color: #9c27b0 !important;
+    padding: 2px 6px !important;
+    cursor: default !important;
+    pointer-events: none !important;
+    border-radius: 4px !important;
+  }
+  
+  /* No pseudo-elements for scenario - keep it clean */
+  .xtm-highlight.xtm-scenario::before,
+  .xtm-highlight.xtm-scenario::after {
+    display: none !important;
+    content: none !important;
   }
 
   /* ========================================
@@ -1977,6 +1981,7 @@ function initialize(): void {
   // Listen for messages from the panel iframe
   window.addEventListener('message', async (event) => {
     if (event.data?.type === 'XTM_CLOSE_PANEL') {
+      clearHighlights(); // Also clear highlights when panel closes
       hidePanel();
     } else if (event.data?.type === 'XTM_COPY_TO_CLIPBOARD' && event.data.text) {
       // Handle clipboard copy from iframe
@@ -2417,16 +2422,20 @@ async function scanPageForAtomicTesting(): Promise<void> {
       return;
     }
     
-    // Create node map for highlighting (same approach as regular scan)
+    // Create node map for highlighting (same approach as regular scan in highlightResults)
     const textNodes = getTextNodes(document.body);
-    const fullText = document.body.innerText;
+    
+    // Build fullText by joining text nodes with space (same as highlightResults)
+    const fullText = textNodes.map((n) => n.textContent).join(' ');
+    
+    // Create node map with +1 offset for space between nodes (same as highlightResults)
     let offset = 0;
     const nodeMap: Array<{ node: Text; start: number; end: number }> = [];
     
     textNodes.forEach((node) => {
       const text = node.textContent || '';
       nodeMap.push({ node, start: offset, end: offset + text.length });
-      offset += text.length;
+      offset += text.length + 1; // +1 for space between nodes
     });
     
     // Highlight atomic testing targets using proper exact match
@@ -2473,8 +2482,8 @@ function detectDomainsAndHostnamesForAtomicTesting(content: string): Array<{ typ
   const results: Array<{ type: string; value: string }> = [];
   const seen = new Set<string>();
   
-  // Domain/hostname pattern (simplified for common TLDs)
-  const domainPattern = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|gov|edu|mil|int|info|biz|name|pro|aero|museum|xyz|online|site|tech|dev|app|cloud|ai|ru|cn|uk|de|fr|jp|kr|br|in|au|nl|it|es|se|no|fi|dk|pl|cz|at|ch|be|pt|hu|ro|bg|sk|si|hr|rs|ua|tr|il|ae|sa|za|ng|ke|eg|ma|tn|dz|ly|jo|kw|qa|om|bh|lb|sy|iq|ir|pk|bd|vn|th|my|sg|ph|id|tw|hk|mo)\b/gi;
+  // Domain/hostname pattern (common TLDs including security/hacking-related ones)
+  const domainPattern = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|org|net|io|co|gov|edu|mil|int|info|biz|name|pro|aero|museum|xyz|online|site|tech|dev|app|cloud|ai|sh|me|cc|tv|ws|fm|am|to|li|ms|la|gg|im|pw|so|sx|tk|ml|ga|cf|gq|ru|cn|uk|de|fr|jp|kr|br|in|au|nl|it|es|se|no|fi|dk|pl|cz|at|ch|be|pt|hu|ro|bg|sk|si|hr|rs|ua|tr|il|ae|sa|za|ng|ke|eg|ma|tn|dz|ly|jo|kw|qa|om|bh|lb|sy|iq|ir|pk|bd|vn|th|my|sg|ph|id|tw|hk|mo|eu|ca|mx|ar|cl|pe|ve|ec|uy|py|bo|cr|pa|gt|hn|sv|ni|cu|do|pr|nz|ph|ie|gr|cz|is|lu|mc|ee|lv|lt|mt|cy)\b/gi;
   
   let match;
   while ((match = domainPattern.exec(content)) !== null) {
@@ -2525,7 +2534,7 @@ function highlightForAtomicTesting(
   const fullTextLower = fullText.toLowerCase();
   let pos = 0;
   let highlightedCount = 0;
-  const maxHighlightsPerValue = 1; // Only highlight first occurrence
+  const maxHighlightsPerValue = 5; // Highlight multiple occurrences to show all origins
   
   while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
     const endPos = pos + searchValue.length;
@@ -2571,21 +2580,14 @@ function highlightForAtomicTesting(
             }
             
             const highlight = document.createElement('span');
-            highlight.className = 'xtm-highlight xtm-atomic-testing';
+            // Visual-only highlighting - add type-specific class for different colors
+            const typeClass = target.type === 'attack-pattern' 
+              ? 'xtm-atomic-attack-pattern' 
+              : 'xtm-atomic-domain';
+            highlight.className = `xtm-highlight xtm-atomic-testing ${typeClass}`;
             highlight.dataset.value = target.value;
             highlight.dataset.type = target.type;
-            highlight.dataset.entity = JSON.stringify(target);
-            if (target.entityId) {
-              highlight.dataset.entityId = target.entityId;
-            }
-            if (target.platformId) {
-              highlight.dataset.platformId = target.platformId;
-            }
-            
-            // Add click handler for selection
-            highlight.addEventListener('click', (e) => handleAtomicTestingClick(e, highlight, target));
-            highlight.addEventListener('mousedown', (e) => { e.stopPropagation(); }, { capture: true });
-            highlight.addEventListener('mouseup', (e) => { e.stopPropagation(); }, { capture: true });
+            // No click handlers - visual only for showing origin on the page
             
             range.surroundContents(highlight);
             highlights.push(highlight);
@@ -2609,27 +2611,35 @@ function highlightForAtomicTesting(
 /**
  * Scan page for scenario creation
  * Scans for attack patterns and sends them to the panel for scenario creation
+ * Uses SAME matching logic as atomic testing for consistency
  */
 async function scanPageForScenario(): Promise<void> {
   showScanOverlay();
   
   try {
-    // Get page content
+    // Clear existing highlights first
+    clearHighlights();
+    selectedForImport.clear();
+    
+    // Get page content - use innerText just like atomic testing and OpenCTI scanning
     const content = document.body.innerText;
     const url = window.location.href;
     const pageTitle = document.title;
     
     log.debug(' Starting scenario scan...');
+    log.debug(` Page content length: ${content.length} chars`);
     
-    // Request attack patterns from OpenAEV cache
+    // Request attack patterns from OpenAEV cache - SAME call as atomic testing
     const response = await chrome.runtime.sendMessage({
       type: 'SCAN_OAEV',
       payload: { content, url, includeAttackPatterns: true },
     });
     
     log.debug(' Scenario scan response:', response);
+    log.debug(' Scenario scan response success:', response?.success);
+    log.debug(' Scenario scan response platformEntities count:', response?.data?.platformEntities?.length || 0);
     
-    // Extract attack patterns
+    // Extract attack patterns - SAME logic as atomic testing (scanPageForAtomicTesting)
     const attackPatterns: Array<{
       id: string;
       entityId: string;
@@ -2640,21 +2650,31 @@ async function scanPageForScenario(): Promise<void> {
       platformId?: string;
     }> = [];
     
+    // Use exact same extraction logic as atomic testing
     if (response?.success && response?.data?.platformEntities) {
-      const patterns = (response.data.platformEntities || [])
+      const foundPatterns = (response.data.platformEntities || [])
         .filter((e: any) => e.type === 'AttackPattern');
       
-      for (const ap of patterns) {
+      log.debug(` Found ${foundPatterns.length} AttackPattern entities in response`);
+      
+      for (const ap of foundPatterns) {
+        // Extract data from entityData if available (has aliases for externalId)
+        const entityData = ap.entityData || {};
+        const aliases = entityData.aliases || [];
+        
         attackPatterns.push({
-          id: ap.entityId || ap.id || ap.attack_pattern_id,
-          entityId: ap.entityId || ap.id || ap.attack_pattern_id,
-          name: ap.name || ap.attack_pattern_name,
-          externalId: ap.attack_pattern_external_id,
-          description: ap.attack_pattern_description,
-          killChainPhases: ap.attack_pattern_kill_chain_phases,
+          id: ap.entityId || ap.id,
+          entityId: ap.entityId || ap.id,
+          name: ap.name,
+          externalId: aliases[0], // First alias is typically the external ID (e.g., T1059)
           platformId: ap.platformId,
         });
+        
+        log.debug(` Added attack pattern: ${ap.name} (${ap.entityId}) from platform ${ap.platformId}`);
       }
+    } else {
+      log.warn(' Scenario scan: No platformEntities in response or response failed');
+      log.warn(' Response details:', { success: response?.success, hasData: !!response?.data, hasPlatformEntities: !!response?.data?.platformEntities });
     }
     
     log.debug(`Found ${attackPatterns.length} attack patterns for scenario`);
@@ -2728,16 +2748,18 @@ function generateCleanDescription(content: string, maxLength = 500): string {
  */
 function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; name: string; externalId?: string }>): void {
   const textNodes = getTextNodes(document.body);
-  const fullText = document.body.innerText;
   
-  // Create a map of text node positions
+  // Build fullText by joining text nodes with space (same as highlightResults)
+  const fullText = textNodes.map((n) => n.textContent).join(' ');
+  
+  // Create a map of text node positions with +1 offset for space between nodes
   let offset = 0;
   const nodeMap: Array<{ node: Text; start: number; end: number }> = [];
   
   textNodes.forEach((node) => {
     const text = node.textContent || '';
     nodeMap.push({ node, start: offset, end: offset + text.length });
-    offset += text.length;
+    offset += text.length + 1; // +1 for space between nodes
   });
   
   for (const ap of attackPatterns) {
@@ -2752,6 +2774,7 @@ function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; nam
 
 /**
  * Highlight text for scenario mode using WHOLE WORD matching
+ * Uses same approach as highlightForAtomicTesting for consistency
  * Only matches complete attack pattern names, not partial matches
  */
 function highlightInTextForScenario(
@@ -2760,15 +2783,17 @@ function highlightInTextForScenario(
   nodeMap: Array<{ node: Text; start: number; end: number }>,
   attackPattern: { id: string; name: string }
 ): void {
-  if (!searchValue || searchValue.length < 3) return;
+  // Skip if search value is too short or empty
+  if (!searchValue || searchValue.length < 2) return;
   
+  // Find all occurrences with word boundary check
   const searchLower = searchValue.toLowerCase();
   const fullTextLower = fullText.toLowerCase();
   let pos = 0;
-  let occurrenceCount = 0;
-  const maxOccurrences = 5;
+  let highlightedCount = 0;
+  const maxHighlightsPerValue = 5; // Highlight multiple occurrences
   
-  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && occurrenceCount < maxOccurrences) {
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
     const endPos = pos + searchValue.length;
     
     // Check for word boundaries - only match whole words/phrases
@@ -2781,64 +2806,59 @@ function highlightInTextForScenario(
       continue;
     }
     
-    // Find which nodes contain this position
+    // Find the text node containing this position
     for (const { node, start, end } of nodeMap) {
       if (pos >= start && pos < end) {
-        const localStart = pos - start;
-        const localEnd = Math.min(end, endPos) - start;
+        // Check if this node is already inside a highlight
+        if (node.parentElement?.closest('.xtm-highlight')) {
+          break; // Skip - already highlighted
+        }
         
-        const text = node.textContent || '';
-        if (localStart >= 0 && localEnd <= text.length) {
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
+        
+        // Validate the text matches what we're looking for
+        const textToHighlight = nodeText.substring(localStart, localEnd);
+        if (!textToHighlight || textToHighlight.toLowerCase() !== searchLower.substring(0, textToHighlight.length)) {
+          break;
+        }
+        
+        if (localEnd <= nodeText.length && textToHighlight.length > 0) {
           try {
+            // Create highlight span
             const range = document.createRange();
             range.setStart(node, localStart);
             range.setEnd(node, localEnd);
             
-            const span = document.createElement('span');
-            span.className = 'xtm-highlight xtm-scenario';
-            span.dataset.value = attackPattern.name;
-            span.dataset.type = 'attack-pattern';
-            span.dataset.entityId = attackPattern.id;
-            span.style.backgroundColor = 'rgba(156, 39, 176, 0.3)'; // Purple for scenarios
-            span.style.borderBottom = '2px solid #9c27b0';
+            // Double-check range content is not empty
+            if (range.toString().trim().length === 0) {
+              break;
+            }
             
-            range.surroundContents(span);
-            occurrenceCount++;
+            const highlight = document.createElement('span');
+            // Use CSS classes for styling (defined in HIGHLIGHT_STYLES)
+            highlight.className = 'xtm-highlight xtm-scenario';
+            highlight.dataset.value = attackPattern.name;
+            highlight.dataset.type = 'attack-pattern';
+            highlight.dataset.entityId = attackPattern.id;
+            // No click handlers - visual only
+            
+            range.surroundContents(highlight);
+            highlights.push(highlight); // Add to highlights array for proper cleanup
+            highlightedCount++;
           } catch (e) {
-            // Skip invalid ranges
+            // Range might cross node boundaries, skip
           }
         }
         break;
       }
     }
-    pos++;
+    
+    pos = endPos;
   }
 }
 
-
-/**
- * Handle click on atomic testing highlight (single selection)
- */
-function handleAtomicTestingClick(e: Event, element: HTMLSpanElement, target: { type: string; value: string; name: string; entityId?: string; platformId?: string; data: any }): void {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // Clear previous selection
-  document.querySelectorAll('.xtm-highlight.xtm-atomic-testing.xtm-selected').forEach(el => {
-    el.classList.remove('xtm-selected');
-  });
-  
-  // Select this one
-  element.classList.add('xtm-selected');
-  atomicTestingTarget = target;
-  
-  // Ensure panel is open
-  ensurePanelElements();
-  showPanelElements();
-  
-  // Update panel with selected target
-  sendPanelMessage('ATOMIC_TESTING_SELECT', target);
-}
 
 /**
  * Scan page for investigation mode

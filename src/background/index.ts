@@ -1424,12 +1424,9 @@ async function handleMessage(
         break;
       }
       
-      case 'CREATE_OAEV_PAYLOAD': {
-        const { hostname, name, platforms, attackPatternIds, platformId } = message.payload as {
+      case 'FIND_DNS_RESOLUTION_PAYLOAD': {
+        const { hostname, platformId } = message.payload as {
           hostname: string;
-          name: string;
-          platforms: string[];
-          attackPatternIds?: string[];
           platformId?: string;
         };
         
@@ -1440,17 +1437,133 @@ async function handleMessage(
             break;
           }
           
-          const payload = await client.createDnsResolutionPayload({
-            hostname,
-            name,
-            platforms,
-            attackPatternIds,
+          const existingPayload = await client.findDnsResolutionPayloadByHostname(hostname);
+          if (existingPayload) {
+            sendResponse(successResponse(existingPayload));
+          } else {
+            sendResponse({ success: true, data: null }); // No existing payload found
+          }
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to search for DNS resolution payload',
           });
-          sendResponse(successResponse(payload));
+        }
+        break;
+      }
+      
+      case 'CREATE_OAEV_PAYLOAD': {
+        // Support both legacy DNS resolution format AND generic payload format
+        const { hostname, name, platforms, attackPatternIds, platformId, payload: payloadData } = message.payload as {
+          hostname?: string;
+          name?: string;
+          platforms?: string[];
+          attackPatternIds?: string[];
+          platformId?: string;
+          payload?: {
+            payload_type: 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
+            payload_name: string;
+            payload_description?: string;
+            payload_platforms: string[];
+            payload_source?: string;
+            payload_status?: string;
+            payload_execution_arch?: string;
+            payload_expectations?: string[];
+            payload_attack_patterns?: string[];
+            command_executor?: string;
+            command_content?: string;
+            payload_cleanup_executor?: string | null;
+            payload_cleanup_command?: string | null;
+            dns_resolution_hostname?: string;
+          };
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          let createdPayload;
+          
+          // Check if generic payload format is provided
+          if (payloadData) {
+            // Use the new generic createPayload method
+            createdPayload = await client.createPayload(payloadData);
+          } else if (hostname && name && platforms) {
+            // Legacy DNS resolution format
+            createdPayload = await client.createDnsResolutionPayload({
+              hostname,
+              name,
+              platforms,
+              attackPatternIds,
+            });
+          } else {
+            sendResponse(errorResponse('Invalid payload data: missing required fields'));
+            break;
+          }
+          
+          sendResponse(successResponse(createdPayload));
         } catch (error) {
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to create payload',
+          });
+        }
+        break;
+      }
+      
+      case 'FETCH_OAEV_PAYLOAD': {
+        const { payloadId, platformId } = message.payload as {
+          payloadId: string;
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const payload = await client.getPayload(payloadId);
+          sendResponse(successResponse(payload));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch payload',
+          });
+        }
+        break;
+      }
+      
+      case 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD': {
+        const { payloadId, platformId } = message.payload as {
+          payloadId: string;
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const contract = await client.findInjectorContractByPayloadId(payloadId);
+          if (contract) {
+            sendResponse(successResponse(contract));
+          } else {
+            sendResponse({
+              success: false,
+              error: 'No injector contract found for this payload',
+            });
+          }
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to find injector contract',
           });
         }
         break;

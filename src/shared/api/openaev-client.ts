@@ -866,10 +866,175 @@ export class OpenAEVClient {
   }
 
   /**
+   * Create a generic payload (Command, Executable, FileDrop, DnsResolution, NetworkTraffic)
+   */
+  async createPayload(payload: {
+    payload_type: 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
+    payload_name: string;
+    payload_description?: string;
+    payload_platforms: string[];
+    payload_source?: string;
+    payload_status?: string;
+    payload_execution_arch?: string;
+    payload_expectations?: string[];
+    payload_attack_patterns?: string[];
+    // Command-specific
+    command_executor?: string;
+    command_content?: string;
+    // Cleanup
+    payload_cleanup_executor?: string | null;
+    payload_cleanup_command?: string | null;
+    // DNS Resolution-specific
+    dns_resolution_hostname?: string;
+  }): Promise<any> {
+    const body: Record<string, any> = {
+      payload_type: payload.payload_type,
+      payload_name: payload.payload_name,
+      payload_description: payload.payload_description || '',
+      payload_platforms: payload.payload_platforms,
+      payload_source: payload.payload_source || 'MANUAL',
+      payload_status: payload.payload_status || 'VERIFIED',
+      payload_execution_arch: payload.payload_execution_arch || 'ALL_ARCHITECTURES',
+      payload_expectations: payload.payload_expectations || ['PREVENTION', 'DETECTION'],
+      payload_attack_patterns: payload.payload_attack_patterns || [],
+    };
+
+    // Add type-specific fields
+    if (payload.payload_type === 'Command') {
+      body.command_executor = payload.command_executor;
+      body.command_content = payload.command_content;
+    }
+    if (payload.payload_type === 'DnsResolution') {
+      body.dns_resolution_hostname = payload.dns_resolution_hostname;
+    }
+
+    // Add cleanup if provided
+    if (payload.payload_cleanup_executor) {
+      body.payload_cleanup_executor = payload.payload_cleanup_executor;
+    }
+    if (payload.payload_cleanup_command) {
+      body.payload_cleanup_command = payload.payload_cleanup_command;
+    }
+
+    return this.request('/api/payloads', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * Get payload by ID
    */
   async getPayload(payloadId: string): Promise<any> {
     return this.request(`/api/payloads/${payloadId}`);
+  }
+
+  /**
+   * Search for existing DNS resolution payload by hostname
+   * Returns the payload if found, null otherwise
+   */
+  async findDnsResolutionPayloadByHostname(hostname: string): Promise<any | null> {
+    log.debug('[OpenAEV] Searching for DNS resolution payload with hostname:', hostname);
+    
+    try {
+      const response = await this.request<PaginatedResponse<any>>('/api/payloads/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          filterGroup: {
+            mode: 'and',
+            filters: [
+              {
+                key: 'payload_type',
+                mode: 'or',
+                operator: 'eq',
+                values: ['DnsResolution'],
+              },
+              {
+                key: 'dns_resolution_hostname',
+                mode: 'or',
+                operator: 'eq',
+                values: [hostname],
+              },
+            ],
+          },
+          page: 0,
+          size: 10,
+        }),
+      });
+      
+      if (response.content && response.content.length > 0) {
+        const payload = response.content[0];
+        log.debug('[OpenAEV] Found existing DNS resolution payload:', payload.payload_id, '->', payload.payload_name);
+        return payload;
+      }
+      
+      log.debug('[OpenAEV] No existing DNS resolution payload found for hostname:', hostname);
+      return null;
+    } catch (error) {
+      log.error('[OpenAEV] Error searching for DNS resolution payload:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Find injector contract by payload ID
+   * When a payload is created, an injector contract is automatically created for it.
+   * This method finds that injector contract using the search API with filters.
+   */
+  async findInjectorContractByPayloadId(payloadId: string): Promise<any | null> {
+    log.debug('[OpenAEV] Searching for injector contract with payload ID:', payloadId);
+    
+    try {
+      // Use the search API with proper filter structure
+      const response = await this.request<PaginatedResponse<any>>('/api/injector_contracts/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          filterGroup: {
+            mode: 'and',
+            filters: [
+              {
+                key: 'injector_contract_payload',
+                mode: 'or',
+                operator: 'eq',
+                values: [payloadId],
+              },
+            ],
+          },
+          page: 0,
+          size: 10,
+        }),
+      });
+      
+      if (response.content && response.content.length > 0) {
+        const contract = response.content[0];
+        log.debug('[OpenAEV] Found injector contract for payload:', payloadId, '->', contract.injector_contract_id);
+        return contract;
+      }
+      
+      log.debug('[OpenAEV] No injector contract found for payload via search:', payloadId);
+      
+      // Fallback: fetch all contracts and filter locally (slower but more reliable)
+      log.debug('[OpenAEV] Fallback: Searching all contracts locally...');
+      const allContracts = await this.getAllInjectorContracts();
+      
+      const matchingContract = allContracts.find((contract: any) => {
+        // The injector contract has a payload reference
+        const contractPayloadId = contract.injector_contract_payload?.payload_id || 
+                                  contract.injector_contract_payload;
+        return contractPayloadId === payloadId;
+      });
+      
+      if (matchingContract) {
+        log.debug('[OpenAEV] Found injector contract via fallback:', payloadId, '->', matchingContract.injector_contract_id);
+        return matchingContract;
+      }
+      
+      log.debug('[OpenAEV] No injector contract found for payload:', payloadId);
+      return null;
+    } catch (error) {
+      log.error('[OpenAEV] Error searching for injector contract:', error);
+      return null;
+    }
   }
 
   /**
@@ -902,7 +1067,7 @@ export class OpenAEVClient {
    * Get atomic testing URL
    */
   getAtomicTestingUrl(atomicTestingId: string): string {
-    return `${this.baseUrl}/admin/atomic/${atomicTestingId}`;
+    return `${this.baseUrl}/admin/atomic_testings/${atomicTestingId}`;
   }
 
   // ============================================================================

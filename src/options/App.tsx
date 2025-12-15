@@ -158,6 +158,13 @@ const App: React.FC = () => {
     loadCacheStats();
   }, []);
 
+  // Reload cache stats when switching to detection tab
+  useEffect(() => {
+    if (activeTab === 'detection') {
+      loadCacheStats();
+    }
+  }, [activeTab]);
+
   const loadSettings = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     

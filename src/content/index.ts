@@ -1629,12 +1629,13 @@ const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-scan-overlay {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
     background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
     color: rgba(255, 255, 255, 0.9);
     padding: 16px 24px;
-    border-radius: 4px;
+    border-radius: 8px;
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     z-index: 2147483647;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -1714,16 +1715,16 @@ const HIGHLIGHT_STYLES = `
     transform: translateX(100%);
   }
   
-  /* Panel overlay for click-outside dismissal */
+  /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */
   .xtm-panel-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 560px;
     bottom: 0;
-    z-index: 2147483639; /* Below highlights (2147483640) so highlights are still clickable */
+    z-index: 2147483635; /* Well below highlights (2147483640) */
     background: transparent;
-    cursor: pointer;
+    pointer-events: none; /* CRITICAL: Allow clicks to pass through to highlights */
   }
   
   .xtm-panel-overlay.hidden {
@@ -2160,7 +2161,10 @@ async function scanPage(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        sendPanelMessage('SCAN_RESULTS', data);
+        // Wait for panel iframe to be ready before sending message
+        setTimeout(() => {
+          sendPanelMessage('SCAN_RESULTS', data);
+        }, 100);
       }
     } else {
       updateScanOverlay('Scan failed: ' + response.error);
@@ -2230,7 +2234,10 @@ async function scanPageForOAEV(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        sendPanelMessage('SCAN_RESULTS', scanResults);
+        // Wait for panel iframe to be ready before sending message
+        setTimeout(() => {
+          sendPanelMessage('SCAN_RESULTS', scanResults);
+        }, 100);
       }
     } else {
       log.error(' SCAN_OAEV failed:', response?.error);
@@ -2300,7 +2307,10 @@ async function scanAllPlatforms(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        sendPanelMessage('SCAN_RESULTS', data);
+        // Wait for panel iframe to be ready before sending message
+        setTimeout(() => {
+          sendPanelMessage('SCAN_RESULTS', data);
+        }, 100);
       }
     } else {
       log.error(' SCAN_ALL failed:', response?.error);
@@ -2321,8 +2331,8 @@ let atomicTestingTarget: { value: string; type: string; data: any } | null = nul
 
 /**
  * Scan page for atomic testing targets
- * Scans for: attack patterns (from OpenAEV cache) and domain/hostname observables (regex)
- * Uses SAME approach as scanPage() (innerText) for consistency with OpenCTI
+ * Uses the same approach as regular scanning for attack patterns and domains
+ * Shows results in the right panel like regular scan results
  */
 async function scanPageForAtomicTesting(): Promise<void> {
   showScanOverlay();
@@ -2336,31 +2346,30 @@ async function scanPageForAtomicTesting(): Promise<void> {
     // Get page content - use innerText just like OpenCTI's scanPage()
     const content = document.body.innerText;
     const url = window.location.href;
+    const pageTitle = document.title;
     
     log.debug(' Starting atomic testing scan...');
     log.debug(`Page content length: ${content.length} chars`);
     
-    // Request attack patterns from OpenAEV cache + detect domains/hostnames
+    // Request attack patterns from OpenAEV cache
     const response = await chrome.runtime.sendMessage({
       type: 'SCAN_OAEV',
       payload: { content, url, includeAttackPatterns: true },
     });
     
-    // Also do regex detection for domains/hostnames
-    const domainHostnameMatches = detectDomainsAndHostnames(content);
-    
     log.debug(' Atomic testing scan response:', response);
-    log.debug(' Domain/hostname matches:', domainHostnameMatches.length);
     
     // Collect all atomic testing targets
     const atomicTargets: Array<{
-      type: 'attack-pattern' | 'domain' | 'hostname';
+      type: 'attack-pattern' | 'Domain-Name' | 'Hostname';
       value: string;
       name: string;
+      entityId?: string;
+      platformId?: string;
       data: any;
     }> = [];
     
-    // Add attack patterns from OpenAEV
+    // Add attack patterns from OpenAEV (only those that were actually found in the content)
     if (response?.success && response?.data?.platformEntities) {
       const attackPatterns = (response.data.platformEntities || [])
         .filter((e: any) => e.type === 'AttackPattern');
@@ -2370,15 +2379,19 @@ async function scanPageForAtomicTesting(): Promise<void> {
           type: 'attack-pattern',
           value: ap.name,
           name: ap.name,
+          entityId: ap.entityId || ap.attack_pattern_id,
+          platformId: ap.platformId,
           data: ap,
         });
       }
     }
     
-    // Add domain/hostname matches
-    for (const match of domainHostnameMatches) {
+    // Also detect domains and hostnames using the same regex as regular scanning
+    // but only highlight those that are actually in the page
+    const domainMatches = detectDomainsAndHostnamesForAtomicTesting(content);
+    for (const match of domainMatches) {
       atomicTargets.push({
-        type: match.type as 'domain' | 'hostname',
+        type: match.type as 'Domain-Name' | 'Hostname',
         value: match.value,
         name: match.value,
         data: { type: match.type, value: match.value },
@@ -2389,16 +2402,50 @@ async function scanPageForAtomicTesting(): Promise<void> {
     
     if (atomicTargets.length === 0) {
       updateScanOverlay('No attack patterns or domains found on this page', false);
+      // Still open panel to show empty state
+      ensurePanelElements();
+      showPanelElements();
+      setTimeout(() => {
+        sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
+          targets: [],
+          pageTitle,
+          pageUrl: url,
+        });
+      }, 100);
       return;
     }
     
-    // Highlight atomic testing targets
-    highlightAtomicTestingTargets(atomicTargets);
+    // Create node map for highlighting (same approach as regular scan)
+    const textNodes = getTextNodes(document.body);
+    const fullText = document.body.innerText;
+    let offset = 0;
+    const nodeMap: Array<{ node: Text; start: number; end: number }> = [];
+    
+    textNodes.forEach((node) => {
+      const text = node.textContent || '';
+      nodeMap.push({ node, start: offset, end: offset + text.length });
+      offset += text.length;
+    });
+    
+    // Highlight atomic testing targets using proper exact match
+    for (const target of atomicTargets) {
+      highlightForAtomicTesting(fullText, target.value, nodeMap, target);
+    }
     
     updateScanOverlay(`Found ${atomicTargets.length} target${atomicTargets.length !== 1 ? 's' : ''} for atomic testing`, false);
     
-    // Open the atomic testing panel
-    showAtomicTestingPanel(atomicTargets);
+    // Open the panel with scan results (like regular scanning)
+    ensurePanelElements();
+    showPanelElements();
+    
+    // Wait for panel iframe to be ready, then send the message
+    setTimeout(() => {
+      sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
+        targets: atomicTargets,
+        pageTitle,
+        pageUrl: url,
+      });
+    }, 100);
     
   } catch (error) {
     log.error(' Atomic testing scan error:', error);
@@ -2407,9 +2454,10 @@ async function scanPageForAtomicTesting(): Promise<void> {
 }
 
 /**
- * Detect domains and hostnames using regex
+ * Detect domains and hostnames for atomic testing
+ * Uses regex to find domains/hostnames in the content
  */
-function detectDomainsAndHostnames(content: string): Array<{ type: string; value: string }> {
+function detectDomainsAndHostnamesForAtomicTesting(content: string): Array<{ type: string; value: string }> {
   const results: Array<{ type: string; value: string }> = [];
   const seen = new Set<string>();
   
@@ -2423,7 +2471,7 @@ function detectDomainsAndHostnames(content: string): Array<{ type: string; value
       seen.add(value);
       // Determine if it's likely a hostname (has subdomain) or just a domain
       const parts = value.split('.');
-      const type = parts.length > 2 ? 'hostname' : 'domain';
+      const type = parts.length > 2 ? 'Hostname' : 'Domain-Name';
       results.push({ type, value });
     }
   }
@@ -2432,9 +2480,209 @@ function detectDomainsAndHostnames(content: string): Array<{ type: string; value
 }
 
 /**
- * Highlight atomic testing targets with radio-button style (single selection)
+ * Highlight text for atomic testing mode using exact match approach
+ * Similar to regular highlightInText but with atomic testing specific styling
  */
-function highlightAtomicTestingTargets(targets: Array<{ type: string; value: string; name: string; data: any }>): void {
+function highlightForAtomicTesting(
+  fullText: string,
+  searchValue: string,
+  nodeMap: Array<{ node: Text; start: number; end: number }>,
+  target: { type: string; value: string; name: string; entityId?: string; platformId?: string; data: any }
+): void {
+  // Skip if search value is too short or empty
+  if (!searchValue || searchValue.length < 2) return;
+  
+  // Find all occurrences
+  const searchLower = searchValue.toLowerCase();
+  let pos = 0;
+  let highlightedCount = 0;
+  const maxHighlightsPerValue = 1; // Only highlight first occurrence
+  
+  while ((pos = fullText.toLowerCase().indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
+    const endPos = pos + searchValue.length;
+    
+    // Find the text node containing this position
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        // Check if this node is already inside a highlight
+        if (node.parentElement?.closest('.xtm-highlight')) {
+          break; // Skip - already highlighted
+        }
+        
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
+        
+        // Validate the text matches what we're looking for
+        const textToHighlight = nodeText.substring(localStart, localEnd);
+        if (!textToHighlight || textToHighlight.toLowerCase() !== searchLower.substring(0, textToHighlight.length)) {
+          break;
+        }
+        
+        if (localEnd <= nodeText.length && textToHighlight.length > 0) {
+          try {
+            // Create highlight span
+            const range = document.createRange();
+            range.setStart(node, localStart);
+            range.setEnd(node, localEnd);
+            
+            // Double-check range content is not empty
+            if (range.toString().trim().length === 0) {
+              break;
+            }
+            
+            const highlight = document.createElement('span');
+            highlight.className = 'xtm-highlight xtm-atomic-testing';
+            highlight.dataset.value = target.value;
+            highlight.dataset.type = target.type;
+            highlight.dataset.entity = JSON.stringify(target);
+            if (target.entityId) {
+              highlight.dataset.entityId = target.entityId;
+            }
+            if (target.platformId) {
+              highlight.dataset.platformId = target.platformId;
+            }
+            
+            // Add click handler for selection
+            highlight.addEventListener('click', (e) => handleAtomicTestingClick(e, highlight, target));
+            highlight.addEventListener('mousedown', (e) => { e.stopPropagation(); }, { capture: true });
+            highlight.addEventListener('mouseup', (e) => { e.stopPropagation(); }, { capture: true });
+            
+            range.surroundContents(highlight);
+            highlights.push(highlight);
+            highlightedCount++;
+          } catch (e) {
+            // Range might cross node boundaries, skip
+          }
+        }
+        break;
+      }
+    }
+    
+    pos = endPos;
+  }
+}
+
+// ============================================================================
+// Scenario Creation Scanning (OpenAEV)
+// ============================================================================
+
+/**
+ * Scan page for scenario creation
+ * Scans for attack patterns and sends them to the panel for scenario creation
+ */
+async function scanPageForScenario(): Promise<void> {
+  showScanOverlay();
+  
+  try {
+    // Get page content
+    const content = document.body.innerText;
+    const url = window.location.href;
+    const pageTitle = document.title;
+    
+    log.debug(' Starting scenario scan...');
+    
+    // Request attack patterns from OpenAEV cache
+    const response = await chrome.runtime.sendMessage({
+      type: 'SCAN_OAEV',
+      payload: { content, url, includeAttackPatterns: true },
+    });
+    
+    log.debug(' Scenario scan response:', response);
+    
+    // Extract attack patterns
+    const attackPatterns: Array<{
+      id: string;
+      entityId: string;
+      name: string;
+      externalId?: string;
+      description?: string;
+      killChainPhases?: string[];
+      platformId?: string;
+    }> = [];
+    
+    if (response?.success && response?.data?.platformEntities) {
+      const patterns = (response.data.platformEntities || [])
+        .filter((e: any) => e.type === 'AttackPattern');
+      
+      for (const ap of patterns) {
+        attackPatterns.push({
+          id: ap.entityId || ap.id || ap.attack_pattern_id,
+          entityId: ap.entityId || ap.id || ap.attack_pattern_id,
+          name: ap.name || ap.attack_pattern_name,
+          externalId: ap.attack_pattern_external_id,
+          description: ap.attack_pattern_description,
+          killChainPhases: ap.attack_pattern_kill_chain_phases,
+          platformId: ap.platformId,
+        });
+      }
+    }
+    
+    log.debug(`Found ${attackPatterns.length} attack patterns for scenario`);
+    
+    // Generate description from page content
+    const pageDescription = generateCleanDescription(content);
+    
+    // Highlight attack patterns on the page (optional, for visual feedback)
+    if (attackPatterns.length > 0) {
+      highlightScenarioAttackPatterns(attackPatterns);
+    }
+    
+    const foundMessage = attackPatterns.length > 0 
+      ? `Found ${attackPatterns.length} attack pattern${attackPatterns.length !== 1 ? 's' : ''} for scenario`
+      : 'No attack patterns found - you can create an empty scenario';
+    updateScanOverlay(foundMessage, false);
+    
+    // Open the scenario panel
+    ensurePanelElements();
+    showPanelElements();
+    
+    // Wait for panel iframe to be ready, then send the message
+    setTimeout(() => {
+      sendPanelMessage('SHOW_SCENARIO_PANEL', {
+        attackPatterns,
+        pageTitle,
+        pageUrl: url,
+        pageDescription,
+        platformId: attackPatterns[0]?.platformId,
+      });
+    }, 100);
+    
+  } catch (error) {
+    log.error(' Scenario scan error:', error);
+    updateScanOverlay('Scenario scan error: ' + (error instanceof Error ? error.message : 'Unknown'), false);
+  }
+}
+
+/**
+ * Generate a clean description from page content
+ */
+function generateCleanDescription(content: string, maxLength = 500): string {
+  // Take first portion of content
+  let description = content.substring(0, maxLength * 2);
+  
+  // Remove extra whitespace
+  description = description.replace(/\s+/g, ' ').trim();
+  
+  // Truncate to maxLength
+  if (description.length > maxLength) {
+    description = description.substring(0, maxLength);
+    // Try to end at a sentence boundary
+    const lastPeriod = description.lastIndexOf('.');
+    if (lastPeriod > maxLength * 0.7) {
+      description = description.substring(0, lastPeriod + 1);
+    } else {
+      description += '...';
+    }
+  }
+  
+  return description;
+}
+
+/**
+ * Highlight attack patterns found for scenario creation (visual feedback)
+ */
+function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; name: string }>): void {
   const textNodes = getTextNodes(document.body);
   const fullText = document.body.innerText;
   
@@ -2448,19 +2696,19 @@ function highlightAtomicTestingTargets(targets: Array<{ type: string; value: str
     offset += text.length;
   });
   
-  for (const target of targets) {
-    highlightInTextForAtomicTesting(fullText, target.value, nodeMap, target);
+  for (const ap of attackPatterns) {
+    highlightInTextForScenario(fullText, ap.name, nodeMap, ap);
   }
 }
 
 /**
- * Highlight text for atomic testing mode
+ * Highlight text for scenario mode
  */
-function highlightInTextForAtomicTesting(
+function highlightInTextForScenario(
   fullText: string,
   searchValue: string,
   nodeMap: Array<{ node: Text; start: number; end: number }>,
-  target: { type: string; value: string; name: string; data: any }
+  attackPattern: { id: string; name: string }
 ): void {
   if (!searchValue || searchValue.length < 3) return;
   
@@ -2468,7 +2716,7 @@ function highlightInTextForAtomicTesting(
   const fullTextLower = fullText.toLowerCase();
   let pos = 0;
   let occurrenceCount = 0;
-  const maxOccurrences = 10;
+  const maxOccurrences = 5;
   
   while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && occurrenceCount < maxOccurrences) {
     const endPos = pos + searchValue.length;
@@ -2487,13 +2735,12 @@ function highlightInTextForAtomicTesting(
             range.setEnd(node, localEnd);
             
             const span = document.createElement('span');
-            span.className = 'xtm-highlight xtm-atomic-testing';
-            span.dataset.value = target.value;
-            span.dataset.type = target.type;
-            span.dataset.entity = JSON.stringify(target);
-            
-            // Add click handler for single selection
-            span.addEventListener('click', (e) => handleAtomicTestingClick(e, span, target));
+            span.className = 'xtm-highlight xtm-scenario';
+            span.dataset.value = attackPattern.name;
+            span.dataset.type = 'attack-pattern';
+            span.dataset.entityId = attackPattern.id;
+            span.style.backgroundColor = 'rgba(156, 39, 176, 0.3)'; // Purple for scenarios
+            span.style.borderBottom = '2px solid #9c27b0';
             
             range.surroundContents(span);
             occurrenceCount++;
@@ -2508,10 +2755,11 @@ function highlightInTextForAtomicTesting(
   }
 }
 
+
 /**
  * Handle click on atomic testing highlight (single selection)
  */
-function handleAtomicTestingClick(e: Event, element: HTMLSpanElement, target: { type: string; value: string; name: string; data: any }): void {
+function handleAtomicTestingClick(e: Event, element: HTMLSpanElement, target: { type: string; value: string; name: string; entityId?: string; platformId?: string; data: any }): void {
   e.preventDefault();
   e.stopPropagation();
   
@@ -2524,22 +2772,12 @@ function handleAtomicTestingClick(e: Event, element: HTMLSpanElement, target: { 
   element.classList.add('xtm-selected');
   atomicTestingTarget = target;
   
-  // Update panel with selected target
-  sendPanelMessage('ATOMIC_TESTING_SELECT', target);
-}
-
-/**
- * Show the atomic testing panel
- */
-async function showAtomicTestingPanel(targets: Array<{ type: string; value: string; name: string; data: any }>): Promise<void> {
+  // Ensure panel is open
   ensurePanelElements();
   showPanelElements();
   
-  const theme = await getCurrentTheme();
-  
-  setTimeout(() => {
-    sendPanelMessage('SHOW_ATOMIC_TESTING_PANEL', { targets, theme });
-  }, 100);
+  // Update panel with selected target
+  sendPanelMessage('ATOMIC_TESTING_SELECT', target);
 }
 
 /**
@@ -2742,7 +2980,7 @@ function highlightForInvestigation(fullText: string, searchValue: string, nodeMa
           
           // Set flag to prevent panel close
           highlightClickInProgress = true;
-          setTimeout(() => { highlightClickInProgress = false; }, 100);
+          setTimeout(() => { highlightClickInProgress = false; }, 500);
           
           // Ensure panel stays open / re-opens when clicking on investigation highlights
           if (panelFrame?.classList.contains('hidden')) {
@@ -3045,7 +3283,13 @@ function highlightInText(
             highlight.addEventListener('mouseleave', handleHighlightLeave);
             highlight.addEventListener('click', handleHighlightClick, { capture: true });
             // Also prevent mousedown and mouseup from triggering other handlers
-            highlight.addEventListener('mousedown', (e) => { e.stopPropagation(); }, { capture: true });
+            // Set flag on mousedown to prevent panel close before click handler runs
+            highlight.addEventListener('mousedown', (e) => { 
+              e.stopPropagation(); 
+              highlightClickInProgress = true;
+              // Reset flag after 500ms if click doesn't happen
+              setTimeout(() => { highlightClickInProgress = false; }, 500);
+            }, { capture: true });
             highlight.addEventListener('mouseup', (e) => { e.stopPropagation(); }, { capture: true });
             highlight.addEventListener('contextmenu', handleHighlightRightClick);
             
@@ -3196,8 +3440,10 @@ function handleHighlightClick(event: MouseEvent): void {
   event.stopImmediatePropagation();
   
   // Set flag to prevent panel close during navigation between highlights
+  // Flag is already set on mousedown, but ensure it's set here too for safety
   highlightClickInProgress = true;
-  setTimeout(() => { highlightClickInProgress = false; }, 100);
+  // Keep flag set for 500ms to ensure overlay click handler doesn't close panel
+  setTimeout(() => { highlightClickInProgress = false; }, 500);
   
   // Return false to prevent default (older browsers)
   if (event.returnValue !== undefined) {
@@ -3344,10 +3590,41 @@ function handleHighlightClick(event: MouseEvent): void {
             ];
             // Add other platforms
             for (const p of otherPlatformEntities) {
+              const pData = p.data || {};
+              const pType = p.type || pData.type || '';
+              // Strip oaev- prefix for type-based ID extraction
+              const cleanType = pType.replace(/^oaev-/, '');
+              // For OpenAEV entities, extract ID using type-specific field names
+              // e.g., attack_pattern_id for AttackPattern, team_id for Team, etc.
+              let pEntityId = pData.entityId || pData.id;
+              if (!pEntityId && cleanType) {
+                // Try type-specific ID fields used by OpenAEV
+                const typeToIdField: Record<string, string> = {
+                  'AttackPattern': 'attack_pattern_id',
+                  'Attack-Pattern': 'attack_pattern_id',
+                  'Finding': 'finding_id',
+                  'Asset': 'endpoint_id',
+                  'AssetGroup': 'asset_group_id',
+                  'Team': 'team_id',
+                  'Player': 'user_id',
+                  'User': 'user_id',
+                  'Scenario': 'scenario_id',
+                  'Exercise': 'exercise_id',
+                  'Organization': 'organization_id',
+                };
+                const idField = typeToIdField[cleanType];
+                if (idField && pData[idField]) {
+                  pEntityId = pData[idField];
+                }
+              }
               platformMatches.push({
-                platformId: p.data.platformId || 'unknown',
-                entityId: p.data.id || p.data.entityId,
-                entityData: p.data,
+                platformId: pData.platformId || 'unknown',
+                entityId: pEntityId || '',
+                entityData: {
+                  ...pData,
+                  type: pType, // Include the type with prefix for proper rendering
+                  entity_type: cleanType, // Include clean type for API calls
+                },
               });
             }
           } catch {
@@ -3474,25 +3751,53 @@ function hidePanel(): void {
 // Add Panel (for adding non-existing entities)
 // ============================================================================
 
+// Track if document click handler is installed
+let documentClickHandlerInstalled = false;
+
+// Document click handler for closing panel when clicking outside
+function handleDocumentClickForPanel(e: MouseEvent): void {
+  // If panel is hidden, do nothing
+  if (panelFrame?.classList.contains('hidden')) {
+    return;
+  }
+  
+  // Don't close if highlight click is in progress
+  if (highlightClickInProgress) {
+    return;
+  }
+  
+  const target = e.target as HTMLElement;
+  
+  // Don't close if clicked on the panel itself
+  if (panelFrame && (target === panelFrame || panelFrame.contains(target))) {
+    return;
+  }
+  
+  // Don't close if clicked on a highlight - let highlight handler deal with it
+  if (target.closest('.xtm-highlight')) {
+    return;
+  }
+  
+  // Don't close if clicked on xtm UI elements (tooltip, selection panel, etc.)
+  if (target.closest('[class*="xtm-"]')) {
+    return;
+  }
+  
+  // Check if click position is over the panel area (right 560px of viewport)
+  const panelAreaStart = window.innerWidth - 560;
+  if (e.clientX >= panelAreaStart) {
+    return; // Click is in panel area
+  }
+  
+  // Click was outside panel and not on a highlight - close panel
+  hidePanel();
+}
+
 function ensurePanelElements(): void {
-  // Create overlay for click-outside dismissal
+  // Create overlay (purely visual indicator, no click handling)
   if (!panelOverlay) {
     panelOverlay = document.createElement('div');
     panelOverlay.className = 'xtm-panel-overlay hidden';
-    panelOverlay.addEventListener('click', (e) => {
-      // Only close if click is directly on overlay, not on a highlight element
-      if (highlightClickInProgress) {
-        return; // Don't close - user clicked a highlight
-      }
-      const target = e.target as HTMLElement;
-      // Check if the click is on a highlight element (shouldn't reach here but safety check)
-      if (target.closest('.xtm-highlight')) {
-        return; // Don't close - click was on a highlight
-      }
-      if (target.classList.contains('xtm-panel-overlay')) {
-        hidePanel();
-      }
-    });
     document.body.appendChild(panelOverlay);
   }
   
@@ -3502,6 +3807,13 @@ function ensurePanelElements(): void {
     panelFrame.className = 'xtm-panel-frame hidden';
     panelFrame.src = chrome.runtime.getURL('panel/index.html');
     document.body.appendChild(panelFrame);
+  }
+  
+  // Install document click handler for click-outside dismissal (only once)
+  if (!documentClickHandlerInstalled) {
+    // Use capture phase to catch clicks before they're stopped by other handlers
+    document.addEventListener('click', handleDocumentClickForPanel, true);
+    documentClickHandlerInstalled = true;
   }
 }
 
@@ -3695,6 +4007,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'SCAN_ATOMIC_TESTING':
       // Atomic testing scan (attack patterns + domains/hostnames)
       scanPageForAtomicTesting().then(() => sendResponse({ success: true }));
+      return true;
+    
+    case 'CREATE_SCENARIO_FROM_PAGE':
+      // Scenario creation - scan for attack patterns and open scenario panel
+      scanPageForScenario().then(() => sendResponse({ success: true }));
       return true;
       
     case 'CLEAR_HIGHLIGHTS':

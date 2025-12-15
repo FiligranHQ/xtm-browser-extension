@@ -644,6 +644,87 @@ export class OpenAEVClient {
     }
   }
 
+  /**
+   * Add inject to a scenario
+   */
+  async addInjectToScenario(scenarioId: string, inject: {
+    inject_title: string;
+    inject_description?: string;
+    inject_injector_contract: string;
+    inject_content?: Record<string, any>;
+    inject_depends_duration?: number;
+    inject_depends_on?: string;
+  }): Promise<any> {
+    return this.request<any>(`/api/scenarios/${scenarioId}/injects`, {
+      method: 'POST',
+      body: JSON.stringify(inject),
+    });
+  }
+
+  /**
+   * Get all kill chain phases
+   */
+  async getKillChainPhases(): Promise<Array<{
+    phase_kill_chain_name: string;
+    phase_name: string;
+    phase_order: number;
+  }>> {
+    try {
+      const response = await this.request<any[]>('/api/kill_chain_phases');
+      return response || [];
+    } catch (error) {
+      log.error(' Get kill chain phases failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search injector contracts by kill chain phase
+   */
+  async searchInjectorContractsByKillChainPhase(killChainPhase: string): Promise<any[]> {
+    const filterGroup = {
+      mode: 'and',
+      filters: [
+        {
+          key: 'injector_contract_kill_chain_phases',
+          operator: 'contains',
+          values: [killChainPhase],
+        },
+      ],
+    };
+
+    const response = await this.request<{ content?: any[] }>('/api/injector_contracts/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        size: 100,
+        filterGroup,
+      }),
+    });
+    
+    return response?.content || [];
+  }
+
+  /**
+   * Get injector contracts for multiple attack patterns
+   * Returns a map of attack pattern ID to available contracts
+   */
+  async getInjectorContractsForAttackPatterns(attackPatternIds: string[]): Promise<Map<string, any[]>> {
+    const result = new Map<string, any[]>();
+    
+    // Fetch contracts for each attack pattern in parallel
+    const promises = attackPatternIds.map(async (apId) => {
+      const contracts = await this.searchInjectorContracts(apId);
+      return { apId, contracts };
+    });
+    
+    const results = await Promise.all(promises);
+    for (const { apId, contracts } of results) {
+      result.set(apId, contracts);
+    }
+    
+    return result;
+  }
+
   // ============================================================================
   // Unified Search (for cache building)
   // ============================================================================

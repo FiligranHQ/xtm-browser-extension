@@ -121,10 +121,10 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tool
       }}
     >
       <Box sx={{ color, display: 'flex' }}>{icon}</Box>
-      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 12 : 13, lineHeight: 1.2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 14 : 15, lineHeight: 1.2 }}>
         {label}
       </Typography>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 9 : 10, textAlign: 'center', lineHeight: 1.2 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 11 : 12, textAlign: 'center', lineHeight: 1.2 }}>
         {subtitle}
       </Typography>
     </Paper>
@@ -428,28 +428,26 @@ const App: React.FC = () => {
   };
 
   const handleGenerateScenario = async () => {
-    await handleAIAction(async () => {
-      if (typeof chrome === 'undefined' || !chrome.tabs) return;
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        // Fire and forget - don't await, close popup immediately
-        ensureContentScriptAndSendMessage(tab.id, { type: 'GENERATE_SCENARIO' });
-      }
-      window.close();
-    });
+    // Scenario creation doesn't require AI - it scans for attack patterns and lets user select injects
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      // Trigger scenario creation scan and panel - fire and forget
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
+    }
+    window.close();
   };
 
 
   const handleAtomicTesting = async () => {
-    await handleAIAction(async () => {
-      if (typeof chrome === 'undefined' || !chrome.tabs) return;
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        // Trigger atomic testing scan and panel - fire and forget
-        ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
-      }
-      window.close();
-    });
+    // Atomic testing doesn't require AI - it just scans for attack patterns
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      // Trigger atomic testing scan and panel - fire and forget
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
+    }
+    window.close();
   };
 
   const handleOpenPlatform = (url: string) => {

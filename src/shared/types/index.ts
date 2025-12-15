@@ -572,6 +572,50 @@ export interface OAEVScenario {
   scenario_updated_at?: string;
 }
 
+export interface OAEVKillChainPhase {
+  phase_kill_chain_name: string;
+  phase_name: string;
+  phase_order: number;
+}
+
+export interface OAEVInjectorContract {
+  injector_contract_id: string;
+  injector_contract_labels?: Record<string, string>;
+  injector_contract_platforms?: string[];
+  injector_contract_attack_patterns?: string[];
+  injector_contract_kill_chain_phases?: string[];
+  injector_contract_content?: string;
+  injector_contract_payload_type?: string;
+  injector_name?: string;
+  injector_type?: string;
+}
+
+export interface OAEVInjectInput {
+  inject_title: string;
+  inject_description?: string;
+  inject_injector_contract: string;
+  inject_content?: Record<string, any>;
+  inject_depends_duration?: number; // Duration in seconds from scenario start
+  inject_depends_on?: string; // ID of the inject this depends on
+}
+
+export interface ScenarioOverviewAttackPattern {
+  id: string;
+  name: string;
+  externalId: string;
+  description?: string;
+  killChainPhases: string[];
+  contracts: OAEVInjectorContract[];
+}
+
+export interface ScenarioOverviewData {
+  attackPatterns: ScenarioOverviewAttackPattern[];
+  killChainPhases: OAEVKillChainPhase[];
+  pageTitle: string;
+  pageUrl: string;
+  pageDescription: string;
+}
+
 // ============================================================================
 // Message Types (for extension communication)
 // ============================================================================
@@ -631,6 +675,8 @@ export type MessageType =
   // Atomic Testing
   | 'SCAN_ATOMIC_TESTING'
   | 'SHOW_ATOMIC_TESTING_PANEL'
+  | 'ATOMIC_TESTING_SCAN_RESULTS'
+  | 'ATOMIC_TESTING_SELECT'
   | 'FETCH_INJECTOR_CONTRACTS'
   | 'FETCH_OAEV_ASSETS'
   | 'FETCH_OAEV_ASSET_GROUPS'
@@ -649,6 +695,11 @@ export type MessageType =
   | 'OPEN_SCENARIO_PANEL'
   | 'SHOW_SCENARIO_PANEL'
   | 'CREATE_SCENARIO'
+  | 'FETCH_SCENARIO_OVERVIEW'
+  | 'FETCH_KILL_CHAIN_PHASES'
+  | 'FETCH_INJECTOR_CONTRACTS_FOR_ATTACK_PATTERNS'
+  | 'ADD_INJECT_TO_SCENARIO'
+  | 'CREATE_SCENARIO_FROM_PAGE'
   // Unified scan
   | 'SCAN_ALL'
   // AI model management

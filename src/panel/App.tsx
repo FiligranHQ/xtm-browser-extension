@@ -82,7 +82,16 @@ import { formatDate, formatDateTime } from '../shared/utils/formatters';
 
 const log = loggers.panel;
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form';
+
+// Interface for platform match in scan results
+interface ScanResultPlatformMatch {
+  platformId: string;
+  platformType: 'opencti' | 'openaev';
+  entityId?: string;
+  entityData?: any;
+  type: string; // The type with platform prefix if needed
+}
 
 // Interface for scan result entity
 interface ScanResultEntity {
@@ -95,6 +104,8 @@ interface ScanResultEntity {
   platformId?: string;
   platformType?: 'opencti' | 'openaev';
   entityData?: any;
+  // Multi-platform support: track all platforms where this entity was found
+  platformMatches?: ScanResultPlatformMatch[];
 }
 
 // Interface for import results statistics
@@ -231,6 +242,11 @@ const App: React.FC = () => {
   const [entityFromScanResults, setEntityFromScanResults] = useState(false);
   // Scan results entities (from page scan)
   const [scanResultsEntities, setScanResultsEntities] = useState<ScanResultEntity[]>([]);
+  // Ref to track latest scan results for use in event handlers (avoids stale closure)
+  const scanResultsEntitiesRef = React.useRef<ScanResultEntity[]>([]);
+  React.useEffect(() => {
+    scanResultsEntitiesRef.current = scanResultsEntities;
+  }, [scanResultsEntities]);
   const [scanResultsTypeFilter, setScanResultsTypeFilter] = useState<string>('all');
   const [scanResultsFoundFilter, setScanResultsFoundFilter] = useState<'all' | 'found' | 'not-found'>('all');
   // PDF attachment option
@@ -273,6 +289,40 @@ const App: React.FC = () => {
   const [availablePriorities, setAvailablePriorities] = useState<Array<{ id: string; name: string }>>([]);
   const [availableResponseTypes, setAvailableResponseTypes] = useState<Array<{ id: string; name: string }>>([]);
   const [availableAuthors, setAvailableAuthors] = useState<Array<{ id: string; name: string; entity_type: string }>>([]);
+
+  // Scenario creation state (OpenAEV)
+  const [scenarioOverviewData, setScenarioOverviewData] = useState<{
+    attackPatterns: Array<{
+      id: string;
+      name: string;
+      externalId: string;
+      description?: string;
+      killChainPhases: string[];
+      contracts: any[];
+    }>;
+    killChainPhases: Array<{
+      phase_kill_chain_name: string;
+      phase_name: string;
+      phase_order: number;
+    }>;
+    pageTitle: string;
+    pageUrl: string;
+    pageDescription: string;
+  } | null>(null);
+  const [scenarioForm, setScenarioForm] = useState({
+    name: '',
+    description: '',
+    subtitle: '',
+    category: 'attack-scenario',
+  });
+  const [selectedInjects, setSelectedInjects] = useState<Array<{
+    attackPatternId: string;
+    attackPatternName: string;
+    contractId: string;
+    contractLabel: string;
+    delayMinutes: number;
+  }>>([]);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -653,7 +703,10 @@ const App: React.FC = () => {
         const payload = data.payload;
         setEntityContainers([]);
         setEntityFromSearch(false); // Not from search
-        setEntityFromScanResults(false); // Not from scan results list (direct click on highlight)
+        // If scan results exist, allow back navigation to them
+        // Use ref to get latest value (avoids stale closure in event handler)
+        const hasScanResults = scanResultsEntitiesRef.current.length > 0;
+        setEntityFromScanResults(hasScanResults);
         
         // Check if we need to fetch full entity details (SDOs from cache have minimal data)
         const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
@@ -914,7 +967,8 @@ const App: React.FC = () => {
         break;
       }
       // Atomic Testing
-      case 'SHOW_ATOMIC_TESTING_PANEL': {
+      case 'SHOW_ATOMIC_TESTING_PANEL':
+      case 'ATOMIC_TESTING_SCAN_RESULTS': {
         const targets = data.payload?.targets || [];
         setAtomicTestingTargets(targets);
         setSelectedAtomicTarget(null);
@@ -927,20 +981,23 @@ const App: React.FC = () => {
         setAtomicTestingSelectedAssetGroup(null);
         setAtomicTestingSelectedContract(null);
         setAtomicTestingTitle('');
+        setAtomicTestingShowList(true); // Show the list first
         setPanelMode('atomic-testing');
         break;
       }
       case 'ATOMIC_TESTING_SELECT': {
-        // User clicked on a target to select it
+        // User clicked on a target to select it (from highlight or list)
         const target = data.payload;
         setSelectedAtomicTarget(target);
         setAtomicTestingTitle(`Atomic Test - ${target?.name || ''}`);
+        setAtomicTestingShowList(false); // Hide list, show form
         
         // If it's an attack pattern and platform is selected, load injector contracts
-        if (target?.type === 'attack-pattern' && target?.data?.entityId && atomicTestingPlatformId) {
+        if (target?.type === 'attack-pattern' && (target?.data?.entityId || target?.entityId) && atomicTestingPlatformId) {
+          const entityId = target?.entityId || target?.data?.entityId;
           chrome.runtime.sendMessage({
             type: 'FETCH_INJECTOR_CONTRACTS',
-            payload: { attackPatternId: target.data.entityId, platformId: atomicTestingPlatformId },
+            payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
           }).then((res: any) => {
             if (res?.success) {
               setAtomicTestingInjectorContracts(res.data || []);
@@ -967,23 +1024,61 @@ const App: React.FC = () => {
       case 'SCAN_RESULTS': {
         // Receive results from page scan (all detected entities)
         const results = data.payload || {};
-        const allEntities: ScanResultEntity[] = [];
-        const seenKeys = new Set<string>(); // For de-duplication
         
-        // Helper to add entity with de-duplication
-        const addEntity = (entity: ScanResultEntity) => {
-          // Create unique key based on value/name and type (case-insensitive)
-          const key = `${(entity.value || entity.name || '').toLowerCase()}::${entity.type.toLowerCase()}`;
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            allEntities.push(entity);
+        // Map to group entities by their normalized name/value (case-insensitive)
+        // This allows us to track the same entity found in multiple platforms
+        const entityMap = new Map<string, ScanResultEntity>();
+        
+        // Helper to normalize key for grouping (use lowercase name/value only)
+        const getGroupKey = (name: string, value?: string): string => {
+          return (value || name || '').toLowerCase();
+        };
+        
+        // Helper to add entity or merge with existing entry
+        const addOrMergeEntity = (entity: ScanResultEntity) => {
+          const groupKey = getGroupKey(entity.name, entity.value);
+          
+          const platformMatch: ScanResultPlatformMatch = {
+            platformId: entity.platformId || '',
+            platformType: entity.platformType || 'opencti',
+            entityId: entity.entityId,
+            entityData: entity.entityData,
+            type: entity.type,
+          };
+          
+          const existing = entityMap.get(groupKey);
+          if (existing) {
+            // Merge: add this platform to existing entry
+            if (!existing.platformMatches) {
+              existing.platformMatches = [{
+                platformId: existing.platformId || '',
+                platformType: existing.platformType || 'opencti',
+                entityId: existing.entityId,
+                entityData: existing.entityData,
+                type: existing.type,
+              }];
+            }
+            // Only add if not already present (same platformId)
+            if (!existing.platformMatches.some(pm => pm.platformId === platformMatch.platformId)) {
+              existing.platformMatches.push(platformMatch);
+            }
+            // If this is a "found" entry, mark the entity as found
+            if (entity.found) {
+              existing.found = true;
+            }
+          } else {
+            // New entry
+            entityMap.set(groupKey, {
+              ...entity,
+              platformMatches: [platformMatch],
+            });
           }
         };
         
         // Add OpenCTI observables
         if (results.observables) {
           for (const obs of results.observables) {
-            addEntity({
+            addOrMergeEntity({
               id: obs.entityId || obs.id || `obs-${obs.value}`,
               type: obs.type,
               name: obs.value,
@@ -1000,7 +1095,7 @@ const App: React.FC = () => {
         // Add OpenCTI SDOs
         if (results.sdos) {
           for (const sdo of results.sdos) {
-            addEntity({
+            addOrMergeEntity({
               id: sdo.entityId || sdo.id || `sdo-${sdo.name}`,
               type: sdo.type,
               name: sdo.name,
@@ -1017,7 +1112,7 @@ const App: React.FC = () => {
         // Add CVEs
         if (results.cves) {
           for (const cve of results.cves) {
-            addEntity({
+            addOrMergeEntity({
               id: cve.entityId || cve.id || `cve-${cve.name}`,
               type: 'Vulnerability',
               name: cve.name,
@@ -1035,13 +1130,20 @@ const App: React.FC = () => {
         if (results.platformEntities) {
           for (const entity of results.platformEntities) {
             const platformType = entity.platformType || 'openaev';
-            addEntity({
-              id: entity.entityId || entity.id || `${platformType}-${entity.name}`,
-              type: platformType === 'openaev' ? `oaev-${entity.type}` : entity.type,
+            // For OpenAEV entities, extract the proper ID
+            // entity.entityId is already set from scan results
+            // Fall back to extracting from entityData using type-specific field names
+            const entityType = entity.type || '';
+            const oaevEntityId = entity.entityId || (platformType === 'openaev' 
+              ? getOAEVEntityId(entity.entityData || entity, entityType)
+              : entity.id) || '';
+            addOrMergeEntity({
+              id: oaevEntityId || `${platformType}-${entity.name}`,
+              type: platformType === 'openaev' ? `oaev-${entityType}` : entityType,
               name: entity.name,
               value: entity.value || entity.name,
               found: entity.found ?? true,
-              entityId: entity.entityId,
+              entityId: oaevEntityId,
               platformId: entity.platformId,
               platformType: platformType as 'opencti' | 'openaev',
               entityData: entity,
@@ -1049,7 +1151,7 @@ const App: React.FC = () => {
           }
         }
         
-        setScanResultsEntities(allEntities);
+        setScanResultsEntities(Array.from(entityMap.values()));
         setScanResultsTypeFilter('all');
         setScanResultsFoundFilter('all');
         setEntityFromScanResults(false);
@@ -1079,6 +1181,94 @@ const App: React.FC = () => {
         setUnifiedSearchResults([]);
         setPanelMode('unified-search');
         break;
+      case 'SHOW_SCENARIO_PANEL': {
+        // Initialize scenario creation with attack patterns from the page
+        const { attackPatterns, pageTitle, pageUrl, pageDescription, platformId } = data.payload || {};
+        
+        // Store page info
+        setCurrentPageUrl(pageUrl || '');
+        setCurrentPageTitle(pageTitle || '');
+        
+        // Initialize scenario form with page info
+        setScenarioForm({
+          name: pageTitle || 'New Scenario',
+          description: pageDescription || '',
+          subtitle: '',
+          category: 'attack-scenario',
+        });
+        
+        // Set platform if provided
+        if (platformId) {
+          setSelectedPlatformId(platformId);
+          const platform = availablePlatforms.find(p => p.id === platformId);
+          if (platform) {
+            setPlatformUrl(platform.url);
+          }
+        } else {
+          // Default to first OpenAEV platform
+          const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
+          if (oaevPlatforms.length > 0) {
+            setSelectedPlatformId(oaevPlatforms[0].id);
+            setPlatformUrl(oaevPlatforms[0].url);
+          }
+        }
+        
+        // Reset selected injects
+        setSelectedInjects([]);
+        
+        // If attack patterns provided, fetch their details and contracts
+        if (attackPatterns && attackPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          setScenarioLoading(true);
+          setPanelMode('scenario-overview');
+          
+          const attackPatternIds = attackPatterns.map((ap: any) => ap.id || ap.entityId);
+          
+          chrome.runtime.sendMessage({
+            type: 'FETCH_SCENARIO_OVERVIEW',
+            payload: { attackPatternIds, platformId: platformId || selectedPlatformId },
+          }, (response) => {
+            setScenarioLoading(false);
+            if (response?.success && response.data) {
+              setScenarioOverviewData({
+                ...response.data,
+                pageTitle: pageTitle || '',
+                pageUrl: pageUrl || '',
+                pageDescription: pageDescription || '',
+              });
+              
+              // Auto-select one inject per attack pattern (first available contract)
+              const autoSelectedInjects: typeof selectedInjects = [];
+              for (const ap of response.data.attackPatterns) {
+                if (ap.contracts && ap.contracts.length > 0) {
+                  const contract = ap.contracts[0];
+                  const contractLabel = contract.injector_contract_labels?.en || 
+                    contract.injector_contract_labels?.['en-US'] || 
+                    contract.injector_name || 
+                    'Unknown Contract';
+                  autoSelectedInjects.push({
+                    attackPatternId: ap.id,
+                    attackPatternName: ap.name,
+                    contractId: contract.injector_contract_id,
+                    contractLabel,
+                    delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
+                  });
+                }
+              }
+              setSelectedInjects(autoSelectedInjects);
+            }
+          });
+        } else {
+          setScenarioOverviewData({
+            attackPatterns: [],
+            killChainPhases: [],
+            pageTitle: pageTitle || '',
+            pageUrl: pageUrl || '',
+            pageDescription: pageDescription || '',
+          });
+          setPanelMode('scenario-overview');
+        }
+        break;
+      }
       case 'LOADING':
         setPanelMode('loading');
         break;
@@ -2076,13 +2266,31 @@ const App: React.FC = () => {
                           const prevPlatformType = prevPlatform?.type || 'opencti';
                           
                           // Fetch full entity data when switching platforms
+                          // Use the appropriate message type based on platform
                           setPanelMode('loading');
                           try {
+                            const entityDataObj = (prevResult.entity as any).entityData || prevResult.entity;
+                            // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
+                            const rawEntityType = entityDataObj?.entity_type || prevResult.entity.type || prevResult.entity.entity_type || entityDataObj?.type || '';
+                            // Strip oaev- prefix if present for the API call
+                            const entityType = rawEntityType?.replace(/^oaev-/, '');
+                            
+                            // For OpenAEV entities, use the helper function to get the proper ID
+                            // OpenAEV uses type-specific ID fields (e.g., attack_pattern_id, team_id)
+                            const entityId = prevPlatformType === 'openaev'
+                              ? getOAEVEntityId(entityDataObj, entityType) || entityDataObj.id || (prevResult.entity as any).entityId
+                              : prevResult.entity.id || (prevResult.entity as any).entityId || entityDataObj?.id;
+                            
+                            const messageType = prevPlatformType === 'openaev' 
+                              ? 'GET_OAEV_ENTITY_DETAILS' 
+                              : 'GET_ENTITY_DETAILS';
+                            
                             const response = await chrome.runtime.sendMessage({
-                              type: 'GET_ENTITY',
+                              type: messageType,
                               payload: {
-                                entityId: prevResult.entity.id || prevResult.entity.entityId,
-                                entityType: prevResult.entity.type || prevResult.entity.entity_type,
+                                id: entityId,
+                                entityId: entityId,
+                                entityType: entityType,
                                 platformId: prevResult.platformId,
                               },
                             });
@@ -2153,13 +2361,31 @@ const App: React.FC = () => {
                           const nextPlatformType = nextPlatform?.type || 'opencti';
                           
                           // Fetch full entity data when switching platforms
+                          // Use the appropriate message type based on platform
                           setPanelMode('loading');
                           try {
+                            const entityDataObj = (nextResult.entity as any).entityData || nextResult.entity;
+                            // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
+                            const rawEntityType = entityDataObj?.entity_type || nextResult.entity.type || nextResult.entity.entity_type || entityDataObj?.type || '';
+                            // Strip oaev- prefix if present for the API call
+                            const entityType = rawEntityType?.replace(/^oaev-/, '');
+                            
+                            // For OpenAEV entities, use the helper function to get the proper ID
+                            // OpenAEV uses type-specific ID fields (e.g., attack_pattern_id, team_id)
+                            const entityId = nextPlatformType === 'openaev'
+                              ? getOAEVEntityId(entityDataObj, entityType) || entityDataObj.id || (nextResult.entity as any).entityId
+                              : nextResult.entity.id || (nextResult.entity as any).entityId || entityDataObj?.id;
+                            
+                            const messageType = nextPlatformType === 'openaev' 
+                              ? 'GET_OAEV_ENTITY_DETAILS' 
+                              : 'GET_ENTITY_DETAILS';
+                            
                             const response = await chrome.runtime.sendMessage({
-                              type: 'GET_ENTITY',
+                              type: messageType,
                               payload: {
-                                entityId: nextResult.entity.id || nextResult.entity.entityId,
-                                entityType: nextResult.entity.type || nextResult.entity.entity_type,
+                                id: entityId,
+                                entityId: entityId,
+                                entityType: entityType,
                                 platformId: nextResult.platformId,
                               },
                             });
@@ -2969,20 +3195,42 @@ const App: React.FC = () => {
         const platformType = platform?.type || 'opencti';
         
         // Fetch full entity data when switching platforms
+        // Use the appropriate message type based on platform
         setPanelMode('loading');
         try {
+          const entityDataObj = (prevResult.entity as any).entityData || prevResult.entity;
+          // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
+          const rawEntityType = entityDataObj?.entity_type || prevResult.entity.type || prevResult.entity.entity_type || entityDataObj?.type || '';
+          // Strip oaev- prefix if present for the API call
+          const entityType = rawEntityType?.replace(/^oaev-/, '');
+          
+          // For OpenAEV entities, get the ID from multiple possible sources
+          // Priority: entityId on result > getOAEVEntityId helper > id field
+          const entityIdToFetch = platformType === 'openaev'
+            ? (prevResult.entity as any).entityId || getOAEVEntityId(entityDataObj, entityType) || entityDataObj?.id || ''
+            : prevResult.entity.id || (prevResult.entity as any).entityId || entityDataObj?.id;
+          
+          const messageType = platformType === 'openaev' 
+            ? 'GET_OAEV_ENTITY_DETAILS' 
+            : 'GET_ENTITY_DETAILS';
+          
           const response = await chrome.runtime.sendMessage({
-            type: 'GET_ENTITY',
+            type: messageType,
             payload: {
-              entityId: prevResult.entity.id || prevResult.entity.entityId,
-              entityType: prevResult.entity.type || prevResult.entity.entity_type,
+              id: entityIdToFetch,
+              entityId: entityIdToFetch,
+              entityType: entityType,
               platformId: prevResult.platformId,
             },
           });
           
           if (response?.success && response.data) {
+            // Preserve the original type from prevResult.entity for view rendering
+            const originalType = prevResult.entity.type || prevResult.entity.entity_type || '';
             const fullEntity = {
               ...response.data,
+              type: originalType, // Preserve type for view rendering
+              entity_type: originalType.replace(/^oaev-/, ''), // Clean type
               _platformId: prevResult.platformId,
               _platformType: platformType,
               _isNonDefaultPlatform: platformType !== 'opencti',
@@ -3023,20 +3271,42 @@ const App: React.FC = () => {
         const platformType = platform?.type || 'opencti';
         
         // Fetch full entity data when switching platforms
+        // Use the appropriate message type based on platform
         setPanelMode('loading');
         try {
+          const entityDataObj = (nextResult.entity as any).entityData || nextResult.entity;
+          // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
+          const rawEntityType = entityDataObj?.entity_type || nextResult.entity.type || nextResult.entity.entity_type || entityDataObj?.type || '';
+          // Strip oaev- prefix if present for the API call
+          const entityType = rawEntityType?.replace(/^oaev-/, '');
+          
+          // For OpenAEV entities, get the ID from multiple possible sources
+          // Priority: entityId on result > getOAEVEntityId helper > id field
+          const entityIdToFetch = platformType === 'openaev'
+            ? (nextResult.entity as any).entityId || getOAEVEntityId(entityDataObj, entityType) || entityDataObj?.id || ''
+            : nextResult.entity.id || (nextResult.entity as any).entityId || entityDataObj?.id;
+          
+          const messageType = platformType === 'openaev' 
+            ? 'GET_OAEV_ENTITY_DETAILS' 
+            : 'GET_ENTITY_DETAILS';
+          
           const response = await chrome.runtime.sendMessage({
-            type: 'GET_ENTITY',
+            type: messageType,
             payload: {
-              entityId: nextResult.entity.id || nextResult.entity.entityId,
-              entityType: nextResult.entity.type || nextResult.entity.entity_type,
+              id: entityIdToFetch,
+              entityId: entityIdToFetch,
+              entityType: entityType,
               platformId: nextResult.platformId,
             },
           });
           
           if (response?.success && response.data) {
+            // Preserve the original type from nextResult.entity for view rendering
+            const originalType = nextResult.entity.type || nextResult.entity.entity_type || '';
             const fullEntity = {
               ...response.data,
+              type: originalType, // Preserve type for view rendering
+              entity_type: originalType.replace(/^oaev-/, ''), // Clean type
               _platformId: nextResult.platformId,
               _platformType: platformType,
               _isNonDefaultPlatform: platformType !== 'opencti',
@@ -3968,7 +4238,7 @@ const App: React.FC = () => {
                         height: 32,
                         borderRadius: '50%',
                         bgcolor: color,
-                        color: 'white',
+                        color: mode === 'dark' ? '#1a1a2e' : 'white', // Dark text on light bg in dark mode
                         fontWeight: 700,
                         fontSize: 14,
                       }}
@@ -5528,69 +5798,179 @@ const App: React.FC = () => {
         entityData: entity.entityData,
       });
       setEntityFromScanResults(true);
+      setMultiPlatformResults([]);
       setPanelMode('not-found');
       return;
     }
     
     // Found entity - show entity overview
-    const platformType = entity.platformType || (entity.type.startsWith('oaev-') ? 'openaev' : 'opencti');
-    const actualType = entity.type.replace('oaev-', '');
+    // Use the first platform match if available, otherwise use entity's platform
+    const firstMatch = entity.platformMatches?.[0];
+    const platformType = firstMatch?.platformType || entity.platformType || (entity.type.startsWith('oaev-') ? 'openaev' : 'opencti');
+    const entityType = firstMatch?.type || entity.type;
+    const actualType = entityType.replace('oaev-', '');
+    const entityId = firstMatch?.entityId || entity.entityId || entity.id;
+    const platformId = firstMatch?.platformId || entity.platformId;
     
     setEntityFromScanResults(true);
-    setEntity({
-      id: entity.entityId || entity.id,
-      entityId: entity.entityId || entity.id,
-      type: entity.type,
-      entity_type: entity.type,
-      name: entity.name,
-      value: entity.value,
-      existsInPlatform: true,
-      platformId: entity.platformId,
-      _platformId: entity.platformId,
-      _platformType: platformType,
-      _isNonDefaultPlatform: platformType !== 'opencti',
-      entityData: entity.entityData,
-    });
     
-    // Fetch full entity details if we have an ID
-    if (entity.entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      setPanelMode('loading');
-      try {
-        const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
-        const response = await chrome.runtime.sendMessage({
-          type: messageType,
-          payload: {
-            id: entity.entityId,
-            entityId: entity.entityId,
-            entityType: actualType,
-            platformId: entity.platformId,
-          },
-        });
-        
-        if (response?.success && response.data) {
-          setEntity({
-            ...response.data,
-            id: entity.entityId,
-            entityId: entity.entityId,
-            type: entity.type,
-            entity_type: entity.type,
-            name: entity.name || response.data.name,
+    // Set up multi-platform results for navigation if entity exists in multiple platforms
+    if (entity.platformMatches && entity.platformMatches.length > 1) {
+      const multiResults = entity.platformMatches.map(match => {
+        const platform = availablePlatforms.find(p => p.id === match.platformId);
+        // Clean type without oaev- prefix for API calls
+        const cleanType = match.type.replace(/^oaev-/, '');
+        return {
+          platformId: match.platformId,
+          platformName: platform?.name || match.platformId,
+          entity: {
+            id: match.entityId,
+            entityId: match.entityId,
+            type: match.type, // Prefixed type for display
+            entity_type: cleanType, // Clean type for API calls
+            name: entity.name,
             value: entity.value,
             existsInPlatform: true,
-            platformId: entity.platformId,
-            _platformId: entity.platformId,
-            _platformType: platformType,
-            _isNonDefaultPlatform: platformType !== 'opencti',
-            entityData: response.data,
+            platformId: match.platformId,
+            _platformId: match.platformId,
+            _platformType: match.platformType,
+            _isNonDefaultPlatform: match.platformType !== 'opencti',
+            entityData: {
+              ...match.entityData,
+              entity_type: cleanType, // Also include in entityData for navigation handlers
+            },
+          } as EntityData,
+        };
+      });
+      // Sort: OpenCTI first
+      const sorted = sortPlatformResults(multiResults);
+      setMultiPlatformResults(sorted);
+      setCurrentPlatformIndex(0);
+      
+      // Use the first sorted result
+      const firstResult = sorted[0];
+      const firstPlatformType = firstResult.entity._platformType || 'opencti';
+      const firstEntityType = (firstResult.entity.type || '').replace('oaev-', '');
+      const firstEntityId = String(firstResult.entity.entityId || firstResult.entity.id || '');
+      
+      setEntity({
+        id: firstEntityId,
+        entityId: firstEntityId,
+        type: firstResult.entity.type,
+        entity_type: firstResult.entity.type,
+        name: entity.name,
+        value: entity.value,
+        existsInPlatform: true,
+        platformId: firstResult.platformId,
+        _platformId: firstResult.platformId,
+        _platformType: firstPlatformType,
+        _isNonDefaultPlatform: firstPlatformType !== 'opencti',
+        entityData: firstResult.entity.entityData,
+      });
+      
+      // Fetch full entity details for the first platform
+      if (firstResult.entity.entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        setPanelMode('loading');
+        try {
+          const messageType = firstPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+          const response = await chrome.runtime.sendMessage({
+            type: messageType,
+            payload: {
+              id: firstResult.entity.entityId,
+              entityId: firstResult.entity.entityId,
+              entityType: firstEntityType,
+              platformId: firstResult.platformId,
+            },
           });
+          
+          if (response?.success && response.data) {
+            const fullEntity = {
+              ...response.data,
+              id: firstResult.entity.entityId,
+              entityId: firstResult.entity.entityId,
+              type: firstResult.entity.type,
+              entity_type: firstResult.entity.type,
+              name: entity.name || response.data.name,
+              value: entity.value,
+              existsInPlatform: true,
+              platformId: firstResult.platformId,
+              _platformId: firstResult.platformId,
+              _platformType: firstPlatformType,
+              _isNonDefaultPlatform: firstPlatformType !== 'opencti',
+              entityData: response.data,
+            };
+            setEntity(fullEntity);
+            // Update multiPlatformResults with full data
+            setMultiPlatformResults(prev => prev.map((r, i) => 
+              i === 0 ? { ...r, entity: fullEntity as EntityData } : r
+            ));
+          }
+          setPanelMode('entity');
+        } catch (error) {
+          log.error(' Failed to fetch entity details:', error);
+          setPanelMode('entity');
         }
-        setPanelMode('entity');
-      } catch (error) {
-        log.error(' Failed to fetch entity details:', error);
+      } else {
         setPanelMode('entity');
       }
     } else {
-      setPanelMode('entity');
+      // Single platform - no multi-platform navigation
+      setMultiPlatformResults([]);
+      setEntity({
+        id: entityId,
+        entityId: entityId,
+        type: entityType,
+        entity_type: entityType,
+        name: entity.name,
+        value: entity.value,
+        existsInPlatform: true,
+        platformId: platformId,
+        _platformId: platformId,
+        _platformType: platformType,
+        _isNonDefaultPlatform: platformType !== 'opencti',
+        entityData: entity.entityData,
+      });
+      
+      // Fetch full entity details if we have an ID
+      if (entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        setPanelMode('loading');
+        try {
+          const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+          const response = await chrome.runtime.sendMessage({
+            type: messageType,
+            payload: {
+              id: entityId,
+              entityId: entityId,
+              entityType: actualType,
+              platformId: platformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            setEntity({
+              ...response.data,
+              id: entityId,
+              entityId: entityId,
+              type: entityType,
+              entity_type: entityType,
+              name: entity.name || response.data.name,
+              value: entity.value,
+              existsInPlatform: true,
+              platformId: platformId,
+              _platformId: platformId,
+              _platformType: platformType,
+              _isNonDefaultPlatform: platformType !== 'opencti',
+              entityData: response.data,
+            });
+          }
+          setPanelMode('entity');
+        } catch (error) {
+          log.error(' Failed to fetch entity details:', error);
+          setPanelMode('entity');
+        }
+      } else {
+        setPanelMode('entity');
+      }
     }
   };
 
@@ -5605,15 +5985,6 @@ const App: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
             Scan Results
           </Typography>
-          <IconButton 
-            size="small" 
-            onClick={() => {
-              setScanResultsEntities([]);
-              setPanelMode('empty');
-            }}
-          >
-            <CloseOutlined fontSize="small" />
-          </IconButton>
         </Box>
         
         {scanResultsEntities.length === 0 ? (
@@ -5724,8 +6095,12 @@ const App: React.FC = () => {
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               {filteredScanResultsEntities.map((entity, index) => {
                 const entityColor = itemColor(entity.type, mode === 'dark');
-                const isOpenAEV = entity.platformType === 'openaev' || entity.type.startsWith('oaev-');
                 const displayType = entity.type.replace('oaev-', '');
+                
+                // Count platforms by type
+                const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
+                const oaevCount = entity.platformMatches?.filter(pm => pm.platformType === 'openaev').length || 0;
+                const hasMultiplePlatforms = (entity.platformMatches?.length || 0) > 1;
                 
                 return (
                   <Paper
@@ -5756,21 +6131,40 @@ const App: React.FC = () => {
                       <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                         {entity.name || entity.value}
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                           {displayType.replace(/-/g, ' ')}
                         </Typography>
-                        {isOpenAEV && (
-                          <Chip 
-                            label="OpenAEV" 
-                            size="small" 
-                            sx={{ 
-                              height: 16, 
-                              fontSize: '0.65rem',
-                              bgcolor: hexToRGB('#00bcd4', 0.2),
-                              color: '#00bcd4',
-                            }} 
-                          />
+                        {/* Show platform counts */}
+                        {(octiCount > 0 || oaevCount > 0) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
+                            {octiCount > 0 && (
+                              <Chip 
+                                label={`OCTI${hasMultiplePlatforms ? ` (${octiCount})` : ''}`}
+                                size="small" 
+                                sx={{ 
+                                  height: 16, 
+                                  fontSize: '0.6rem',
+                                  bgcolor: hexToRGB('#ff9800', 0.2),
+                                  color: '#ff9800',
+                                  '& .MuiChip-label': { px: 0.75 },
+                                }} 
+                              />
+                            )}
+                            {oaevCount > 0 && (
+                              <Chip 
+                                label={`OAEV${hasMultiplePlatforms ? ` (${oaevCount})` : ''}`}
+                                size="small" 
+                                sx={{ 
+                                  height: 16, 
+                                  fontSize: '0.6rem',
+                                  bgcolor: hexToRGB('#00bcd4', 0.2),
+                                  color: '#00bcd4',
+                                  '& .MuiChip-label': { px: 0.75 },
+                                }} 
+                              />
+                            )}
+                          </Box>
                         )}
                       </Box>
                     </Box>
@@ -5801,14 +6195,19 @@ const App: React.FC = () => {
     type: string;
     value: string;
     name: string;
+    entityId?: string;
+    platformId?: string;
     data: any;
   }>>([]);
   const [selectedAtomicTarget, setSelectedAtomicTarget] = useState<{
     type: string;
     value: string;
     name: string;
+    entityId?: string;
+    platformId?: string;
     data: any;
   } | null>(null);
+  const [atomicTestingShowList, setAtomicTestingShowList] = useState(true); // Show target list first
   const [atomicTestingPlatformId, setAtomicTestingPlatformId] = useState<string | null>(null);
   const [atomicTestingPlatformSelected, setAtomicTestingPlatformSelected] = useState(false);
   const [atomicTestingTargetType, setAtomicTestingTargetType] = useState<'asset' | 'asset_group'>('asset');
@@ -5956,6 +6355,7 @@ const App: React.FC = () => {
   const resetAtomicTesting = () => {
     setAtomicTestingTargets([]);
     setSelectedAtomicTarget(null);
+    setAtomicTestingShowList(true);
     setAtomicTestingPlatformId(null);
     setAtomicTestingPlatformSelected(false);
     setAtomicTestingAssets([]);
@@ -5975,17 +6375,37 @@ const App: React.FC = () => {
     });
   };
   
+  // Handle selecting a target from the list
+  const handleSelectAtomicTargetFromList = (target: typeof atomicTestingTargets[0]) => {
+    setSelectedAtomicTarget(target);
+    setAtomicTestingTitle(`Atomic Test - ${target.name}`);
+    setAtomicTestingShowList(false);
+    
+    // If it's an attack pattern and platform is selected, load injector contracts
+    const entityId = target.entityId || target.data?.entityId;
+    if (target.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
+      chrome.runtime.sendMessage({
+        type: 'FETCH_INJECTOR_CONTRACTS',
+        payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
+      }).then((res: any) => {
+        if (res?.success) {
+          setAtomicTestingInjectorContracts(res.data || []);
+        }
+      });
+    }
+  };
+  
   const renderAtomicTestingView = () => {
+    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
+    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    
     // Step 1: Platform selection (if multiple OpenAEV platforms)
     if (openaevPlatforms.length > 1 && !atomicTestingPlatformSelected) {
       return (
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <BugReportOutlined sx={{ color: '#f44336' }} />
+            <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
             <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
-            <IconButton size="small" onClick={resetAtomicTesting}>
-              <CloseOutlined fontSize="small" />
-            </IconButton>
           </Box>
           
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -6010,14 +6430,7 @@ const App: React.FC = () => {
                   '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
                 }}
               >
-                <img 
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`)
-                    : `../assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`
-                  } 
-                  alt="OpenAEV" 
-                  style={{ width: 24, height: 24 }} 
-                />
+                <img src={openaevLogoPath} alt="OpenAEV" style={{ width: 24, height: 24 }} />
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>
                     {platform.name}
@@ -6039,15 +6452,189 @@ const App: React.FC = () => {
       handleSelectAtomicTestingPlatform(openaevPlatforms[0].id);
     }
     
-    // Step 2: Show form once platform is selected
+    // Step 2: Show list of found targets (like scan results)
+    if (atomicTestingShowList && atomicTestingPlatformSelected) {
+      const attackPatterns = atomicTestingTargets.filter(t => t.type === 'attack-pattern');
+      const domains = atomicTestingTargets.filter(t => t.type === 'Domain-Name' || t.type === 'domain');
+      const hostnames = atomicTestingTargets.filter(t => t.type === 'Hostname' || t.type === 'hostname');
+      
+      return (
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
+            <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
+          </Box>
+          
+          {/* Stats */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <Box sx={{ flex: 1, p: 1.5, borderRadius: 1, bgcolor: 'action.hover', textAlign: 'center' }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: '#f44336' }}>
+                {atomicTestingTargets.length}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Targets Found
+              </Typography>
+            </Box>
+          </Box>
+          
+          {atomicTestingTargets.length === 0 ? (
+            <Alert severity="info">
+              No attack patterns or domains found on this page
+            </Alert>
+          ) : (
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {/* Attack Patterns */}
+              {attackPatterns.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
+                    Attack Patterns ({attackPatterns.length})
+                  </Typography>
+                  {attackPatterns.map((target, i) => (
+                    <Paper
+                      key={`ap-${i}`}
+                      onClick={() => handleSelectAtomicTargetFromList(target)}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        mb: 1,
+                        cursor: 'pointer',
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        transition: 'all 0.15s',
+                        '&:hover': { 
+                          bgcolor: 'action.hover',
+                          borderColor: '#f44336',
+                        },
+                      }}
+                    >
+                      <SecurityOutlined sx={{ fontSize: 20, color: '#d4e157' }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                          {target.name}
+                        </Typography>
+                        {target.data?.attack_pattern_external_id && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {target.data.attack_pattern_external_id}
+                          </Typography>
+                        )}
+                      </Box>
+                      <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Paper>
+                  ))}
+                </>
+              )}
+              
+              {/* Domains */}
+              {domains.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 600, color: 'text.secondary' }}>
+                    Domains ({domains.length})
+                  </Typography>
+                  {domains.map((target, i) => (
+                    <Paper
+                      key={`domain-${i}`}
+                      onClick={() => handleSelectAtomicTargetFromList(target)}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        mb: 1,
+                        cursor: 'pointer',
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        transition: 'all 0.15s',
+                        '&:hover': { 
+                          bgcolor: 'action.hover',
+                          borderColor: '#f44336',
+                        },
+                      }}
+                    >
+                      <LanguageOutlined sx={{ fontSize: 20, color: '#00bcd4' }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                          {target.value}
+                        </Typography>
+                      </Box>
+                      <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Paper>
+                  ))}
+                </>
+              )}
+              
+              {/* Hostnames */}
+              {hostnames.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 600, color: 'text.secondary' }}>
+                    Hostnames ({hostnames.length})
+                  </Typography>
+                  {hostnames.map((target, i) => (
+                    <Paper
+                      key={`hostname-${i}`}
+                      onClick={() => handleSelectAtomicTargetFromList(target)}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        mb: 1,
+                        cursor: 'pointer',
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        transition: 'all 0.15s',
+                        '&:hover': { 
+                          bgcolor: 'action.hover',
+                          borderColor: '#f44336',
+                        },
+                      }}
+                    >
+                      <DnsOutlined sx={{ fontSize: 20, color: '#9c27b0' }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                          {target.value}
+                        </Typography>
+                      </Box>
+                      <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Paper>
+                  ))}
+                </>
+              )}
+            </Box>
+          )}
+          
+          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, textAlign: 'center' }}>
+            Select a target from the list or click on a highlight on the page
+          </Typography>
+        </Box>
+      );
+    }
+    
+    // Step 3: Show form once target is selected
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <BugReportOutlined sx={{ color: '#f44336' }} />
+          <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
-          <IconButton size="small" onClick={resetAtomicTesting}>
-            <CloseOutlined fontSize="small" />
-          </IconButton>
+          {atomicTestingTargets.length > 0 && (
+            <Button 
+              size="small" 
+              startIcon={<ArrowBackOutlined />}
+              onClick={() => {
+                setSelectedAtomicTarget(null);
+                setAtomicTestingShowList(true);
+              }}
+            >
+              Back
+            </Button>
+          )}
         </Box>
         
         {/* Target Info */}
@@ -6056,12 +6643,12 @@ const App: React.FC = () => {
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Selected Target</Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAtomicTarget.name}</Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
-              {selectedAtomicTarget.type.replace('-', ' ')}
+              {selectedAtomicTarget.type.replace('-', ' ').replace('_', ' ')}
             </Typography>
           </Paper>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Click on a highlighted target on the page to select it for atomic testing
+            Click on a highlighted target on the page or select from the list
           </Alert>
         )}
         
@@ -6140,9 +6727,10 @@ const App: React.FC = () => {
             )}
             
             {/* Info for domain/hostname */}
-            {(selectedAtomicTarget.type === 'domain' || selectedAtomicTarget.type === 'hostname') && (
+            {(selectedAtomicTarget.type === 'Domain-Name' || selectedAtomicTarget.type === 'domain' || 
+              selectedAtomicTarget.type === 'Hostname' || selectedAtomicTarget.type === 'hostname') && (
               <Alert severity="info" sx={{ fontSize: 12 }}>
-                A DNS Resolution payload will be created automatically for this {selectedAtomicTarget.type}.
+                A DNS Resolution payload will be created automatically for this {selectedAtomicTarget.type.toLowerCase().replace('-', ' ')}.
               </Alert>
             )}
             
@@ -6568,6 +7156,405 @@ const App: React.FC = () => {
     );
   };
 
+  // ============================================================================
+  // Scenario Creation Views (OpenAEV)
+  // ============================================================================
+  
+  const handleCreateScenario = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setSubmitting(true);
+    
+    try {
+      // First create the scenario
+      const scenarioResponse = await chrome.runtime.sendMessage({
+        type: 'CREATE_SCENARIO',
+        payload: {
+          name: scenarioForm.name,
+          description: scenarioForm.description,
+          subtitle: scenarioForm.subtitle,
+          category: scenarioForm.category,
+          platformId: selectedPlatformId,
+        },
+      });
+      
+      if (!scenarioResponse?.success || !scenarioResponse.data) {
+        log.error(' Scenario creation failed:', scenarioResponse?.error);
+        setSubmitting(false);
+        return;
+      }
+      
+      const scenario = scenarioResponse.data;
+      log.info(' Scenario created:', scenario.scenario_id);
+      
+      // Add selected injects to the scenario
+      let previousInjectId: string | null = null;
+      for (const inject of selectedInjects) {
+        const injectPayload: any = {
+          inject_title: `${inject.attackPatternName} - ${inject.contractLabel}`,
+          inject_description: `Inject for ${inject.attackPatternName}`,
+          inject_injector_contract: inject.contractId,
+          inject_depends_duration: inject.delayMinutes * 60, // Convert to seconds
+        };
+        
+        // Chain injects if there's a previous one
+        if (previousInjectId) {
+          injectPayload.inject_depends_on = previousInjectId;
+        }
+        
+        const injectResponse = await chrome.runtime.sendMessage({
+          type: 'ADD_INJECT_TO_SCENARIO',
+          payload: {
+            scenarioId: scenario.scenario_id,
+            inject: injectPayload,
+            platformId: selectedPlatformId,
+          },
+        });
+        
+        if (injectResponse?.success && injectResponse.data?.inject_id) {
+          previousInjectId = injectResponse.data.inject_id;
+        }
+      }
+      
+      // Open the scenario in the platform
+      if (scenario.url) {
+        chrome.tabs.create({ url: scenario.url });
+      }
+      
+      // Reset and close
+      setScenarioForm({ name: '', description: '', subtitle: '', category: 'attack-scenario' });
+      setSelectedInjects([]);
+      setScenarioOverviewData(null);
+      handleClose();
+    } catch (error) {
+      log.error(' Scenario creation error:', error);
+    }
+    
+    setSubmitting(false);
+  };
+  
+  const renderScenarioOverviewView = () => {
+    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
+    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    
+    return (
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Create Scenario
+          </Typography>
+        </Box>
+        
+        {/* Stepper */}
+        <Stepper activeStep={0} sx={{ mb: 3 }}>
+          <Step>
+            <StepLabel>Select Injects</StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>Configure Details</StepLabel>
+          </Step>
+        </Stepper>
+        
+        {scenarioLoading ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 2 }}>
+            <CircularProgress size={40} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Loading attack patterns and inject contracts...
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Attack Patterns List */}
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
+            </Typography>
+            
+            {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                No attack patterns found on this page. You can still create an empty scenario.
+              </Alert>
+            ) : (
+              <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+                {scenarioOverviewData.attackPatterns.map((ap) => (
+                  <Paper
+                    key={ap.id}
+                    elevation={0}
+                    sx={{
+                      p: 1.5,
+                      mb: 1,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                    }}
+                  >
+                    {/* Attack Pattern Header */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <SecurityOutlined sx={{ fontSize: 18, color: '#d4e157' }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                        {ap.name}
+                      </Typography>
+                      <Chip 
+                        label={ap.externalId} 
+                        size="small" 
+                        sx={{ fontSize: 10, height: 20 }} 
+                      />
+                    </Box>
+                    
+                    {/* Kill Chain Phases */}
+                    {ap.killChainPhases && ap.killChainPhases.length > 0 && (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                        {ap.killChainPhases.map((phase, i) => (
+                          <Chip
+                            key={i}
+                            label={phase}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: 9, height: 18 }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                    
+                    {/* Available Contracts */}
+                    {ap.contracts && ap.contracts.length > 0 ? (
+                      <TextField
+                        select
+                        label="Select Inject Contract"
+                        size="small"
+                        fullWidth
+                        value={selectedInjects.find(i => i.attackPatternId === ap.id)?.contractId || ''}
+                        onChange={(e) => {
+                          const contractId = e.target.value;
+                          if (!contractId) {
+                            // Remove this attack pattern's inject
+                            setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                          } else {
+                            const contract = ap.contracts.find((c: any) => c.injector_contract_id === contractId);
+                            const contractLabel = contract?.injector_contract_labels?.en || 
+                              contract?.injector_contract_labels?.['en-US'] || 
+                              contract?.injector_name || 
+                              'Unknown';
+                            
+                            setSelectedInjects(prev => {
+                              const existing = prev.findIndex(i => i.attackPatternId === ap.id);
+                              const newInject = {
+                                attackPatternId: ap.id,
+                                attackPatternName: ap.name,
+                                contractId,
+                                contractLabel,
+                                delayMinutes: existing >= 0 ? prev[existing].delayMinutes : prev.length * 10,
+                              };
+                              
+                              if (existing >= 0) {
+                                const updated = [...prev];
+                                updated[existing] = newInject;
+                                return updated;
+                              }
+                              return [...prev, newInject];
+                            });
+                          }
+                        }}
+                        sx={{ mt: 1 }}
+                      >
+                        <MenuItem value="">
+                          <em>Skip this attack pattern</em>
+                        </MenuItem>
+                        {ap.contracts.map((contract: any) => {
+                          const label = contract.injector_contract_labels?.en || 
+                            contract.injector_contract_labels?.['en-US'] || 
+                            contract.injector_name || 
+                            'Unknown Contract';
+                          return (
+                            <MenuItem key={contract.injector_contract_id} value={contract.injector_contract_id}>
+                              {label}
+                            </MenuItem>
+                          );
+                        })}
+                      </TextField>
+                    ) : (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                        No inject contracts available for this attack pattern
+                      </Typography>
+                    )}
+                  </Paper>
+                ))}
+              </Box>
+            )}
+            
+            {/* Summary */}
+            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {selectedInjects.length} inject{selectedInjects.length !== 1 ? 's' : ''} selected
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Total scenario duration: ~{selectedInjects.length > 0 ? (selectedInjects.length - 1) * 10 : 0} minutes
+              </Typography>
+            </Box>
+            
+            {/* Actions */}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                onClick={handleClose}
+                sx={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => setPanelMode('scenario-form')}
+                endIcon={<ArrowForwardOutlined />}
+                sx={{ flex: 1 }}
+              >
+                Next
+              </Button>
+            </Box>
+          </>
+        )}
+      </Box>
+    );
+  };
+  
+  const renderScenarioFormView = () => {
+    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
+    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    
+    const categories = [
+      { value: 'attack-scenario', label: 'Attack Scenario' },
+      { value: 'incident-response', label: 'Incident Response' },
+      { value: 'detection-validation', label: 'Detection Validation' },
+      { value: 'red-team', label: 'Red Team' },
+      { value: 'purple-team', label: 'Purple Team' },
+    ];
+    
+    return (
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Create Scenario
+          </Typography>
+        </Box>
+        
+        {/* Stepper */}
+        <Stepper activeStep={1} sx={{ mb: 3 }}>
+          <Step>
+            <StepLabel>Select Injects</StepLabel>
+          </Step>
+          <Step>
+            <StepLabel>Configure Details</StepLabel>
+          </Step>
+        </Stepper>
+        
+        {/* Form */}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <TextField
+            label="Scenario Name"
+            value={scenarioForm.name}
+            onChange={(e) => setScenarioForm(prev => ({ ...prev, name: e.target.value }))}
+            fullWidth
+            required
+            sx={{ mb: 2 }}
+          />
+          
+          <TextField
+            label="Subtitle"
+            value={scenarioForm.subtitle}
+            onChange={(e) => setScenarioForm(prev => ({ ...prev, subtitle: e.target.value }))}
+            fullWidth
+            placeholder="Short tagline for the scenario"
+            sx={{ mb: 2 }}
+          />
+          
+          <TextField
+            select
+            label="Category"
+            value={scenarioForm.category}
+            onChange={(e) => setScenarioForm(prev => ({ ...prev, category: e.target.value }))}
+            fullWidth
+            sx={{ mb: 2 }}
+          >
+            {categories.map((cat) => (
+              <MenuItem key={cat.value} value={cat.value}>
+                {cat.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          
+          <TextField
+            label="Description"
+            value={scenarioForm.description}
+            onChange={(e) => setScenarioForm(prev => ({ ...prev, description: e.target.value }))}
+            fullWidth
+            multiline
+            rows={6}
+            placeholder="Detailed description of the scenario..."
+            sx={{ mb: 2 }}
+          />
+          
+          {/* Inject Timeline Preview */}
+          {selectedInjects.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Inject Timeline ({selectedInjects.length})
+              </Typography>
+              <Box sx={{ pl: 2, borderLeft: 2, borderColor: 'primary.main' }}>
+                {selectedInjects.map((inject, index) => (
+                  <Box key={inject.contractId} sx={{ mb: 1.5, position: 'relative' }}>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        left: -11,
+                        top: 4,
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        bgcolor: 'primary.main',
+                      }}
+                    />
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      +{inject.delayMinutes} min
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {inject.attackPatternName}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {inject.contractLabel}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
+        
+        {/* Actions */}
+        <Box sx={{ display: 'flex', gap: 1, pt: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={() => setPanelMode('scenario-overview')}
+            startIcon={<ArrowBackOutlined />}
+            sx={{ flex: 1 }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateScenario}
+            disabled={!scenarioForm.name || submitting}
+            endIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <ArrowForwardOutlined />}
+            sx={{ flex: 1 }}
+          >
+            Create Scenario
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
   const renderEmptyView = () => (
     <Box
       sx={{
@@ -6640,6 +7627,10 @@ const App: React.FC = () => {
         return renderOAEVSearchView();
       case 'unified-search':
         return renderUnifiedSearchView();
+      case 'scenario-overview':
+        return renderScenarioOverviewView();
+      case 'scenario-form':
+        return renderScenarioFormView();
       case 'loading':
         return renderLoadingView();
       default:

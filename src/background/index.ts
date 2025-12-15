@@ -1487,6 +1487,173 @@ async function handleMessage(
         break;
       }
       
+      // ============================================================================
+      // Scenario Creation (OpenAEV)
+      // ============================================================================
+      
+      case 'FETCH_KILL_CHAIN_PHASES': {
+        const { platformId } = message.payload as { platformId?: string } || {};
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const phases = await client.getKillChainPhases();
+          sendResponse(successResponse(phases));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch kill chain phases',
+          });
+        }
+        break;
+      }
+      
+      case 'FETCH_INJECTOR_CONTRACTS_FOR_ATTACK_PATTERNS': {
+        const { attackPatternIds, platformId } = message.payload as {
+          attackPatternIds: string[];
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const contractsMap = await client.getInjectorContractsForAttackPatterns(attackPatternIds);
+          // Convert Map to plain object for serialization
+          const contractsObj: Record<string, any[]> = {};
+          contractsMap.forEach((contracts, apId) => {
+            contractsObj[apId] = contracts;
+          });
+          sendResponse(successResponse(contractsObj));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch injector contracts',
+          });
+        }
+        break;
+      }
+      
+      case 'FETCH_SCENARIO_OVERVIEW': {
+        // Fetch attack patterns with their kill chain phases and available inject contracts
+        const { attackPatternIds, platformId } = message.payload as {
+          attackPatternIds: string[];
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          // Fetch attack patterns with full details
+          const attackPatterns = await Promise.all(
+            attackPatternIds.map(async (id) => {
+              const ap = await client.getAttackPattern(id);
+              const contracts = await client.searchInjectorContracts(id);
+              return {
+                id,
+                name: ap?.attack_pattern_name || 'Unknown',
+                externalId: ap?.attack_pattern_external_id || '',
+                description: ap?.attack_pattern_description || '',
+                killChainPhases: ap?.attack_pattern_kill_chain_phases || [],
+                contracts,
+              };
+            })
+          );
+          
+          // Get all kill chain phases for reference
+          const killChainPhases = await client.getKillChainPhases();
+          
+          sendResponse(successResponse({
+            attackPatterns,
+            killChainPhases,
+          }));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch scenario overview',
+          });
+        }
+        break;
+      }
+      
+      case 'CREATE_SCENARIO': {
+        const { name, description, subtitle, category, platformId } = message.payload as {
+          name: string;
+          description?: string;
+          subtitle?: string;
+          category?: string;
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const scenario = await client.createScenario({
+            scenario_name: name,
+            scenario_description: description,
+            scenario_subtitle: subtitle,
+            scenario_category: category,
+          });
+          
+          // Return with URL
+          const url = client.getScenarioUrl(scenario.scenario_id);
+          sendResponse({ success: true, data: { ...scenario, url } });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to create scenario',
+          });
+        }
+        break;
+      }
+      
+      case 'ADD_INJECT_TO_SCENARIO': {
+        const { scenarioId, inject, platformId } = message.payload as {
+          scenarioId: string;
+          inject: {
+            inject_title: string;
+            inject_description?: string;
+            inject_injector_contract: string;
+            inject_content?: Record<string, any>;
+            inject_depends_duration?: number;
+            inject_depends_on?: string;
+          };
+          platformId?: string;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const result = await client.addInjectToScenario(scenarioId, inject);
+          sendResponse(successResponse(result));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to add inject to scenario',
+          });
+        }
+        break;
+      }
+      
       case 'GET_ENTITY_DETAILS': {
         if (openCTIClients.size === 0) {
           sendResponse(errorResponse('Not configured'));

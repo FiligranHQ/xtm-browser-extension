@@ -1111,16 +1111,15 @@ const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     NON-DEFAULT PLATFORM ENTITIES
-     Generic styling for entities from non-OpenCTI platforms
-     Uses platform-specific colors via class modifiers
+     NON-DEFAULT PLATFORM ENTITIES (OpenAEV, OpenGRC, etc.)
+     Uses same green color as OpenCTI for consistency
      ======================================== */
   
-  /* Generic platform entity found - purple style (default for non-OpenCTI) */
+  /* Generic platform entity found - green style (consistent with OpenCTI) */
   .xtm-highlight.xtm-platform-found {
-    background: rgba(156, 39, 176, 0.25) !important;
-    border: 2px solid #9c27b0 !important;
-    border-color: #9c27b0 !important;
+    background: rgba(0, 200, 83, 0.25) !important;
+    border: 2px solid #4caf50 !important;
+    border-color: #4caf50 !important;
   }
   
   .xtm-highlight.xtm-platform-found::after {
@@ -1131,7 +1130,7 @@ const HIGHLIGHT_STYLES = `
     transform: translateY(-50%) !important;
     width: 14px !important;
     height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239c27b0'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
     background-size: contain !important;
     background-repeat: no-repeat !important;
     display: block !important;
@@ -1141,16 +1140,16 @@ const HIGHLIGHT_STYLES = `
   }
   
   .xtm-highlight.xtm-platform-found:hover {
-    background: rgba(156, 39, 176, 0.4) !important;
-    border-color: #7b1fa2 !important;
-    box-shadow: 0 0 8px rgba(156, 39, 176, 0.5) !important;
+    background: rgba(0, 200, 83, 0.4) !important;
+    border-color: #2e7d32 !important;
+    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
   }
   
-  /* Legacy OpenAEV class - kept for backward compatibility */
+  /* OpenAEV entity found highlight - green (consistent with OpenCTI) */
   .xtm-highlight.xtm-oaev-found {
-    background: rgba(156, 39, 176, 0.25) !important;
-    border: 2px solid #9c27b0 !important;
-    border-color: #9c27b0 !important;
+    background: rgba(0, 200, 83, 0.25) !important;
+    border: 2px solid #4caf50 !important;
+    border-color: #4caf50 !important;
   }
   
   .xtm-highlight.xtm-oaev-found::after {
@@ -1161,7 +1160,7 @@ const HIGHLIGHT_STYLES = `
     transform: translateY(-50%) !important;
     width: 14px !important;
     height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239c27b0'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
     background-size: contain !important;
     background-repeat: no-repeat !important;
     display: block !important;
@@ -1171,9 +1170,72 @@ const HIGHLIGHT_STYLES = `
   }
   
   .xtm-highlight.xtm-oaev-found:hover {
-    background: rgba(156, 39, 176, 0.4) !important;
-    border-color: #7b1fa2 !important;
-    box-shadow: 0 0 8px rgba(156, 39, 176, 0.5) !important;
+    background: rgba(0, 200, 83, 0.4) !important;
+    border-color: #2e7d32 !important;
+    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
+  }
+
+  /* ========================================
+     MIXED STATE - Not found in OpenCTI but FOUND in another platform
+     Orange base with checkbox on left, green indicator on right showing found
+     ======================================== */
+  .xtm-highlight.xtm-mixed {
+    background: linear-gradient(to right, rgba(255, 167, 38, 0.25) 70%, rgba(0, 200, 83, 0.25) 70%) !important;
+    border: 2px solid !important;
+    border-image: linear-gradient(to right, #ffa726 70%, #4caf50 30%) 1 !important;
+    padding: 4px 40px 4px 30px !important;  /* Extra space for both icons */
+  }
+  
+  /* Unchecked checkbox on LEFT (same as not-found) */
+  .xtm-highlight.xtm-mixed::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 12px !important;
+    height: 12px !important;
+    border: 2px solid #ffa726 !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+  }
+  
+  /* Green check icon on RIGHT for found in other platform */
+  .xtm-highlight.xtm-mixed::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 28px !important;
+    height: 14px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Cpath d='M6 1h16a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H6a5 5 0 0 1-5-5V6a5 5 0 0 1 5-5z' fill='%2300c853' fill-opacity='0.9'/%3E%3Cpath d='M11 4l-3 3-1.5-1.5-.7.7 2.2 2.3 3.7-3.8z' fill='white'/%3E%3Ctext x='16' y='10' font-size='6' fill='white' font-family='Arial'>VIEW</text%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+    cursor: pointer !important;
+  }
+  
+  .xtm-highlight.xtm-mixed:hover {
+    background: linear-gradient(to right, rgba(255, 167, 38, 0.4) 70%, rgba(0, 200, 83, 0.4) 70%) !important;
+    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
+  }
+  
+  /* Selected state for mixed */
+  .xtm-highlight.xtm-mixed.xtm-selected::before {
+    background: #0fbcff !important;
+    border-color: #0fbcff !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 10px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
   }
 
   /* ========================================
@@ -1795,37 +1857,42 @@ function scrollToFirstHighlight(event?: MouseEvent): void {
   
   const firstHighlight = document.querySelector('.xtm-highlight') as HTMLElement;
   if (firstHighlight) {
-    // Get the element's position relative to the document
-    const rect = firstHighlight.getBoundingClientRect();
-    const absoluteTop = window.scrollY + rect.top;
-    const scrollTarget = Math.max(0, absoluteTop - (window.innerHeight / 2) + (rect.height / 2));
-    
-    // Force scroll using multiple methods for compatibility
-    try {
-      // Method 1: window.scrollTo with behavior
-      window.scrollTo({
-        top: scrollTarget,
-        behavior: 'smooth'
+    // Use scrollIntoView as the primary method - most reliable across different page structures
+    // Small delay to ensure overlay is gone and DOM is ready
+    setTimeout(() => {
+      // Primary method: scrollIntoView with center alignment
+      firstHighlight.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center',
+        inline: 'nearest'
       });
-    } catch {
-      // Method 2: Fallback for older browsers
-      window.scrollTo(0, scrollTarget);
-    }
-    
-    // Also try scrollIntoView as backup after a short delay
-    setTimeout(() => {
-      if (firstHighlight) {
-        firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-    
-    // Add a brief flash effect to make it more visible after scroll
-    setTimeout(() => {
-      firstHighlight.classList.add('xtm-flash');
+      
+      // Fallback: If scrollIntoView doesn't work well (some SPAs), try direct scroll
       setTimeout(() => {
-        firstHighlight.classList.remove('xtm-flash');
-      }, 1500);
-    }, 600); // Wait for scroll to complete
+        const rect = firstHighlight.getBoundingClientRect();
+        // Check if element is still not in viewport center
+        const viewportCenter = window.innerHeight / 2;
+        const elementCenter = rect.top + rect.height / 2;
+        
+        if (Math.abs(elementCenter - viewportCenter) > 100) {
+          // Element is not centered, try window scroll
+          const absoluteTop = window.scrollY + rect.top;
+          const scrollTarget = Math.max(0, absoluteTop - viewportCenter + (rect.height / 2));
+          window.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth'
+          });
+        }
+      }, 300);
+      
+      // Add flash effect to highlight the element
+      setTimeout(() => {
+        firstHighlight.classList.add('xtm-flash');
+        setTimeout(() => {
+          firstHighlight.classList.remove('xtm-flash');
+        }, 1500);
+      }, 500);
+    }, 50);
   }
 }
 
@@ -1855,13 +1922,13 @@ async function scanPage(): Promise<void> {
         ...data.observables.filter((o: DetectedObservable) => o.found),
         ...data.sdos.filter((s: DetectedSDO) => s.found),
         ...(data.cves || []).filter((c: DetectedSDO) => c.found),
-        ...(data.oaevEntities || []).filter((e: any) => e.found),
+        ...(data.platformEntities || []).filter((e: any) => e.found),
       ].length;
       
       const totalDetected =
-        data.observables.length + data.sdos.length + (data.cves?.length || 0) + (data.oaevEntities?.length || 0);
+        data.observables.length + data.sdos.length + (data.cves?.length || 0) + (data.platformEntities?.length || 0);
       
-      const oaevCount = data.oaevEntities?.length || 0;
+      const oaevCount = data.platformEntities?.length || 0;
       
       if (totalDetected === 0) {
         // Show notification when nothing is found
@@ -1916,7 +1983,7 @@ async function scanPageForOAEV(): Promise<void> {
     
     if (response.success && response.data) {
       const data = response.data;
-      const entities = data.oaevEntities || [];
+      const entities = data.platformEntities || [];
       
       log.debug(`Found ${entities.length} OpenAEV entities to highlight`);
       
@@ -1925,12 +1992,12 @@ async function scanPageForOAEV(): Promise<void> {
         observables: [],
         sdos: [],
         cves: [],
-        oaevEntities: entities,
+        platformEntities: entities,
         scanTime: data.scanTime || 0,
         url: data.url || url,
       };
       
-      // Highlight using the same method as OpenCTI (highlightResults handles oaevEntities)
+      // Highlight using the same method as OpenCTI (highlightResults handles platformEntities)
       if (entities.length > 0) {
         highlightResults(scanResults);
       }
@@ -1995,7 +2062,7 @@ async function scanAllPlatforms(): Promise<void> {
         ...data.observables.filter((o: { found?: boolean }) => o.found),
         ...data.sdos.filter((s: { found?: boolean }) => s.found),
       ].length;
-      const oaevFound = data.oaevEntities?.length || 0;
+      const oaevFound = data.platformEntities?.length || 0;
       const totalFound = octiFound + oaevFound;
       
       if (totalFound === 0) {
@@ -2066,8 +2133,8 @@ async function scanPageForAtomicTesting(): Promise<void> {
     }> = [];
     
     // Add attack patterns from OpenAEV
-    if (response?.success && response?.data?.oaevEntities) {
-      const attackPatterns = (response.data.oaevEntities || [])
+    if (response?.success && response?.data?.platformEntities) {
+      const attackPatterns = (response.data.platformEntities || [])
         .filter((e: any) => e.type === 'AttackPattern');
       
       for (const ap of attackPatterns) {
@@ -2296,7 +2363,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       
       // Note: CVEs are not included in investigation (they're info-only)
       // OpenAEV entities are also filtered by platform if specified
-      const foundOAEV = (data.oaevEntities || []).filter((e: any) => {
+      const foundOAEV = (data.platformEntities || []).filter((e: any) => {
         if (!e.found) return false;
         // Non-default platform entities have their own platform IDs
         // Only include if no platformId filter or if the filter matches the entity's platform
@@ -2315,7 +2382,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         observables: foundObservables,
         sdos: foundSDOs,
         cves: [], // Don't include CVEs
-        oaevEntities: foundOAEV,
+        platformEntities: foundOAEV,
         scanTime: data.scanTime,
         url: data.url,
       };
@@ -2404,8 +2471,8 @@ function highlightResultsForInvestigation(results: ScanResultPayload): void {
   for (const sdo of results.sdos) {
     highlightForInvestigation(fullText, sdo.name, nodeMap, sdo.type, sdo.entityId, sdo.platformId || (sdo as any)._platformId);
   }
-  if (results.oaevEntities) {
-    for (const e of results.oaevEntities) {
+  if (results.platformEntities) {
+    for (const e of results.platformEntities) {
       // Use createPrefixedType for platform entity types
       const prefixedType = createPrefixedType(e.type, 'openaev');
       highlightForInvestigation(fullText, e.name, nodeMap, prefixedType, e.entityId, e.platformId);
@@ -2443,6 +2510,17 @@ function highlightForInvestigation(fullText: string, searchValue: string, nodeMa
         highlight.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
+          
+          // Set flag to prevent panel close
+          highlightClickInProgress = true;
+          setTimeout(() => { highlightClickInProgress = false; }, 100);
+          
+          // Ensure panel stays open / re-opens when clicking on investigation highlights
+          if (panelFrame?.classList.contains('hidden')) {
+            showPanelElements();
+          }
+          
           const isNowSelected = !highlight.classList.contains('xtm-selected');
           highlight.classList.toggle('xtm-selected');
           
@@ -2481,21 +2559,56 @@ function highlightResults(results: ScanResultPayload): void {
   // Full text for matching
   const fullText = textNodes.map((n) => n.textContent).join(' ');
   
-  // Find and highlight observables
+  // Build a map of values to their platform findings
+  // This helps detect when same text is in multiple platforms (mixed state)
+  const valueToPlatformEntities: Map<string, {
+    platformType: string;
+    type: string;
+    found: boolean;
+    data: any;
+  }[]> = new Map();
+  
+  // Collect platform entities by value
+  if (results.platformEntities) {
+    for (const entity of results.platformEntities) {
+      const valueLower = entity.name.toLowerCase();
+      if (!valueToPlatformEntities.has(valueLower)) {
+        valueToPlatformEntities.set(valueLower, []);
+      }
+      const platformType = (entity.platformType || 'openaev') as PlatformType;
+      valueToPlatformEntities.get(valueLower)!.push({
+        platformType,
+        type: createPrefixedType(entity.type, platformType),
+        found: entity.found,
+        data: entity,
+      });
+    }
+  }
+  
+  // Find and highlight observables (with mixed state check)
   for (const obs of results.observables) {
+    const valueLower = obs.value.toLowerCase();
+    const platformMatches = valueToPlatformEntities.get(valueLower);
+    
     highlightInText(fullText, obs.value, nodeMap, {
       type: obs.type,
       found: obs.found,
       data: obs,
+      // If not found in OpenCTI but found in another platform, pass the platform info
+      foundInPlatforms: !obs.found && platformMatches ? platformMatches.filter(p => p.found) : undefined,
     });
   }
   
-  // Find and highlight SDOs
+  // Find and highlight SDOs (with mixed state check)
   for (const sdo of results.sdos) {
+    const valueLower = sdo.name.toLowerCase();
+    const platformMatches = valueToPlatformEntities.get(valueLower);
+    
     highlightInText(fullText, sdo.name, nodeMap, {
       type: sdo.type,
       found: sdo.found,
       data: sdo,
+      foundInPlatforms: !sdo.found && platformMatches ? platformMatches.filter(p => p.found) : undefined,
     });
   }
   
@@ -2510,15 +2623,15 @@ function highlightResults(results: ScanResultPayload): void {
     }
   }
   
-  // Find and highlight OpenAEV entities
-  if (results.oaevEntities) {
-    for (const oaevEntity of results.oaevEntities) {
-      // Use createPrefixedType for platform entity types
-      const prefixedType = createPrefixedType(oaevEntity.type, 'openaev');
-      highlightInText(fullText, oaevEntity.name, nodeMap, {
+  // Find and highlight platform entities that weren't already highlighted via observables/SDOs
+  if (results.platformEntities) {
+    for (const entity of results.platformEntities) {
+      const entityPlatformType = (entity.platformType || 'openaev') as PlatformType;
+      const prefixedType = createPrefixedType(entity.type, entityPlatformType);
+      highlightInText(fullText, entity.name, nodeMap, {
         type: prefixedType,
-        found: oaevEntity.found,
-        data: oaevEntity as unknown as DetectedSDO, // Type coercion for compatibility
+        found: entity.found,
+        data: entity as unknown as DetectedSDO,
       });
     }
   }
@@ -2532,6 +2645,13 @@ function highlightInText(
     type: string;
     found: boolean;
     data: DetectedObservable | DetectedSDO;
+    // For mixed state: not found in primary platform but found in other platforms
+    foundInPlatforms?: Array<{
+      platformType: string;
+      type: string;
+      found: boolean;
+      data: any;
+    }>;
   }
 ): void {
   // Skip if search value is too short or empty
@@ -2580,9 +2700,18 @@ function highlightInText(
             highlight.className = 'xtm-highlight';
             
             // Apply appropriate styling based on status
-            // Green for found (OpenCTI), purple for non-default platforms, orange for not found, gray for SDOs that cannot be added
+            // Green for found (all platforms), orange for not found
+            // MIXED: not found in OpenCTI but found in another platform (orange+green)
+            // Gray for SDOs that cannot be added
             const isNonDefaultPlatform = isNonDefaultPlatformEntity(meta.type);
-            if (isNonDefaultPlatform && meta.found) {
+            const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
+            
+            if (hasMixedState) {
+              // Mixed state: not found in OpenCTI but found in another platform
+              highlight.classList.add('xtm-mixed');
+              // Store the platform entity data for the right-side click action
+              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+            } else if (isNonDefaultPlatform && meta.found) {
               // Non-default platform entity found - use platform-found class
               highlight.classList.add('xtm-platform-found');
             } else if (meta.found) {
@@ -2599,6 +2728,10 @@ function highlightInText(
             highlight.dataset.value = searchValue;
             highlight.dataset.found = String(meta.found);
             highlight.dataset.entity = JSON.stringify(meta.data);
+            // For mixed state, also mark if found in other platforms
+            if (hasMixedState) {
+              highlight.dataset.mixedState = 'true';
+            }
             
             // Add event listeners - use capture phase to intercept before any other handlers
             highlight.addEventListener('mouseenter', handleHighlightHover);
@@ -2638,6 +2771,7 @@ function handleHighlightHover(event: MouseEvent): void {
   const found = target.dataset.found === 'true';
   const isSelected = selectedForImport.has(value);
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isMixedState = target.dataset.mixedState === 'true';
   
   // Use platform registry to get platform name and display type
   const platformDef = getPlatformFromEntity(rawType);
@@ -2649,8 +2783,39 @@ function handleHighlightHover(event: MouseEvent): void {
   let statusIcon: string;
   let statusText: string;
   let actionText: string;
+  let additionalInfo = '';
   
-  if (found) {
+  if (isMixedState) {
+    // Mixed state: not in OpenCTI but found in another platform
+    try {
+      const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+      const platformNames = platformEntities.map((p: any) => {
+        const def = getPlatformFromEntity(p.type);
+        return def.name;
+      }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i); // Unique names
+      
+      statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+      statusText = `Not in ${platformName}`;
+      actionText = isSelected 
+        ? 'Click to deselect • Right-click to add'
+        : 'Click to select for import';
+      
+      // Show found in other platforms
+      additionalInfo = `
+        <div class="xtm-tooltip-status found" style="margin-top: 4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+          Found in ${platformNames.join(', ')}
+        </div>
+        <div class="xtm-tooltip-action" style="color: #00c853;">
+          Click green badge to view in ${platformNames[0]}
+        </div>
+      `;
+    } catch {
+      statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+      statusText = 'Not in platform';
+      actionText = 'Click to select for import';
+    }
+  } else if (found) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
     statusText = `Found in ${platformName}`;
     actionText = 'Click to view details';
@@ -2680,6 +2845,7 @@ function handleHighlightHover(event: MouseEvent): void {
     <div class="xtm-tooltip-action">
       ${actionText}
     </div>
+    ${additionalInfo}
   `;
   
   const rect = target.getBoundingClientRect();
@@ -2732,8 +2898,43 @@ function handleHighlightClick(event: MouseEvent): void {
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isMixedState = target.dataset.mixedState === 'true';
   // Get the type from dataset (includes oaev- prefix for OpenAEV entities)
   const highlightType = target.dataset.type || '';
+  
+  // For mixed state, check if click is on the right side (green badge area)
+  if (isMixedState) {
+    const rect = target.getBoundingClientRect();
+    const clickX = event.clientX;
+    const rightAreaStart = rect.right - 45; // Green badge is about 40px wide
+    
+    if (clickX >= rightAreaStart) {
+      // Click on green badge - open panel for the platform entity
+      try {
+        const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+        if (platformEntities.length > 0) {
+          const platformEntity = platformEntities[0];
+          const entity = platformEntity.data;
+          entity.type = platformEntity.type;
+          selectedEntity = entity;
+          
+          chrome.runtime.sendMessage({
+            type: 'SHOW_ENTITY_PANEL',
+            payload: {
+              entityType: 'platform',
+              entity,
+            },
+          });
+          
+          showPanel(entity);
+          return;
+        }
+      } catch {
+        // Fall through to normal click handling
+      }
+    }
+    // Click on left side - handle as normal not-found (toggle selection)
+  }
   
   if (entityData) {
     try {
@@ -2862,11 +3063,15 @@ function ensurePanelElements(): void {
     panelOverlay = document.createElement('div');
     panelOverlay.className = 'xtm-panel-overlay hidden';
     panelOverlay.addEventListener('click', (e) => {
-      // Only close if click is directly on overlay, not during highlight navigation
+      // Only close if click is directly on overlay, not on a highlight element
       if (highlightClickInProgress) {
         return; // Don't close - user clicked a highlight
       }
       const target = e.target as HTMLElement;
+      // Check if the click is on a highlight element (shouldn't reach here but safety check)
+      if (target.closest('.xtm-highlight')) {
+        return; // Don't close - click was on a highlight
+      }
       if (target.classList.contains('xtm-panel-overlay')) {
         hidePanel();
       }

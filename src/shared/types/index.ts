@@ -90,18 +90,6 @@ export interface ExtensionSettings {
   openctiPlatforms: PlatformConfig[];
   openaevPlatforms: PlatformConfig[];
   opengrcPlatforms?: PlatformConfig[]; // Future platform
-  
-  // Legacy single platform (for backward compatibility)
-  opencti?: {
-    url: string;
-    apiToken: string;
-    enabled: boolean;
-  };
-  openaev?: {
-    url: string;
-    apiToken: string;
-    enabled: boolean;
-  };
   theme: 'auto' | 'light' | 'dark';
   autoScan: boolean;
   highlightColor?: string;
@@ -131,7 +119,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       'Hostname', 'IPv4-Addr', 'IPv6-Addr', 'Mac-Addr', 'Phone-Number',
       'StixFile', 'Url', 'User-Agent'
     ],
-    oaevEntityTypes: ['Asset', 'AssetGroup', 'Player', 'Team', 'Finding'],
+    platformEntityTypes: {
+      openaev: ['Asset', 'AssetGroup', 'Player', 'Team', 'Finding'],
+    },
   },
   ai: {
     enabled: false,
@@ -314,20 +304,8 @@ export interface OAEVFinding {
   }>;
 }
 
-export interface DetectedOAEVEntity {
-  type: OAEVEntityType;
-  name: string;
-  value?: string; // The matched text in the document
-  startIndex: number;
-  endIndex: number;
-  found: boolean;
-  entityId?: string;
-  entityData?: OAEVAsset | OAEVAssetGroup | OAEVPlayer | OAEVTeam | OAEVFinding;
-  platformId?: string;
-}
-
 /**
- * Generic detected platform entity (for non-OpenCTI platforms)
+ * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenGRC)
  * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
  */
 export interface DetectedPlatformEntity {
@@ -740,7 +718,7 @@ export interface ScanState {
 
 export interface PanelState {
   isOpen: boolean;
-  entity?: DetectedObservable | DetectedSDO | DetectedOAEVEntity;
+  entity?: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
   entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
   loading: boolean;
 }

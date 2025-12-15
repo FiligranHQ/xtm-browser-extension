@@ -106,7 +106,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tool
         gap: compact ? 0.25 : 0.5,
         p: compact ? 1 : 1.5,
         width: '100%',
-        height: compact ? 65 : 90,
+        height: compact ? 72 : 100,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         background: `linear-gradient(135deg, ${color}20, ${color}08)`,
@@ -121,10 +121,10 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subtitle, tool
       }}
     >
       <Box sx={{ color, display: 'flex' }}>{icon}</Box>
-      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 11 : 12, lineHeight: 1.2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 12 : 13, lineHeight: 1.2 }}>
         {label}
       </Typography>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 8 : 9, textAlign: 'center', lineHeight: 1.2 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 9 : 10, textAlign: 'center', lineHeight: 1.2 }}>
         {subtitle}
       </Typography>
     </Paper>

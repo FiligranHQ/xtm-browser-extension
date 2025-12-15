@@ -39,13 +39,14 @@ export interface DetectionResult {
   observables: DetectedObservable[];
   sdos: DetectedSDO[];
   cves: DetectedSDO[];
-  oaevEntities: DetectedOAEVEntity[];
+  platformEntities: DetectedPlatformEntity[];
   scanTime: number;
 }
 
-// OpenAEV Entity Detection
-export interface DetectedOAEVEntity {
-  type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding';
+// Platform Entity Detection (for non-OpenCTI platforms like OpenAEV)
+export interface DetectedPlatformEntity {
+  platformType: string; // e.g., 'openaev', 'opengrc'
+  type: string; // e.g., 'Asset', 'AssetGroup', 'Team', 'Player', 'AttackPattern', 'Finding'
   name: string;
   value: string; // The matched text
   startIndex: number;
@@ -53,6 +54,7 @@ export interface DetectedOAEVEntity {
   found: boolean;
   entityId?: string;
   platformId?: string;
+  entityData?: any; // Original entity data from cache
 }
 
 // ============================================================================
@@ -491,22 +493,22 @@ export class DetectionEngine {
   }
 
   /**
-   * Detect OpenAEV entities using cached entity names
+   * Detect platform entities (OpenAEV, etc.) using cached entity names
    */
-  async detectOAEVEntitiesFromCache(text: string): Promise<DetectedOAEVEntity[]> {
-    const detected: DetectedOAEVEntity[] = [];
+  async detectPlatformEntitiesFromCache(text: string): Promise<DetectedPlatformEntity[]> {
+    const detected: DetectedPlatformEntity[] = [];
     const seenEntities = new Set<string>();
     const seenRanges = new Set<string>();
     
-    // Get cached OpenAEV entity map
+    // Get cached platform entity map (currently OpenAEV)
     const entityMap = await getAllCachedOAEVEntityNamesForMatching();
     
     if (entityMap.size === 0) {
-      log.debug(' No cached OpenAEV entities available for detection');
+      log.debug(' No cached platform entities available for detection');
       return detected;
     }
     
-    log.debug(`Searching for ${entityMap.size} cached OpenAEV entity names/aliases`);
+    log.debug(`Searching for ${entityMap.size} cached platform entity names/aliases`);
     
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
@@ -574,6 +576,7 @@ export class DetectionEngine {
         if (hasOverlap) continue;
         
         detected.push({
+          platformType: 'openaev', // Currently only OpenAEV entities are detected
           type: entity.type,
           name: entity.name,
           value: matchedText,
@@ -582,6 +585,7 @@ export class DetectionEngine {
           found: true,
           entityId: entity.id,
           platformId: entity.platformId,
+          entityData: entity,
         });
         
         seenEntities.add(entity.id);
@@ -612,8 +616,8 @@ export class DetectionEngine {
     // Detect SDOs from cache first (fast, offline)
     const cachedSDOs = await this.detectSDOsFromCache(text);
     
-    // Detect OpenAEV entities from cache
-    const oaevEntities = await this.detectOAEVEntitiesFromCache(text);
+    // Detect platform entities from cache (OpenAEV, etc.)
+    const platformEntities = await this.detectPlatformEntitiesFromCache(text);
     
     // Also detect from provided entity names (fallback/additional)
     let additionalSDOs: DetectedSDO[] = [];
@@ -657,7 +661,7 @@ export class DetectionEngine {
       observables: enrichedObservables,
       sdos: finalSDOs,
       cves: enrichedCVEs,
-      oaevEntities,
+      platformEntities,
       scanTime,
     };
   }

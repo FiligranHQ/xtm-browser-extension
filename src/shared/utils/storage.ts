@@ -31,7 +31,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
   // Merge with stored settings
   const mergedSettings = { ...defaultSettings, ...settings };
   
-  // Migrate legacy single platform format to multi-platform
+  // One-time migration: convert old single-platform format to multi-platform array
   if (!mergedSettings.openctiPlatforms?.length && settings.opencti?.url && settings.opencti?.apiToken) {
     mergedSettings.openctiPlatforms = [{
       id: 'default',
@@ -112,7 +112,7 @@ export async function cacheScanResults(
 }
 
 // ============================================================================
-// Entity Names Cache (Legacy - basic names list)
+// Entity Names Cache (simple names list for quick detection)
 // ============================================================================
 
 interface EntityNamesCache {
@@ -217,7 +217,7 @@ export async function getSDOCache(platformId?: string): Promise<SDOCache | null>
   const multiCache = await getMultiPlatformSDOCache();
   
   if (!platformId) {
-    // Return first available cache for backward compatibility
+    // Return first available cache when no specific platform is requested
     const platformIds = Object.keys(multiCache.platforms);
     if (platformIds.length === 0) return null;
     return multiCache.platforms[platformIds[0]];

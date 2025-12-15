@@ -1231,14 +1231,17 @@ const App: React.FC = () => {
                         control={
                           <Checkbox
                             size="small"
-                            checked={settings.detection?.oaevEntityTypes?.includes(item.value) ?? true}
+                            checked={settings.detection?.platformEntityTypes?.openaev?.includes(item.value) ?? true}
                             onChange={(e) => {
-                              const types = settings.detection?.oaevEntityTypes || [];
+                              const types = settings.detection?.platformEntityTypes?.openaev || [];
                               updateSetting('detection', {
                                 ...settings.detection,
-                                oaevEntityTypes: e.target.checked
-                                  ? [...types, item.value]
-                                  : types.filter((t) => t !== item.value),
+                                platformEntityTypes: {
+                                  ...settings.detection?.platformEntityTypes,
+                                  openaev: e.target.checked
+                                    ? [...types, item.value]
+                                    : types.filter((t) => t !== item.value),
+                                },
                               });
                             }}
                           />

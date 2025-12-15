@@ -392,14 +392,6 @@ const App: React.FC = () => {
         } else if (enabledOAEVPlatforms.length > 0) {
           setPlatformUrl(enabledOAEVPlatforms[0].url);
           setSelectedPlatformId(enabledOAEVPlatforms[0].id);
-        } else {
-          // Fallback to legacy single platform
-          const legacyUrl = response.data?.opencti?.url || '';
-          setPlatformUrl(legacyUrl);
-          if (legacyUrl) {
-            setAvailablePlatforms([{ id: 'default', name: 'OpenCTI', url: legacyUrl, type: 'opencti' }]);
-            setSelectedPlatformId('default');
-          }
         }
       }
     });
@@ -1371,13 +1363,22 @@ const App: React.FC = () => {
       }
       
       // Set entity to the created container and show entity view
+      // Use data from the API response if available, otherwise use form data
       setEntity({
         id: createdContainer.id,
-        entity_type: containerType,
-        name: containerForm.name,
-        description: containerForm.description,
+        entity_type: createdContainer.entity_type || containerType,
+        type: createdContainer.entity_type || containerType, // Also set 'type' for consistency
+        name: createdContainer.name || containerForm.name,
+        description: createdContainer.description || containerForm.description,
+        created: createdContainer.created,
+        modified: createdContainer.modified,
+        createdBy: createdContainer.createdBy,
+        objectLabel: createdContainer.objectLabel,
+        objectMarking: createdContainer.objectMarking,
         existsInPlatform: true,
         _platformId: createdPlatformId,
+        _platformType: 'opencti', // Explicitly mark as OpenCTI entity
+        _isNonDefaultPlatform: false, // Not a non-default platform
       });
       setEntityContainers([]);
       setPanelMode('entity');
@@ -4860,7 +4861,7 @@ const App: React.FC = () => {
     );
   };
 
-  // Keep for backwards compatibility but redirect to search view
+  // Alias for search results view - redirects to unified search view
   const renderSearchResultsView = () => renderSearchView();
 
   // Helper to get icon for OAEV entity type (matches OpenAEV's useEntityIcon.tsx)

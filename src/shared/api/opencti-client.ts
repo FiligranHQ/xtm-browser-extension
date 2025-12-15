@@ -1515,6 +1515,31 @@ export class OpenCTIClient {
     let query: string;
     let mutationName: string;
 
+    // Common fields to return for all container types
+    const containerFields = `
+      id
+      standard_id
+      entity_type
+      name
+      description
+      created
+      modified
+      createdBy {
+        id
+        name
+      }
+      objectLabel {
+        id
+        value
+        color
+      }
+      objectMarking {
+        id
+        definition
+        x_opencti_color
+      }
+    `;
+
     switch (input.type) {
       case 'Report':
         containerInput.published = input.published || new Date().toISOString();
@@ -1524,11 +1549,7 @@ export class OpenCTIClient {
         query = `
           mutation CreateReport($input: ReportAddInput!) {
             reportAdd(input: $input) {
-              id
-              standard_id
-              entity_type
-              name
-              description
+              ${containerFields}
             }
           }
         `;
@@ -1545,11 +1566,7 @@ export class OpenCTIClient {
         query = `
           mutation CreateCaseIncident($input: CaseIncidentAddInput!) {
             caseIncidentAdd(input: $input) {
-              id
-              standard_id
-              entity_type
-              name
-              description
+              ${containerFields}
             }
           }
         `;
@@ -1563,11 +1580,7 @@ export class OpenCTIClient {
         query = `
           mutation CreateCaseRfi($input: CaseRfiAddInput!) {
             caseRfiAdd(input: $input) {
-              id
-              standard_id
-              entity_type
-              name
-              description
+              ${containerFields}
             }
           }
         `;
@@ -1581,11 +1594,7 @@ export class OpenCTIClient {
         query = `
           mutation CreateCaseRft($input: CaseRftAddInput!) {
             caseRftAdd(input: $input) {
-              id
-              standard_id
-              entity_type
-              name
-              description
+              ${containerFields}
             }
           }
         `;
@@ -1598,11 +1607,7 @@ export class OpenCTIClient {
         query = `
           mutation CreateGrouping($input: GroupingAddInput!) {
             groupingAdd(input: $input) {
-              id
-              standard_id
-              entity_type
-              name
-              description
+              ${containerFields}
             }
           }
         `;

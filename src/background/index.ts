@@ -92,10 +92,10 @@ const platformClients: PlatformClientRegistry = {
   openaev: new Map(),
 };
 
-// Legacy references for backward compatibility
+// Platform client registries
 let openCTIClients: Map<string, OpenCTIClient> = platformClients.opencti;
 let openAEVClients: Map<string, OpenAEVClient> = platformClients.openaev;
-// Primary OpenCTI client for backward compatibility
+// Primary OpenCTI client (first configured)
 let openCTIClient: OpenCTIClient | null = null;
 let detectionEngine: DetectionEngine | null = null;
 let isInitialized = false;
@@ -124,7 +124,6 @@ async function initializeClient(): Promise<void> {
   log.debug('Settings loaded:', {
     hasOpenctiPlatforms: !!settings.openctiPlatforms,
     openctiPlatformsCount: settings.openctiPlatforms?.length || 0,
-    hasLegacyOpencti: !!(settings.opencti?.url && settings.opencti?.apiToken),
   });
   
   // Initialize OpenCTI clients
@@ -154,19 +153,6 @@ async function initializeClient(): Promise<void> {
       } else {
         log.debug(`Skipping platform ${platform.name}: url=${!!platform.url}, token=${!!platform.apiToken}, enabled=${platform.enabled}`);
       }
-    }
-  } else if (settings.opencti?.url && settings.opencti?.apiToken) {
-    // Legacy single platform support
-    log.info('Using legacy single platform settings');
-    try {
-      openCTIClient = new OpenCTIClient({
-        url: settings.opencti.url,
-        apiToken: settings.opencti.apiToken,
-      });
-      openCTIClients.set('default', openCTIClient);
-      log.info('OpenCTI client initialized (legacy)');
-    } catch (error) {
-      log.error('Failed to initialize OpenCTI client:', error);
     }
   } else {
     log.debug('No OpenCTI platforms configured');
@@ -1072,7 +1058,7 @@ async function handleMessage(
               observables: result.observables,
               sdos: result.sdos,
               cves: result.cves,
-              oaevEntities: [], // DO NOT include OpenAEV entities in OpenCTI scans
+              platformEntities: [], // DO NOT include platform entities in OpenCTI-only scans
               scanTime: result.scanTime,
               url: payload.url,
             };
@@ -1119,7 +1105,7 @@ async function handleMessage(
           const includeAttackPatterns = payload.includeAttackPatterns === true;
           log.debug(`SCAN_OAEV: Searching for ${oaevEntityMap.size} cached OpenAEV entities (includeAttackPatterns: ${includeAttackPatterns})`);
           
-          const oaevEntities: ScanResultPayload['oaevEntities'] = [];
+          const platformEntities: ScanResultPayload['platformEntities'] = [];
           const originalText = payload.content;
           const textLower = originalText.toLowerCase();
           const seenEntities = new Set<string>();
@@ -1173,7 +1159,8 @@ async function handleMessage(
                 if (!hasOverlap) {
                   const matchedText = originalText.substring(matchIndex, endIndex);
                   log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
-                  oaevEntities.push({
+                  platformEntities.push({
+                    platformType: 'openaev',
                     type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
                     name: entity.name,
                     value: matchedText,
@@ -1182,6 +1169,7 @@ async function handleMessage(
                     found: true,
                     entityId: entity.id,
                     platformId: entity.platformId,
+                    entityData: entity,
                   });
                   seenEntities.add(entity.id);
                   seenRanges.add(rangeKey);
@@ -1195,12 +1183,12 @@ async function handleMessage(
             }
           }
           
-          const attackPatternCount = oaevEntities.filter(e => e.type === 'AttackPattern').length;
-          const assetCount = oaevEntities.length - attackPatternCount;
+          const attackPatternCount = platformEntities.filter(e => e.type === 'AttackPattern').length;
+          const assetCount = platformEntities.length - attackPatternCount;
           log.debug(`SCAN_OAEV: Found ${assetCount} assets and ${attackPatternCount} attack patterns`);
           
           const scanResult = {
-            oaevEntities,
+            platformEntities,
             scanTime: 0,
             url: payload.url,
           };
@@ -1227,7 +1215,7 @@ async function handleMessage(
             sdos: [],
             cves: [],
           };
-          const oaevEntities: ScanResultPayload['oaevEntities'] = [];
+          const platformEntities: ScanResultPayload['platformEntities'] = [];
           
           // 1. Scan OpenCTI (if detection engine is available)
           if (detectionEngine) {
@@ -1292,7 +1280,8 @@ async function handleMessage(
                     
                     if (!hasOverlap) {
                       const matchedText = originalText.substring(matchIndex, endIndex);
-                      oaevEntities.push({
+                      platformEntities.push({
+                        platformType: 'openaev',
                         type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding',
                         name: entity.name,
                         value: matchedText,
@@ -1301,6 +1290,7 @@ async function handleMessage(
                         found: true,
                         entityId: entity.id,
                         platformId: entity.platformId,
+                        entityData: entity,
                       });
                       seenEntities.add(entity.id);
                       seenRanges.add(rangeKey);
@@ -1312,7 +1302,7 @@ async function handleMessage(
                   matchIndex = textLower.indexOf(nameLower, searchStart);
                 }
               }
-              log.debug(`SCAN_ALL: OpenAEV found ${oaevEntities.length} entities`);
+              log.debug(`SCAN_ALL: OpenAEV found ${platformEntities.length} entities`);
             } else {
               log.debug('SCAN_ALL: No OpenAEV entities in cache');
             }
@@ -1325,7 +1315,7 @@ async function handleMessage(
             observables: openctiResult.observables,
             sdos: openctiResult.sdos,
             cves: openctiResult.cves,
-            oaevEntities,
+            platformEntities,
             scanTime: 0,
             url: payload.url,
           };
@@ -1333,7 +1323,7 @@ async function handleMessage(
           const totalFound = 
             scanResult.observables.filter(o => o.found).length +
             scanResult.sdos.filter(s => s.found).length +
-            scanResult.oaevEntities.length;
+            (scanResult.platformEntities?.length || 0);
           log.info(`SCAN_ALL: Unified scan complete. Total found: ${totalFound}`);
           
           sendResponse({ success: true, data: scanResult });
@@ -2336,7 +2326,7 @@ async function handleMessage(
             const labels = await client.fetchLabels();
             sendResponse({ success: true, data: labels.map(l => ({ ...l, _platformId: labelsPlatformId })) });
           } else {
-            // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
+            // Fetch from all platforms in parallel with timeout
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
               try {
                 const timeoutPromise = new Promise<never>((_, reject) => 
@@ -2394,7 +2384,7 @@ async function handleMessage(
             const markings = await client.fetchMarkingDefinitions();
             sendResponse({ success: true, data: markings.map(m => ({ ...m, _platformId: markingsPlatformId })) });
           } else {
-            // Fetch from all platforms in PARALLEL with timeout (legacy behavior)
+            // Fetch from all platforms in parallel with timeout
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
               try {
                 const timeoutPromise = new Promise<never>((_, reject) => 

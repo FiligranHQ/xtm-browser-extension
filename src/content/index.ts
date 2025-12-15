@@ -1094,20 +1094,53 @@ let currentScanMode: 'scan' | 'atomic' | 'scenario' | 'investigation' | null = n
 let lastScanData: ScanResultPayload | null = null;
 
 // ============================================================================
-// Panel Communication Utility
+// Panel Communication Utility (with ready-state queuing)
 // ============================================================================
+
+// Track panel ready state and queue messages until ready
+let isPanelReady = false;
+const panelMessageQueue: Array<{ type: string; payload?: unknown }> = [];
 
 /**
  * Send a message to the panel iframe.
- * This utility function centralizes panel communication and handles null checks.
+ * If the panel is not ready yet, the message is queued and will be sent when the panel signals ready.
+ * This prevents race conditions where scan results are lost if sent before the panel loads.
  */
 function sendPanelMessage(type: string, payload?: unknown): void {
   if (!panelFrame?.contentWindow) {
     log.debug(`Cannot send panel message '${type}': panel not available`);
     return;
   }
+  
+  if (!isPanelReady) {
+    // Queue the message until panel is ready
+    log.debug(` sendPanelMessage: Panel not ready, queuing '${type}'`);
+    panelMessageQueue.push({ type, payload });
+    return;
+  }
+  
   log.debug(` sendPanelMessage: Sending '${type}' to panel iframe`);
   panelFrame.contentWindow.postMessage({ type, payload }, '*');
+}
+
+/**
+ * Flush all queued messages to the panel.
+ * Called when the panel signals it's ready.
+ */
+function flushPanelMessageQueue(): void {
+  if (!panelFrame?.contentWindow) {
+    log.warn('Cannot flush panel queue: panel not available');
+    return;
+  }
+  
+  log.debug(` Flushing ${panelMessageQueue.length} queued panel messages`);
+  while (panelMessageQueue.length > 0) {
+    const msg = panelMessageQueue.shift();
+    if (msg) {
+      log.debug(` sendPanelMessage: Sending queued '${msg.type}' to panel iframe`);
+      panelFrame.contentWindow.postMessage(msg, '*');
+    }
+  }
 }
 
 // ============================================================================
@@ -2056,7 +2089,16 @@ function selectAllNotFound(): void {
   sendPanelMessage('SELECTION_UPDATED', messagePayload);
 }
 
+function hideSelectionPanel(): void {
+  const panel = document.getElementById('xtm-selection-panel');
+  if (panel) {
+    panel.classList.remove('visible');
+  }
+}
+
 function openPreviewPanel(): void {
+  // Hide the bottom selection bar when opening the import preview
+  hideSelectionPanel();
   showPreviewPanel();
 }
 
@@ -2081,7 +2123,12 @@ function initialize(): void {
   
   // Listen for messages from the panel iframe
   window.addEventListener('message', async (event) => {
-    if (event.data?.type === 'XTM_CLOSE_PANEL') {
+    if (event.data?.type === 'XTM_PANEL_READY') {
+      // Panel has loaded and is ready to receive messages
+      log.debug(' Panel signaled ready, flushing message queue');
+      isPanelReady = true;
+      flushPanelMessageQueue();
+    } else if (event.data?.type === 'XTM_CLOSE_PANEL') {
       // Only clear highlights if NOT in scan mode
       // In scan mode, highlights persist and clicking them re-opens the panel
       if (currentScanMode !== 'scan') {
@@ -2162,6 +2209,9 @@ function initialize(): void {
         selectedCount: 0,
         selectedItems: [],
       });
+    } else if (event.data?.type === 'XTM_HIDE_SELECTION_PANEL') {
+      // Hide the bottom selection bar (called when import is triggered from panel)
+      hideSelectionPanel();
     } else if (event.data?.type === 'XTM_HIGHLIGHT_AI_ENTITIES' && event.data.entities) {
       // Highlight AI-discovered entities on the page
       const entities = event.data.entities as Array<{ type: string; value: string; name: string }>;
@@ -2350,6 +2400,10 @@ async function scanPage(): Promise<void> {
   currentScanMode = 'scan';
   
   try {
+    // Clear existing highlights and selections first
+    clearHighlights();
+    selectedForImport.clear();
+    
     // Get page content
     const content = document.body.innerText;
     const url = window.location.href;
@@ -2366,7 +2420,6 @@ async function scanPage(): Promise<void> {
       lastScanData = data; // Store for re-opening panel from highlight clicks
       
       // Highlight results
-      clearHighlights();
       highlightResults(data);
       
       const totalFound = [
@@ -2398,10 +2451,13 @@ async function scanPage(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        // Wait for panel iframe to be ready before sending message
-        setTimeout(() => {
-          sendPanelMessage('SCAN_RESULTS', data);
-        }, 100);
+        // Message will be queued if panel not ready yet, sent when panel signals ready
+        sendPanelMessage('SCAN_RESULTS', data);
+        // Send current selection state to sync with panel (important when re-opening panel)
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
       }
     } else {
       updateScanOverlay('Scan failed: ' + response.error);
@@ -2471,10 +2527,13 @@ async function scanPageForOAEV(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        // Wait for panel iframe to be ready before sending message
-        setTimeout(() => {
-          sendPanelMessage('SCAN_RESULTS', scanResults);
-        }, 100);
+        // Message will be queued if panel not ready yet, sent when panel signals ready
+        sendPanelMessage('SCAN_RESULTS', scanResults);
+        // Send current selection state to sync with panel (important when re-opening panel)
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
       }
     } else {
       log.error(' SCAN_OAEV failed:', response?.error);
@@ -2548,10 +2607,13 @@ async function scanAllPlatforms(): Promise<void> {
         // Send results to panel and open it
         ensurePanelElements();
         showPanelElements();
-        // Wait for panel iframe to be ready before sending message
-        setTimeout(() => {
-          sendPanelMessage('SCAN_RESULTS', data);
-        }, 100);
+        // Message will be queued if panel not ready yet, sent when panel signals ready
+        sendPanelMessage('SCAN_RESULTS', data);
+        // Send current selection state to sync with panel (important when re-opening panel)
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
       }
     } else {
       log.error(' SCAN_ALL failed:', response?.error);
@@ -2650,14 +2712,13 @@ async function scanPageForAtomicTesting(): Promise<void> {
       ensurePanelElements();
       showPanelElements();
       const theme = await getCurrentTheme();
-      setTimeout(() => {
-        sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
-          targets: [],
-          pageTitle,
-          pageUrl: url,
-          theme,
-        });
-      }, 100);
+      // Message will be queued if panel not ready yet, sent when panel signals ready
+      sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
+        targets: [],
+        pageTitle,
+        pageUrl: url,
+        theme,
+      });
       return;
     }
     
@@ -2697,15 +2758,13 @@ async function scanPageForAtomicTesting(): Promise<void> {
     // Get current theme to pass to panel
     const theme = await getCurrentTheme();
     
-    // Wait for panel iframe to be ready, then send the message
-    setTimeout(() => {
-      sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
-        targets: atomicTargets,
-        pageTitle,
-        pageUrl: url,
-        theme,
-      });
-    }, 100);
+    // Message will be queued if panel not ready yet, sent when panel signals ready
+    sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
+      targets: atomicTargets,
+      pageTitle,
+      pageUrl: url,
+      theme,
+    });
     
   } catch (error) {
     log.error(' Atomic testing scan error:', error);
@@ -2941,17 +3000,15 @@ async function scanPageForScenario(): Promise<void> {
     // Get current theme to pass to panel
     const theme = await getCurrentTheme();
     
-    // Wait for panel iframe to be ready, then send the message
-    setTimeout(() => {
-      sendPanelMessage('SHOW_SCENARIO_PANEL', {
-        attackPatterns,
-        pageTitle,
-        pageUrl: url,
-        pageDescription,
-        platformId: attackPatterns[0]?.platformId,
-        theme,
-      });
-    }, 100);
+    // Message will be queued if panel not ready yet, sent when panel signals ready
+    sendPanelMessage('SHOW_SCENARIO_PANEL', {
+      attackPatterns,
+      pageTitle,
+      pageUrl: url,
+      pageDescription,
+      platformId: attackPatterns[0]?.platformId,
+      theme,
+    });
     
   } catch (error) {
     log.error(' Scenario scan error:', error);
@@ -3780,10 +3837,13 @@ function handleHighlightClick(event: MouseEvent): void {
   if (currentScanMode === 'scan' && panelFrame?.classList.contains('hidden') && lastScanData) {
     ensurePanelElements();
     showPanelElements();
-    // Send scan results back to panel
-    setTimeout(() => {
-      sendPanelMessage('SCAN_RESULTS', lastScanData);
-    }, 100);
+    // Send scan results back to panel (will be queued if panel not ready)
+    sendPanelMessage('SCAN_RESULTS', lastScanData);
+    // Send current selection state to sync with panel (important when re-opening panel)
+    sendPanelMessage('SELECTION_UPDATED', {
+      selectedCount: selectedForImport.size,
+      selectedItems: Array.from(selectedForImport),
+    });
     // Continue to process the highlight click - the panel will show entity when ready
   }
   
@@ -4040,6 +4100,12 @@ function toggleSelection(element: HTMLElement, value: string): void {
   // Update the bottom selection panel
   updateSelectionPanel();
   
+  // Notify panel about selection change (sync with right panel checkboxes)
+  sendPanelMessage('SELECTION_UPDATED', {
+    selectedCount: selectedForImport.size,
+    selectedItems: Array.from(selectedForImport),
+  });
+  
   // Notify background about selection change
   chrome.runtime.sendMessage({
     type: 'SELECTION_CHANGED',
@@ -4065,14 +4131,13 @@ async function showPanel(
   const theme = await getCurrentTheme();
   
   // Send entity data to panel with existsInPlatform flag based on 'found'
-  setTimeout(() => {
-    sendPanelMessage('SHOW_ENTITY', { 
-      ...entity, 
-      existsInPlatform: entity.found ?? false, 
-      theme,
-      platformMatches, // Include platform matches for multi-platform navigation
-    });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_ENTITY', { 
+    ...entity, 
+    existsInPlatform: entity.found ?? false, 
+    theme,
+    platformMatches, // Include platform matches for multi-platform navigation
+  });
 }
 
 function hidePanel(): void {
@@ -4140,6 +4205,10 @@ function ensurePanelElements(): void {
   
   // Create inline panel
   if (!panelFrame) {
+    // Reset ready state when creating a new panel - it needs to load
+    isPanelReady = false;
+    panelMessageQueue.length = 0; // Clear any stale messages
+    
     panelFrame = document.createElement('iframe');
     panelFrame.className = 'xtm-panel-frame hidden';
     panelFrame.src = chrome.runtime.getURL('panel/index.html');
@@ -4163,10 +4232,8 @@ function showAddPanel(entity: DetectedObservable | DetectedSDO): void {
   ensurePanelElements();
   showPanelElements();
   
-  // Send entity data to panel in add mode
-  setTimeout(() => {
-    sendPanelMessage('SHOW_ADD_ENTITY', entity);
-  }, 100);
+  // Send entity data to panel in add mode (will be queued if panel not ready)
+  sendPanelMessage('SHOW_ADD_ENTITY', entity);
 }
 
 // Helper to get current theme from background
@@ -4220,18 +4287,17 @@ async function showPreviewPanel(): Promise<void> {
   
   log.debug(' showPreviewPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_PREVIEW', { 
-      entities: selectedEntities, 
-      pageUrl: window.location.href, 
-      pageTitle: article.title,
-      pageContent: article.textContent, // Use clean text content instead of HTML
-      pageHtmlContent: article.content, // Also pass HTML for content field
-      pageDescription: description, // Pre-computed description
-      pageExcerpt: article.excerpt,
-      theme: theme,
-    });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_PREVIEW', { 
+    entities: selectedEntities, 
+    pageUrl: window.location.href, 
+    pageTitle: article.title,
+    pageContent: article.textContent, // Use clean text content instead of HTML
+    pageHtmlContent: article.content, // Also pass HTML for content field
+    pageDescription: description, // Pre-computed description
+    pageExcerpt: article.excerpt,
+    theme: theme,
+  });
 }
 
 async function showContainerPanel(): Promise<void> {
@@ -4247,17 +4313,16 @@ async function showContainerPanel(): Promise<void> {
   
   log.debug(' showContainerPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_CREATE_CONTAINER', { 
-      pageUrl: window.location.href, 
-      pageTitle: article.title,
-      pageContent: article.textContent, // Use clean text content instead of HTML
-      pageHtmlContent: article.content, // Also pass HTML for content field
-      pageDescription: description, // Pre-computed description
-      pageExcerpt: article.excerpt,
-      theme: theme,
-    });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_CREATE_CONTAINER', { 
+    pageUrl: window.location.href, 
+    pageTitle: article.title,
+    pageContent: article.textContent, // Use clean text content instead of HTML
+    pageHtmlContent: article.content, // Also pass HTML for content field
+    pageDescription: description, // Pre-computed description
+    pageExcerpt: article.excerpt,
+    theme: theme,
+  });
 }
 
 async function showInvestigationPanel(): Promise<void> {
@@ -4269,9 +4334,8 @@ async function showInvestigationPanel(): Promise<void> {
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_INVESTIGATION_PANEL', { theme });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_INVESTIGATION_PANEL', { theme });
   
   // Note: We don't auto-scan here anymore
   // For single platform, the panel will send SCAN_FOR_INVESTIGATION message
@@ -4285,9 +4349,8 @@ async function showSearchPanel(): Promise<void> {
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_SEARCH_PANEL', { theme });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_SEARCH_PANEL', { theme });
 }
 
 async function showOAEVSearchPanel(): Promise<void> {
@@ -4297,9 +4360,8 @@ async function showOAEVSearchPanel(): Promise<void> {
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_OAEV_SEARCH_PANEL', { theme });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_OAEV_SEARCH_PANEL', { theme });
 }
 
 async function showUnifiedSearchPanel(): Promise<void> {
@@ -4309,9 +4371,8 @@ async function showUnifiedSearchPanel(): Promise<void> {
   // Get current theme to pass to panel
   const theme = await getCurrentTheme();
   
-  setTimeout(() => {
-    sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme });
-  }, 100);
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme });
 }
 
 // ============================================================================

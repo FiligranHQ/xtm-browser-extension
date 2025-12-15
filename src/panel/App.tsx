@@ -648,6 +648,11 @@ const App: React.FC = () => {
 
     // Listen for messages from content script
     window.addEventListener('message', handleMessage);
+    
+    // Signal to the content script that the panel is ready to receive messages
+    // This ensures scan results aren't lost if sent before the panel loads
+    window.parent.postMessage({ type: 'XTM_PANEL_READY' }, '*');
+    log.debug('Panel ready, sent XTM_PANEL_READY signal');
 
     // Get initial panel state
     chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
@@ -1280,42 +1285,38 @@ const App: React.FC = () => {
         };
         
         // Helper to add entity or merge with existing entry
+        // IMPORTANT: platformMatches should ONLY contain platforms where entity was FOUND
         const addOrMergeEntity = (entity: ScanResultEntity) => {
           const groupKey = getGroupKey(entity.name, entity.value);
           
-          const platformMatch: ScanResultPlatformMatch = {
+          // Only create a platform match if the entity was FOUND on this platform
+          const platformMatch: ScanResultPlatformMatch | null = entity.found ? {
             platformId: entity.platformId || '',
             platformType: entity.platformType || 'opencti',
             entityId: entity.entityId,
             entityData: entity.entityData,
             type: entity.type,
-          };
+          } : null;
           
           const existing = entityMap.get(groupKey);
           if (existing) {
-            // Merge: add this platform to existing entry
-            if (!existing.platformMatches) {
-              existing.platformMatches = [{
-                platformId: existing.platformId || '',
-                platformType: existing.platformType || 'opencti',
-                entityId: existing.entityId,
-                entityData: existing.entityData,
-                type: existing.type,
-              }];
-            }
-            // Only add if not already present (same platformId)
-            if (!existing.platformMatches.some(pm => pm.platformId === platformMatch.platformId)) {
-              existing.platformMatches.push(platformMatch);
-            }
-            // If this is a "found" entry, mark the entity as found
-            if (entity.found) {
+            // Merge: add this platform to existing entry ONLY if found
+            if (entity.found && platformMatch) {
+              if (!existing.platformMatches) {
+                existing.platformMatches = [];
+              }
+              // Only add if not already present (same platformId)
+              if (!existing.platformMatches.some(pm => pm.platformId === platformMatch.platformId)) {
+                existing.platformMatches.push(platformMatch);
+              }
+              // Mark the entity as found since at least one platform found it
               existing.found = true;
             }
           } else {
-            // New entry
+            // New entry - only add platformMatches if found
             entityMap.set(groupKey, {
               ...entity,
-              platformMatches: [platformMatch],
+              platformMatches: platformMatch ? [platformMatch] : [],
             });
           }
         };
@@ -1399,7 +1400,8 @@ const App: React.FC = () => {
         setScanResultsEntities(Array.from(entityMap.values()));
         setScanResultsTypeFilter('all');
         setScanResultsFoundFilter('all');
-        setSelectedScanItems(new Set()); // Clear selections for new scan
+        // Note: Don't clear selections here - SELECTION_UPDATED message follows with correct state
+        // This allows selections to persist when re-opening panel
         setEntityFromScanResults(false);
         setPanelMode('scan-results');
         break;
@@ -6604,6 +6606,50 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper to check if an entity can be imported to OpenCTI
+  // Entity is importable if: not an OpenAEV-specific type AND not already in OpenCTI
+  const isImportableToOpenCTI = (entity: ScanResultEntity): boolean => {
+    // OpenAEV-specific types can't be imported to OpenCTI
+    if (entity.type.startsWith('oaev-')) return false;
+    // Check if NOT found in OpenCTI (octiCount === 0)
+    const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
+    return octiCount === 0;
+  };
+
+  // Handler for importing selected entities from scan results
+  const handleImportSelectedScanResults = () => {
+    // Get selected entities from scan results that can be imported to OpenCTI
+    const selectedEntities = scanResultsEntities.filter(entity => {
+      const entityValue = entity.value || entity.name;
+      return selectedScanItems.has(entityValue) && isImportableToOpenCTI(entity);
+    });
+    
+    if (selectedEntities.length === 0) {
+      log.warn('No entities selected for import');
+      return;
+    }
+    
+    // Hide the bottom selection bar on the page
+    window.parent.postMessage({ type: 'XTM_HIDE_SELECTION_PANEL' }, '*');
+    
+    // Build entities for import - use the same format as other import flows
+    const entitiesToImport = selectedEntities.map(entity => ({
+      type: entity.type,
+      value: entity.value,
+      name: entity.name || entity.value,
+      existsInPlatform: false,
+      discoveredByAI: entity.discoveredByAI,
+    }));
+    
+    log.debug('Importing selected scan results:', entitiesToImport.length, 'entities');
+    
+    // Set entities and go to preview view
+    setEntitiesToAdd(entitiesToImport);
+    setCurrentPageUrl(currentPageUrl || window.location.href);
+    setCurrentPageTitle(currentPageTitle || document.title);
+    setPanelMode('preview');
+  };
+
   const renderScanResultsView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     
@@ -6769,47 +6815,66 @@ const App: React.FC = () => {
               );
             })()}
             
-            {/* Select All / Deselect All for new (not found) entities */}
+            {/* Select All / Deselect All for entities importable to OpenCTI */}
             {(() => {
-              const notFoundEntities = filteredScanResultsEntities.filter(e => !e.found);
-              const notFoundValues = notFoundEntities.map(e => e.value || e.name);
-              const selectedNotFoundCount = notFoundValues.filter(v => selectedScanItems.has(v)).length;
-              const allSelected = selectedNotFoundCount === notFoundEntities.length && notFoundEntities.length > 0;
+              // Entities importable to OpenCTI: not oaev-* type AND not already in OpenCTI
+              const importableEntities = filteredScanResultsEntities.filter(e => isImportableToOpenCTI(e));
+              const importableValues = importableEntities.map(e => e.value || e.name);
+              const selectedImportableCount = importableValues.filter(v => selectedScanItems.has(v)).length;
+              const allSelected = selectedImportableCount === importableEntities.length && importableEntities.length > 0;
               
-              if (notFoundEntities.length === 0) return null;
+              if (importableEntities.length === 0) return null;
               
               return (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {selectedNotFoundCount > 0 
-                      ? `${selectedNotFoundCount} of ${notFoundEntities.length} new entities selected`
-                      : `${notFoundEntities.length} new entities available for import`
+                    {selectedImportableCount > 0 
+                      ? `${selectedImportableCount} of ${importableEntities.length} entities selected for OpenCTI`
+                      : `${importableEntities.length} entities available for OpenCTI import`
                     }
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      if (allSelected) {
-                        // Deselect all
-                        window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
-                        setSelectedScanItems(new Set());
-                      } else {
-                        // Select all not-found entities
-                        window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: notFoundValues }, '*');
-                        setSelectedScanItems(new Set(notFoundValues));
-                      }
-                    }}
-                    startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
-                    sx={{ 
-                      textTransform: 'none', 
-                      fontSize: '0.75rem',
-                      py: 0.25,
-                      minWidth: 'auto',
-                    }}
-                  >
-                    {allSelected ? 'Deselect all' : 'Select all new'}
-                  </Button>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        if (allSelected) {
+                          // Deselect all
+                          window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
+                          setSelectedScanItems(new Set());
+                        } else {
+                          // Select all importable entities
+                          window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: importableValues }, '*');
+                          setSelectedScanItems(new Set(importableValues));
+                        }
+                      }}
+                      startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
+                      sx={{ 
+                        textTransform: 'none', 
+                        fontSize: '0.75rem',
+                        py: 0.25,
+                        minWidth: 'auto',
+                      }}
+                    >
+                      {allSelected ? 'Deselect all' : 'Select all'}
+                    </Button>
+                    {selectedImportableCount > 0 && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={handleImportSelectedScanResults}
+                        startIcon={<ArrowForwardOutlined />}
+                        sx={{ 
+                          textTransform: 'none', 
+                          fontSize: '0.75rem',
+                          py: 0.25,
+                          minWidth: 'auto',
+                        }}
+                      >
+                        Import ({selectedImportableCount})
+                      </Button>
+                    )}
+                  </Box>
                 </Box>
               );
             })()}
@@ -6862,8 +6927,8 @@ const App: React.FC = () => {
                       },
                     }}
                   >
-                    {/* Checkbox for non-found entities (including AI-discovered) */}
-                    {!entity.found && (
+                    {/* Checkbox for entities importable to OpenCTI (not in OCTI, not oaev-* type) */}
+                    {isImportableToOpenCTI(entity) && (
                       <Checkbox
                         checked={isSelected}
                         onClick={(e) => {

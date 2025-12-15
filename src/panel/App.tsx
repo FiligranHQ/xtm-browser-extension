@@ -746,7 +746,8 @@ const App: React.FC = () => {
       window.removeEventListener('message', handleMessage);
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
-  }, [selectedPlatformId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // MUST be empty - only run once on mount. DO NOT add selectedPlatformId or navigation will break!
 
   // Load labels and markings lazily when container form is needed
   // Also reload when the selected platform changes to ensure we get data from the correct platform
@@ -938,6 +939,16 @@ const App: React.FC = () => {
       case 'SHOW_ENTITY':
       case 'SHOW_ENTITY_PANEL': {
         const payload = data.payload;
+        log.debug('[SHOW_ENTITY_PANEL] Received payload:', {
+          type: data.type,
+          entityId: payload?.entityId || payload?.id,
+          entityType: payload?.type || payload?.entity_type,
+          platformId: payload?.platformId,
+          hasPlatformMatches: !!(payload?.platformMatches || payload?.entityData?.platformMatches),
+          platformMatchesCount: (payload?.platformMatches || payload?.entityData?.platformMatches)?.length,
+          existsInPlatform: payload?.existsInPlatform,
+        });
+        
         setEntityContainers([]);
         setEntityFromSearchMode(null); // Not from search
         // If scan results exist, allow back navigation to them
@@ -952,7 +963,10 @@ const App: React.FC = () => {
         
         // Handle multi-platform results if entity is found in multiple platforms
         const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
+        log.debug('[SHOW_ENTITY_PANEL] platformMatches:', platformMatches);
+        
         if (platformMatches && platformMatches.length > 0) {
+          log.debug('[SHOW_ENTITY_PANEL] Building multiPlatformResults from', platformMatches.length, 'matches');
           // Build multi-platform results for navigation
           // IMPORTANT: Set entity data structure consistently for navigation to work
           const multiResults: Array<{ platformId: string; platformName: string; entity: EntityData }> = platformMatches.map((match: { platformId: string; platformType?: string; entityId: string; entityData?: any; type?: string }) => {
@@ -992,10 +1006,18 @@ const App: React.FC = () => {
           });
           // Sort results: OpenCTI platforms first (knowledge base reference)
           const sortedResults = sortPlatformResults(multiResults);
+          log.debug('[SHOW_ENTITY_PANEL] sortedResults:', sortedResults.map(r => ({
+            platformId: r.platformId,
+            platformName: r.platformName,
+            entityId: r.entity.entityId || r.entity.id,
+            type: r.entity.type,
+            _platformType: r.entity._platformType,
+          })));
           setMultiPlatformResults(sortedResults);
           multiPlatformResultsRef.current = sortedResults; // Update ref synchronously
           setCurrentPlatformIndex(0);
           currentPlatformIndexRef.current = 0; // Update ref synchronously
+          log.debug('[SHOW_ENTITY_PANEL] Set multiPlatformResults, length:', sortedResults.length, 'ref length:', multiPlatformResultsRef.current.length);
         } else if (platformId) {
           // Single platform result - still set it for consistent display
           const platform = availablePlatforms.find(p => p.id === platformId);
@@ -2887,20 +2909,49 @@ const App: React.FC = () => {
                     <IconButton 
                       size="small" 
                       onClick={() => {
-                        // SIMPLE: Just switch to previous platform using cached data
+                        log.debug('[HEADER-NAV] Prev clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
                         const idx = currentPlatformIndexRef.current;
                         const results = multiPlatformResultsRef.current;
                         if (idx > 0 && results.length > 1) {
                           const newIdx = idx - 1;
                           const target = results[newIdx];
                           const platform = availablePlatforms.find(p => p.id === target.platformId);
+                          log.debug('[HEADER-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
                           
-                          // Update all state synchronously - entity already has _platformType etc.
-                          setCurrentPlatformIndex(newIdx);
+                          // Update ref FIRST, then state
                           currentPlatformIndexRef.current = newIdx;
+                          setCurrentPlatformIndex(newIdx);
                           setEntity(target.entity);
                           setSelectedPlatformId(target.platformId);
                           if (platform) setPlatformUrl(platform.url);
+                          log.debug('[HEADER-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
+                          
+                          // Fetch full entity details in background if needed
+                          const entityObj = target.entity;
+                          const platformType = entityObj?._platformType || 'opencti';
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const ed = (entityObj?.entityData || entityObj) as any;
+                          const needsFetch = platformType === 'openaev'
+                            ? !(ed?.attack_pattern_name || ed?.attack_pattern_description || ed?.scenario_name)
+                            : !(entityObj?.description || ed?.description || entityObj?.objectLabel);
+                          if (needsFetch && entityObj) {
+                            const entityId = entityObj.entityId || entityObj.id;
+                            const entityType = (entityObj.entity_type || entityObj.type || '').replace('oaev-', '');
+                            if (entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                              const msgType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+                              chrome.runtime.sendMessage({
+                                type: msgType,
+                                payload: { id: entityId, entityId, entityType, platformId: target.platformId },
+                              }, (response) => {
+                                if (chrome.runtime.lastError || currentPlatformIndexRef.current !== newIdx) return;
+                                if (response?.success && response.data) {
+                                  const fullEntity = { ...entityObj, ...response.data, entityData: response.data, _platformId: target.platformId, _platformType: platformType, _isNonDefaultPlatform: platformType !== 'opencti' };
+                                  setEntity(fullEntity);
+                                  multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) => i === newIdx ? { ...r, entity: fullEntity as EntityData } : r);
+                                }
+                              });
+                            }
+                          }
                         }
                       }} 
                       disabled={currentPlatformIndex === 0}
@@ -2928,20 +2979,49 @@ const App: React.FC = () => {
                     <IconButton 
                       size="small" 
                       onClick={() => {
-                        // SIMPLE: Just switch to next platform using cached data
+                        log.debug('[HEADER-NAV] Next clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
                         const idx = currentPlatformIndexRef.current;
                         const results = multiPlatformResultsRef.current;
                         if (idx < results.length - 1) {
                           const newIdx = idx + 1;
                           const target = results[newIdx];
                           const platform = availablePlatforms.find(p => p.id === target.platformId);
+                          log.debug('[HEADER-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
                           
-                          // Update all state synchronously - entity already has _platformType etc.
-                          setCurrentPlatformIndex(newIdx);
+                          // Update ref FIRST, then state
                           currentPlatformIndexRef.current = newIdx;
+                          setCurrentPlatformIndex(newIdx);
                           setEntity(target.entity);
                           setSelectedPlatformId(target.platformId);
                           if (platform) setPlatformUrl(platform.url);
+                          log.debug('[HEADER-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
+                          
+                          // Fetch full entity details in background if needed
+                          const entityObj = target.entity;
+                          const platformType = entityObj?._platformType || 'opencti';
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const ed = (entityObj?.entityData || entityObj) as any;
+                          const needsFetch = platformType === 'openaev'
+                            ? !(ed?.attack_pattern_name || ed?.attack_pattern_description || ed?.scenario_name)
+                            : !(entityObj?.description || ed?.description || entityObj?.objectLabel);
+                          if (needsFetch && entityObj) {
+                            const entityId = entityObj.entityId || entityObj.id;
+                            const entityType = (entityObj.entity_type || entityObj.type || '').replace('oaev-', '');
+                            if (entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                              const msgType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+                              chrome.runtime.sendMessage({
+                                type: msgType,
+                                payload: { id: entityId, entityId, entityType, platformId: target.platformId },
+                              }, (response) => {
+                                if (chrome.runtime.lastError || currentPlatformIndexRef.current !== newIdx) return;
+                                if (response?.success && response.data) {
+                                  const fullEntity = { ...entityObj, ...response.data, entityData: response.data, _platformId: target.platformId, _platformType: platformType, _isNonDefaultPlatform: platformType !== 'opencti' };
+                                  setEntity(fullEntity);
+                                  multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) => i === newIdx ? { ...r, entity: fullEntity as EntityData } : r);
+                                }
+                              });
+                            }
+                          }
                         }
                       }} 
                       disabled={currentPlatformIndex === multiPlatformResults.length - 1}
@@ -3283,30 +3363,7 @@ const App: React.FC = () => {
                 </Typography>
               </Box>
             )}
-            
-            {/* Created Date */}
-            {entityData.attack_pattern_created_at && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={sectionTitleStyle}>
-                  Created
-                </Typography>
-                <Typography variant="body2" sx={contentTextStyle}>
-                  {formatDateTime(entityData.attack_pattern_created_at)}
-                </Typography>
-              </Box>
-            )}
-            
-            {/* Updated Date */}
-            {entityData.attack_pattern_updated_at && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={sectionTitleStyle}>
-                  Last Modified
-                </Typography>
-                <Typography variant="body2" sx={contentTextStyle}>
-                  {formatDateTime(entityData.attack_pattern_updated_at)}
-                </Typography>
-              </Box>
-            )}
+            {/* Dates moved to consolidated Dates section */}
           </>
         )}
         
@@ -3494,18 +3551,7 @@ const App: React.FC = () => {
                 </Typography>
               </Box>
             )}
-            
-            {/* Finding Created At */}
-            {entityData.finding_created_at && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={sectionTitleStyle}>
-                  Created
-                </Typography>
-                <Typography variant="body2" sx={contentTextStyle}>
-                  {formatDateTime(entityData.finding_created_at)}
-                </Typography>
-              </Box>
-            )}
+            {/* Dates moved to consolidated Dates section */}
             
             {/* Associated Assets */}
             {entityData.finding_assets && entityData.finding_assets.length > 0 && (
@@ -3605,6 +3651,102 @@ const App: React.FC = () => {
                 ))}
               </Box>
             </Box>
+          );
+        })()}
+
+        {/* Dates Section - Consistent with OpenCTI style */}
+        {(() => {
+          // Collect available dates based on entity type
+          const dates: Array<{ label: string; value: string }> = [];
+          
+          if (oaevType === 'AttackPattern') {
+            if (entityData.attack_pattern_created_at) {
+              dates.push({ label: 'Created', value: entityData.attack_pattern_created_at });
+            }
+            if (entityData.attack_pattern_updated_at) {
+              dates.push({ label: 'Last Modified', value: entityData.attack_pattern_updated_at });
+            }
+          } else if (oaevType === 'Finding') {
+            if (entityData.finding_created_at) {
+              dates.push({ label: 'Created', value: entityData.finding_created_at });
+            }
+          } else if (oaevType === 'Scenario') {
+            if (entityData.scenario_created_at) {
+              dates.push({ label: 'Created', value: entityData.scenario_created_at });
+            }
+            if (entityData.scenario_updated_at) {
+              dates.push({ label: 'Last Modified', value: entityData.scenario_updated_at });
+            }
+          } else if (oaevType === 'Exercise') {
+            if (entityData.exercise_created_at) {
+              dates.push({ label: 'Created', value: entityData.exercise_created_at });
+            }
+            if (entityData.exercise_updated_at) {
+              dates.push({ label: 'Last Modified', value: entityData.exercise_updated_at });
+            }
+            if (entityData.exercise_start_date) {
+              dates.push({ label: 'Start Date', value: entityData.exercise_start_date });
+            }
+            if (entityData.exercise_end_date) {
+              dates.push({ label: 'End Date', value: entityData.exercise_end_date });
+            }
+          } else if (oaevType === 'Asset') {
+            if (entityData.asset_created_at) {
+              dates.push({ label: 'Created', value: entityData.asset_created_at });
+            }
+            if (entityData.asset_updated_at) {
+              dates.push({ label: 'Last Modified', value: entityData.asset_updated_at });
+            }
+          } else if (oaevType === 'AssetGroup') {
+            if (entityData.asset_group_created_at) {
+              dates.push({ label: 'Created', value: entityData.asset_group_created_at });
+            }
+          } else if (oaevType === 'Team') {
+            if (entityData.team_created_at) {
+              dates.push({ label: 'Created', value: entityData.team_created_at });
+            }
+          } else if (oaevType === 'Player') {
+            if (entityData.player_created_at) {
+              dates.push({ label: 'Created', value: entityData.player_created_at });
+            }
+          } else if (oaevType === 'User') {
+            if (entityData.user_created_at) {
+              dates.push({ label: 'Created', value: entityData.user_created_at });
+            }
+          } else if (oaevType === 'Organization') {
+            if (entityData.organization_created_at) {
+              dates.push({ label: 'Created', value: entityData.organization_created_at });
+            }
+          }
+          
+          return dates.length > 0 && (
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                mb: 2.5, 
+                p: 2, 
+                borderRadius: 1, 
+                bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                border: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Dates
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: dates.length > 2 ? 'repeat(2, 1fr)' : '1fr', gap: 2 }}>
+                {dates.map((date, i) => (
+                  <Box key={i}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.25 }}>
+                      {date.label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
+                      {formatDate(date.value)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
           );
         })()}
 
@@ -3723,112 +3865,114 @@ const App: React.FC = () => {
 
     const isVulnerability = type.toLowerCase() === 'vulnerability';
 
-    // Helper to check if entity has full data loaded
-    const hasFullEntityData = (entityObj: EntityData | undefined): boolean => {
-      if (!entityObj) return false;
+    // Helper to check if entity needs full data fetched
+    const needsEntityFetch = (entityObj: EntityData | undefined): boolean => {
+      if (!entityObj) return true;
       const platformType = entityObj._platformType || 'opencti';
-      if (platformType === 'openaev') {
-        // OpenAEV: check for type-specific detailed fields in entityData
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ed = (entityObj.entityData || entityObj) as any;
-        return !!(ed.finding_type || ed.finding_created_at || ed.endpoint_name || 
-                  ed.asset_group_name || ed.team_name || ed.attack_pattern_name || 
-                  ed.attack_pattern_description || ed.scenario_name || ed.exercise_name || 
-                  ed.user_email || ed.asset_description);
-      }
-      // OpenCTI: check for description or objectLabel
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ed = (entityObj.entityData || {}) as any;
-      return !!(entityObj.description || ed.description || 
-                entityObj.objectLabel || ed.objectLabel);
+      const ed = (entityObj.entityData || entityObj) as any;
+      if (platformType === 'openaev') {
+        // OpenAEV: need fetch if no type-specific fields
+        return !(ed.finding_type || ed.finding_created_at || ed.endpoint_name || 
+                 ed.asset_group_name || ed.team_name || ed.attack_pattern_name || 
+                 ed.attack_pattern_description || ed.scenario_name || ed.exercise_name || 
+                 ed.user_email || ed.asset_description);
+      }
+      // OpenCTI: need fetch if no description or labels
+      return !(entityObj.description || ed.description || entityObj.objectLabel || ed.objectLabel);
     };
-
-    // Navigate to a specific platform index - fetches full data if needed
-    const navigateToPlatformIndex = async (newIdx: number) => {
-      const results = multiPlatformResultsRef.current;
-      if (newIdx < 0 || newIdx >= results.length) return;
+    
+    // Fire-and-forget fetch for entity details (non-blocking)
+    const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
+      const platformType = targetEntity._platformType || (targetEntity.type?.startsWith('oaev-') ? 'openaev' : 'opencti');
+      const entityId = targetEntity.entityId || targetEntity.id;
+      const entityType = (targetEntity.entity_type || targetEntity.type || '').replace('oaev-', '');
       
-      const target = results[newIdx];
-      const platform = availablePlatforms.find(p => p.id === target.platformId);
-      const platformType = target.entity._platformType || (target.entity.type?.startsWith('oaev-') ? 'openaev' : 'opencti');
+      if (!entityId || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
       
-      // Update index and platform info immediately
-      setCurrentPlatformIndex(newIdx);
-      currentPlatformIndexRef.current = newIdx;
-      setSelectedPlatformId(target.platformId);
-      if (platform) setPlatformUrl(platform.url);
+      const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+      log.debug('[ENTITY-NAV] Fetching full details for:', { messageType, entityId, platformType, platformId: targetPlatformId });
       
-      // Check if we already have full data for this entity
-      if (hasFullEntityData(target.entity)) {
-        // Already have full data, just set entity
-        setEntity(target.entity);
-        return;
-      }
-      
-      // Need to fetch full entity data
-      const entityId = target.entity.entityId || target.entity.id;
-      const entityType = (target.entity.entity_type || target.entity.type || '').replace('oaev-', '');
-      
-      if (!entityId || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-        setEntity(target.entity);
-        return;
-      }
-      
-      // Set minimal entity first so something shows
-      setEntity(target.entity);
-      
-      try {
-        const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
-        const response = await chrome.runtime.sendMessage({
-          type: messageType,
-          payload: {
-            id: entityId,
-            entityId: entityId,
-            entityType: entityType,
-            platformId: target.platformId,
-          },
-        });
-        
-        // Check if user navigated away while we were fetching
-        if (currentPlatformIndexRef.current !== newIdx) return;
+      chrome.runtime.sendMessage({
+        type: messageType,
+        payload: { id: entityId, entityId, entityType, platformId: targetPlatformId },
+      }, (response) => {
+        if (chrome.runtime.lastError) return;
+        // Only update if user is still viewing this entity
+        if (currentPlatformIndexRef.current !== targetIdx) return;
         
         if (response?.success && response.data) {
           const fullEntity = {
-            ...target.entity,
+            ...targetEntity,
             ...response.data,
             entityData: response.data,
             existsInPlatform: true,
-            _platformId: target.platformId,
+            _platformId: targetPlatformId,
             _platformType: platformType,
             _isNonDefaultPlatform: platformType !== 'opencti',
           };
+          log.debug('[ENTITY-NAV] Full entity fetched, updating...');
           setEntity(fullEntity);
-          // Update the cached entity in multiPlatformResults for future navigation
-          setMultiPlatformResults(prev => prev.map((r, i) => 
-            i === newIdx ? { ...r, entity: fullEntity as EntityData } : r
-          ));
+          // Update cache for future navigation
           multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
-            i === newIdx ? { ...r, entity: fullEntity as EntityData } : r
+            i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
           );
         }
-      } catch (error) {
-        log.error(' Failed to fetch entity details during navigation:', error);
-      }
+      });
     };
 
-    // Platform navigation handlers
+    // Simple synchronous navigation - switch to cached data, fetch full details in background if needed
     const handlePrevPlatform = () => {
+      log.debug('[ENTITY-NAV] Prev clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
       const idx = currentPlatformIndexRef.current;
-      if (idx > 0) {
-        navigateToPlatformIndex(idx - 1);
+      const results = multiPlatformResultsRef.current;
+      if (idx > 0 && results.length > 1) {
+        const newIdx = idx - 1;
+        const target = results[newIdx];
+        const platform = availablePlatforms.find(p => p.id === target.platformId);
+        log.debug('[ENTITY-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
+        
+        // Update ref FIRST, then state - all synchronously
+        currentPlatformIndexRef.current = newIdx;
+        setCurrentPlatformIndex(newIdx);
+        setEntity(target.entity);
+        setSelectedPlatformId(target.platformId);
+        if (platform) setPlatformUrl(platform.url);
+        log.debug('[ENTITY-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
+        
+        // Fetch full details in background if needed (non-blocking)
+        if (needsEntityFetch(target.entity)) {
+          fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
+        }
+      } else {
+        log.debug('[ENTITY-NAV] Cannot go prev - already at index 0 or no results');
       }
     };
 
     const handleNextPlatform = () => {
+      log.debug('[ENTITY-NAV] Next clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
       const idx = currentPlatformIndexRef.current;
       const results = multiPlatformResultsRef.current;
       if (idx < results.length - 1) {
-        navigateToPlatformIndex(idx + 1);
+        const newIdx = idx + 1;
+        const target = results[newIdx];
+        const platform = availablePlatforms.find(p => p.id === target.platformId);
+        log.debug('[ENTITY-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
+        
+        // Update ref FIRST, then state - all synchronously
+        currentPlatformIndexRef.current = newIdx;
+        setCurrentPlatformIndex(newIdx);
+        setEntity(target.entity);
+        setSelectedPlatformId(target.platformId);
+        if (platform) setPlatformUrl(platform.url);
+        log.debug('[ENTITY-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
+        
+        // Fetch full details in background if needed (non-blocking)
+        if (needsEntityFetch(target.entity)) {
+          fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
+        }
+      } else {
+        log.debug('[ENTITY-NAV] Cannot go next - already at last index');
       }
     };
 

@@ -58,6 +58,8 @@ import {
   EmailOutlined,
   InfoOutlined,
   AutoAwesomeOutlined,
+  CheckBoxOutlined,
+  CheckBoxOutlineBlankOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Target, MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
@@ -297,6 +299,10 @@ const App: React.FC = () => {
   }, [scanResultsEntities]);
   const [scanResultsTypeFilter, setScanResultsTypeFilter] = useState<string>('all');
   const [scanResultsFoundFilter, setScanResultsFoundFilter] = useState<'all' | 'found' | 'not-found'>('all');
+  // Selected items for import (synced with content script)
+  const [selectedScanItems, setSelectedScanItems] = useState<Set<string>>(new Set());
+  // Create indicators from observables option
+  const [createIndicators, setCreateIndicators] = useState(true);
   // PDF attachment option
   const [attachPdf, setAttachPdf] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -651,6 +657,9 @@ const App: React.FC = () => {
 
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;
+    if (type === 'SELECTION_UPDATED') {
+      log.debug(' handleMessage received SELECTION_UPDATED:', payload);
+    }
     handlePanelState({ type, payload });
   };
 
@@ -1293,6 +1302,7 @@ const App: React.FC = () => {
         setScanResultsEntities(Array.from(entityMap.values()));
         setScanResultsTypeFilter('all');
         setScanResultsFoundFilter('all');
+        setSelectedScanItems(new Set()); // Clear selections for new scan
         setEntityFromScanResults(false);
         setPanelMode('scan-results');
         break;
@@ -1304,6 +1314,18 @@ const App: React.FC = () => {
           setInvestigationEntities(prev => 
             prev.map(e => e.id === entityId ? { ...e, selected } : e)
           );
+        }
+        break;
+      }
+      case 'SELECTION_UPDATED': {
+        // Sync selection state from content script (highlight checkbox clicks)
+        log.debug(' SELECTION_UPDATED received:', data.payload);
+        const { selectedItems } = data.payload || {};
+        if (Array.isArray(selectedItems)) {
+          log.debug(' Setting selectedScanItems to:', selectedItems);
+          setSelectedScanItems(new Set(selectedItems));
+        } else {
+          log.warn(' SELECTION_UPDATED: selectedItems is not an array:', selectedItems);
         }
         break;
       }
@@ -1415,11 +1437,18 @@ const App: React.FC = () => {
           
           // Fetch assets, asset groups, and teams for target selection
           if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            log.debug(' Starting fetch of scenario targets for platform:', singlePlatformId);
             Promise.all([
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }),
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId: singlePlatformId } }),
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId: singlePlatformId } }),
             ]).then(([assetsRes, assetGroupsRes, teamsRes]) => {
+              log.debug(' Scenario targets fetch responses:', {
+                assets: { success: assetsRes?.success, count: assetsRes?.data?.length, error: assetsRes?.error },
+                assetGroups: { success: assetGroupsRes?.success, count: assetGroupsRes?.data?.length, error: assetGroupsRes?.error },
+                teams: { success: teamsRes?.success, count: teamsRes?.data?.length, error: teamsRes?.error },
+              });
+              
               if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
               if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
               if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
@@ -2101,6 +2130,7 @@ const App: React.FC = () => {
       payload: { 
         entities: entitiesToAdd,
         platformId: targetPlatformId,
+        createIndicator: createIndicators,
       },
     });
 
@@ -4660,7 +4690,8 @@ const App: React.FC = () => {
   const renderPreviewView = () => (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <Typography variant="h6">Preview Selection</Typography>
+        <ArrowForwardOutlined sx={{ color: 'primary.main' }} />
+        <Typography variant="h6">Import Selection</Typography>
       </Box>
       
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -4668,7 +4699,7 @@ const App: React.FC = () => {
       </Typography>
 
       {/* Entity list */}
-      <Box sx={{ maxHeight: 300, overflow: 'auto', mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+      <Box sx={{ maxHeight: 250, overflow: 'auto', mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
         {entitiesToAdd.map((e, i) => (
           <Paper
             key={i}
@@ -4700,6 +4731,28 @@ const App: React.FC = () => {
             />
           </Paper>
         ))}
+      </Box>
+
+      {/* Options */}
+      <Box sx={{ mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={createIndicators}
+              onChange={(e) => setCreateIndicators(e.target.checked)}
+              size="small"
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body2">Create indicators from observables</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Automatically generate STIX indicators for each observable
+              </Typography>
+            </Box>
+          }
+          sx={{ alignItems: 'flex-start', ml: 0 }}
+        />
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -6434,6 +6487,51 @@ const App: React.FC = () => {
               </Box>
             )}
             
+            {/* Select All / Deselect All for new (not found) entities */}
+            {(() => {
+              const notFoundEntities = filteredScanResultsEntities.filter(e => !e.found);
+              const notFoundValues = notFoundEntities.map(e => e.value || e.name);
+              const selectedNotFoundCount = notFoundValues.filter(v => selectedScanItems.has(v)).length;
+              const allSelected = selectedNotFoundCount === notFoundEntities.length && notFoundEntities.length > 0;
+              
+              if (notFoundEntities.length === 0) return null;
+              
+              return (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {selectedNotFoundCount > 0 
+                      ? `${selectedNotFoundCount} of ${notFoundEntities.length} new entities selected`
+                      : `${notFoundEntities.length} new entities available for import`
+                    }
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      if (allSelected) {
+                        // Deselect all
+                        window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
+                        setSelectedScanItems(new Set());
+                      } else {
+                        // Select all not-found entities
+                        window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: notFoundValues }, '*');
+                        setSelectedScanItems(new Set(notFoundValues));
+                      }
+                    }}
+                    startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
+                    sx={{ 
+                      textTransform: 'none', 
+                      fontSize: '0.75rem',
+                      py: 0.25,
+                      minWidth: 'auto',
+                    }}
+                  >
+                    {allSelected ? 'Deselect all' : 'Select all new'}
+                  </Button>
+                </Box>
+              );
+            })()}
+            
             {/* Entity list */}
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               {filteredScanResultsEntities.map((entity, index) => {
@@ -6445,6 +6543,9 @@ const App: React.FC = () => {
                 const oaevCount = entity.platformMatches?.filter(pm => pm.platformType === 'openaev').length || 0;
                 const hasMultiplePlatforms = (entity.platformMatches?.length || 0) > 1;
                 
+                const entityValue = entity.value || entity.name;
+                const isSelected = selectedScanItems.has(entityValue);
+                
                 return (
                   <Paper
                     key={entity.id + '-' + index}
@@ -6453,22 +6554,47 @@ const App: React.FC = () => {
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 1.5,
+                      gap: 1,
                       p: 1.5,
                       mb: 1,
-                      bgcolor: 'background.paper',
+                      bgcolor: isSelected ? hexToRGB('#1976d2', 0.08) : 'background.paper',
                       border: 1,
-                      borderColor: entity.found ? 'success.main' : 'warning.main',
+                      borderColor: isSelected ? 'primary.main' : (entity.found ? 'success.main' : 'warning.main'),
                       borderRadius: 1,
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                       borderLeftWidth: 4,
                       '&:hover': {
-                        bgcolor: 'action.hover',
+                        bgcolor: isSelected ? hexToRGB('#1976d2', 0.12) : 'action.hover',
                         boxShadow: 1,
                       },
                     }}
                   >
+                    {/* Checkbox for non-found entities */}
+                    {!entity.found && (
+                      <Checkbox
+                        checked={isSelected}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.parent.postMessage({ type: 'XTM_TOGGLE_SELECTION', value: entityValue }, '*');
+                          setSelectedScanItems(prev => {
+                            const next = new Set(prev);
+                            if (next.has(entityValue)) {
+                              next.delete(entityValue);
+                            } else {
+                              next.add(entityValue);
+                            }
+                            return next;
+                          });
+                        }}
+                        size="small"
+                        sx={{ 
+                          p: 0.5, 
+                          mr: 0.5,
+                          '&.Mui-checked': { color: 'primary.main' },
+                        }}
+                      />
+                    )}
                     <ItemIcon type={entity.type} size="small" color={entityColor} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
@@ -7008,21 +7134,16 @@ const App: React.FC = () => {
       }
       
       // Step 3: Create the atomic testing
-      const atomicTestingData: any = {
-        atomic_title: atomicTestingTitle || `Atomic Test - ${atomicTestingAIGeneratedPayload.name}`,
-        atomic_injector_contract: injectorContractId,
-      };
-      
-      if (atomicTestingTargetType === 'asset' && atomicTestingSelectedAsset) {
-        atomicTestingData.atomic_assets = [atomicTestingSelectedAsset];
-      } else if (atomicTestingTargetType === 'asset_group' && atomicTestingSelectedAssetGroup) {
-        atomicTestingData.atomic_asset_groups = [atomicTestingSelectedAssetGroup];
-      }
+      const targetAssetId = atomicTestingTargetType === 'asset' ? atomicTestingSelectedAsset : null;
+      const targetAssetGroupId = atomicTestingTargetType === 'asset_group' ? atomicTestingSelectedAssetGroup : null;
       
       const response = await chrome.runtime.sendMessage({
         type: 'CREATE_ATOMIC_TESTING',
         payload: {
-          atomicTesting: atomicTestingData,
+          title: atomicTestingTitle || `Atomic Test - ${atomicTestingAIGeneratedPayload.name}`,
+          injectorContractId,
+          assetIds: targetAssetId ? [targetAssetId] : [],
+          assetGroupIds: targetAssetGroupId ? [targetAssetGroupId] : [],
           platformId: atomicTestingPlatformId,
         },
       });
@@ -8673,11 +8794,18 @@ const App: React.FC = () => {
     // Fetch assets, asset groups, and teams for target selection
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
+        log.debug(' Starting fetch of scenario targets for platform:', platformId);
         const [assetsRes, assetGroupsRes, teamsRes] = await Promise.all([
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId } }),
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId } }),
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId } }),
         ]);
+        
+        log.debug(' Scenario targets fetch responses:', {
+          assets: { success: assetsRes?.success, count: assetsRes?.data?.length, error: assetsRes?.error },
+          assetGroups: { success: assetGroupsRes?.success, count: assetGroupsRes?.data?.length, error: assetGroupsRes?.error },
+          teams: { success: teamsRes?.success, count: teamsRes?.data?.length, error: teamsRes?.error },
+        });
         
         if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
         if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
@@ -9684,28 +9812,37 @@ const App: React.FC = () => {
               <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
                 Default Team (for all email notifications)
               </Typography>
-              <Autocomplete
-                options={scenarioTeams}
-                getOptionLabel={(option) => option.team_name || 'Unknown'}
-                value={scenarioTeams.find(t => t.team_id === scenarioSelectedTeam) || null}
-                onChange={(_, value) => setScenarioSelectedTeam(value?.team_id || null)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Select Team" 
-                    size="small" 
-                    placeholder={scenarioTeams.length === 0 ? 'Loading teams...' : 'Choose a team'}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} key={option.team_id}>
-                    <GroupsOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
-                    <Typography variant="body2">{option.team_name}</Typography>
-                  </Box>
-                )}
-                size="small"
-                noOptionsText={scenarioTeams.length === 0 ? 'Loading...' : 'No teams found'}
-              />
+              {scenarioTeams.length === 0 ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+                  <CircularProgress size={20} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Loading teams...
+                  </Typography>
+                </Box>
+              ) : (
+                <Autocomplete
+                  options={scenarioTeams}
+                  getOptionLabel={(option) => option.team_name || 'Unknown'}
+                  value={scenarioTeams.find(t => t.team_id === scenarioSelectedTeam) || null}
+                  onChange={(_, value) => setScenarioSelectedTeam(value?.team_id || null)}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Team" 
+                      size="small" 
+                      placeholder="Choose a team"
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.team_id}>
+                      <GroupsOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                      <Typography variant="body2">{option.team_name}</Typography>
+                    </Box>
+                  )}
+                  size="small"
+                  noOptionsText="No teams found"
+                />
+              )}
             </Box>
           ) : (
             /* Asset/Asset Group Selection for Technical scenarios */
@@ -9734,51 +9871,69 @@ const App: React.FC = () => {
                 </Button>
               </Box>
               {scenarioTargetType === 'asset' ? (
-                <Autocomplete
-                  options={scenarioAssets}
-                  getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
-                  value={scenarioAssets.find(a => a.asset_id === scenarioSelectedAsset) || null}
-                  onChange={(_, value) => setScenarioSelectedAsset(value?.asset_id || null)}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="Select Asset" 
-                      size="small"
-                      placeholder={scenarioAssets.length === 0 ? 'Loading assets...' : 'Choose an asset'}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <Box component="li" {...props} key={option.asset_id}>
-                      <ComputerOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
-                      <Typography variant="body2">{option.asset_name || option.endpoint_hostname}</Typography>
-                    </Box>
-                  )}
-                  size="small"
-                  noOptionsText={scenarioAssets.length === 0 ? 'Loading...' : 'No assets found'}
-                />
+                scenarioAssets.length === 0 ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Loading assets...
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Autocomplete
+                    options={scenarioAssets}
+                    getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
+                    value={scenarioAssets.find(a => a.asset_id === scenarioSelectedAsset) || null}
+                    onChange={(_, value) => setScenarioSelectedAsset(value?.asset_id || null)}
+                    renderInput={(params) => (
+                      <TextField 
+                        {...params} 
+                        label="Select Asset" 
+                        size="small"
+                        placeholder="Choose an asset"
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <Box component="li" {...props} key={option.asset_id}>
+                        <ComputerOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                        <Typography variant="body2">{option.asset_name || option.endpoint_hostname}</Typography>
+                      </Box>
+                    )}
+                    size="small"
+                    noOptionsText="No assets found"
+                  />
+                )
               ) : (
-                <Autocomplete
-                  options={scenarioAssetGroups}
-                  getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
-                  value={scenarioAssetGroups.find(g => g.asset_group_id === scenarioSelectedAssetGroup) || null}
-                  onChange={(_, value) => setScenarioSelectedAssetGroup(value?.asset_group_id || null)}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="Select Asset Group" 
-                      size="small"
-                      placeholder={scenarioAssetGroups.length === 0 ? 'Loading asset groups...' : 'Choose an asset group'}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <Box component="li" {...props} key={option.asset_group_id}>
-                      <LanOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
-                      <Typography variant="body2">{option.asset_group_name}</Typography>
-                    </Box>
-                  )}
-                  size="small"
-                  noOptionsText={scenarioAssetGroups.length === 0 ? 'Loading...' : 'No asset groups found'}
-                />
+                scenarioAssetGroups.length === 0 ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Loading asset groups...
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Autocomplete
+                    options={scenarioAssetGroups}
+                    getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
+                    value={scenarioAssetGroups.find(g => g.asset_group_id === scenarioSelectedAssetGroup) || null}
+                    onChange={(_, value) => setScenarioSelectedAssetGroup(value?.asset_group_id || null)}
+                    renderInput={(params) => (
+                      <TextField 
+                        {...params} 
+                        label="Select Asset Group" 
+                        size="small"
+                        placeholder="Choose an asset group"
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <Box component="li" {...props} key={option.asset_group_id}>
+                        <LanOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                        <Typography variant="body2">{option.asset_group_name}</Typography>
+                      </Box>
+                    )}
+                    size="small"
+                    noOptionsText="No asset groups found"
+                  />
+                )
               )}
             </Box>
           )}
@@ -9818,6 +9973,8 @@ const App: React.FC = () => {
                               
                               setAiFillingEmails(true);
                               try {
+                                log.debug(' Requesting AI email generation for attack patterns:', emailTimeline.map(e => ({ id: e.attackPatternId, name: e.attackPatternName, externalId: e.externalId })));
+                                
                                 const response = await chrome.runtime.sendMessage({
                                   type: 'AI_GENERATE_EMAILS',
                                   payload: {
@@ -9834,9 +9991,28 @@ const App: React.FC = () => {
                                   },
                                 });
                                 
+                                log.debug(' AI email response:', response);
+                                
                                 if (response?.success && response.data?.emails) {
-                                  setScenarioEmails(response.data.emails);
-                                  log.debug(' AI generated', response.data.emails.length, 'email contents');
+                                  // Map AI response to ensure attackPatternId matches
+                                  // AI might return externalId instead of UUID, so we need to map back
+                                  const mappedEmails = response.data.emails.map((aiEmail: any) => {
+                                    // Find matching attack pattern by ID or externalId
+                                    const matchingAp = emailTimeline.find(e => 
+                                      e.attackPatternId === aiEmail.attackPatternId ||
+                                      e.externalId === aiEmail.attackPatternId
+                                    );
+                                    return {
+                                      ...aiEmail,
+                                      attackPatternId: matchingAp?.attackPatternId || aiEmail.attackPatternId,
+                                    };
+                                  });
+                                  
+                                  log.debug(' Mapped emails:', mappedEmails);
+                                  setScenarioEmails(mappedEmails);
+                                  log.debug(' AI generated', mappedEmails.length, 'email contents');
+                                } else {
+                                  log.error(' AI email generation failed - no emails in response:', response);
                                 }
                               } catch (error) {
                                 log.error(' AI email generation failed:', error);
@@ -9855,73 +10031,258 @@ const App: React.FC = () => {
                   })()}
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  {emailTimeline.map((email, index) => {
-                    const aiEmail = scenarioEmails.find(e => e.attackPatternId === email.attackPatternId);
-                    const emailSubject = aiEmail?.subject || `[Simulation] ${email.attackPatternName}`;
-                    const emailBody = aiEmail?.body || '';
+                  {(() => {
+                    // Group emails by kill chain phase
+                    const sortedKillChainPhases = (scenarioOverviewData?.killChainPhases || []).sort((a, b) => a.phase_order - b.phase_order);
+                    
+                    // Build a map of phase name to emails
+                    const emailsByPhase = new Map<string, typeof emailTimeline>();
+                    const emailsWithNoPhase: typeof emailTimeline = [];
+                    
+                    emailTimeline.forEach(email => {
+                      if (email.killChainPhases && email.killChainPhases.length > 0) {
+                        // Use the first kill chain phase for grouping
+                        const phaseName = email.killChainPhases[0];
+                        if (!emailsByPhase.has(phaseName)) {
+                          emailsByPhase.set(phaseName, []);
+                        }
+                        emailsByPhase.get(phaseName)!.push(email);
+                      } else {
+                        emailsWithNoPhase.push(email);
+                      }
+                    });
+                    
+                    // Track global index for delay calculation display
+                    let globalIndex = 0;
                     
                     return (
-                      <Box key={email.attackPatternId} sx={{ display: 'flex', gap: 1.5 }}>
-                        {/* Timeline column */}
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
-                          <Box
-                            sx={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              bgcolor: aiEmail ? '#4caf50' : '#42a5f5',
-                              border: 2,
-                              borderColor: 'background.paper',
-                              boxShadow: 1,
-                              zIndex: 1,
-                            }}
-                          />
-                          {index < emailTimeline.length - 1 && (
-                            <Box sx={{ width: 2, flex: 1, bgcolor: '#42a5f5', opacity: 0.5, minHeight: emailBody ? 60 : 40 }} />
-                          )}
-                        </Box>
-                        {/* Content */}
-                        <Box sx={{ flex: 1, pb: 2 }}>
-                          <Chip 
-                            label={`+${email.delayMinutes} min`} 
-                            size="small" 
-                            sx={{ 
-                              height: 18, 
-                              fontSize: 10, 
-                              bgcolor: 'action.selected',
-                              mb: 0.5,
-                            }} 
-                          />
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {emailSubject}
-                          </Typography>
-                          {aiEmail ? (
-                            <>
+                      <>
+                        {sortedKillChainPhases.map(kcPhase => {
+                          const phaseEmails = emailsByPhase.get(kcPhase.phase_name) || [];
+                          if (phaseEmails.length === 0) return null;
+                          
+                          return (
+                            <Box key={kcPhase.phase_name} sx={{ mb: 2 }}>
+                              {/* Kill Chain Phase Header */}
+                              <Box sx={{
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 1, 
+                                mb: 1.5,
+                                borderLeft: 3, 
+                                borderColor: '#f57c00', 
+                                pl: 1,
+                                py: 0.5,
+                              }}>
+                                <Typography variant="caption" sx={{ 
+                                  fontWeight: 700, 
+                                  textTransform: 'uppercase', 
+                                  color: '#f57c00',
+                                  letterSpacing: 0.5,
+                                }}>
+                                  {kcPhase.phase_name}
+                                </Typography>
+                                <Chip 
+                                  label={phaseEmails.length} 
+                                  size="small" 
+                                  sx={{ 
+                                    height: 16, 
+                                    fontSize: 10, 
+                                    bgcolor: '#f57c00', 
+                                    color: 'white',
+                                    minWidth: 20,
+                                  }} 
+                                />
+                              </Box>
+                              
+                              {/* Emails in this phase */}
+                              {phaseEmails.map((email, phaseIndex) => {
+                                const aiEmail = scenarioEmails.find(e => e.attackPatternId === email.attackPatternId);
+                                const emailSubject = aiEmail?.subject || `[Simulation] ${email.attackPatternName}`;
+                                const emailBody = aiEmail?.body || '';
+                                const isLastInPhase = phaseIndex === phaseEmails.length - 1;
+                                const currentGlobalIndex = globalIndex++;
+                                const isLastOverall = currentGlobalIndex === emailTimeline.length - 1;
+                                
+                                return (
+                                  <Box key={email.attackPatternId} sx={{ display: 'flex', gap: 1.5, ml: 1 }}>
+                                    {/* Timeline column */}
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
+                                      <Box
+                                        sx={{
+                                          width: 12,
+                                          height: 12,
+                                          borderRadius: '50%',
+                                          bgcolor: aiEmail ? '#4caf50' : '#42a5f5',
+                                          border: 2,
+                                          borderColor: 'background.paper',
+                                          boxShadow: 1,
+                                          zIndex: 1,
+                                        }}
+                                      />
+                                      {!isLastOverall && (
+                                        <Box sx={{ 
+                                          width: 2, 
+                                          flex: 1, 
+                                          bgcolor: isLastInPhase ? '#f57c00' : '#42a5f5', 
+                                          opacity: isLastInPhase ? 0.3 : 0.5, 
+                                          minHeight: emailBody ? 60 : 40,
+                                        }} />
+                                      )}
+                                    </Box>
+                                    {/* Content */}
+                                    <Box sx={{ flex: 1, pb: 2 }}>
+                                      <Chip 
+                                        label={`+${email.delayMinutes} min`} 
+                                        size="small" 
+                                        sx={{ 
+                                          height: 18, 
+                                          fontSize: 10, 
+                                          bgcolor: 'action.selected',
+                                          mb: 0.5,
+                                        }} 
+                                      />
+                                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                        {emailSubject}
+                                      </Typography>
+                                      {aiEmail ? (
+                                        <>
+                                          <Chip 
+                                            label="AI generated" 
+                                            size="small" 
+                                            sx={{ 
+                                              height: 16, 
+                                              fontSize: 9, 
+                                              bgcolor: '#4caf50', 
+                                              color: 'white',
+                                              mt: 0.5,
+                                              mb: 0.5,
+                                            }} 
+                                          />
+                                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', whiteSpace: 'pre-wrap' }}>
+                                            {emailBody.substring(0, 200)}{emailBody.length > 200 ? '...' : ''}
+                                          </Typography>
+                                        </>
+                                      ) : (
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic' }}>
+                                          {email.externalId} • Email body placeholder
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  </Box>
+                                );
+                              })}
+                            </Box>
+                          );
+                        })}
+                        
+                        {/* Emails with no kill chain phase */}
+                        {emailsWithNoPhase.length > 0 && (
+                          <Box sx={{ mb: 2 }}>
+                            <Box sx={{
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: 1, 
+                              mb: 1.5,
+                              borderLeft: 3, 
+                              borderColor: 'text.disabled', 
+                              pl: 1,
+                              py: 0.5,
+                            }}>
+                              <Typography variant="caption" sx={{ 
+                                fontWeight: 700, 
+                                textTransform: 'uppercase', 
+                                color: 'text.disabled',
+                                letterSpacing: 0.5,
+                              }}>
+                                Other
+                              </Typography>
                               <Chip 
-                                label="AI generated" 
+                                label={emailsWithNoPhase.length} 
                                 size="small" 
                                 sx={{ 
                                   height: 16, 
-                                  fontSize: 9, 
-                                  bgcolor: '#4caf50', 
+                                  fontSize: 10, 
+                                  bgcolor: 'text.disabled', 
                                   color: 'white',
-                                  mt: 0.5,
-                                  mb: 0.5,
+                                  minWidth: 20,
                                 }} 
                               />
-                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', whiteSpace: 'pre-wrap' }}>
-                                {emailBody.substring(0, 200)}{emailBody.length > 200 ? '...' : ''}
-                              </Typography>
-                            </>
-                          ) : (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic' }}>
-                              {email.externalId} • Email body placeholder
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
+                            </Box>
+                            
+                            {emailsWithNoPhase.map((email, phaseIndex) => {
+                              const aiEmail = scenarioEmails.find(e => e.attackPatternId === email.attackPatternId);
+                              const emailSubject = aiEmail?.subject || `[Simulation] ${email.attackPatternName}`;
+                              const emailBody = aiEmail?.body || '';
+                              const isLastOverall = globalIndex++ === emailTimeline.length - 1;
+                              
+                              return (
+                                <Box key={email.attackPatternId} sx={{ display: 'flex', gap: 1.5, ml: 1 }}>
+                                  {/* Timeline column */}
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
+                                    <Box
+                                      sx={{
+                                        width: 12,
+                                        height: 12,
+                                        borderRadius: '50%',
+                                        bgcolor: aiEmail ? '#4caf50' : '#42a5f5',
+                                        border: 2,
+                                        borderColor: 'background.paper',
+                                        boxShadow: 1,
+                                        zIndex: 1,
+                                      }}
+                                    />
+                                    {!isLastOverall && (
+                                      <Box sx={{ width: 2, flex: 1, bgcolor: '#42a5f5', opacity: 0.5, minHeight: emailBody ? 60 : 40 }} />
+                                    )}
+                                  </Box>
+                                  {/* Content */}
+                                  <Box sx={{ flex: 1, pb: 2 }}>
+                                    <Chip 
+                                      label={`+${email.delayMinutes} min`} 
+                                      size="small" 
+                                      sx={{ 
+                                        height: 18, 
+                                        fontSize: 10, 
+                                        bgcolor: 'action.selected',
+                                        mb: 0.5,
+                                      }} 
+                                    />
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {emailSubject}
+                                    </Typography>
+                                    {aiEmail ? (
+                                      <>
+                                        <Chip 
+                                          label="AI generated" 
+                                          size="small" 
+                                          sx={{ 
+                                            height: 16, 
+                                            fontSize: 9, 
+                                            bgcolor: '#4caf50', 
+                                            color: 'white',
+                                            mt: 0.5,
+                                            mb: 0.5,
+                                          }} 
+                                        />
+                                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', whiteSpace: 'pre-wrap' }}>
+                                          {emailBody.substring(0, 200)}{emailBody.length > 200 ? '...' : ''}
+                                        </Typography>
+                                      </>
+                                    ) : (
+                                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic' }}>
+                                        {email.externalId} • Email body placeholder
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </Box>
               </Box>
             )

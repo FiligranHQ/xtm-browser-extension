@@ -1099,6 +1099,7 @@ function sendPanelMessage(type: string, payload?: unknown): void {
     log.debug(`Cannot send panel message '${type}': panel not available`);
     return;
   }
+  log.debug(` sendPanelMessage: Sending '${type}' to panel iframe`);
   panelFrame.contentWindow.postMessage({ type, payload }, '*');
 }
 
@@ -1904,13 +1905,14 @@ function createSelectionPanel(): HTMLElement | null {
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
-      <button class="xtm-selection-btn xtm-selection-btn-secondary" id="xtm-select-all">Select All New</button>
+      <button class="xtm-selection-btn xtm-selection-btn-secondary" id="xtm-select-all">Select all new</button>
       <button class="xtm-selection-btn xtm-selection-btn-primary" id="xtm-preview-selection" style="display: flex; align-items: center; justify-content: center;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; flex-shrink: 0;">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
-        Preview
+        Import
       </button>
     </div>
   `;
@@ -1946,11 +1948,22 @@ function clearAllSelections(): void {
     el.classList.remove('xtm-selected');
   });
   updateSelectionPanel();
+  
+  // Notify panel about selection change (sync with right panel)
+  sendPanelMessage('SELECTION_UPDATED', {
+    selectedCount: 0,
+    selectedItems: [],
+  });
 }
 
 function selectAllNotFound(): void {
+  log.debug(' selectAllNotFound called');
+  
   // Only select observables that can be added (not SDOs like CVEs)
-  document.querySelectorAll('.xtm-highlight.xtm-not-found').forEach(el => {
+  const notFoundHighlights = document.querySelectorAll('.xtm-highlight.xtm-not-found');
+  log.debug(` Found ${notFoundHighlights.length} not-found highlights`);
+  
+  notFoundHighlights.forEach(el => {
     const value = (el as HTMLElement).dataset.value;
     // Skip if it's a non-addable SDO type
     if ((el as HTMLElement).classList.contains('xtm-sdo-not-addable')) return;
@@ -1959,7 +1972,17 @@ function selectAllNotFound(): void {
       el.classList.add('xtm-selected');
     }
   });
+  
+  log.debug(` Selected ${selectedForImport.size} items:`, Array.from(selectedForImport));
   updateSelectionPanel();
+  
+  // Notify panel about selection change (sync with right panel)
+  const messagePayload = {
+    selectedCount: selectedForImport.size,
+    selectedItems: Array.from(selectedForImport),
+  };
+  log.debug(' Sending SELECTION_UPDATED to panel:', messagePayload);
+  sendPanelMessage('SELECTION_UPDATED', messagePayload);
 }
 
 function openPreviewPanel(): void {
@@ -2016,6 +2039,58 @@ function initialize(): void {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
+    } else if (event.data?.type === 'XTM_TOGGLE_SELECTION' && event.data.value) {
+      // Toggle selection from panel checkbox
+      const value = event.data.value;
+      const highlightEl = document.querySelector(`.xtm-highlight[data-value="${CSS.escape(value)}"]`) as HTMLElement;
+      if (highlightEl) {
+        toggleSelection(highlightEl, value);
+      } else {
+        // No highlight found, but we can still add to selection
+        if (selectedForImport.has(value)) {
+          selectedForImport.delete(value);
+        } else {
+          selectedForImport.add(value);
+        }
+        updateSelectionPanel();
+        // Notify panel about selection change
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
+      }
+    } else if (event.data?.type === 'XTM_SELECT_ALL' && event.data.values) {
+      // Select all items from panel
+      const values = event.data.values as string[];
+      values.forEach(value => {
+        if (!selectedForImport.has(value)) {
+          selectedForImport.add(value);
+          // Update highlights if they exist
+          document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`).forEach(el => {
+            el.classList.add('xtm-selected');
+          });
+        }
+      });
+      updateSelectionPanel();
+      // Notify panel about selection change
+      sendPanelMessage('SELECTION_UPDATED', {
+        selectedCount: selectedForImport.size,
+        selectedItems: Array.from(selectedForImport),
+      });
+    } else if (event.data?.type === 'XTM_DESELECT_ALL') {
+      // Deselect all items
+      selectedForImport.forEach(value => {
+        document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`).forEach(el => {
+          el.classList.remove('xtm-selected');
+        });
+      });
+      selectedForImport.clear();
+      updateSelectionPanel();
+      // Notify panel about selection change
+      sendPanelMessage('SELECTION_UPDATED', {
+        selectedCount: 0,
+        selectedItems: [],
+      });
     }
   });
   

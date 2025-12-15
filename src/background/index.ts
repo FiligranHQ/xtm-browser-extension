@@ -2942,9 +2942,10 @@ async function handleMessage(
           break;
         }
         
-        const { entities, platformId } = message.payload as { 
+        const { entities, platformId, createIndicator } = message.payload as { 
           entities: Array<{ type: string; value: string }>;
           platformId?: string;
+          createIndicator?: boolean;
         };
         
         // Use specified platform or first available
@@ -2959,7 +2960,8 @@ async function handleMessage(
             // Refang values before creating (OpenCTI stores clean values)
             entities.map(e => client.createObservable({ 
               type: e.type as any, 
-              value: refangIndicator(e.value) 
+              value: refangIndicator(e.value),
+              createIndicator: createIndicator ?? true, // Default to true
             }))
           );
           sendResponse(successResponse(results));
@@ -3309,15 +3311,35 @@ async function handleMessage(
               killChainPhases?: string[];
             }>;
           };
+          
+          log.debug(' AI_GENERATE_EMAILS request:', {
+            attackPatterns: request.attackPatterns?.map(ap => ({ id: ap.id, name: ap.name, externalId: ap.externalId })),
+          });
+          
           const response = await aiClient.generateEmails(request);
           
+          log.debug(' AI raw response success:', response.success);
+          log.debug(' AI raw response content (first 500 chars):', response.content?.substring(0, 500));
+          
           if (response.success && response.content) {
-            const emails = parseAIJsonResponse(response.content);
-            sendResponse(successResponse(emails));
+            const parsed = parseAIJsonResponse<{ emails: Array<{ attackPatternId: string; subject: string; body: string }> }>(response.content);
+            log.debug(' Parsed AI response:', parsed);
+            
+            if (!parsed || !parsed.emails || !Array.isArray(parsed.emails)) {
+              log.error(' AI response parsing failed or invalid structure. Content:', response.content.substring(0, 1000));
+              sendResponse({ success: false, error: 'Failed to parse AI response - invalid JSON structure' });
+              break;
+            }
+            
+            // The parsed response should be { emails: [...] }
+            // We send the whole object so response.data.emails works in the panel
+            sendResponse(successResponse(parsed));
           } else {
+            log.error(' AI email generation failed:', response.error);
             sendResponse({ success: false, error: response.error || 'Failed to parse emails' });
           }
         } catch (error) {
+          log.error(' AI email generation exception:', error);
           sendResponse({ 
             success: false, 
             error: error instanceof Error ? error.message : 'AI generation failed' 

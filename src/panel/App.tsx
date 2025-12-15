@@ -52,6 +52,10 @@ import {
   DomainOutlined,
   CheckCircleOutlined,
   ErrorOutline,
+  LanguageOutlined,
+  DnsOutlined,
+  ArrowBackOutlined,
+  EmailOutlined,
 } from '@mui/icons-material';
 import { LockPattern } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
@@ -323,6 +327,9 @@ const App: React.FC = () => {
     delayMinutes: number;
   }>>([]);
   const [scenarioLoading, setScenarioLoading] = useState(false);
+  const [scenarioStep, setScenarioStep] = useState<0 | 1 | 2>(0); // 0: Affinity, 1: Injects, 2: Details
+  const [scenarioTypeAffinity, setScenarioTypeAffinity] = useState<'ENDPOINT' | 'CLOUD' | 'WEB' | 'TABLE-TOP'>('ENDPOINT');
+  const [scenarioPlatformsAffinity, setScenarioPlatformsAffinity] = useState<string[]>(['windows', 'linux', 'macos']);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -970,6 +977,13 @@ const App: React.FC = () => {
       case 'SHOW_ATOMIC_TESTING_PANEL':
       case 'ATOMIC_TESTING_SCAN_RESULTS': {
         const targets = data.payload?.targets || [];
+        const themeFromPayload = data.payload?.theme;
+        
+        // Set theme if provided
+        if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
+          setMode(themeFromPayload);
+        }
+        
         setAtomicTestingTargets(targets);
         setSelectedAtomicTarget(null);
         setAtomicTestingPlatformSelected(false);
@@ -982,6 +996,7 @@ const App: React.FC = () => {
         setAtomicTestingSelectedContract(null);
         setAtomicTestingTitle('');
         setAtomicTestingShowList(true); // Show the list first
+        setAtomicTestingTypeFilter('all'); // Reset type filter
         setPanelMode('atomic-testing');
         break;
       }
@@ -991,14 +1006,25 @@ const App: React.FC = () => {
         setSelectedAtomicTarget(target);
         setAtomicTestingTitle(`Atomic Test - ${target?.name || ''}`);
         setAtomicTestingShowList(false); // Hide list, show form
+        setAtomicTestingInjectorContracts([]); // Reset contracts
+        setAtomicTestingSelectedContract(null);
         
         // If it's an attack pattern and platform is selected, load injector contracts
-        if (target?.type === 'attack-pattern' && (target?.data?.entityId || target?.entityId) && atomicTestingPlatformId) {
-          const entityId = target?.entityId || target?.data?.entityId;
+        // The attack pattern ID should be from OpenAEV - check multiple possible locations
+        const entityId = target?.entityId || 
+          target?.data?.entityId || 
+          target?.data?.attack_pattern_id ||
+          target?.data?.id;
+        
+        log.debug(' ATOMIC_TESTING_SELECT - target:', { target, entityId, platformId: atomicTestingPlatformId });
+        
+        if (target?.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
+          log.debug(' Fetching injector contracts for attack pattern:', entityId);
           chrome.runtime.sendMessage({
             type: 'FETCH_INJECTOR_CONTRACTS',
             payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
           }).then((res: any) => {
+            log.debug(' Injector contracts response:', res);
             if (res?.success) {
               setAtomicTestingInjectorContracts(res.data || []);
             }
@@ -1183,7 +1209,12 @@ const App: React.FC = () => {
         break;
       case 'SHOW_SCENARIO_PANEL': {
         // Initialize scenario creation with attack patterns from the page
-        const { attackPatterns, pageTitle, pageUrl, pageDescription, platformId } = data.payload || {};
+        const { attackPatterns, pageTitle, pageUrl, pageDescription, platformId, theme: themeFromPayload } = data.payload || {};
+        
+        // Set theme if provided
+        if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
+          setMode(themeFromPayload);
+        }
         
         // Store page info
         setCurrentPageUrl(pageUrl || '');
@@ -1213,8 +1244,11 @@ const App: React.FC = () => {
           }
         }
         
-        // Reset selected injects
+        // Reset scenario state
         setSelectedInjects([]);
+        setScenarioStep(0); // Start at affinity selection step
+        setScenarioTypeAffinity('ENDPOINT');
+        setScenarioPlatformsAffinity(['windows', 'linux', 'macos']);
         
         // If attack patterns provided, fetch their details and contracts
         if (attackPatterns && attackPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -3077,10 +3111,7 @@ const App: React.FC = () => {
               size="small"
               startIcon={
                 <img 
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_openaev_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`)
-                    : `../assets/logos/logo_openaev_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`
-                  } 
+                  src={`../assets/logos/logo_openaev_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`} 
                   alt="" 
                   style={{ width: 18, height: 18 }} 
                 />
@@ -6213,6 +6244,7 @@ const App: React.FC = () => {
   const [atomicTestingTargetType, setAtomicTestingTargetType] = useState<'asset' | 'asset_group'>('asset');
   const [atomicTestingAssets, setAtomicTestingAssets] = useState<any[]>([]);
   const [atomicTestingAssetGroups, setAtomicTestingAssetGroups] = useState<any[]>([]);
+  const [atomicTestingTypeFilter, setAtomicTestingTypeFilter] = useState<'all' | 'attack-pattern' | 'domain'>('all');
   const [atomicTestingInjectorContracts, setAtomicTestingInjectorContracts] = useState<any[]>([]);
   const [atomicTestingSelectedAsset, setAtomicTestingSelectedAsset] = useState<string | null>(null);
   const [atomicTestingSelectedAssetGroup, setAtomicTestingSelectedAssetGroup] = useState<string | null>(null);
@@ -6231,13 +6263,16 @@ const App: React.FC = () => {
   const handleSelectAtomicTestingPlatform = async (platformId: string) => {
     setAtomicTestingPlatformId(platformId);
     setAtomicTestingPlatformSelected(true);
+    setAtomicTestingTypeFilter('all'); // Reset filter
     
     // Load assets and asset groups
     setAtomicTestingLoadingAssets(true);
     try {
-      const [assetsRes, groupsRes] = await Promise.all([
+      // Fetch assets, asset groups, and all contracts in parallel
+      const [assetsRes, groupsRes, allContractsRes] = await Promise.all([
         chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId } }),
         chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId } }),
+        chrome.runtime.sendMessage({ type: 'FETCH_INJECTOR_CONTRACTS', payload: { platformId } }), // Fetch all contracts
       ]);
       
       if (assetsRes?.success) {
@@ -6247,14 +6282,56 @@ const App: React.FC = () => {
         setAtomicTestingAssetGroups(groupsRes.data || []);
       }
       
-      // If selected target is attack pattern, load injector contracts
-      if (selectedAtomicTarget?.type === 'attack-pattern' && selectedAtomicTarget?.data?.entityId) {
-        const contractsRes = await chrome.runtime.sendMessage({
-          type: 'FETCH_INJECTOR_CONTRACTS',
-          payload: { attackPatternId: selectedAtomicTarget.data.entityId, platformId },
+      // Enrich attack patterns with contract availability
+      if (allContractsRes?.success) {
+        const allContracts = allContractsRes.data || [];
+        log.debug(' All contracts for atomic testing:', allContracts.length);
+        
+        // Update targets with contract availability
+        setAtomicTestingTargets(prevTargets => {
+          return prevTargets.map(target => {
+            if (target.type !== 'attack-pattern') return target;
+            
+            const targetId = target.entityId || target.data?.entityId || target.data?.attack_pattern_id || target.data?.id;
+            const targetExternalId = target.data?.attack_pattern_external_id;
+            
+            // Find contracts that match this attack pattern
+            // NOTE: injector_contract_attack_patterns is a List<String> of UUIDs, not objects!
+            const matchingContracts = allContracts.filter((contract: any) => {
+              const contractApIds: string[] = contract.injector_contract_attack_patterns || [];
+              // Each item in the array is a UUID string, match directly
+              return contractApIds.includes(targetId);
+            });
+            
+            return {
+              ...target,
+              data: {
+                ...target.data,
+                hasContracts: matchingContracts.length > 0,
+                contractCount: matchingContracts.length,
+              },
+            };
+          });
         });
-        if (contractsRes?.success) {
-          setAtomicTestingInjectorContracts(contractsRes.data || []);
+      }
+      
+      // If selected target is attack pattern, load injector contracts for it
+      if (selectedAtomicTarget?.type === 'attack-pattern') {
+        const entityId = selectedAtomicTarget.entityId || 
+          selectedAtomicTarget.data?.entityId || 
+          selectedAtomicTarget.data?.attack_pattern_id ||
+          selectedAtomicTarget.data?.id;
+        
+        if (entityId) {
+          log.debug(' Platform selected, fetching injector contracts for:', entityId);
+          const contractsRes = await chrome.runtime.sendMessage({
+            type: 'FETCH_INJECTOR_CONTRACTS',
+            payload: { attackPatternId: entityId, platformId },
+          });
+          log.debug(' Injector contracts response:', contractsRes);
+          if (contractsRes?.success) {
+            setAtomicTestingInjectorContracts(contractsRes.data || []);
+          }
         }
       }
     } catch (error) {
@@ -6380,14 +6457,25 @@ const App: React.FC = () => {
     setSelectedAtomicTarget(target);
     setAtomicTestingTitle(`Atomic Test - ${target.name}`);
     setAtomicTestingShowList(false);
+    setAtomicTestingInjectorContracts([]); // Reset contracts
+    setAtomicTestingSelectedContract(null);
     
     // If it's an attack pattern and platform is selected, load injector contracts
-    const entityId = target.entityId || target.data?.entityId;
+    // The attack pattern ID should be from OpenAEV - check multiple possible locations
+    const entityId = target.entityId || 
+      target.data?.entityId || 
+      target.data?.attack_pattern_id ||
+      target.data?.id;
+    
+    log.debug(' Selecting atomic target:', { target, entityId, platformId: atomicTestingPlatformId });
+    
     if (target.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
+      log.debug(' Fetching injector contracts for attack pattern:', entityId);
       chrome.runtime.sendMessage({
         type: 'FETCH_INJECTOR_CONTRACTS',
         payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
       }).then((res: any) => {
+        log.debug(' Injector contracts response:', res);
         if (res?.success) {
           setAtomicTestingInjectorContracts(res.data || []);
         }
@@ -6397,7 +6485,7 @@ const App: React.FC = () => {
   
   const renderAtomicTestingView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
-    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
     
     // Step 1: Platform selection (if multiple OpenAEV platforms)
     if (openaevPlatforms.length > 1 && !atomicTestingPlatformSelected) {
@@ -6458,23 +6546,76 @@ const App: React.FC = () => {
       const domains = atomicTestingTargets.filter(t => t.type === 'Domain-Name' || t.type === 'domain');
       const hostnames = atomicTestingTargets.filter(t => t.type === 'Hostname' || t.type === 'hostname');
       
+      // Separate attack patterns by contract availability
+      const attackPatternsWithContracts = attackPatterns.filter(t => t.data?.hasContracts === true);
+      const attackPatternsWithoutContracts = attackPatterns.filter(t => t.data?.hasContracts !== true);
+      
+      // Apply filter using state variable
+      const showAttackPatterns = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'attack-pattern';
+      const showDomains = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'domain';
+      const showHostnames = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'domain'; // Include hostnames with domains
+      
       return (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
             <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
             <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
           </Box>
           
-          {/* Stats */}
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <Box sx={{ flex: 1, p: 1.5, borderRadius: 1, bgcolor: 'action.hover', textAlign: 'center' }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: '#f44336' }}>
-                {atomicTestingTargets.length}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Targets Found
-              </Typography>
-            </Box>
+          {/* Type Stats - Clickable Boxes */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 2, flexShrink: 0 }}>
+            {attackPatterns.length > 0 && (
+              <Paper
+                elevation={0}
+                onClick={() => setAtomicTestingTypeFilter(atomicTestingTypeFilter === 'attack-pattern' ? 'all' : 'attack-pattern')}
+                sx={{
+                  flex: 1,
+                  p: 1.5,
+                  borderRadius: 1,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: 2,
+                  borderColor: atomicTestingTypeFilter === 'attack-pattern' ? '#d4e157' : 'transparent',
+                  bgcolor: atomicTestingTypeFilter === 'attack-pattern' ? 'rgba(212, 225, 87, 0.1)' : 'action.hover',
+                  transition: 'all 0.2s',
+                  '&:hover': { bgcolor: 'rgba(212, 225, 87, 0.15)' },
+                }}
+              >
+                <LockPattern sx={{ fontSize: 24, color: '#d4e157', mb: 0.5 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#d4e157' }}>
+                  {attackPatterns.length}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  Attack Patterns
+                </Typography>
+              </Paper>
+            )}
+            {(domains.length > 0 || hostnames.length > 0) && (
+              <Paper
+                elevation={0}
+                onClick={() => setAtomicTestingTypeFilter(atomicTestingTypeFilter === 'domain' ? 'all' : 'domain')}
+                sx={{
+                  flex: 1,
+                  p: 1.5,
+                  borderRadius: 1,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: 2,
+                  borderColor: atomicTestingTypeFilter === 'domain' ? '#00bcd4' : 'transparent',
+                  bgcolor: atomicTestingTypeFilter === 'domain' ? 'rgba(0, 188, 212, 0.1)' : 'action.hover',
+                  transition: 'all 0.2s',
+                  '&:hover': { bgcolor: 'rgba(0, 188, 212, 0.15)' },
+                }}
+              >
+                <LanguageOutlined sx={{ fontSize: 24, color: '#00bcd4', mb: 0.5 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#00bcd4' }}>
+                  {domains.length + hostnames.length}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  Domains
+                </Typography>
+              </Paper>
+            )}
           </Box>
           
           {atomicTestingTargets.length === 0 ? (
@@ -6482,58 +6623,16 @@ const App: React.FC = () => {
               No attack patterns or domains found on this page
             </Alert>
           ) : (
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {/* Attack Patterns */}
-              {attackPatterns.length > 0 && (
+            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+              {/* Domains/Hostnames - Always Playable (show first) */}
+              {showDomains && (domains.length > 0 || hostnames.length > 0) && (
                 <>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary' }}>
-                    Attack Patterns ({attackPatterns.length})
-                  </Typography>
-                  {attackPatterns.map((target, i) => (
-                    <Paper
-                      key={`ap-${i}`}
-                      onClick={() => handleSelectAtomicTargetFromList(target)}
-                      elevation={0}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        p: 1.5,
-                        mb: 1,
-                        cursor: 'pointer',
-                        borderRadius: 1,
-                        border: 1,
-                        borderColor: 'divider',
-                        transition: 'all 0.15s',
-                        '&:hover': { 
-                          bgcolor: 'action.hover',
-                          borderColor: '#f44336',
-                        },
-                      }}
-                    >
-                      <SecurityOutlined sx={{ fontSize: 20, color: '#d4e157' }} />
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                          {target.name}
-                        </Typography>
-                        {target.data?.attack_pattern_external_id && (
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {target.data.attack_pattern_external_id}
-                          </Typography>
-                        )}
-                      </Box>
-                      <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
-                    </Paper>
-                  ))}
-                </>
-              )}
-              
-              {/* Domains */}
-              {domains.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 600, color: 'text.secondary' }}>
-                    Domains ({domains.length})
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Domains & Hostnames ({domains.length + hostnames.length})
+                    </Typography>
+                    <Chip label="Always playable" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#4caf50', color: 'white' }} />
+                  </Box>
                   {domains.map((target, i) => (
                     <Paper
                       key={`domain-${i}`}
@@ -6550,10 +6649,7 @@ const App: React.FC = () => {
                         border: 1,
                         borderColor: 'divider',
                         transition: 'all 0.15s',
-                        '&:hover': { 
-                          bgcolor: 'action.hover',
-                          borderColor: '#f44336',
-                        },
+                        '&:hover': { bgcolor: 'action.hover', borderColor: '#00bcd4' },
                       }}
                     >
                       <LanguageOutlined sx={{ fontSize: 20, color: '#00bcd4' }} />
@@ -6561,19 +6657,13 @@ const App: React.FC = () => {
                         <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                           {target.value}
                         </Typography>
+                        <Typography variant="caption" sx={{ color: '#4caf50' }}>
+                          DNS Resolution payload
+                        </Typography>
                       </Box>
                       <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
                     </Paper>
                   ))}
-                </>
-              )}
-              
-              {/* Hostnames */}
-              {hostnames.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 600, color: 'text.secondary' }}>
-                    Hostnames ({hostnames.length})
-                  </Typography>
                   {hostnames.map((target, i) => (
                     <Paper
                       key={`hostname-${i}`}
@@ -6590,10 +6680,7 @@ const App: React.FC = () => {
                         border: 1,
                         borderColor: 'divider',
                         transition: 'all 0.15s',
-                        '&:hover': { 
-                          bgcolor: 'action.hover',
-                          borderColor: '#f44336',
-                        },
+                        '&:hover': { bgcolor: 'action.hover', borderColor: '#9c27b0' },
                       }}
                     >
                       <DnsOutlined sx={{ fontSize: 20, color: '#9c27b0' }} />
@@ -6601,8 +6688,94 @@ const App: React.FC = () => {
                         <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                           {target.value}
                         </Typography>
+                        <Typography variant="caption" sx={{ color: '#4caf50' }}>
+                          DNS Resolution payload
+                        </Typography>
                       </Box>
                       <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Paper>
+                  ))}
+                </>
+              )}
+              
+              {/* Attack Patterns WITH Contracts - Playable */}
+              {showAttackPatterns && attackPatternsWithContracts.length > 0 && (
+                <>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: domains.length > 0 || hostnames.length > 0 ? 2 : 0 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Attack Patterns - Ready ({attackPatternsWithContracts.length})
+                    </Typography>
+                    <Chip label="Contracts available" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#4caf50', color: 'white' }} />
+                  </Box>
+                  {attackPatternsWithContracts.map((target, i) => (
+                    <Paper
+                      key={`ap-ready-${i}`}
+                      onClick={() => handleSelectAtomicTargetFromList(target)}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        mb: 1,
+                        cursor: 'pointer',
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        transition: 'all 0.15s',
+                        '&:hover': { bgcolor: 'action.hover', borderColor: '#d4e157' },
+                      }}
+                    >
+                      <LockPattern sx={{ fontSize: 20, color: '#d4e157' }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                          {target.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {target.data?.attack_pattern_external_id || ''}
+                          {target.data?.contractCount && ` • ${target.data.contractCount} contract${target.data.contractCount !== 1 ? 's' : ''}`}
+                        </Typography>
+                      </Box>
+                      <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </Paper>
+                  ))}
+                </>
+              )}
+              
+              {/* Attack Patterns WITHOUT Contracts - Not Playable */}
+              {showAttackPatterns && attackPatternsWithoutContracts.length > 0 && (
+                <>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      Attack Patterns - No Contracts ({attackPatternsWithoutContracts.length})
+                    </Typography>
+                    <Chip label="Not playable" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'text.disabled', color: 'white' }} />
+                  </Box>
+                  {attackPatternsWithoutContracts.map((target, i) => (
+                    <Paper
+                      key={`ap-no-contract-${i}`}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        mb: 1,
+                        borderRadius: 1,
+                        border: 1,
+                        borderColor: 'divider',
+                        opacity: 0.6,
+                      }}
+                    >
+                      <LockPattern sx={{ fontSize: 20, color: 'text.disabled' }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word', color: 'text.secondary' }}>
+                          {target.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                          {target.data?.attack_pattern_external_id || ''} • No inject contracts
+                        </Typography>
+                      </Box>
                     </Paper>
                   ))}
                 </>
@@ -6610,7 +6783,7 @@ const App: React.FC = () => {
             </Box>
           )}
           
-          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, textAlign: 'center', flexShrink: 0 }}>
             Select a target from the list or click on a highlight on the page
           </Typography>
         </Box>
@@ -6619,27 +6792,37 @@ const App: React.FC = () => {
     
     // Step 3: Show form once target is selected
     return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
-          {atomicTestingTargets.length > 0 && (
-            <Button 
-              size="small" 
-              startIcon={<ArrowBackOutlined />}
+        </Box>
+        
+        {/* Back to list button */}
+        {atomicTestingTargets.length > 0 && (
+          <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+            <Button
+              size="small"
+              startIcon={<ChevronLeftOutlined />}
               onClick={() => {
                 setSelectedAtomicTarget(null);
                 setAtomicTestingShowList(true);
               }}
+              sx={{ 
+                color: 'text.secondary',
+                textTransform: 'none',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
             >
-              Back
+              Back to list
             </Button>
-          )}
-        </Box>
+          </Box>
+        )}
         
         {/* Target Info */}
         {selectedAtomicTarget ? (
-          <Paper elevation={0} sx={{ p: 2, mb: 2, border: 1, borderColor: '#f44336', borderRadius: 1, bgcolor: 'rgba(244, 67, 54, 0.1)' }}>
+          <Paper elevation={0} sx={{ p: 2, mb: 2, border: 1, borderColor: '#f44336', borderRadius: 1, bgcolor: 'rgba(244, 67, 54, 0.1)', flexShrink: 0 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Selected Target</Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedAtomicTarget.name}</Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
@@ -6647,7 +6830,7 @@ const App: React.FC = () => {
             </Typography>
           </Paper>
         ) : (
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
             Click on a highlighted target on the page or select from the list
           </Alert>
         )}
@@ -6657,7 +6840,7 @@ const App: React.FC = () => {
             <CircularProgress size={32} />
           </Box>
         ) : selectedAtomicTarget && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'auto' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'auto', minHeight: 0 }}>
             {/* Title */}
             <TextField
               label="Test Title"
@@ -6678,7 +6861,7 @@ const App: React.FC = () => {
                   variant={atomicTestingTargetType === 'asset' ? 'contained' : 'outlined'}
                   size="small"
                   onClick={() => setAtomicTestingTargetType('asset')}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, minWidth: 0 }}
                 >
                   Asset
                 </Button>
@@ -6686,7 +6869,7 @@ const App: React.FC = () => {
                   variant={atomicTestingTargetType === 'asset_group' ? 'contained' : 'outlined'}
                   size="small"
                   onClick={() => setAtomicTestingTargetType('asset_group')}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, minWidth: 0 }}
                 >
                   Asset Group
                 </Button>
@@ -6716,14 +6899,91 @@ const App: React.FC = () => {
             
             {/* Injector Contract Selection (for attack patterns) */}
             {selectedAtomicTarget.type === 'attack-pattern' && (
-              <Autocomplete
-                options={atomicTestingInjectorContracts}
-                getOptionLabel={(option) => option.injector_contract_labels?.en || option.injector_contract_id || 'Unknown'}
-                value={atomicTestingInjectorContracts.find(c => c.injector_contract_id === atomicTestingSelectedContract) || null}
-                onChange={(_, value) => setAtomicTestingSelectedContract(value?.injector_contract_id || null)}
-                renderInput={(params) => <TextField {...params} label="Select Injector Contract" size="small" />}
-                size="small"
-              />
+              <Box>
+                <Autocomplete
+                  options={atomicTestingInjectorContracts}
+                  getOptionLabel={(option) => {
+                    const label = option.injector_contract_labels?.en || 
+                      option.injector_contract_labels?.['en-US'] || 
+                      option.injector_name || 
+                      'Unknown Contract';
+                    return label;
+                  }}
+                  value={atomicTestingInjectorContracts.find(c => c.injector_contract_id === atomicTestingSelectedContract) || null}
+                  onChange={(_, value) => setAtomicTestingSelectedContract(value?.injector_contract_id || null)}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Injector Contract" 
+                      size="small"
+                      helperText={atomicTestingInjectorContracts.length === 0 ? 'No contracts available for this attack pattern' : undefined}
+                    />
+                  )}
+                  renderOption={(props, option) => {
+                    const label = option.injector_contract_labels?.en || 
+                      option.injector_contract_labels?.['en-US'] || 
+                      option.injector_name || 
+                      'Unknown Contract';
+                    const platforms = option.injector_contract_platforms || [];
+                    const injectorType = option.injector_type || '';
+                    
+                    return (
+                      <li {...props} key={option.injector_contract_id}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Typography variant="body2">{label}</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            {platforms.map((platform: string) => (
+                              <Chip
+                                key={platform}
+                                label={platform}
+                                size="small"
+                                sx={{ 
+                                  height: 18, 
+                                  fontSize: 10,
+                                  bgcolor: platform === 'Windows' ? '#0078d4' : 
+                                          platform === 'Linux' ? '#f57c00' : 
+                                          platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
+                                  color: 'white',
+                                }}
+                              />
+                            ))}
+                            {injectorType && (
+                              <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                                {injectorType}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      </li>
+                    );
+                  }}
+                  size="small"
+                  noOptionsText="No contracts available for this attack pattern"
+                />
+                {atomicTestingInjectorContracts.length > 0 && atomicTestingSelectedContract && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                    {(() => {
+                      const selectedContract = atomicTestingInjectorContracts.find(c => c.injector_contract_id === atomicTestingSelectedContract);
+                      const platforms = selectedContract?.injector_contract_platforms || [];
+                      return platforms.map((platform: string) => (
+                        <Chip
+                          key={platform}
+                          label={platform}
+                          size="small"
+                          sx={{ 
+                            height: 20, 
+                            fontSize: 11,
+                            bgcolor: platform === 'Windows' ? '#0078d4' : 
+                                    platform === 'Linux' ? '#f57c00' : 
+                                    platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
+                            color: 'white',
+                          }}
+                        />
+                      ));
+                    })()}
+                  </Box>
+                )}
+              </Box>
             )}
             
             {/* Info for domain/hostname */}
@@ -6735,7 +6995,7 @@ const App: React.FC = () => {
             )}
             
             {/* Create Button */}
-            <Box sx={{ mt: 'auto', pt: 2 }}>
+            <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
               <Button
                 fullWidth
                 variant="contained"
@@ -6908,7 +7168,7 @@ const App: React.FC = () => {
       case 'Player': return <PersonOutlined sx={{ fontSize: iconSize, color: '#ff9800' }} />;
       case 'Team': return <GroupsOutlined sx={{ fontSize: iconSize, color: '#4caf50' }} />;
       case 'Organization': return <DomainOutlined sx={{ fontSize: iconSize, color: '#3f51b5' }} />;
-      case 'AttackPattern': return <SecurityOutlined sx={{ fontSize: iconSize, color: '#d4e157' }} />;
+      case 'AttackPattern': return <LockPattern sx={{ fontSize: iconSize, color: '#d4e157' }} />;
       case 'Finding': return <TravelExploreOutlined sx={{ fontSize: iconSize, color: '#e91e63' }} />;
       case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: iconSize, color: '#9c27b0' }} />;
       case 'Exercise': return <Kayaking sx={{ fontSize: iconSize, color: '#ff5722' }} />;
@@ -7235,12 +7495,41 @@ const App: React.FC = () => {
   
   const renderScenarioOverviewView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
-    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
+    
+    // Filter contracts by platform affinity for technical scenarios
+    const getFilteredContracts = (contracts: any[]) => {
+      if (scenarioTypeAffinity === 'TABLE-TOP') return []; // No contracts for table-top
+      if (!contracts) return [];
+      
+      return contracts.filter((contract: any) => {
+        const contractPlatforms = contract.injector_contract_platforms || [];
+        // If no platforms specified on contract, include it
+        if (contractPlatforms.length === 0) return true;
+        // Check if any selected platform matches contract platforms
+        return scenarioPlatformsAffinity.some(p => 
+          contractPlatforms.map((cp: string) => cp.toLowerCase()).includes(p.toLowerCase())
+        );
+      });
+    };
+    
+    // Handle proceeding from affinity selection to inject selection
+    const handleAffinityNext = async () => {
+      setScenarioStep(1);
+      
+      // For table-top, we don't need to fetch contracts
+      if (scenarioTypeAffinity === 'TABLE-TOP') {
+        return;
+      }
+      
+      // For technical scenarios, we already have the data loaded
+      // Just proceed to step 1
+    };
     
     return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Create Scenario
@@ -7248,7 +7537,10 @@ const App: React.FC = () => {
         </Box>
         
         {/* Stepper */}
-        <Stepper activeStep={0} sx={{ mb: 3 }}>
+        <Stepper activeStep={scenarioStep} sx={{ mb: 3, flexShrink: 0 }}>
+          <Step>
+            <StepLabel>Select Affinity</StepLabel>
+          </Step>
           <Step>
             <StepLabel>Select Injects</StepLabel>
           </Step>
@@ -7264,142 +7556,343 @@ const App: React.FC = () => {
               Loading attack patterns and inject contracts...
             </Typography>
           </Box>
-        ) : (
-          <>
-            {/* Attack Patterns List */}
+        ) : scenarioStep === 0 ? (
+          /* Step 0: Affinity Selection */
+          <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
+            {/* Type Affinity */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
+              Type Affinity
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+              Select the type of scenario you want to create
             </Typography>
             
-            {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                No attack patterns found on this page. You can still create an empty scenario.
-              </Alert>
-            ) : (
-              <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
-                {scenarioOverviewData.attackPatterns.map((ap) => (
-                  <Paper
-                    key={ap.id}
-                    elevation={0}
-                    sx={{
-                      p: 1.5,
-                      mb: 1,
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                    }}
-                  >
-                    {/* Attack Pattern Header */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <SecurityOutlined sx={{ fontSize: 18, color: '#d4e157' }} />
-                      <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                        {ap.name}
-                      </Typography>
-                      <Chip 
-                        label={ap.externalId} 
-                        size="small" 
-                        sx={{ fontSize: 10, height: 20 }} 
-                      />
-                    </Box>
-                    
-                    {/* Kill Chain Phases */}
-                    {ap.killChainPhases && ap.killChainPhases.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                        {ap.killChainPhases.map((phase, i) => (
-                          <Chip
-                            key={i}
-                            label={phase}
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontSize: 9, height: 18 }}
-                          />
-                        ))}
-                      </Box>
-                    )}
-                    
-                    {/* Available Contracts */}
-                    {ap.contracts && ap.contracts.length > 0 ? (
-                      <TextField
-                        select
-                        label="Select Inject Contract"
-                        size="small"
-                        fullWidth
-                        value={selectedInjects.find(i => i.attackPatternId === ap.id)?.contractId || ''}
-                        onChange={(e) => {
-                          const contractId = e.target.value;
-                          if (!contractId) {
-                            // Remove this attack pattern's inject
-                            setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+              {[
+                { value: 'ENDPOINT', label: 'Endpoint', description: 'Technical endpoint testing' },
+                { value: 'CLOUD', label: 'Cloud', description: 'Technical cloud testing' },
+                { value: 'WEB', label: 'Web', description: 'Technical web testing' },
+                { value: 'TABLE-TOP', label: 'Table-top', description: 'Simulation with email notifications' },
+              ].map((option) => (
+                <Paper
+                  key={option.value}
+                  elevation={0}
+                  onClick={() => setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity)}
+                  sx={{
+                    p: 1.5,
+                    flex: '1 1 calc(50% - 4px)',
+                    minWidth: 120,
+                    border: 2,
+                    borderColor: scenarioTypeAffinity === option.value ? 'primary.main' : 'divider',
+                    borderRadius: 1,
+                    cursor: 'pointer',
+                    bgcolor: scenarioTypeAffinity === option.value ? 'action.selected' : 'transparent',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {option.label}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {option.description}
+                  </Typography>
+                </Paper>
+              ))}
+            </Box>
+            
+            {/* Platform Affinity - Only show for technical scenarios */}
+            {scenarioTypeAffinity !== 'TABLE-TOP' && (
+              <>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Platform Affinity
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+                  Select target platforms for technical injects
+                </Typography>
+                
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+                  {[
+                    { value: 'windows', label: 'Windows', color: '#0078d4' },
+                    { value: 'linux', label: 'Linux', color: '#f57c00' },
+                    { value: 'macos', label: 'macOS', color: '#7b1fa2' },
+                    { value: 'android', label: 'Android', color: '#3ddc84' },
+                  ].map((platform) => {
+                    const isSelected = scenarioPlatformsAffinity.includes(platform.value);
+                    return (
+                      <Chip
+                        key={platform.value}
+                        label={platform.label}
+                        onClick={() => {
+                          if (isSelected) {
+                            // Don't allow deselecting if it's the last one
+                            if (scenarioPlatformsAffinity.length > 1) {
+                              setScenarioPlatformsAffinity(prev => prev.filter(p => p !== platform.value));
+                            }
                           } else {
-                            const contract = ap.contracts.find((c: any) => c.injector_contract_id === contractId);
-                            const contractLabel = contract?.injector_contract_labels?.en || 
-                              contract?.injector_contract_labels?.['en-US'] || 
-                              contract?.injector_name || 
-                              'Unknown';
-                            
-                            setSelectedInjects(prev => {
-                              const existing = prev.findIndex(i => i.attackPatternId === ap.id);
-                              const newInject = {
-                                attackPatternId: ap.id,
-                                attackPatternName: ap.name,
-                                contractId,
-                                contractLabel,
-                                delayMinutes: existing >= 0 ? prev[existing].delayMinutes : prev.length * 10,
-                              };
-                              
-                              if (existing >= 0) {
-                                const updated = [...prev];
-                                updated[existing] = newInject;
-                                return updated;
-                              }
-                              return [...prev, newInject];
-                            });
+                            setScenarioPlatformsAffinity(prev => [...prev, platform.value]);
                           }
                         }}
-                        sx={{ mt: 1 }}
+                        sx={{
+                          bgcolor: isSelected ? platform.color : 'transparent',
+                          color: isSelected ? 'white' : 'text.primary',
+                          border: 1,
+                          borderColor: isSelected ? platform.color : 'divider',
+                          '&:hover': {
+                            bgcolor: isSelected ? platform.color : 'action.hover',
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+              </>
+            )}
+            
+            {/* Table-top info */}
+            {scenarioTypeAffinity === 'TABLE-TOP' && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Table-top scenarios use email notifications to simulate attack phases. 
+                Each attack pattern will generate an email placeholder for the corresponding kill chain phase.
+              </Alert>
+            )}
+            
+            {/* Attack Patterns Preview */}
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Detected Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
+            </Typography>
+            <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
+              {scenarioOverviewData?.attackPatterns?.slice(0, 5).map((ap) => (
+                <Box key={ap.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
+                  <LockPattern sx={{ fontSize: 16, color: '#d4e157' }} />
+                  <Typography variant="body2" sx={{ flex: 1 }} noWrap>{ap.name}</Typography>
+                  <Chip label={ap.externalId} size="small" sx={{ fontSize: 9, height: 18 }} />
+                </Box>
+              ))}
+              {(scenarioOverviewData?.attackPatterns?.length || 0) > 5 && (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  +{(scenarioOverviewData?.attackPatterns?.length || 0) - 5} more...
+                </Typography>
+              )}
+            </Box>
+            
+            {/* Actions */}
+            <Box sx={{ display: 'flex', gap: 1, mt: 'auto', flexShrink: 0 }}>
+              <Button variant="outlined" onClick={handleClose} sx={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleAffinityNext}
+                endIcon={<ArrowForwardOutlined />}
+                sx={{ flex: 1 }}
+              >
+                Next
+              </Button>
+            </Box>
+          </Box>
+        ) : scenarioStep === 1 ? (
+          /* Step 1: Inject Selection */
+          <>
+            {/* Back button */}
+            <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+              <Button
+                size="small"
+                startIcon={<ChevronLeftOutlined />}
+                onClick={() => setScenarioStep(0)}
+                sx={{ 
+                  color: 'text.secondary',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                Back to affinity selection
+              </Button>
+            </Box>
+            
+            {scenarioTypeAffinity === 'TABLE-TOP' ? (
+              /* Table-top: Email placeholders */
+              <>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Email Notifications ({scenarioOverviewData?.attackPatterns?.length || 0})
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+                  Each attack pattern will generate an email notification for simulation purposes
+                </Typography>
+                
+                {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    No attack patterns found. Add attack patterns to generate email notifications.
+                  </Alert>
+                ) : (
+                  <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
+                    {scenarioOverviewData.attackPatterns.map((ap, index) => (
+                      <Paper
+                        key={ap.id}
+                        elevation={0}
+                        sx={{
+                          p: 1.5,
+                          mb: 1,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                        }}
                       >
-                        <MenuItem value="">
-                          <em>Skip this attack pattern</em>
-                        </MenuItem>
-                        {ap.contracts.map((contract: any) => {
-                          const label = contract.injector_contract_labels?.en || 
-                            contract.injector_contract_labels?.['en-US'] || 
-                            contract.injector_name || 
-                            'Unknown Contract';
-                          return (
-                            <MenuItem key={contract.injector_contract_id} value={contract.injector_contract_id}>
-                              {label}
-                            </MenuItem>
-                          );
-                        })}
-                      </TextField>
-                    ) : (
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                        No inject contracts available for this attack pattern
-                      </Typography>
-                    )}
-                  </Paper>
-                ))}
-              </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <EmailOutlined sx={{ fontSize: 18, color: '#42a5f5' }} />
+                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                            {ap.name}
+                          </Typography>
+                          <Chip label={`+${index * 10}min`} size="small" sx={{ fontSize: 10, height: 20, bgcolor: 'action.selected' }} />
+                        </Box>
+                        {ap.killChainPhases && ap.killChainPhases.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {ap.killChainPhases.map((phase, i) => (
+                              <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
+                            ))}
+                          </Box>
+                        )}
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
+                          Email Subject: [Simulation] {ap.name} ({ap.externalId})
+                        </Typography>
+                      </Paper>
+                    ))}
+                  </Box>
+                )}
+              </>
+            ) : (
+              /* Technical: Inject contracts */
+              <>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
+                </Typography>
+                
+                {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    No attack patterns found on this page. You can still create an empty scenario.
+                  </Alert>
+                ) : (
+                  <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
+                    {scenarioOverviewData.attackPatterns.map((ap) => {
+                      const filteredContracts = getFilteredContracts(ap.contracts);
+                      return (
+                        <Paper
+                          key={ap.id}
+                          elevation={0}
+                          sx={{ p: 1.5, mb: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <LockPattern sx={{ fontSize: 18, color: '#d4e157' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>{ap.name}</Typography>
+                            <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
+                          </Box>
+                          
+                          {ap.killChainPhases && ap.killChainPhases.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                              {ap.killChainPhases.map((phase, i) => (
+                                <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
+                              ))}
+                            </Box>
+                          )}
+                          
+                          {filteredContracts.length > 0 ? (
+                            <TextField
+                              select
+                              label="Select Inject Contract"
+                              size="small"
+                              fullWidth
+                              value={selectedInjects.find(i => i.attackPatternId === ap.id)?.contractId || ''}
+                              onChange={(e) => {
+                                const contractId = e.target.value;
+                                if (!contractId) {
+                                  setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                                } else {
+                                  const contract = filteredContracts.find((c: any) => c.injector_contract_id === contractId);
+                                  const contractLabel = contract?.injector_contract_labels?.en || 
+                                    contract?.injector_contract_labels?.['en-US'] || 
+                                    contract?.injector_name || 'Unknown';
+                                  
+                                  setSelectedInjects(prev => {
+                                    const existing = prev.findIndex(i => i.attackPatternId === ap.id);
+                                    const newInject = {
+                                      attackPatternId: ap.id,
+                                      attackPatternName: ap.name,
+                                      contractId,
+                                      contractLabel,
+                                      delayMinutes: existing >= 0 ? prev[existing].delayMinutes : prev.length * 10,
+                                    };
+                                    
+                                    if (existing >= 0) {
+                                      const updated = [...prev];
+                                      updated[existing] = newInject;
+                                      return updated;
+                                    }
+                                    return [...prev, newInject];
+                                  });
+                                }
+                              }}
+                              sx={{ mt: 1 }}
+                            >
+                              <MenuItem value=""><em>Skip this attack pattern</em></MenuItem>
+                              {filteredContracts.map((contract: any) => {
+                                const label = contract.injector_contract_labels?.en || 
+                                  contract.injector_contract_labels?.['en-US'] || 
+                                  contract.injector_name || 'Unknown Contract';
+                                const platforms = contract.injector_contract_platforms || [];
+                                return (
+                                  <MenuItem key={contract.injector_contract_id} value={contract.injector_contract_id}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                      <Typography variant="body2" sx={{ flex: 1 }}>{label}</Typography>
+                                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        {platforms.slice(0, 2).map((p: string) => (
+                                          <Chip key={p} label={p} size="small" sx={{ 
+                                            height: 16, fontSize: 9,
+                                            bgcolor: p.toLowerCase() === 'windows' ? '#0078d4' : 
+                                                    p.toLowerCase() === 'linux' ? '#f57c00' : 
+                                                    p.toLowerCase() === 'macos' ? '#7b1fa2' : 'action.selected',
+                                            color: 'white',
+                                          }} />
+                                        ))}
+                                      </Box>
+                                    </Box>
+                                  </MenuItem>
+                                );
+                              })}
+                            </TextField>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                              No contracts available for selected platforms ({scenarioPlatformsAffinity.join(', ')})
+                            </Typography>
+                          )}
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                )}
+              </>
             )}
             
             {/* Summary */}
-            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, mb: 2 }}>
+            <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, mb: 2, flexShrink: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {selectedInjects.length} inject{selectedInjects.length !== 1 ? 's' : ''} selected
+                {scenarioTypeAffinity === 'TABLE-TOP' 
+                  ? `${scenarioOverviewData?.attackPatterns?.length || 0} email notification${(scenarioOverviewData?.attackPatterns?.length || 0) !== 1 ? 's' : ''}`
+                  : `${selectedInjects.length} inject${selectedInjects.length !== 1 ? 's' : ''} selected`
+                }
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Total scenario duration: ~{selectedInjects.length > 0 ? (selectedInjects.length - 1) * 10 : 0} minutes
+                {scenarioTypeAffinity === 'TABLE-TOP'
+                  ? `Total scenario duration: ~${((scenarioOverviewData?.attackPatterns?.length || 1) - 1) * 10} minutes`
+                  : `Total scenario duration: ~${selectedInjects.length > 0 ? (selectedInjects.length - 1) * 10 : 0} minutes`
+                }
               </Typography>
             </Box>
             
             {/* Actions */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                onClick={handleClose}
-                sx={{ flex: 1 }}
-              >
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Button variant="outlined" onClick={handleClose} sx={{ flex: 1 }}>
                 Cancel
               </Button>
               <Button
@@ -7412,14 +7905,14 @@ const App: React.FC = () => {
               </Button>
             </Box>
           </>
-        )}
+        ) : null}
       </Box>
     );
   };
   
   const renderScenarioFormView = () => {
     const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
-    const openaevLogoPath = chrome.runtime.getURL(`assets/logo_openaev_${logoSuffix}.png`);
+    const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
     
     const categories = [
       { value: 'attack-scenario', label: 'Attack Scenario' },
@@ -7429,10 +7922,21 @@ const App: React.FC = () => {
       { value: 'purple-team', label: 'Purple Team' },
     ];
     
+    // For table-top, create email timeline from attack patterns
+    const emailTimeline = scenarioTypeAffinity === 'TABLE-TOP' && scenarioOverviewData?.attackPatterns
+      ? scenarioOverviewData.attackPatterns.map((ap, index) => ({
+          attackPatternId: ap.id,
+          attackPatternName: ap.name,
+          externalId: ap.externalId,
+          killChainPhases: ap.killChainPhases,
+          delayMinutes: index * 10,
+        }))
+      : [];
+    
     return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Create Scenario
@@ -7440,8 +7944,11 @@ const App: React.FC = () => {
         </Box>
         
         {/* Stepper */}
-        <Stepper activeStep={1} sx={{ mb: 3 }}>
-          <Step>
+        <Stepper activeStep={2} sx={{ mb: 3, flexShrink: 0 }}>
+          <Step completed>
+            <StepLabel>Select Affinity</StepLabel>
+          </Step>
+          <Step completed>
             <StepLabel>Select Injects</StepLabel>
           </Step>
           <Step>
@@ -7449,14 +7956,57 @@ const App: React.FC = () => {
           </Step>
         </Stepper>
         
+        {/* Back button */}
+        <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setScenarioStep(1)}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to inject selection
+          </Button>
+        </Box>
+        
+        {/* Affinity Summary */}
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+          <Chip 
+            label={`Type: ${scenarioTypeAffinity}`} 
+            size="small" 
+            sx={{ 
+              bgcolor: scenarioTypeAffinity === 'TABLE-TOP' ? '#42a5f5' : '#4caf50',
+              color: 'white',
+            }} 
+          />
+          {scenarioTypeAffinity !== 'TABLE-TOP' && scenarioPlatformsAffinity.map(p => (
+            <Chip 
+              key={p} 
+              label={p} 
+              size="small" 
+              sx={{ 
+                bgcolor: p === 'windows' ? '#0078d4' : 
+                        p === 'linux' ? '#f57c00' : 
+                        p === 'macos' ? '#7b1fa2' : 
+                        p === 'android' ? '#3ddc84' : 'action.selected',
+                color: 'white',
+              }} 
+            />
+          ))}
+        </Box>
+        
         {/* Form */}
-        <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           <TextField
             label="Scenario Name"
             value={scenarioForm.name}
             onChange={(e) => setScenarioForm(prev => ({ ...prev, name: e.target.value }))}
             fullWidth
             required
+            size="small"
             sx={{ mb: 2 }}
           />
           
@@ -7465,6 +8015,7 @@ const App: React.FC = () => {
             value={scenarioForm.subtitle}
             onChange={(e) => setScenarioForm(prev => ({ ...prev, subtitle: e.target.value }))}
             fullWidth
+            size="small"
             placeholder="Short tagline for the scenario"
             sx={{ mb: 2 }}
           />
@@ -7475,6 +8026,7 @@ const App: React.FC = () => {
             value={scenarioForm.category}
             onChange={(e) => setScenarioForm(prev => ({ ...prev, category: e.target.value }))}
             fullWidth
+            size="small"
             sx={{ mb: 2 }}
           >
             {categories.map((cat) => (
@@ -7490,52 +8042,93 @@ const App: React.FC = () => {
             onChange={(e) => setScenarioForm(prev => ({ ...prev, description: e.target.value }))}
             fullWidth
             multiline
-            rows={6}
+            rows={4}
             placeholder="Detailed description of the scenario..."
             sx={{ mb: 2 }}
           />
           
-          {/* Inject Timeline Preview */}
-          {selectedInjects.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                Inject Timeline ({selectedInjects.length})
-              </Typography>
-              <Box sx={{ pl: 2, borderLeft: 2, borderColor: 'primary.main' }}>
-                {selectedInjects.map((inject, index) => (
-                  <Box key={inject.contractId} sx={{ mb: 1.5, position: 'relative' }}>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        left: -11,
-                        top: 4,
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: 'primary.main',
-                      }}
-                    />
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      +{inject.delayMinutes} min
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {inject.attackPatternName}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      {inject.contractLabel}
-                    </Typography>
-                  </Box>
-                ))}
+          {/* Timeline Preview */}
+          {scenarioTypeAffinity === 'TABLE-TOP' ? (
+            /* Email Timeline for Table-top */
+            emailTimeline.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Email Timeline ({emailTimeline.length})
+                </Typography>
+                <Box sx={{ pl: 2, borderLeft: 2, borderColor: '#42a5f5' }}>
+                  {emailTimeline.map((email) => (
+                    <Box key={email.attackPatternId} sx={{ mb: 1.5, position: 'relative' }}>
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          left: -11,
+                          top: 4,
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: '#42a5f5',
+                        }}
+                      />
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        +{email.delayMinutes} min
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        [Simulation] {email.attackPatternName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {email.externalId} • Email Notification
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
               </Box>
-            </Box>
+            )
+          ) : (
+            /* Inject Timeline for Technical scenarios */
+            selectedInjects.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Inject Timeline ({selectedInjects.length})
+                </Typography>
+                <Box sx={{ pl: 2, borderLeft: 2, borderColor: 'primary.main' }}>
+                  {selectedInjects.map((inject) => (
+                    <Box key={inject.contractId} sx={{ mb: 1.5, position: 'relative' }}>
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          left: -11,
+                          top: 4,
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: 'primary.main',
+                        }}
+                      />
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        +{inject.delayMinutes} min
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {inject.attackPatternName}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {inject.contractLabel}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )
           )}
         </Box>
         
         {/* Actions */}
-        <Box sx={{ display: 'flex', gap: 1, pt: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, pt: 2, flexShrink: 0 }}>
           <Button
             variant="outlined"
-            onClick={() => setPanelMode('scenario-overview')}
+            onClick={() => {
+              setScenarioStep(1);
+              setPanelMode('scenario-overview');
+            }}
             startIcon={<ArrowBackOutlined />}
             sx={{ flex: 1 }}
           >

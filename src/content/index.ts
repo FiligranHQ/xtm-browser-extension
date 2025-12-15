@@ -2405,11 +2405,13 @@ async function scanPageForAtomicTesting(): Promise<void> {
       // Still open panel to show empty state
       ensurePanelElements();
       showPanelElements();
+      const theme = await getCurrentTheme();
       setTimeout(() => {
         sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
           targets: [],
           pageTitle,
           pageUrl: url,
+          theme,
         });
       }, 100);
       return;
@@ -2428,8 +2430,14 @@ async function scanPageForAtomicTesting(): Promise<void> {
     });
     
     // Highlight atomic testing targets using proper exact match
+    // For attack patterns, also highlight by external ID (e.g., T1059)
     for (const target of atomicTargets) {
       highlightForAtomicTesting(fullText, target.value, nodeMap, target);
+      // Also highlight by external ID if available
+      const externalId = target.data?.attack_pattern_external_id || target.data?.externalId;
+      if (target.type === 'attack-pattern' && externalId && externalId !== target.value) {
+        highlightForAtomicTesting(fullText, externalId, nodeMap, target);
+      }
     }
     
     updateScanOverlay(`Found ${atomicTargets.length} target${atomicTargets.length !== 1 ? 's' : ''} for atomic testing`, false);
@@ -2438,12 +2446,16 @@ async function scanPageForAtomicTesting(): Promise<void> {
     ensurePanelElements();
     showPanelElements();
     
+    // Get current theme to pass to panel
+    const theme = await getCurrentTheme();
+    
     // Wait for panel iframe to be ready, then send the message
     setTimeout(() => {
       sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
         targets: atomicTargets,
         pageTitle,
         pageUrl: url,
+        theme,
       });
     }, 100);
     
@@ -2480,8 +2492,24 @@ function detectDomainsAndHostnamesForAtomicTesting(content: string): Array<{ typ
 }
 
 /**
- * Highlight text for atomic testing mode using exact match approach
+ * Check if a character is a valid word boundary for entity matching.
+ * Matches the SAME logic as SCAN_OAEV in background script.
+ * A character is a valid boundary if it's:
+ * - whitespace, punctuation, or special characters
+ * - OR not alphanumeric (allows matching words separated by hyphens, underscores, etc.)
+ */
+function isValidWordBoundary(char: string | undefined): boolean {
+  if (!char || char === '') return true; // Start/end of string is a boundary
+  // Valid boundary: whitespace, punctuation, or special characters
+  if (/[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t.]/.test(char)) return true;
+  // Also valid if NOT alphanumeric (this handles hyphens, underscores at word boundaries)
+  return !/[a-zA-Z0-9]/.test(char);
+}
+
+/**
+ * Highlight text for atomic testing mode using exact WHOLE WORD match approach
  * Similar to regular highlightInText but with atomic testing specific styling
+ * Only matches complete words/phrases, not partial matches
  */
 function highlightForAtomicTesting(
   fullText: string,
@@ -2492,14 +2520,25 @@ function highlightForAtomicTesting(
   // Skip if search value is too short or empty
   if (!searchValue || searchValue.length < 2) return;
   
-  // Find all occurrences
+  // Find all occurrences with word boundary check
   const searchLower = searchValue.toLowerCase();
+  const fullTextLower = fullText.toLowerCase();
   let pos = 0;
   let highlightedCount = 0;
   const maxHighlightsPerValue = 1; // Only highlight first occurrence
   
-  while ((pos = fullText.toLowerCase().indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
     const endPos = pos + searchValue.length;
+    
+    // Check for word boundaries - only match whole words/phrases
+    const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
+    const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
+    
+    if (!isValidWordBoundary(charBefore) || !isValidWordBoundary(charAfter)) {
+      // Not a whole word match, skip to next position
+      pos++;
+      continue;
+    }
     
     // Find the text node containing this position
     for (const { node, start, end } of nodeMap) {
@@ -2637,6 +2676,9 @@ async function scanPageForScenario(): Promise<void> {
     ensurePanelElements();
     showPanelElements();
     
+    // Get current theme to pass to panel
+    const theme = await getCurrentTheme();
+    
     // Wait for panel iframe to be ready, then send the message
     setTimeout(() => {
       sendPanelMessage('SHOW_SCENARIO_PANEL', {
@@ -2645,6 +2687,7 @@ async function scanPageForScenario(): Promise<void> {
         pageUrl: url,
         pageDescription,
         platformId: attackPatterns[0]?.platformId,
+        theme,
       });
     }, 100);
     
@@ -2681,8 +2724,9 @@ function generateCleanDescription(content: string, maxLength = 500): string {
 
 /**
  * Highlight attack patterns found for scenario creation (visual feedback)
+ * Highlights both attack pattern names AND external IDs (like T1059)
  */
-function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; name: string }>): void {
+function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; name: string; externalId?: string }>): void {
   const textNodes = getTextNodes(document.body);
   const fullText = document.body.innerText;
   
@@ -2697,12 +2741,18 @@ function highlightScenarioAttackPatterns(attackPatterns: Array<{ id: string; nam
   });
   
   for (const ap of attackPatterns) {
+    // Highlight by name
     highlightInTextForScenario(fullText, ap.name, nodeMap, ap);
+    // Also highlight by external ID (e.g., T1059) if available
+    if (ap.externalId && ap.externalId !== ap.name) {
+      highlightInTextForScenario(fullText, ap.externalId, nodeMap, ap);
+    }
   }
 }
 
 /**
- * Highlight text for scenario mode
+ * Highlight text for scenario mode using WHOLE WORD matching
+ * Only matches complete attack pattern names, not partial matches
  */
 function highlightInTextForScenario(
   fullText: string,
@@ -2720,6 +2770,16 @@ function highlightInTextForScenario(
   
   while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && occurrenceCount < maxOccurrences) {
     const endPos = pos + searchValue.length;
+    
+    // Check for word boundaries - only match whole words/phrases
+    const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
+    const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
+    
+    if (!isValidWordBoundary(charBefore) || !isValidWordBoundary(charAfter)) {
+      // Not a whole word match, skip to next position
+      pos++;
+      continue;
+    }
     
     // Find which nodes contain this position
     for (const { node, start, end } of nodeMap) {

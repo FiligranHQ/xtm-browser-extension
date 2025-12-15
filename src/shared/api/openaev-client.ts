@@ -763,31 +763,74 @@ export class OpenAEVClient {
   // ============================================================================
 
   /**
-   * Search injector contracts with optional attack pattern filter
+   * Get ALL injector contracts with full pagination support
+   * This ensures we fetch all contracts even when there are more than 500
    */
-  async searchInjectorContracts(attackPatternId?: string): Promise<any[]> {
-    const filterGroup: any = {
-      mode: 'and',
-      filters: [],
-    };
-    
-    if (attackPatternId) {
-      filterGroup.filters.push({
-        key: 'injector_contract_attack_patterns',
-        operator: 'contains',
-        values: [attackPatternId],
+  async getAllInjectorContracts(): Promise<any[]> {
+    const allContracts: any[] = [];
+    let currentPage = 0;
+    let totalPages = 1;
+    let pageCount = 0;
+
+    log.info('[OpenAEV] Starting to fetch all injector contracts with pagination...');
+
+    while (currentPage < totalPages) {
+      const response = await this.request<PaginatedResponse<any>>('/api/injector_contracts/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          page: currentPage,
+          size: OpenAEVClient.DEFAULT_PAGE_SIZE,
+        }),
       });
+
+      allContracts.push(...response.content);
+      totalPages = response.totalPages;
+      currentPage++;
+      pageCount++;
+
+      log.debug(`[OpenAEV] Fetched injector contracts page ${pageCount}/${totalPages}: ${response.content.length} items (total: ${allContracts.length})`);
     }
 
-    const response = await this.request<{ content?: any[] }>('/api/injector_contracts/search', {
-      method: 'POST',
-      body: JSON.stringify({
-        size: 100,
-        filterGroup: filterGroup.filters.length > 0 ? filterGroup : undefined,
-      }),
+    log.info(`[OpenAEV] Completed fetching injector contracts: ${allContracts.length} total items in ${pageCount} pages`);
+    return allContracts;
+  }
+
+  /**
+   * Search injector contracts with optional attack pattern filter
+   * If attackPatternId is provided, fetches all contracts and filters client-side
+   * Note: injector_contract_attack_patterns is a List<String> of attack pattern UUIDs
+   */
+  async searchInjectorContracts(attackPatternId?: string): Promise<any[]> {
+    // Fetch ALL contracts using pagination
+    const allContracts = await this.getAllInjectorContracts();
+    log.debug('[OpenAEV] searchInjectorContracts - total contracts fetched:', allContracts.length);
+    
+    // If no attack pattern filter, return all
+    if (!attackPatternId) {
+      return allContracts;
+    }
+    
+    // Filter client-side by attack pattern ID
+    // NOTE: injector_contract_attack_patterns is a List<String> of UUIDs, NOT objects!
+    const filteredContracts = allContracts.filter((contract: any) => {
+      const attackPatternIds = contract.injector_contract_attack_patterns || [];
+      // Each item in the array is a UUID string, not an object
+      return attackPatternIds.includes(attackPatternId);
     });
     
-    return response?.content || [];
+    log.debug('[OpenAEV] searchInjectorContracts - filtered for attackPatternId:', attackPatternId, '- found:', filteredContracts.length);
+    
+    // Debug logging when no matches found
+    if (filteredContracts.length === 0 && allContracts.length > 0) {
+      log.debug('[OpenAEV] No matches found. Sample contract attack patterns:', 
+        allContracts.slice(0, 3).map((c: any) => ({
+          label: c.injector_contract_labels?.en,
+          attackPatterns: c.injector_contract_attack_patterns,
+        }))
+      );
+    }
+    
+    return filteredContracts;
   }
 
   /**

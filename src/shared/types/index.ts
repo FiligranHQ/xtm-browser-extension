@@ -793,11 +793,8 @@ export interface InjectorContract {
   };
   injector_contract_payload_type?: string;
   injector_contract_platforms?: string[];
-  injector_contract_attack_patterns?: Array<{
-    attack_pattern_id: string;
-    attack_pattern_name: string;
-    attack_pattern_external_id?: string;
-  }>;
+  // NOTE: This is a List<String> of attack pattern UUIDs from OpenAEV API, not objects!
+  injector_contract_attack_patterns?: string[];
   injector_contract_content?: any;
 }
 

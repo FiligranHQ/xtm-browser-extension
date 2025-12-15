@@ -1356,16 +1356,24 @@ async function handleMessage(
           platformId?: string;
         };
         
+        log.debug('[Background] FETCH_INJECTOR_CONTRACTS:', { attackPatternId, platformId });
+        
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
+            log.error('[Background] OpenAEV client not configured for platformId:', platformId);
             sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
+          log.debug('[Background] Searching injector contracts for attack pattern:', attackPatternId);
           const contracts = await client.searchInjectorContracts(attackPatternId);
+          log.debug('[Background] Found', contracts.length, 'injector contracts');
+          log.debug('[Background] Contracts sample:', contracts.slice(0, 3));
+          
           sendResponse(successResponse(contracts));
         } catch (error) {
+          log.error('[Background] Failed to fetch injector contracts:', error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to fetch injector contracts',
@@ -1548,6 +1556,8 @@ async function handleMessage(
           platformId?: string;
         };
         
+        log.debug('[FETCH_SCENARIO_OVERVIEW] Attack pattern IDs:', attackPatternIds);
+        
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
@@ -1555,13 +1565,44 @@ async function handleMessage(
             break;
           }
           
+          // First, fetch all contracts once (more efficient)
+          const allContracts = await client.searchInjectorContracts();
+          log.debug('[FETCH_SCENARIO_OVERVIEW] Total contracts fetched:', allContracts.length);
+          
+          // Log sample contract structure to understand the data
+          if (allContracts.length > 0) {
+            log.debug('[FETCH_SCENARIO_OVERVIEW] Sample contract:', {
+              id: allContracts[0].injector_contract_id,
+              label: allContracts[0].injector_contract_labels?.en,
+              attackPatterns: allContracts[0].injector_contract_attack_patterns,
+            });
+          }
+          
           // Fetch attack patterns with full details
           const attackPatterns = await Promise.all(
             attackPatternIds.map(async (id) => {
+              log.debug('[FETCH_SCENARIO_OVERVIEW] Fetching attack pattern:', id);
               const ap = await client.getAttackPattern(id);
-              const contracts = await client.searchInjectorContracts(id);
+              log.debug('[FETCH_SCENARIO_OVERVIEW] Attack pattern data:', ap);
+              
+              // Get the actual attack pattern UUID (in case a different ID was passed)
+              const attackPatternUuid = ap?.attack_pattern_id || id;
+              
+              // Filter contracts that have this attack pattern
+              // NOTE: injector_contract_attack_patterns is a List<String> of UUIDs, NOT objects!
+              const contracts = allContracts.filter((contract: any) => {
+                const contractApIds: string[] = contract.injector_contract_attack_patterns || [];
+                // Each item in the array is a UUID string, not an object
+                // Match by UUID directly
+                return contractApIds.includes(attackPatternUuid) || contractApIds.includes(id);
+              });
+              
+              log.debug('[FETCH_SCENARIO_OVERVIEW] Contracts for', ap?.attack_pattern_name || id, 
+                '(uuid:', attackPatternUuid, '):', contracts.length,
+                'Sample contract APs:', allContracts.slice(0, 2).map((c: any) => c.injector_contract_attack_patterns));
+              
               return {
-                id,
+                id: attackPatternUuid,
                 name: ap?.attack_pattern_name || 'Unknown',
                 externalId: ap?.attack_pattern_external_id || '',
                 description: ap?.attack_pattern_description || '',
@@ -1574,11 +1615,15 @@ async function handleMessage(
           // Get all kill chain phases for reference
           const killChainPhases = await client.getKillChainPhases();
           
+          log.debug('[FETCH_SCENARIO_OVERVIEW] Final attack patterns with contracts:', 
+            attackPatterns.map(ap => ({ name: ap.name, contractCount: ap.contracts.length })));
+          
           sendResponse(successResponse({
             attackPatterns,
             killChainPhases,
           }));
         } catch (error) {
+          log.error('[FETCH_SCENARIO_OVERVIEW] Error:', error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to fetch scenario overview',

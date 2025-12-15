@@ -649,8 +649,6 @@ const App: React.FC = () => {
     // Listen for messages from content script
     window.addEventListener('message', handleMessage);
 
-    // Cleanup function
-
     // Get initial panel state
     chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
       if (chrome.runtime.lastError) return;
@@ -658,9 +656,86 @@ const App: React.FC = () => {
         handlePanelState(response.data);
       }
     });
+    
+    // Listen for storage changes to keep platforms in sync when settings change
+    // This handles the case where the popup adds a new platform
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.settings) {
+        const newSettings = changes.settings.newValue;
+        if (newSettings) {
+          log.debug('Storage change detected, reloading platforms...');
+          
+          // Reload OpenCTI platforms
+          const openctiPlatforms = newSettings.openctiPlatforms || [];
+          const enabledOpenCTI = openctiPlatforms
+            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
+            .map((p: any) => ({ 
+              id: p.id, 
+              name: p.name || 'OpenCTI', 
+              url: p.url, 
+              type: 'opencti' as const,
+              isEnterprise: p.isEnterprise,
+            }));
+          
+          // Reload OpenAEV platforms  
+          const openaevPlatforms = newSettings.openaevPlatforms || [];
+          const enabledOpenAEV = openaevPlatforms
+            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
+            .map((p: any) => ({ 
+              id: p.id, 
+              name: p.name || 'OpenAEV', 
+              url: p.url, 
+              type: 'openaev' as const,
+              isEnterprise: p.isEnterprise,
+            }));
+          
+          const allPlatforms = [...enabledOpenCTI, ...enabledOpenAEV];
+          setAvailablePlatforms(allPlatforms);
+          
+          // Update selected platform if needed
+          if (allPlatforms.length > 0 && !allPlatforms.find(p => p.id === selectedPlatformId)) {
+            setPlatformUrl(allPlatforms[0].url);
+            setSelectedPlatformId(allPlatforms[0].id);
+          }
+          
+          // Update AI settings
+          const ai = newSettings.ai;
+          const aiAvailable = !!(ai?.enabled && ai?.provider && ai?.apiKey);
+          setAiSettings({
+            enabled: ai?.enabled || false,
+            provider: ai?.provider,
+            available: aiAvailable,
+          });
+          
+          // Test connections for new platforms to get EE status
+          allPlatforms.forEach((platform) => {
+            chrome.runtime.sendMessage(
+              { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: platform.type } },
+              (testResponse) => {
+                if (chrome.runtime.lastError || !testResponse?.success) return;
+                setAvailablePlatforms(prev => prev.map(p => 
+                  p.id === platform.id 
+                    ? { 
+                        ...p, 
+                        version: testResponse.data?.version,
+                        isEnterprise: testResponse.data?.enterprise_edition,
+                      }
+                    : p
+                ));
+              }
+            );
+          });
+        }
+      }
+    };
+    
+    chrome.storage.onChanged.addListener(handleStorageChange);
 
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, [selectedPlatformId]);
 
   // Load labels and markings lazily when container form is needed
   // Also reload when the selected platform changes to ensure we get data from the correct platform

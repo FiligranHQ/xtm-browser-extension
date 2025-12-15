@@ -143,6 +143,7 @@ const App: React.FC = () => {
   
   // Setup wizard state
   const [setupStep, setSetupStep] = useState<SetupStep>('welcome');
+  const [isInSetupWizard, setIsInSetupWizard] = useState(false); // Track if user is actively in setup wizard
   const [setupUrl, setSetupUrl] = useState('');
   const [setupToken, setSetupToken] = useState('');
   const [setupName, setSetupName] = useState('');
@@ -614,22 +615,8 @@ const App: React.FC = () => {
         if (platformType === 'opencti') {
           setSetupStep('openaev');
         } else {
-          // Refresh status and close the popup to complete setup
-          setSetupStep('complete');
-          
-          // Wait for cache to start building, then reload status
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Reload status by fetching connection status again
-          try {
-            const response = await chrome.runtime.sendMessage({ type: 'GET_CONNECTION_STATUS' });
-            if (response?.success && response.data) {
-              setStatus(response.data);
-            }
-          } catch {
-            // If status fetch fails, reload the popup
-            window.location.reload();
-          }
+          // Complete setup - exit the wizard and refresh status
+          await completeSetupWizard();
         }
       }, 1000);
       
@@ -639,7 +626,29 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSetupSkip = (currentStep: 'opencti' | 'openaev') => {
+  // Function to complete the setup wizard and transition to main UI
+  const completeSetupWizard = async () => {
+    setSetupStep('complete');
+    
+    // Wait for cache to start building
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Reload status by fetching connection status and testing connections
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_CONNECTION_STATUS' });
+      if (response?.success && response.data) {
+        setStatus(response.data);
+      }
+    } catch {
+      log.debug('Could not fetch connection status');
+    }
+    
+    // Exit the wizard mode - this will show the main UI
+    setIsInSetupWizard(false);
+    setSetupStep('welcome'); // Reset step for future use
+  };
+
+  const handleSetupSkip = async (currentStep: 'opencti' | 'openaev') => {
     setSetupUrl('');
     setSetupToken('');
     setSetupName('');
@@ -649,9 +658,8 @@ const App: React.FC = () => {
     if (currentStep === 'opencti') {
       setSetupStep('openaev');
     } else {
-      // After OAEV, reload to show main screen if anything was configured
-      // The status will be refreshed from storage
-      window.location.reload();
+      // After OAEV skip, complete the wizard if any platform was configured
+      await completeSetupWizard();
     }
   };
 
@@ -691,7 +699,7 @@ const App: React.FC = () => {
         <Divider />
 
         {/* Welcome Splash when nothing is configured */}
-        {!hasAnyPlatformConfigured && setupStep === 'welcome' && (
+        {!hasAnyPlatformConfigured && !isInSetupWizard && setupStep === 'welcome' && (
           <Box sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <Box sx={{ mb: 2 }}>
               <img
@@ -710,7 +718,10 @@ const App: React.FC = () => {
             <Button
               variant="contained"
               endIcon={<ChevronRightOutlined />}
-              onClick={() => setSetupStep('opencti')}
+              onClick={() => {
+                setIsInSetupWizard(true);
+                setSetupStep('opencti');
+              }}
               sx={{ borderRadius: 1, mb: 1.5 }}
               fullWidth
             >
@@ -728,7 +739,7 @@ const App: React.FC = () => {
         )}
         
         {/* OpenCTI Setup Step */}
-        {!hasAnyPlatformConfigured && setupStep === 'opencti' && (
+        {isInSetupWizard && setupStep === 'opencti' && (
           <Box sx={{ p: 2.5, flex: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
               <img
@@ -816,7 +827,7 @@ const App: React.FC = () => {
         )}
         
         {/* OpenAEV Setup Step */}
-        {!hasAnyPlatformConfigured && setupStep === 'openaev' && (
+        {isInSetupWizard && setupStep === 'openaev' && (
           <Box sx={{ p: 2.5, flex: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
               <img
@@ -907,7 +918,7 @@ const App: React.FC = () => {
         )}
 
         {/* Main Actions Section */}
-        {hasAnyPlatformConfigured && (
+        {hasAnyPlatformConfigured && !isInSetupWizard && (
         <>
         {/* Global Actions - Scan & Search across all platforms */}
         <Box sx={{ p: 2, pb: 1 }}>

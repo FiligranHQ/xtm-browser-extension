@@ -442,7 +442,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['Authorization']).toBe('Bearer sk-openai-key');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('gpt-4o');
+    expect(body.model).toBe('gpt-5.2');
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[1].role).toBe('user');
   });

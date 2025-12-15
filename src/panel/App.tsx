@@ -599,7 +599,9 @@ const App: React.FC = () => {
               },
             };
           });
-          setMultiPlatformResults(multiResults);
+          // Sort results: OpenCTI platforms first (knowledge base reference)
+          const sortedResults = sortPlatformResults(multiResults);
+          setMultiPlatformResults(sortedResults);
           setCurrentPlatformIndex(0);
         } else if (platformId) {
           // Single platform result - still set it for consistent display
@@ -894,6 +896,24 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper function to sort multi-platform results with OpenCTI platforms first
+  // OpenCTI is the knowledge base reference, so it should always be displayed first
+  const sortPlatformResults = <T extends { platformId: string }>(results: T[]): T[] => {
+    return [...results].sort((a, b) => {
+      const platformA = availablePlatforms.find(p => p.id === a.platformId);
+      const platformB = availablePlatforms.find(p => p.id === b.platformId);
+      const typeA = platformA?.type || 'opencti';
+      const typeB = platformB?.type || 'opencti';
+      
+      // OpenCTI platforms should come before OpenAEV (and other platforms)
+      if (typeA === 'opencti' && typeB !== 'opencti') return -1;
+      if (typeA !== 'opencti' && typeB === 'opencti') return 1;
+      
+      // Within the same platform type, maintain original order (stable sort)
+      return 0;
+    });
+  };
+
   // Interface for merged search results
   interface MergedSearchResult {
     representativeKey: string; // Key for grouping (name + type)
@@ -1067,7 +1087,7 @@ const App: React.FC = () => {
   };
 
   // Handle click on unified search result
-  const handleUnifiedSearchResultClick = (result: UnifiedSearchResult) => {
+  const handleUnifiedSearchResultClick = async (result: UnifiedSearchResult) => {
     setEntityFromSearch(true);
     
     const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
@@ -1082,16 +1102,24 @@ const App: React.FC = () => {
       setEntity({
         ...originalData,
         type: result.type,
+        entity_type: result.type,
         name: result.name,
         existsInPlatform: true,
         _platformId: result.platformId,
+        _platformType: 'opencti',
+        _isNonDefaultPlatform: false,
       } as unknown as EntityData);
       setPanelMode('entity');
+      // Fetch containers for OpenCTI entities
+      if (result.entityId) {
+        fetchEntityContainers(result.entityId, result.platformId);
+      }
     } else {
-      // Handle OpenAEV result
+      // Handle OpenAEV result - fetch full entity details
       const originalData = result.data as Record<string, unknown>;
-      // Create prefixed type for non-default platform entities
       const prefixedType = createPrefixedType(result.type, 'openaev');
+      
+      // Set initial entity data from search result
       setEntity({
         ...originalData,
         type: prefixedType,
@@ -1103,10 +1131,50 @@ const App: React.FC = () => {
         _isNonDefaultPlatform: true,
       } as unknown as EntityData);
       setPanelMode('entity');
+      
+      // Fetch full entity details from OpenAEV API
+      try {
+        const entityId = result.entityId || (originalData as any)._id || 
+          (originalData as any).asset_id || (originalData as any).team_id || 
+          (originalData as any).user_id || (originalData as any).scenario_id ||
+          (originalData as any).exercise_id || (originalData as any).finding_id ||
+          (originalData as any).asset_group_id || (originalData as any).attack_pattern_id ||
+          (originalData as any).organization_id;
+          
+        if (entityId && result.platformId) {
+          const response = await chrome.runtime.sendMessage({
+            type: 'GET_OAEV_ENTITY_DETAILS',
+            payload: {
+              entityId,
+              entityType: result.type,
+              platformId: result.platformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            // Update entity with full details
+            setEntity({
+              ...response.data,
+              type: prefixedType,
+              name: result.name || response.data.asset_name || response.data.team_name || 
+                response.data.user_email || response.data.scenario_name || response.data.exercise_name ||
+                response.data.attack_pattern_name || response.data.finding_name || response.data.organization_name,
+              entityData: response.data,
+              existsInPlatform: true,
+              _platformId: result.platformId,
+              _platformType: 'openaev',
+              _isNonDefaultPlatform: true,
+            } as unknown as EntityData);
+          }
+        }
+      } catch (error) {
+        // Keep the initial entity data from search result if fetch fails
+        console.warn('Failed to fetch full OpenAEV entity details:', error);
+      }
     }
   };
 
-  const handleOaevSearchResultClick = (result: any) => {
+  const handleOaevSearchResultClick = async (result: any) => {
     // Determine entity type from _entityClass
     const entityClass = result._entityClass || '';
     const oaevType = getOaevTypeFromClass(entityClass);
@@ -1119,11 +1187,12 @@ const App: React.FC = () => {
       setPlatformUrl(platformInfo.url);
     }
     
-    // Navigate to entity view
+    // Set initial entity data from search result
+    const entityName = getOaevEntityName(result, oaevType);
     setEntity({
       ...result,
       type: `oaev-${oaevType}`,
-      name: getOaevEntityName(result, oaevType),
+      name: entityName,
       entityData: result,
       existsInPlatform: true,
       _platformId: platformId,
@@ -1131,6 +1200,44 @@ const App: React.FC = () => {
       _isNonDefaultPlatform: true,
     });
     setPanelMode('entity');
+    
+    // Fetch full entity details from OpenAEV API
+    try {
+      const entityId = result._id || result.asset_id || result.team_id || 
+        result.user_id || result.scenario_id || result.exercise_id || 
+        result.finding_id || result.asset_group_id || result.attack_pattern_id ||
+        result.organization_id;
+        
+      if (entityId && platformId) {
+        const response = await chrome.runtime.sendMessage({
+          type: 'GET_OAEV_ENTITY_DETAILS',
+          payload: {
+            entityId,
+            entityType: oaevType,
+            platformId,
+          },
+        });
+        
+        if (response?.success && response.data) {
+          // Update entity with full details
+          setEntity({
+            ...response.data,
+            type: `oaev-${oaevType}`,
+            name: entityName || response.data.asset_name || response.data.team_name || 
+              response.data.user_email || response.data.scenario_name || response.data.exercise_name ||
+              response.data.attack_pattern_name || response.data.finding_name || response.data.organization_name,
+            entityData: response.data,
+            existsInPlatform: true,
+            _platformId: platformId,
+            _platformType: 'openaev',
+            _isNonDefaultPlatform: true,
+          });
+        }
+      }
+    } catch (error) {
+      // Keep the initial entity data from search result if fetch fails
+      console.warn('Failed to fetch full OpenAEV entity details:', error);
+    }
   };
 
   // Helper to get OAEV entity type from Java class name
@@ -1183,6 +1290,12 @@ const App: React.FC = () => {
     // Mark that we're coming from search (for back button)
     setEntityFromSearch(true);
     
+    // Helper to get platform type from platformId
+    const getPlatformType = (platformId: string): 'opencti' | 'openaev' => {
+      const platform = availablePlatforms.find(p => p.id === platformId);
+      return platform?.type || 'opencti'; // Default to opencti for search results
+    };
+    
     // If found in multiple platforms, set up multi-platform navigation
     if (merged.platforms.length > 1) {
       // Load entity for first platform and set up multi-platform results
@@ -1197,6 +1310,7 @@ const App: React.FC = () => {
       
       // Fetch entity details for all platforms in parallel
       const entityPromises = merged.platforms.map(async (p) => {
+        const platformType = getPlatformType(p.platformId);
         const response = await chrome.runtime.sendMessage({
           type: 'GET_ENTITY_DETAILS',
           payload: { 
@@ -1206,25 +1320,50 @@ const App: React.FC = () => {
           },
         });
         
+        const entityType = p.result.entity_type || p.result.type;
         return {
           platformId: p.platformId,
           platformName: p.platformName,
-          entity: response?.success ? { ...response.data, existsInPlatform: true, _platformId: p.platformId } : { ...p.result, existsInPlatform: true },
+          entity: response?.success 
+            ? { 
+                ...response.data, 
+                existsInPlatform: true, 
+                _platformId: p.platformId,
+                _platformType: platformType,
+                _isNonDefaultPlatform: platformType !== 'opencti',
+                type: response.data.entity_type || response.data.type || entityType,
+              } 
+            : { 
+                ...p.result, 
+                existsInPlatform: true,
+                _platformId: p.platformId,
+                _platformType: platformType,
+                _isNonDefaultPlatform: platformType !== 'opencti',
+                type: entityType,
+              },
         };
       });
       
       const results = await Promise.all(entityPromises);
       
+      // Sort results: OpenCTI platforms first (knowledge base reference)
+      const sortedResults = sortPlatformResults(results);
+      
       // Set up multi-platform navigation
-      setMultiPlatformResults(results);
+      setMultiPlatformResults(sortedResults);
       setCurrentPlatformIndex(0);
-      setEntity(results[0].entity);
+      setEntity(sortedResults[0].entity);
       setPanelMode('entity');
-      fetchEntityContainers(results[0].entity.id, results[0].platformId);
+      // Only fetch containers for OpenCTI platforms
+      if (getPlatformType(sortedResults[0].platformId) === 'opencti') {
+        fetchEntityContainers(sortedResults[0].entity.id, sortedResults[0].platformId);
+      }
     } else {
       // Single platform - load directly
       const platform = merged.platforms[0];
       const platformInfo = availablePlatforms.find(p => p.id === platform.platformId);
+      const platformType = platformInfo?.type || 'opencti';
+      
       if (platformInfo) {
         setSelectedPlatformId(platformInfo.id);
         setPlatformUrl(platformInfo.url);
@@ -1241,13 +1380,31 @@ const App: React.FC = () => {
           },
         });
         
+        const entityType = platform.result.entity_type || platform.result.type;
         if (response?.success && response.data) {
-          setEntity({ ...response.data, existsInPlatform: true, _platformId: platform.platformId });
+          setEntity({ 
+            ...response.data, 
+            existsInPlatform: true, 
+            _platformId: platform.platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: platformType !== 'opencti',
+            type: response.data.entity_type || response.data.type || entityType,
+          });
           setMultiPlatformResults([]); // Clear multi-platform
           setPanelMode('entity');
-          fetchEntityContainers(response.data.id, platform.platformId);
+          // Only fetch containers for OpenCTI platforms
+          if (platformType === 'opencti') {
+            fetchEntityContainers(response.data.id, platform.platformId);
+          }
         } else {
-          setEntity({ ...platform.result, existsInPlatform: true });
+          setEntity({ 
+            ...platform.result, 
+            existsInPlatform: true,
+            _platformId: platform.platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: platformType !== 'opencti',
+            type: entityType,
+          });
           setMultiPlatformResults([]);
           setPanelMode('entity');
         }
@@ -1812,6 +1969,57 @@ const App: React.FC = () => {
                 <Chip label={entityData.endpoint_arch} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
               </Box>
             )}
+            
+            {/* Asset Type */}
+            {(entityData.asset_type || entityData.endpoint_type) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Asset Type
+                </Typography>
+                <Chip label={entityData.asset_type || entityData.endpoint_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              </Box>
+            )}
+            
+            {/* Last Seen */}
+            {(entityData.asset_last_seen || entityData.endpoint_last_seen) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Last Seen
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {new Date(entityData.asset_last_seen || entityData.endpoint_last_seen).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* MACs */}
+            {((entityData.endpoint_mac_addresses || entityData.asset_mac_addresses) && (entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  MAC Addresses
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {(entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).map((mac: string, i: number) => (
+                    <Chip key={i} label={mac} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+            
+            {/* Tags (resolved) */}
+            {((entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags) && 
+              (entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Tags
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {(entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).map((tag: string, i: number) => (
+                    <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
           </>
         )}
         
@@ -1959,13 +2167,13 @@ const App: React.FC = () => {
             )}
             
             {/* Tags */}
-            {((entityData.scenario_tags) && entityData.scenario_tags.length > 0) && (
+            {((entityData.scenario_tags_resolved || entityData.scenario_tags) && (entityData.scenario_tags_resolved || entityData.scenario_tags).length > 0) && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="caption" sx={sectionTitleStyle}>
                   Tags
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                  {entityData.scenario_tags.map((tag: string, i: number) => (
+                  {(entityData.scenario_tags_resolved || entityData.scenario_tags).map((tag: string, i: number) => (
                     <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
                   ))}
                 </Box>
@@ -2021,24 +2229,18 @@ const App: React.FC = () => {
             )}
             
             {/* Tags */}
-            {((entityData.exercise_tags) && entityData.exercise_tags.length > 0) && (
+            {((entityData.exercise_tags_resolved || entityData.exercise_tags) && (entityData.exercise_tags_resolved || entityData.exercise_tags).length > 0) && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="caption" sx={sectionTitleStyle}>
                   Tags
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                  {entityData.exercise_tags.map((tag: string, i: number) => (
+                  {(entityData.exercise_tags_resolved || entityData.exercise_tags).map((tag: string, i: number) => (
                     <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
                   ))}
                 </Box>
               </Box>
             )}
-          </>
-        )}
-        
-        {oaevType === 'Organization' && (
-          <>
-            {/* No specific extra fields for now, description is handled below */}
           </>
         )}
         
@@ -2081,6 +2283,87 @@ const App: React.FC = () => {
             )}
           </>
         )}
+        
+        {oaevType === 'Finding' && (
+          <>
+            {/* Finding Type */}
+            {entityData.finding_type && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Type
+                </Typography>
+                <Chip 
+                  label={entityData.finding_type} 
+                  size="small" 
+                  sx={{ 
+                    bgcolor: hexToRGB(color, 0.2), 
+                    color,
+                    fontWeight: 600,
+                    borderRadius: 1,
+                  }} 
+                />
+              </Box>
+            )}
+            
+            {/* Finding Value */}
+            {entityData.finding_value && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Value
+                </Typography>
+                <Typography variant="body2" sx={{ ...contentTextStyle, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  {entityData.finding_value}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Finding Created At */}
+            {entityData.finding_created_at && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Created
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {new Date(entityData.finding_created_at).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Associated Assets */}
+            {entityData.finding_assets && entityData.finding_assets.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Assets
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.finding_assets.map((asset: { asset_id: string; asset_name: string }, i: number) => (
+                    <Chip key={i} label={asset.asset_name || asset.asset_id} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+            
+            {/* Associated Asset Groups */}
+            {entityData.finding_asset_groups && entityData.finding_asset_groups.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Asset Groups
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.finding_asset_groups.map((group: { asset_group_id: string; asset_group_name: string }, i: number) => (
+                    <Chip key={i} label={group.asset_group_name || group.asset_group_id} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </>
+        )}
+        
+        {oaevType === 'Organization' && (
+          <>
+            {/* Organization Description is handled below */}
+          </>
+        )}
 
         {/* Description (common to all types) */}
         {description && (
@@ -2094,20 +2377,24 @@ const App: React.FC = () => {
           </Box>
         )}
         
-        {/* Tags */}
-        {((entityData.asset_group_tags || entityData.team_tags || entityData.asset_tags) && 
-          (entityData.asset_group_tags || entityData.team_tags || entityData.asset_tags).length > 0) && (
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" sx={sectionTitleStyle}>
-              Tags
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-              {(entityData.asset_group_tags || entityData.team_tags || entityData.asset_tags).map((tag: string, i: number) => (
-                <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
-              ))}
+        {/* Tags (for AssetGroup and Team entities - resolved if available) */}
+        {(oaevType === 'AssetGroup' || oaevType === 'Team') && (() => {
+          const tags = oaevType === 'AssetGroup' 
+            ? (entityData.asset_group_tags_resolved || entityData.asset_group_tags)
+            : (entityData.team_tags_resolved || entityData.team_tags);
+          return tags && tags.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Tags
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {tags.map((tag: string, i: number) => (
+                  <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+                ))}
+              </Box>
             </Box>
-          </Box>
-        )}
+          );
+        })()}
 
         <Divider sx={{ my: 2 }} />
 
@@ -2233,9 +2520,15 @@ const App: React.FC = () => {
         const prevIndex = currentPlatformIndex - 1;
         setCurrentPlatformIndex(prevIndex);
         const prevResult = multiPlatformResults[prevIndex];
-        setEntity({ ...prevResult.entity, _platformId: prevResult.platformId });
-        setSelectedPlatformId(prevResult.platformId);
         const platform = availablePlatforms.find(p => p.id === prevResult.platformId);
+        const platformType = platform?.type || 'opencti';
+        setEntity({ 
+          ...prevResult.entity, 
+          _platformId: prevResult.platformId,
+          _platformType: platformType,
+          _isNonDefaultPlatform: platformType !== 'opencti',
+        });
+        setSelectedPlatformId(prevResult.platformId);
         if (platform) setPlatformUrl(platform.url);
       }
     };
@@ -2245,9 +2538,15 @@ const App: React.FC = () => {
         const nextIndex = currentPlatformIndex + 1;
         setCurrentPlatformIndex(nextIndex);
         const nextResult = multiPlatformResults[nextIndex];
-        setEntity({ ...nextResult.entity, _platformId: nextResult.platformId });
-        setSelectedPlatformId(nextResult.platformId);
         const platform = availablePlatforms.find(p => p.id === nextResult.platformId);
+        const platformType = platform?.type || 'opencti';
+        setEntity({ 
+          ...nextResult.entity, 
+          _platformId: nextResult.platformId,
+          _platformType: platformType,
+          _isNonDefaultPlatform: platformType !== 'opencti',
+        });
+        setSelectedPlatformId(nextResult.platformId);
         if (platform) setPlatformUrl(platform.url);
       }
     };
@@ -2573,30 +2872,9 @@ const App: React.FC = () => {
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {creators.map((c: { id: string; name: string }, idx: number) => (
-                    c.id && platformUrl ? (
-                      <Typography 
-                        key={c.id || idx}
-                        variant="body2" 
-                        onClick={() => handleOpenInPlatform(c.id)}
-                        sx={{ 
-                          fontWeight: 500, 
-                          ...contentTextStyle,
-                          color: 'primary.main',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          '&:hover': { textDecoration: 'underline' },
-                        }}
-                      >
-                        {c.name}
-                        <OpenInNewOutlined sx={{ fontSize: 14 }} />
-                      </Typography>
-                    ) : (
-                      <Typography key={c.id || idx} variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
-                        {c.name}
-                      </Typography>
-                    )
+                    <Typography key={c.id || idx} variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
+                      {c.name}
+                    </Typography>
                   ))}
                 </Box>
               </Box>
@@ -3346,13 +3624,16 @@ const App: React.FC = () => {
           if (response?.success && response.data) {
             setEntity({
               ...response.data,
+              type: response.data.entity_type || container.entity_type,
               existsInPlatform: true,
               _platformId: containerPlatformId,
+              _platformType: 'opencti',
+              _isNonDefaultPlatform: false,
             });
             setMultiPlatformResults([{
               platformId: containerPlatformId,
               platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-              entity: { ...response.data, existsInPlatform: true },
+              entity: { ...response.data, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
             }]);
             setCurrentPlatformIndex(0);
             setEntityContainers([]);
@@ -3371,15 +3652,18 @@ const App: React.FC = () => {
       setEntity({
         id: container.id,
         entity_type: container.entity_type,
+        type: container.entity_type,
         name: container.name,
         description: (container as any).description,
         existsInPlatform: true,
         _platformId: containerPlatformId,
+        _platformType: 'opencti',
+        _isNonDefaultPlatform: false,
       });
       setMultiPlatformResults([{
         platformId: containerPlatformId,
         platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-        entity: { id: container.id, entity_type: container.entity_type, name: container.name, existsInPlatform: true },
+        entity: { id: container.id, entity_type: container.entity_type, type: container.entity_type, name: container.name, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
       }]);
       setCurrentPlatformIndex(0);
       setEntityContainers([]);

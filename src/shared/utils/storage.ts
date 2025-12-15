@@ -12,13 +12,11 @@ import type { ExtensionSettings } from '../types';
 
 /**
  * Get extension settings from storage
- * Automatically migrates old settings format to new multi-platform format
  */
 export async function getSettings(): Promise<ExtensionSettings> {
   const result = await chrome.storage.local.get('settings');
   const settings = result.settings || {};
   
-  // Default settings with multi-platform support
   const defaultSettings: ExtensionSettings = {
     openctiPlatforms: [],
     openaevPlatforms: [],
@@ -28,21 +26,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
     showNotifications: true,
   };
   
-  // Merge with stored settings
-  const mergedSettings = { ...defaultSettings, ...settings };
-  
-  // One-time migration: convert old single-platform format to multi-platform array
-  if (!mergedSettings.openctiPlatforms?.length && settings.opencti?.url && settings.opencti?.apiToken) {
-    mergedSettings.openctiPlatforms = [{
-      id: 'default',
-      name: 'OpenCTI',
-      url: settings.opencti.url,
-      apiToken: settings.opencti.apiToken,
-      enabled: settings.opencti.enabled !== false,
-    }];
-  }
-  
-  return mergedSettings;
+  return { ...defaultSettings, ...settings };
 }
 
 /**

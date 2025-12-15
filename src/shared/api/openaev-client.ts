@@ -849,6 +849,64 @@ export class OpenAEVClient {
       url: this.baseUrl,
     };
   }
+
+  /**
+   * Get Organization by ID
+   */
+  async getOrganization(organizationId: string): Promise<any | null> {
+    try {
+      return await this.request(`/api/organizations/${organizationId}`);
+    } catch (error) {
+      log.error(' Get organization failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get Exercise by ID
+   */
+  async getExercise(exerciseId: string): Promise<any | null> {
+    try {
+      return await this.request(`/api/exercises/${exerciseId}`);
+    } catch (error) {
+      log.error(' Get exercise failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get any entity by ID and type
+   * This is a unified getter that dispatches to the appropriate method
+   */
+  async getEntityById(entityId: string, entityType: string): Promise<any | null> {
+    // Normalize the type - remove 'oaev-' prefix if present
+    const normalizedType = entityType.replace('oaev-', '');
+    
+    switch (normalizedType) {
+      case 'Asset':
+        return this.getAsset(entityId);
+      case 'AssetGroup':
+        return this.getAssetGroup(entityId);
+      case 'Player':
+      case 'User':
+        return this.getPlayer(entityId);
+      case 'Team':
+        return this.getTeam(entityId);
+      case 'Organization':
+        return this.getOrganization(entityId);
+      case 'Scenario':
+        return this.getScenario(entityId);
+      case 'Exercise':
+        return this.getExercise(entityId);
+      case 'AttackPattern':
+        return this.getAttackPattern(entityId);
+      case 'Finding':
+        return this.getFinding(entityId);
+      default:
+        log.warn(`Unknown entity type: ${normalizedType}`);
+        return null;
+    }
+  }
 }
 
 export default OpenAEVClient;

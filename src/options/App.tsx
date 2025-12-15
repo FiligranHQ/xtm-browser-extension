@@ -205,17 +205,14 @@ const App: React.FC = () => {
     const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
     if (chrome.runtime.lastError) return;
     if (response?.success && response.data) {
-      // Migrate old settings format if needed
       const loadedSettings = response.data;
+      
+      // Ensure required fields have defaults
       if (!loadedSettings.openctiPlatforms) {
-        loadedSettings.openctiPlatforms = loadedSettings.opencti 
-          ? [{ id: '1', name: 'OpenCTI', ...loadedSettings.opencti }]
-          : [];
+        loadedSettings.openctiPlatforms = [];
       }
       if (!loadedSettings.openaevPlatforms) {
-        loadedSettings.openaevPlatforms = loadedSettings.openaev?.url 
-          ? [{ id: '1', name: 'OpenAEV', ...loadedSettings.openaev }]
-          : [];
+        loadedSettings.openaevPlatforms = [];
       }
       if (!loadedSettings.detection) {
         loadedSettings.detection = DEFAULT_DETECTION;

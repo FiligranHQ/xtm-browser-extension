@@ -1047,24 +1047,23 @@ async function handleMessage(
       }
       
       case 'SCAN_PAGE': {
-        // SCAN_PAGE is for OpenCTI ONLY - does NOT include OpenAEV entities
+        // SCAN_PAGE scans for OpenCTI entities only (observables, SDOs, CVEs)
+        // For global scanning across all platforms, use SCAN_ALL instead
         const payload = message.payload as { content: string; url: string };
         try {
-          // Detection engine is required for OpenCTI scans
           if (detectionEngine) {
             const result = await detectionEngine.scan(payload.content);
-            // Explicitly exclude OpenAEV entities from OpenCTI scan results
+            // Return OpenCTI results - platformEntities from other platforms are handled by SCAN_ALL
             const scanResult: ScanResultPayload = {
               observables: result.observables,
               sdos: result.sdos,
               cves: result.cves,
-              platformEntities: [], // DO NOT include platform entities in OpenCTI-only scans
+              platformEntities: [], // OpenCTI entities are in observables/sdos/cves, not platformEntities
               scanTime: result.scanTime,
               url: payload.url,
             };
             sendResponse({ success: true, data: scanResult });
           } else {
-            // No OpenCTI detection engine - return empty results
             sendResponse({ success: false, error: 'OpenCTI not configured' });
           }
         } catch (error) {
@@ -1076,7 +1075,8 @@ async function handleMessage(
         break;
       }
       
-      // OpenAEV-ONLY scanning for Assets (does not scan OpenCTI at all)
+      // SCAN_OAEV scans for OpenAEV entities only (assets, teams, players, etc.)
+      // For global scanning across all platforms, use SCAN_ALL instead
       // If includeAttackPatterns is true, also includes attack patterns (for atomic testing)
       case 'SCAN_OAEV': {
         const payload = message.payload as { content: string; url: string; includeAttackPatterns?: boolean };
@@ -1203,11 +1203,17 @@ async function handleMessage(
         break;
       }
       
-      // UNIFIED SCAN - Scans BOTH OpenCTI AND OpenAEV
+      // SCAN_ALL - Global unified scan across ALL configured platforms
+      // This is the main scan action used from the popup
+      // Results include OpenCTI entities (observables/sdos/cves) and other platform entities (platformEntities)
+      // Each result includes platform information so the UI can differentiate where entities come from
       case 'SCAN_ALL': {
         const payload = message.payload as { content: string; url: string };
         try {
-          log.info('SCAN_ALL: Starting unified scan across all platforms...');
+          // Count configured platforms for logging
+          const octiPlatformCount = openCTIClients.size;
+          const oaevPlatformCount = openAEVClients.size;
+          log.info(`SCAN_ALL: Starting unified scan across ALL configured platforms (${octiPlatformCount} OpenCTI, ${oaevPlatformCount} OpenAEV)...`);
           
           // Initialize results
           let openctiResult: { observables: any[]; sdos: any[]; cves: any[] } = {
@@ -1217,25 +1223,27 @@ async function handleMessage(
           };
           const platformEntities: ScanResultPayload['platformEntities'] = [];
           
-          // 1. Scan OpenCTI (if detection engine is available)
+          // 1. Scan OpenCTI (detection engine scans ALL OpenCTI platforms' caches)
           if (detectionEngine) {
             try {
+              log.debug(`SCAN_ALL: Scanning ${octiPlatformCount} OpenCTI platform(s) for observables, SDOs, and CVEs...`);
               const octiResult = await detectionEngine.scan(payload.content);
               openctiResult = {
                 observables: octiResult.observables || [],
                 sdos: octiResult.sdos || [],
                 cves: octiResult.cves || [],
               };
-              log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.sdos.length} SDOs, ${openctiResult.cves.length} CVEs`);
+              log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.sdos.length} SDOs, ${openctiResult.cves.length} CVEs across ${octiPlatformCount} platform(s)`);
             } catch (octiError) {
               log.warn('SCAN_ALL: OpenCTI scan failed:', octiError);
             }
           } else {
-            log.debug('SCAN_ALL: No OpenCTI detection engine available');
+            log.debug('SCAN_ALL: No OpenCTI detection engine available (0 platforms configured)');
           }
           
-          // 2. Scan OpenAEV (from cache)
+          // 2. Scan OpenAEV (from ALL OpenAEV platforms' caches)
           try {
+            log.debug(`SCAN_ALL: Scanning ${oaevPlatformCount} OpenAEV platform(s) for assets, teams, findings, etc...`);
             const { getAllCachedOAEVEntityNamesForMatching } = await import('../shared/utils/storage');
             const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
             
@@ -1302,9 +1310,9 @@ async function handleMessage(
                   matchIndex = textLower.indexOf(nameLower, searchStart);
                 }
               }
-              log.debug(`SCAN_ALL: OpenAEV found ${platformEntities.length} entities`);
+              log.debug(`SCAN_ALL: OpenAEV found ${platformEntities.length} entities across ${oaevPlatformCount} platform(s)`);
             } else {
-              log.debug('SCAN_ALL: No OpenAEV entities in cache');
+              log.debug(`SCAN_ALL: No OpenAEV entities in cache (scanned ${oaevPlatformCount} platform(s))`);
             }
           } catch (oaevError) {
             log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
@@ -1324,7 +1332,7 @@ async function handleMessage(
             scanResult.observables.filter(o => o.found).length +
             scanResult.sdos.filter(s => s.found).length +
             (scanResult.platformEntities?.length || 0);
-          log.info(`SCAN_ALL: Unified scan complete. Total found: ${totalFound}`);
+          log.info(`SCAN_ALL: Unified scan complete across ${octiPlatformCount + oaevPlatformCount} total platforms. Found: ${totalFound} entities`);
           
           sendResponse({ success: true, data: scanResult });
         } catch (error) {
@@ -1332,67 +1340,6 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Unified scan failed',
-          });
-        }
-        break;
-      }
-      
-      // Get OpenAEV entity details
-      case 'GET_OAEV_ENTITY_DETAILS': {
-        const { entityId, entityType, platformId } = message.payload as {
-          entityId: string;
-          entityType: string;
-          platformId?: string;
-        };
-        
-        try {
-          // Find the OpenAEV client
-          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
-          if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
-            break;
-          }
-          
-          // Ensure tags are cached for resolution
-          await client.ensureTagsCached();
-          
-          // Fetch entity details based on type
-          let entity: Record<string, unknown> | null = null;
-          switch (entityType) {
-            case 'Asset':
-              entity = await client.getAsset(entityId) as Record<string, unknown> | null;
-              break;
-            case 'AssetGroup':
-              entity = await client.getAssetGroup(entityId) as Record<string, unknown> | null;
-              break;
-            case 'Player':
-              entity = await client.getPlayer(entityId) as Record<string, unknown> | null;
-              break;
-            case 'Team':
-              entity = await client.getTeam(entityId) as Record<string, unknown> | null;
-              break;
-          }
-          
-          if (entity) {
-            // Resolve tag IDs to names for display
-            const resolvedEntity = { ...entity, _platformId: platformId };
-            if (entity.asset_tags) {
-              resolvedEntity.asset_tags = client.resolveTagIds(entity.asset_tags as string[]);
-            }
-            if (entity.asset_group_tags) {
-              resolvedEntity.asset_group_tags = client.resolveTagIds(entity.asset_group_tags as string[]);
-            }
-            if (entity.team_tags) {
-              resolvedEntity.team_tags = client.resolveTagIds(entity.team_tags as string[]);
-            }
-            sendResponse({ success: true, data: resolvedEntity });
-          } else {
-            sendResponse({ success: false, error: 'Entity not found' });
-          }
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to fetch entity',
           });
         }
         break;
@@ -1978,6 +1925,76 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'OAEV Search failed',
+          });
+        }
+        break;
+      }
+
+      case 'GET_OAEV_ENTITY_DETAILS': {
+        // Fetch full entity details from OpenAEV by ID and type
+        const { entityId, entityType, platformId: requestedPlatformId } = message.payload as {
+          entityId: string;
+          entityType: string;
+          platformId: string;
+        };
+        
+        const client = openAEVClients.get(requestedPlatformId);
+        if (!client) {
+          sendResponse({ success: false, error: 'OpenAEV platform not found' });
+          break;
+        }
+        
+        try {
+          const timeoutPromise = new Promise<null>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
+          );
+          
+          // Ensure tags are cached for resolution
+          await client.ensureTagsCached();
+          
+          const entity = await Promise.race([
+            client.getEntityById(entityId, entityType),
+            timeoutPromise
+          ]);
+          
+          if (entity) {
+            // Resolve tags if present (convert IDs to labels)
+            if (entity.asset_tags && Array.isArray(entity.asset_tags)) {
+              entity.asset_tags_resolved = client.resolveTagIds(entity.asset_tags);
+            }
+            if (entity.endpoint_tags && Array.isArray(entity.endpoint_tags)) {
+              entity.endpoint_tags_resolved = client.resolveTagIds(entity.endpoint_tags);
+            }
+            if (entity.team_tags && Array.isArray(entity.team_tags)) {
+              entity.team_tags_resolved = client.resolveTagIds(entity.team_tags);
+            }
+            if (entity.asset_group_tags && Array.isArray(entity.asset_group_tags)) {
+              entity.asset_group_tags_resolved = client.resolveTagIds(entity.asset_group_tags);
+            }
+            if (entity.scenario_tags && Array.isArray(entity.scenario_tags)) {
+              entity.scenario_tags_resolved = client.resolveTagIds(entity.scenario_tags);
+            }
+            if (entity.exercise_tags && Array.isArray(entity.exercise_tags)) {
+              entity.exercise_tags_resolved = client.resolveTagIds(entity.exercise_tags);
+            }
+            
+            sendResponse({ 
+              success: true, 
+              data: {
+                ...entity,
+                _platformId: requestedPlatformId,
+                _platformType: 'openaev',
+                _entityType: entityType,
+              }
+            });
+          } else {
+            sendResponse({ success: false, error: 'Entity not found' });
+          }
+        } catch (error) {
+          log.error(`Failed to fetch OpenAEV entity ${entityId}:`, error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch entity',
           });
         }
         break;

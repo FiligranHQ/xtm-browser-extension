@@ -35,11 +35,24 @@ interface PaginatedResponse<T> {
   empty: boolean;
 }
 
+/**
+ * OpenAEV Tag structure
+ */
+interface OAEVTag {
+  tag_id: string;
+  tag_name: string;
+}
+
 export class OpenAEVClient {
   private baseUrl: string;
   private token: string;
   private platformId: string;
   private platformName: string;
+  
+  /**
+   * Cache of tags for resolving IDs to names
+   */
+  private tagsCache: Map<string, string> = new Map();
 
   /**
    * Default page size for pagination
@@ -111,6 +124,47 @@ export class OpenAEVClient {
 
     log.info(`[OpenAEV] Completed fetching ${entityType}: ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
+  }
+
+  // ============================================================================
+  // Tags - For resolving tag IDs to names
+  // ============================================================================
+
+  /**
+   * Fetch all tags from the platform and populate the cache
+   */
+  async fetchAllTags(): Promise<void> {
+    try {
+      const response = await this.request<OAEVTag[]>('/api/tags');
+      this.tagsCache.clear();
+      for (const tag of response) {
+        this.tagsCache.set(tag.tag_id, tag.tag_name);
+      }
+      log.debug(`[OpenAEV] Cached ${this.tagsCache.size} tags`);
+    } catch (error) {
+      log.warn('[OpenAEV] Failed to fetch tags:', error);
+    }
+  }
+
+  /**
+   * Resolve a list of tag IDs to tag names
+   * Returns empty array if tags cache is empty
+   */
+  resolveTagIds(tagIds: string[] | undefined): string[] {
+    if (!tagIds || tagIds.length === 0) return [];
+    
+    return tagIds
+      .map(id => this.tagsCache.get(id) || id) // Fall back to ID if not found
+      .filter(Boolean);
+  }
+
+  /**
+   * Ensure tags are cached before resolving
+   */
+  async ensureTagsCached(): Promise<void> {
+    if (this.tagsCache.size === 0) {
+      await this.fetchAllTags();
+    }
   }
 
   // ============================================================================

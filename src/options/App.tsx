@@ -342,6 +342,25 @@ const App: React.FC = () => {
       
       if (response?.success) {
         setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
+        
+        // Start polling for cache refresh completion
+        // The background script triggers cache refresh after settings save
+        setIsRefreshingCache(true);
+        const pollInterval = setInterval(async () => {
+          const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
+          if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
+            clearInterval(pollInterval);
+            setIsRefreshingCache(false);
+            await loadCacheStats();
+          }
+        }, 1000);
+        
+        // Timeout after 2 minutes
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setIsRefreshingCache(false);
+          loadCacheStats();
+        }, 120000);
       } else {
         setSnackbar({ open: true, message: response?.error || 'Failed to save settings', severity: 'error' });
       }
@@ -1026,7 +1045,9 @@ const App: React.FC = () => {
                             <Typography variant="body2">{platform.platformName}</Typography>
                           </Box>
                           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {platform.total} entities • {platform.age}m ago
+                            {platform.timestamp === 0 
+                              ? 'Building cache...' 
+                              : `${platform.total} entities • ${platform.age}m ago`}
                           </Typography>
                         </Box>
                       ))}
@@ -1059,7 +1080,9 @@ const App: React.FC = () => {
                             <Typography variant="body2">{platform.platformName}</Typography>
                           </Box>
                           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {platform.total} entities • {platform.age}m ago
+                            {platform.timestamp === 0 
+                              ? 'Building cache...' 
+                              : `${platform.total} entities • ${platform.age}m ago`}
                           </Typography>
                         </Box>
                       ))}

@@ -2518,11 +2518,15 @@ function handleHighlightHover(event: MouseEvent): void {
   const tooltip = document.getElementById('xtm-tooltip');
   if (!tooltip) return;
   
-  const type = target.dataset.type || 'Unknown';
+  const rawType = target.dataset.type || 'Unknown';
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
   const isSelected = selectedForImport.has(value);
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isOpenAEV = rawType.startsWith('oaev-');
+  const platformName = isOpenAEV ? 'OpenAEV' : 'OpenCTI';
+  // Display clean type name (strip oaev- prefix for OpenAEV entities)
+  const displayType = isOpenAEV ? rawType.replace('oaev-', '') : rawType;
   
   // Different status icons based on state
   let statusIcon: string;
@@ -2531,13 +2535,13 @@ function handleHighlightHover(event: MouseEvent): void {
   
   if (found) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
-    statusText = 'Found in OpenCTI';
+    statusText = `Found in ${platformName}`;
     actionText = 'Click to view details';
   } else if (isSdoNotAddable) {
     // CVE/Vulnerability not in platform - cannot be added
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9e9e9e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
     statusText = 'Not in platform';
-    actionText = 'CVE detected but not found in OpenCTI';
+    actionText = `CVE detected but not found in ${platformName}`;
   } else {
     // Observable not found - can be added
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
@@ -2549,7 +2553,7 @@ function handleHighlightHover(event: MouseEvent): void {
   
   tooltip.innerHTML = `
     <div class="xtm-tooltip-header">
-      <span class="xtm-tooltip-type">${type}</span>
+      <span class="xtm-tooltip-type">${displayType}</span>
     </div>
     <div class="xtm-tooltip-value">${escapeHtml(value)}</div>
     <div class="xtm-tooltip-status ${found ? 'found' : 'not-found'}">

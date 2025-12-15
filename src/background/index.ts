@@ -1174,25 +1174,39 @@ async function handleMessage(
             break;
           }
           
+          // Ensure tags are cached for resolution
+          await client.ensureTagsCached();
+          
           // Fetch entity details based on type
-          let entity = null;
+          let entity: Record<string, unknown> | null = null;
           switch (entityType) {
             case 'Asset':
-              entity = await client.getAsset(entityId);
+              entity = await client.getAsset(entityId) as Record<string, unknown> | null;
               break;
             case 'AssetGroup':
-              entity = await client.getAssetGroup(entityId);
+              entity = await client.getAssetGroup(entityId) as Record<string, unknown> | null;
               break;
             case 'Player':
-              entity = await client.getPlayer(entityId);
+              entity = await client.getPlayer(entityId) as Record<string, unknown> | null;
               break;
             case 'Team':
-              entity = await client.getTeam(entityId);
+              entity = await client.getTeam(entityId) as Record<string, unknown> | null;
               break;
           }
           
           if (entity) {
-            sendResponse({ success: true, data: { ...entity, _platformId: platformId } });
+            // Resolve tag IDs to names for display
+            const resolvedEntity = { ...entity, _platformId: platformId };
+            if (entity.asset_tags) {
+              resolvedEntity.asset_tags = client.resolveTagIds(entity.asset_tags as string[]);
+            }
+            if (entity.asset_group_tags) {
+              resolvedEntity.asset_group_tags = client.resolveTagIds(entity.asset_group_tags as string[]);
+            }
+            if (entity.team_tags) {
+              resolvedEntity.team_tags = client.resolveTagIds(entity.team_tags as string[]);
+            }
+            sendResponse({ success: true, data: resolvedEntity });
           } else {
             sendResponse({ success: false, error: 'Entity not found' });
           }
@@ -1899,7 +1913,8 @@ async function handleMessage(
           let grandTotal = 0;
           let oldestTimestamp = Date.now();
           
-          // OpenCTI stats
+          // OpenCTI stats - include all configured platforms (even if not yet cached)
+          const processedOpenctiPlatforms = new Set<string>();
           for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
             let platformTotal = 0;
             for (const entities of Object.values(cache.entities)) {
@@ -1917,9 +1932,24 @@ async function handleMessage(
               timestamp: cache.timestamp,
               age: Date.now() - cache.timestamp,
             });
+            processedOpenctiPlatforms.add(platformId);
           }
           
-          // OpenAEV stats
+          // Add platforms from settings that don't have cache entries yet
+          for (const p of currentSettings.openctiPlatforms || []) {
+            if (p.url && p.apiToken && !processedOpenctiPlatforms.has(p.id)) {
+              openctiPlatformStats.push({
+                platformId: p.id,
+                platformName: p.name,
+                total: 0,
+                timestamp: 0,
+                age: 0,
+              });
+            }
+          }
+          
+          // OpenAEV stats - include all configured platforms (even if not yet cached)
+          const processedOaevPlatforms = new Set<string>();
           let oaevGrandTotal = 0;
           for (const [platformId, cache] of Object.entries(oaevMultiCache.platforms)) {
             let platformTotal = 0;
@@ -1939,6 +1969,20 @@ async function handleMessage(
               timestamp: cache.timestamp,
               age: Date.now() - cache.timestamp,
             });
+            processedOaevPlatforms.add(platformId);
+          }
+          
+          // Add OpenAEV platforms from settings that don't have cache entries yet
+          for (const p of currentSettings.openaevPlatforms || []) {
+            if (p.url && p.apiToken && !processedOaevPlatforms.has(p.id)) {
+              oaevPlatformStats.push({
+                platformId: p.id,
+                platformName: p.name,
+                total: 0,
+                timestamp: 0,
+                age: 0,
+              });
+            }
           }
           
           sendResponse({

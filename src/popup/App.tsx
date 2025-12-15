@@ -328,41 +328,60 @@ const App: React.FC = () => {
     });
     
     // Listen for storage changes to keep status in sync
-    // This ensures the popup updates when settings are saved (e.g., from splash setup completing)
+    // This ensures the popup updates when settings are saved (e.g., from options page)
+    // NOTE: We only sync isEnterprise and handle platform additions/removals,
+    // but we DON'T override connected status - that's managed by connection tests
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
         const newSettings = changes.settings.newValue;
         if (newSettings) {
-          // Update platform status with new isEnterprise values
           const openctiPlatforms = newSettings.openctiPlatforms || [];
           const openaevPlatforms = newSettings.openaevPlatforms || [];
           
-          setStatus(prev => ({
-            opencti: openctiPlatforms.map((p: any) => {
+          setStatus(prev => {
+            // Build new opencti list - keep connected status from existing entries
+            const newOpencti = openctiPlatforms.map((p: any) => {
               const existing = prev.opencti.find(e => e.id === p.id);
-              return existing 
-                ? { ...existing, isEnterprise: p.isEnterprise }
-                : {
-                    id: p.id || 'default',
-                    name: p.name || p.platformName || 'OpenCTI',
-                    url: p.url || '',
-                    connected: false,
-                    isEnterprise: p.isEnterprise,
-                  };
-            }),
-            openaev: openaevPlatforms.map((p: any) => {
+              if (existing) {
+                // Platform exists - preserve all status, just update isEnterprise from settings
+                return { ...existing, isEnterprise: p.isEnterprise };
+              }
+              // New platform - check if there's any platform with connected=true
+              // that we should preserve (handles race condition during setup)
+              const anyConnected = prev.opencti.find(e => e.connected && e.url === p.url);
+              return {
+                id: p.id || 'default',
+                name: p.name || p.platformName || 'OpenCTI',
+                url: p.url || '',
+                connected: anyConnected?.connected || false,
+                version: anyConnected?.version,
+                userName: anyConnected?.userName,
+                isEnterprise: p.isEnterprise ?? anyConnected?.isEnterprise,
+              };
+            });
+            
+            // Build new openaev list - keep connected status from existing entries
+            const newOpenaev = openaevPlatforms.map((p: any) => {
               const existing = prev.openaev.find(e => e.id === p.id);
-              return existing 
-                ? { ...existing, isEnterprise: p.isEnterprise }
-                : {
-                    id: p.id || 'default',
-                    name: p.name || p.platformName || 'OpenAEV',
-                    url: p.url || '',
-                    connected: false,
-                    isEnterprise: p.isEnterprise,
-                  };
-            }),
-          }));
+              if (existing) {
+                // Platform exists - preserve all status, just update isEnterprise from settings
+                return { ...existing, isEnterprise: p.isEnterprise };
+              }
+              // New platform - check if there's any platform with connected=true
+              const anyConnected = prev.openaev.find(e => e.connected && e.url === p.url);
+              return {
+                id: p.id || 'default',
+                name: p.name || p.platformName || 'OpenAEV',
+                url: p.url || '',
+                connected: anyConnected?.connected || false,
+                version: anyConnected?.version,
+                userName: anyConnected?.userName,
+                isEnterprise: p.isEnterprise ?? anyConnected?.isEnterprise,
+              };
+            });
+            
+            return { opencti: newOpencti, openaev: newOpenaev };
+          });
         }
       }
     };
@@ -574,7 +593,34 @@ const App: React.FC = () => {
         isEnterprise: newPlatform.isEnterprise,
       });
       
-      // Add the new platform
+      // FIRST: Update the status to show this platform as connected
+      // This must happen BEFORE saving to storage so the storage change listener
+      // finds the platform already in status and preserves its connected state
+      const newPlatformStatus: PlatformStatus = {
+        id: platformId,
+        name: finalName,
+        url: normalizedUrl,
+        connected: true, // Platform is connected since test passed
+        version: testResponse.data?.version,
+        userName: platformType === 'opencti' 
+          ? (testResponse.data?.me?.name || testResponse.data?.me?.user_email)
+          : testResponse.data?.user?.user_email,
+        isEnterprise: isEnterprise,
+      };
+      
+      if (platformType === 'opencti') {
+        setStatus(prev => ({
+          ...prev,
+          opencti: [...prev.opencti, newPlatformStatus],
+        }));
+      } else {
+        setStatus(prev => ({
+          ...prev,
+          openaev: [...prev.openaev, newPlatformStatus],
+        }));
+      }
+      
+      // Add the new platform to settings
       const updatedSettings = {
         ...currentSettings,
         [`${platformType}Platforms`]: [
@@ -583,7 +629,7 @@ const App: React.FC = () => {
         ],
       };
       
-      // Save settings
+      // Save settings (this triggers storage change listener, but status already updated above)
       const saveResponse = await chrome.runtime.sendMessage({
         type: 'SAVE_SETTINGS',
         payload: updatedSettings,
@@ -615,8 +661,9 @@ const App: React.FC = () => {
         if (platformType === 'opencti') {
           setSetupStep('openaev');
         } else {
-          // Complete setup - exit the wizard and refresh status
-          await completeSetupWizard();
+          // Complete setup - exit the wizard (status already updated)
+          setIsInSetupWizard(false);
+          setSetupStep('welcome');
         }
       }, 1000);
       
@@ -625,30 +672,7 @@ const App: React.FC = () => {
       setSetupTesting(false);
     }
   };
-
-  // Function to complete the setup wizard and transition to main UI
-  const completeSetupWizard = async () => {
-    setSetupStep('complete');
-    
-    // Wait for cache to start building
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Reload status by fetching connection status and testing connections
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_CONNECTION_STATUS' });
-      if (response?.success && response.data) {
-        setStatus(response.data);
-      }
-    } catch {
-      log.debug('Could not fetch connection status');
-    }
-    
-    // Exit the wizard mode - this will show the main UI
-    setIsInSetupWizard(false);
-    setSetupStep('welcome'); // Reset step for future use
-  };
-
-  const handleSetupSkip = async (currentStep: 'opencti' | 'openaev') => {
+  const handleSetupSkip = (currentStep: 'opencti' | 'openaev') => {
     setSetupUrl('');
     setSetupToken('');
     setSetupName('');
@@ -658,8 +682,10 @@ const App: React.FC = () => {
     if (currentStep === 'opencti') {
       setSetupStep('openaev');
     } else {
-      // After OAEV skip, complete the wizard if any platform was configured
-      await completeSetupWizard();
+      // After OAEV skip, exit the wizard
+      // Status was already updated when OpenCTI was configured (if any)
+      setIsInSetupWizard(false);
+      setSetupStep('welcome');
     }
   };
 

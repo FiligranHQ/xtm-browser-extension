@@ -25,7 +25,6 @@ import {
 } from '../shared/platform';
 import { Readability } from '@mozilla/readability';
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 // ============================================================================
 // Article Extraction & PDF Generation Utilities
@@ -72,11 +71,13 @@ function extractArticleContent(): { title: string; content: string; textContent:
     if (article) {
       // Apply additional text cleaning to remove paywall messages
       const cleanedTextContent = cleanArticleText(article.textContent || '');
+      // Also clean the HTML content to remove any remaining overlays/modals
+      const cleanedHtmlContent = cleanArticleHtml(article.content || '');
       
       log.debug(' Readability extracted article:', article.title, 'raw length:', article.textContent?.length, 'cleaned length:', cleanedTextContent.length);
       return {
         title: article.title || document.title,
-        content: article.content || '',
+        content: cleanedHtmlContent,
         textContent: cleanedTextContent,
         excerpt: cleanArticleText(article.excerpt || ''),
         byline: article.byline || '',
@@ -99,22 +100,53 @@ function extractArticleContent(): { title: string; content: string; textContent:
 
 /**
  * Fallback content extraction when Readability fails - returns HTML
+ * Thoroughly cleans overlays, modals, popups, and non-content elements
  */
 function getFallbackContent(): string {
   const clone = document.body.cloneNode(true) as HTMLElement;
   
-  // Remove non-content elements
+  // Comprehensive list of elements to remove
   const selectorsToRemove = [
-    'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
-    'nav', 'header', 'footer', 'aside', 'menu',
-    '.sidebar', '.navigation', '.menu', '.advertisement', '.ad', '.advert',
-    '.share', '.social', '.comments', '.related', '.recommended',
-    '.newsletter', '.subscribe', '.popup', '.modal', '.cookie', '.banner',
-    '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
-    '[role="search"]', '[role="form"]', '[role="menu"]',
-    '[class*="share"]', '[class*="social"]', '[class*="comment"]', '[class*="sidebar"]',
-    '[class*="advert"]', '[class*="cookie"]', '[class*="newsletter"]', '[class*="popup"]',
-    '[id*="share"]', '[id*="social"]', '[id*="comment"]', '[id*="sidebar"]',
+    // Core non-content elements
+    'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio',
+    'object', 'embed', 'applet', 'form', 'input', 'button', 'select', 'textarea',
+    // Navigation and structural
+    'nav', 'header', 'footer', 'aside', 'menu', 'menuitem',
+    // Common overlay/modal patterns
+    '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]', '[class*="dialog"]',
+    '[class*="lightbox"]', '[class*="drawer"]', '[class*="sheet"]', '[class*="backdrop"]',
+    '[id*="overlay"]', '[id*="modal"]', '[id*="popup"]', '[id*="dialog"]',
+    // Cookie/consent banners
+    '[class*="cookie"]', '[class*="consent"]', '[class*="gdpr"]', '[class*="privacy-"]',
+    '[class*="banner"]', '[class*="notice"]', '[class*="alert"]',
+    '[id*="cookie"]', '[id*="consent"]', '[id*="gdpr"]', '[id*="banner"]',
+    // Sticky/fixed elements
+    '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
+    '[class*="toolbar"]', '[class*="toast"]', '[class*="snackbar"]',
+    // Ads and promotions
+    '[class*="ad-"]', '[class*="advert"]', '[class*="advertisement"]', '[class*="sponsor"]',
+    '[class*="promo"]', '[class*="promotion"]', '[class*="cta"]',
+    '[id*="ad-"]', '[id*="advert"]', '[id*="sponsor"]',
+    // Social and sharing
+    '[class*="share"]', '[class*="social"]', '[class*="follow"]', '[class*="like"]',
+    // Comments and related content
+    '[class*="comment"]', '[class*="related"]', '[class*="recommended"]', '[class*="suggested"]',
+    '[class*="sidebar"]', '[class*="widget"]',
+    // Newsletter and subscription
+    '[class*="newsletter"]', '[class*="subscribe"]', '[class*="signup"]', '[class*="login"]',
+    '[class*="paywall"]', '[class*="subscription"]', '[class*="premium"]',
+    // Navigation elements
+    '[class*="breadcrumb"]', '[class*="pagination"]', '[class*="nav-"]', '[class*="menu-"]',
+    // ARIA roles for non-content
+    '[role="navigation"]', '[role="banner"]', '[role="complementary"]', '[role="contentinfo"]',
+    '[role="search"]', '[role="form"]', '[role="menu"]', '[role="menubar"]', '[role="dialog"]',
+    '[role="alertdialog"]', '[role="tooltip"]', '[role="status"]', '[role="alert"]',
+    // Hidden elements
+    '[hidden]', '[aria-hidden="true"]',
+    // Common framework overlays
+    '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root', '.MuiDrawer-root',
+    '.chakra-modal', '.chakra-overlay', '.ant-modal', '.ant-drawer',
+    '.ReactModal__Overlay', '.ReactModal__Content',
   ];
   
   selectorsToRemove.forEach(selector => {
@@ -123,15 +155,136 @@ function getFallbackContent(): string {
     } catch { /* Skip invalid selectors */ }
   });
   
+  // Remove elements with fixed/absolute positioning (likely overlays)
+  clone.querySelectorAll('*').forEach(el => {
+    const style = (el as HTMLElement).style;
+    if (style) {
+      const position = style.position;
+      if (position === 'fixed' || position === 'sticky') {
+        el.remove();
+        return;
+      }
+    }
+    // Also check computed style for fixed elements
+    try {
+      const computed = window.getComputedStyle(el as HTMLElement);
+      if (computed.position === 'fixed' || computed.position === 'sticky') {
+        el.remove();
+        return;
+      }
+      // Remove elements with very high z-index (likely overlays)
+      const zIndex = parseInt(computed.zIndex);
+      if (!isNaN(zIndex) && zIndex > 9000) {
+        el.remove();
+        return;
+      }
+    } catch { /* Skip if computed style fails */ }
+  });
+  
   // Clean attributes
   clone.querySelectorAll('*').forEach(el => {
     el.removeAttribute('style');
     el.removeAttribute('onclick');
     el.removeAttribute('onload');
     el.removeAttribute('onerror');
+    el.removeAttribute('onmouseover');
+    el.removeAttribute('onmouseout');
+    el.removeAttribute('onfocus');
+    el.removeAttribute('onblur');
+    el.removeAttribute('data-scroll-lock');
+    el.removeAttribute('data-overlay');
+    el.removeAttribute('data-modal');
+  });
+  
+  // Remove empty wrapper elements
+  clone.querySelectorAll('div, span').forEach(el => {
+    const hasText = el.textContent?.trim();
+    const hasContent = el.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, li, table, img, figure, blockquote, pre, code, a');
+    if (!hasText && !hasContent) {
+      el.remove();
+    }
   });
   
   return clone.innerHTML;
+}
+
+/**
+ * Clean HTML content from Readability output - removes overlays, modals, and problematic elements
+ * This ensures the content field doesn't have elements that prevent text selection
+ */
+function cleanArticleHtml(html: string): string {
+  if (!html) return '';
+  
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  // Remove remaining problematic elements (Readability may not catch all)
+  const selectorsToRemove = [
+    // Scripts and interactive elements (should be gone, but double-check)
+    'script', 'style', 'noscript', 'iframe', 'object', 'embed',
+    'form', 'input', 'button', 'select', 'textarea',
+    // Overlay patterns
+    '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]', '[class*="dialog"]',
+    '[class*="backdrop"]', '[class*="lightbox"]',
+    '[id*="overlay"]', '[id*="modal"]', '[id*="popup"]',
+    // Cookie/banner patterns
+    '[class*="cookie"]', '[class*="consent"]', '[class*="banner"]', '[class*="notice"]',
+    '[id*="cookie"]', '[id*="consent"]', '[id*="banner"]',
+    // Fixed/sticky elements
+    '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
+    '[class*="toolbar"]', '[class*="toast"]',
+    // Ads
+    '[class*="ad-"]', '[class*="advert"]', '[class*="sponsor"]', '[class*="promo"]',
+    // Social/share
+    '[class*="share"]', '[class*="social"]',
+    // Newsletter/subscription
+    '[class*="newsletter"]', '[class*="subscribe"]', '[class*="paywall"]',
+    // Navigation
+    '[class*="breadcrumb"]', '[class*="pagination"]',
+    // ARIA roles for overlays
+    '[role="dialog"]', '[role="alertdialog"]', '[role="tooltip"]',
+    // Hidden elements
+    '[hidden]', '[aria-hidden="true"]',
+    // Framework overlays
+    '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root',
+    '.ReactModal__Overlay', '.ReactModal__Content',
+  ];
+  
+  selectorsToRemove.forEach(selector => {
+    try {
+      temp.querySelectorAll(selector).forEach(el => el.remove());
+    } catch { /* Skip invalid selectors */ }
+  });
+  
+  // Remove all inline styles and event handlers
+  temp.querySelectorAll('*').forEach(el => {
+    el.removeAttribute('style');
+    el.removeAttribute('onclick');
+    el.removeAttribute('onload');
+    el.removeAttribute('onerror');
+    el.removeAttribute('onmouseover');
+    el.removeAttribute('onmouseout');
+    el.removeAttribute('onfocus');
+    el.removeAttribute('onblur');
+    el.removeAttribute('data-scroll-lock');
+    el.removeAttribute('data-overlay');
+    el.removeAttribute('data-modal');
+    // Remove class attribute to prevent CSS from affecting display
+    // Keep the element structure but remove styling hooks
+    el.removeAttribute('class');
+    el.removeAttribute('id');
+  });
+  
+  // Remove empty wrapper elements
+  temp.querySelectorAll('div, span').forEach(el => {
+    const hasText = el.textContent?.trim();
+    const hasContent = el.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, li, table, img, figure, blockquote, pre, code, a');
+    if (!hasText && !hasContent) {
+      el.remove();
+    }
+  });
+  
+  return temp.innerHTML;
 }
 
 /**
@@ -346,259 +499,8 @@ function extractFirstParagraph(textContent: string, maxLength = 500): string {
 }
 
 /**
- * Convert image to base64 data URL to avoid CORS issues
- */
-async function imageToBase64(imgElement: HTMLImageElement): Promise<string | null> {
-  try {
-    // If already a data URL, return as-is
-    if (imgElement.src.startsWith('data:')) {
-      return imgElement.src;
-    }
-    
-    // Try to fetch the image and convert to base64
-    const response = await fetch(imgElement.src, { mode: 'cors' });
-    if (!response.ok) return null;
-    
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    // CORS error or other issue - try canvas approach
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = imgElement.naturalWidth || imgElement.width || 300;
-      canvas.height = imgElement.naturalHeight || imgElement.height || 200;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(imgElement, 0, 0);
-        return canvas.toDataURL('image/png');
-      }
-    } catch {
-      // Canvas is tainted, skip this image
-    }
-    return null;
-  }
-}
-
-/**
- * Clean HTML content for PDF rendering - remove unwanted elements and fix images
- */
-async function prepareHtmlForPdf(htmlContent: string, title: string): Promise<HTMLElement> {
-  // Create a container for the PDF content
-  const container = document.createElement('div');
-  container.id = 'xtm-pdf-container';
-  
-  // Apply styles for clean PDF rendering
-  container.style.cssText = `
-    width: 595px;
-    padding: 40px;
-    background: white;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 12px;
-    line-height: 1.6;
-    color: #1a1a1a;
-    box-sizing: border-box;
-  `;
-  
-  // Build the PDF content with header, article, and footer
-  const sourceUrl = window.location.href;
-  const truncatedUrl = sourceUrl.length > 70 ? sourceUrl.substring(0, 67) + '...' : sourceUrl;
-  
-  container.innerHTML = `
-    <style>
-      #xtm-pdf-container * {
-        box-sizing: border-box;
-      }
-      #xtm-pdf-container h1, #xtm-pdf-container h2, #xtm-pdf-container h3, 
-      #xtm-pdf-container h4, #xtm-pdf-container h5, #xtm-pdf-container h6 {
-        color: #1a1a1a;
-        margin-top: 16px;
-        margin-bottom: 8px;
-        line-height: 1.3;
-      }
-      #xtm-pdf-container h1 { font-size: 22px; }
-      #xtm-pdf-container h2 { font-size: 18px; }
-      #xtm-pdf-container h3 { font-size: 16px; }
-      #xtm-pdf-container p {
-        margin: 0 0 12px 0;
-        text-align: justify;
-      }
-      #xtm-pdf-container strong, #xtm-pdf-container b {
-        font-weight: 700;
-      }
-      #xtm-pdf-container em, #xtm-pdf-container i {
-        font-style: italic;
-      }
-      #xtm-pdf-container ul, #xtm-pdf-container ol {
-        margin: 8px 0 12px 20px;
-        padding-left: 20px;
-      }
-      #xtm-pdf-container li {
-        margin-bottom: 4px;
-      }
-      #xtm-pdf-container blockquote {
-        margin: 12px 0;
-        padding: 10px 20px;
-        border-left: 4px solid #001bda;
-        background: #f5f5f5;
-        font-style: italic;
-      }
-      #xtm-pdf-container img {
-        max-width: 100%;
-        height: auto;
-        margin: 12px 0;
-        display: block;
-      }
-      #xtm-pdf-container a {
-        color: #001bda;
-        text-decoration: none;
-      }
-      #xtm-pdf-container figure {
-        margin: 12px 0;
-      }
-      #xtm-pdf-container figcaption {
-        font-size: 10px;
-        color: #666;
-        text-align: center;
-        margin-top: 4px;
-      }
-      #xtm-pdf-container pre, #xtm-pdf-container code {
-        background: #f5f5f5;
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 11px;
-        padding: 2px 4px;
-        border-radius: 2px;
-      }
-      #xtm-pdf-container pre {
-        padding: 12px;
-        overflow-x: auto;
-        margin: 12px 0;
-      }
-      #xtm-pdf-container table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 12px 0;
-      }
-      #xtm-pdf-container th, #xtm-pdf-container td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-      }
-      #xtm-pdf-container th {
-        background: #f5f5f5;
-        font-weight: 600;
-      }
-      .xtm-pdf-header {
-        border-bottom: 2px solid #001bda;
-        padding-bottom: 12px;
-        margin-bottom: 20px;
-      }
-      .xtm-pdf-header-title {
-        color: #001bda;
-        font-size: 11px;
-        font-weight: 600;
-        margin: 0 0 4px 0;
-      }
-      .xtm-pdf-header-date {
-        color: #666;
-        font-size: 10px;
-        margin: 0;
-      }
-      .xtm-pdf-article-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #1a1a1a;
-        margin: 0 0 12px 0;
-        line-height: 1.2;
-      }
-      .xtm-pdf-meta {
-        color: #666;
-        font-size: 10px;
-        margin-bottom: 20px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #e0e0e0;
-      }
-      .xtm-pdf-content {
-        margin-bottom: 30px;
-      }
-      .xtm-pdf-footer {
-        border-top: 1px solid #e0e0e0;
-        padding-top: 12px;
-        margin-top: 20px;
-        color: #999;
-        font-size: 9px;
-        text-align: center;
-      }
-    </style>
-    
-    <div class="xtm-pdf-header">
-      <p class="xtm-pdf-header-title">Filigran XTM Browser Extension</p>
-      <p class="xtm-pdf-header-date">Captured on ${new Date().toLocaleDateString()}</p>
-    </div>
-    
-    <h1 class="xtm-pdf-article-title">${escapeHtml(title)}</h1>
-    
-    <div class="xtm-pdf-meta">
-      <div>Source: ${escapeHtml(truncatedUrl)}</div>
-      <div>Captured: ${new Date().toLocaleString()}</div>
-    </div>
-    
-    <div class="xtm-pdf-content">
-      ${htmlContent}
-    </div>
-    
-    <div class="xtm-pdf-footer">
-      Generated by Filigran XTM Browser Extension | ${window.location.hostname}
-    </div>
-  `;
-  
-  // Clean up the content section - remove scripts, iframes, etc.
-  const contentDiv = container.querySelector('.xtm-pdf-content');
-  if (contentDiv) {
-    // Remove unwanted elements
-    const toRemove = contentDiv.querySelectorAll('script, iframe, noscript, object, embed, video, audio, svg, canvas, form, input, button, [style*="display: none"], [style*="display:none"], [hidden]');
-    toRemove.forEach(el => el.remove());
-    
-    // Remove empty elements
-    contentDiv.querySelectorAll('p, div, span').forEach(el => {
-      if (!el.textContent?.trim() && !el.querySelector('img')) {
-        el.remove();
-      }
-    });
-  }
-  
-  // Process images - convert to base64 to avoid CORS issues
-  const images = container.querySelectorAll('img');
-  for (const img of images) {
-    try {
-      const base64 = await imageToBase64(img as HTMLImageElement);
-      if (base64) {
-        img.src = base64;
-        // Ensure reasonable size for PDF
-        const imgEl = img as HTMLImageElement;
-        if (imgEl.naturalWidth > 500 || !imgEl.style.maxWidth) {
-          img.style.maxWidth = '100%';
-          img.style.height = 'auto';
-        }
-      } else {
-        // Remove images that couldn't be converted (CORS issues)
-        img.remove();
-      }
-    } catch {
-      img.remove();
-    }
-  }
-  
-  return container;
-}
-
-/**
- * Generate PDF from article content using jsPDF with html2canvas
- * Preserves text formatting (bold, italic, headings) and includes images
+ * Generate PDF from article content with selectable text
+ * Parses HTML and renders using native jsPDF methods for real text (not images)
  * Returns base64 encoded PDF data
  */
 async function generateArticlePDF(): Promise<{ data: string; filename: string } | null> {
@@ -611,93 +513,266 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
       return null;
     }
     
-    log.debug(' Starting PDF generation with HTML rendering, article title:', article.title);
-    log.debug(' HTML content length:', article.content?.length || 0);
+    log.debug(' Starting PDF generation with selectable text, article title:', article.title);
     
-    // Prepare the HTML content for PDF rendering
-    const container = await prepareHtmlForPdf(article.content, article.title);
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
     
-    // Temporarily add container to DOM for rendering (hidden)
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    document.body.appendChild(container);
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+    const lineHeight = 5;
+    let yPosition = margin;
     
-    try {
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      // Use html2canvas to capture the styled content
-      const canvas = await html2canvas(container, {
-        scale: 2, // Higher quality
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: 595, // A4 width in pixels at 72 DPI
-        windowWidth: 595,
-      });
-      
-      // Calculate how to fit the content on PDF pages
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
-      
-      // Add image to PDF, handling multiple pages if needed
-      let heightLeft = imgHeight;
-      let position = 0;
-      
-      // Add first page
-      pdf.addImage(
-        canvas.toDataURL('image/jpeg', 0.95),
-        'JPEG',
-        0,
-        position,
-        imgWidth,
-        imgHeight
-      );
-      heightLeft -= pageHeight;
-      
-      // Add additional pages if content is longer than one page
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight; // Negative offset for subsequent pages
+    // Helper to check if we need a new page
+    const checkPageBreak = (neededHeight: number) => {
+      if (yPosition + neededHeight > pageHeight - margin) {
         pdf.addPage();
-        pdf.addImage(
-          canvas.toDataURL('image/jpeg', 0.95),
-          'JPEG',
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        );
-        heightLeft -= pageHeight;
+        yPosition = margin;
+        return true;
       }
-      
-      // Generate filename
-      const filename = `${sanitizeFilename(article.title)}.pdf`;
-      
-      // Get PDF as base64
-      const pdfOutput = pdf.output('datauristring');
-      const base64Data = pdfOutput.split(',')[1];
-      
-      log.debug(' PDF generated successfully with HTML rendering, base64 length:', base64Data.length);
-      
-      return {
-        data: base64Data,
-        filename: filename,
-      };
-    } finally {
-      // Always remove the temporary container
-      document.body.removeChild(container);
-    }
+      return false;
+    };
+    
+    // Header - blue line
+    pdf.setFillColor(0, 27, 218);
+    pdf.rect(margin, margin, contentWidth, 0.5, 'F');
+    yPosition += 5;
+    
+    // Header text
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 27, 218);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Filigran XTM Browser Extension', margin, yPosition);
+    yPosition += 5;
+    
+    // Date
+    pdf.setFontSize(9);
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Captured on ${new Date().toLocaleDateString()}`, margin, yPosition);
+    yPosition += 10;
+    
+    // Title
+    pdf.setFontSize(18);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'bold');
+    const titleLines = pdf.splitTextToSize(article.title, contentWidth);
+    checkPageBreak(titleLines.length * 7);
+    pdf.text(titleLines, margin, yPosition);
+    yPosition += titleLines.length * 7 + 3;
+    
+    // Source URL
+    pdf.setFontSize(9);
+    pdf.setTextColor(0, 100, 200);
+    pdf.setFont('helvetica', 'normal');
+    const truncatedUrl = window.location.href.length > 80 
+      ? window.location.href.substring(0, 77) + '...' 
+      : window.location.href;
+    pdf.textWithLink(truncatedUrl, margin, yPosition, { url: window.location.href });
+    yPosition += 8;
+    
+    // Divider
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 8;
+    
+    // Parse and render HTML content with formatting
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = article.content;
+    
+    // Remove unwanted elements
+    const removeSelectors = ['script', 'style', 'nav', 'footer', 'header', 'aside', 'iframe', 'noscript', '.advertisement', '.social-share', '.comments'];
+    removeSelectors.forEach(sel => {
+      tempDiv.querySelectorAll(sel).forEach(el => el.remove());
+    });
+    
+    // Process content recursively
+    const processNode = (node: Node, isBold = false, isItalic = false, fontSize = 11) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.trim();
+        if (text) {
+          // Set font style
+          let fontStyle: 'normal' | 'bold' | 'italic' | 'bolditalic' = 'normal';
+          if (isBold && isItalic) fontStyle = 'bolditalic';
+          else if (isBold) fontStyle = 'bold';
+          else if (isItalic) fontStyle = 'italic';
+          
+          pdf.setFont('helvetica', fontStyle);
+          pdf.setFontSize(fontSize);
+          pdf.setTextColor(30, 30, 30);
+          
+          const lines = pdf.splitTextToSize(text, contentWidth);
+          const neededHeight = lines.length * lineHeight;
+          checkPageBreak(neededHeight);
+          pdf.text(lines, margin, yPosition);
+          yPosition += neededHeight;
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const tagName = el.tagName.toLowerCase();
+        
+        // Handle different elements
+        switch (tagName) {
+          case 'h1':
+            checkPageBreak(12);
+            yPosition += 4;
+            processChildren(el, true, false, 16);
+            yPosition += 4;
+            break;
+          case 'h2':
+            checkPageBreak(10);
+            yPosition += 3;
+            processChildren(el, true, false, 14);
+            yPosition += 3;
+            break;
+          case 'h3':
+          case 'h4':
+          case 'h5':
+          case 'h6':
+            checkPageBreak(8);
+            yPosition += 2;
+            processChildren(el, true, false, 12);
+            yPosition += 2;
+            break;
+          case 'p':
+            checkPageBreak(lineHeight);
+            processChildren(el, isBold, isItalic, fontSize);
+            yPosition += 3;
+            break;
+          case 'br':
+            yPosition += lineHeight;
+            break;
+          case 'strong':
+          case 'b':
+            processChildren(el, true, isItalic, fontSize);
+            break;
+          case 'em':
+          case 'i':
+            processChildren(el, isBold, true, fontSize);
+            break;
+          case 'ul':
+          case 'ol':
+            yPosition += 2;
+            el.querySelectorAll(':scope > li').forEach((li, idx) => {
+              checkPageBreak(lineHeight);
+              const bullet = tagName === 'ul' ? '•' : `${idx + 1}.`;
+              pdf.setFont('helvetica', 'normal');
+              pdf.setFontSize(11);
+              pdf.setTextColor(30, 30, 30);
+              pdf.text(bullet, margin, yPosition);
+              
+              const liText = li.textContent?.trim() || '';
+              const lines = pdf.splitTextToSize(liText, contentWidth - 8);
+              pdf.text(lines, margin + 8, yPosition);
+              yPosition += lines.length * lineHeight + 1;
+            });
+            yPosition += 2;
+            break;
+          case 'blockquote':
+            checkPageBreak(lineHeight + 4);
+            yPosition += 2;
+            pdf.setDrawColor(0, 27, 218);
+            pdf.setLineWidth(0.5);
+            const quoteStartY = yPosition;
+            processChildren(el, false, true, 10);
+            pdf.line(margin, quoteStartY - 2, margin, yPosition);
+            yPosition += 4;
+            break;
+          case 'a':
+            // Render links with URL
+            const href = el.getAttribute('href');
+            const linkText = el.textContent?.trim() || '';
+            if (linkText && href) {
+              pdf.setTextColor(0, 100, 200);
+              pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+              pdf.setFontSize(fontSize);
+              const lines = pdf.splitTextToSize(linkText, contentWidth);
+              checkPageBreak(lines.length * lineHeight);
+              pdf.textWithLink(lines.join(' '), margin, yPosition, { url: href.startsWith('http') ? href : window.location.origin + href });
+              yPosition += lines.length * lineHeight;
+              pdf.setTextColor(30, 30, 30);
+            }
+            break;
+          case 'img':
+            // Skip images for now - they would require async loading
+            // Could add: [Image: alt text] placeholder
+            const alt = el.getAttribute('alt');
+            if (alt) {
+              checkPageBreak(lineHeight);
+              pdf.setFontSize(9);
+              pdf.setTextColor(100, 100, 100);
+              pdf.setFont('helvetica', 'italic');
+              pdf.text(`[Image: ${alt}]`, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            break;
+          case 'pre':
+          case 'code':
+            checkPageBreak(lineHeight);
+            pdf.setFont('courier', 'normal');
+            pdf.setFontSize(9);
+            pdf.setTextColor(50, 50, 50);
+            const codeText = el.textContent?.trim() || '';
+            const codeLines = pdf.splitTextToSize(codeText, contentWidth);
+            pdf.text(codeLines, margin, yPosition);
+            yPosition += codeLines.length * 4 + 2;
+            pdf.setFont('helvetica', 'normal');
+            break;
+          case 'hr':
+            checkPageBreak(6);
+            yPosition += 3;
+            pdf.setDrawColor(200, 200, 200);
+            pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+            yPosition += 3;
+            break;
+          case 'div':
+          case 'section':
+          case 'article':
+          case 'span':
+          case 'figure':
+          case 'figcaption':
+          default:
+            processChildren(el, isBold, isItalic, fontSize);
+            break;
+        }
+      }
+    };
+    
+    const processChildren = (el: HTMLElement, isBold: boolean, isItalic: boolean, fontSize: number) => {
+      el.childNodes.forEach(child => processNode(child, isBold, isItalic, fontSize));
+    };
+    
+    // Process all content
+    tempDiv.childNodes.forEach(child => processNode(child));
+    
+    // Footer
+    const footerY = pageHeight - 10;
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    pdf.text(`Generated by Filigran XTM Browser Extension | ${window.location.hostname}`, margin, footerY);
+    
+    // Generate filename
+    const filename = `${sanitizeFilename(article.title)}.pdf`;
+    
+    // Get PDF as base64
+    const pdfOutput = pdf.output('datauristring');
+    const base64Data = pdfOutput.split(',')[1];
+    
+    log.debug(' PDF generated successfully with selectable text, base64 length:', base64Data.length);
+    
+    return {
+      data: base64Data,
+      filename: filename,
+    };
   } catch (error) {
-    log.error(' Failed to generate PDF with HTML rendering:', error);
+    log.error(' Failed to generate PDF:', error);
     // Fallback to simple text-based PDF
     return generateSimpleTextPDF();
   }
@@ -2560,7 +2635,7 @@ function highlightResults(results: ScanResultPayload): void {
   const fullText = textNodes.map((n) => n.textContent).join(' ');
   
   // Build a map of values to their platform findings
-  // This helps detect when same text is in multiple platforms (mixed state)
+  // This helps detect when same text is in multiple platforms (mixed state or multi-platform)
   const valueToPlatformEntities: Map<string, {
     platformType: string;
     type: string;
@@ -2568,7 +2643,39 @@ function highlightResults(results: ScanResultPayload): void {
     data: any;
   }[]> = new Map();
   
-  // Collect platform entities by value
+  // First, collect OpenCTI observables by value
+  for (const obs of results.observables) {
+    if (obs.found) {
+      const valueLower = obs.value.toLowerCase();
+      if (!valueToPlatformEntities.has(valueLower)) {
+        valueToPlatformEntities.set(valueLower, []);
+      }
+      valueToPlatformEntities.get(valueLower)!.push({
+        platformType: 'opencti',
+        type: obs.type,
+        found: true,
+        data: obs,
+      });
+    }
+  }
+  
+  // Collect OpenCTI SDOs by name
+  for (const sdo of results.sdos) {
+    if (sdo.found) {
+      const valueLower = sdo.name.toLowerCase();
+      if (!valueToPlatformEntities.has(valueLower)) {
+        valueToPlatformEntities.set(valueLower, []);
+      }
+      valueToPlatformEntities.get(valueLower)!.push({
+        platformType: 'opencti',
+        type: sdo.type,
+        found: true,
+        data: sdo,
+      });
+    }
+  }
+  
+  // Collect platform entities (OpenAEV, etc.) by value
   if (results.platformEntities) {
     for (const entity of results.platformEntities) {
       const valueLower = entity.name.toLowerCase();
@@ -2585,30 +2692,35 @@ function highlightResults(results: ScanResultPayload): void {
     }
   }
   
-  // Find and highlight observables (with mixed state check)
+  // Find and highlight observables (with multi-platform check)
   for (const obs of results.observables) {
     const valueLower = obs.value.toLowerCase();
-    const platformMatches = valueToPlatformEntities.get(valueLower);
+    const allPlatformMatches = valueToPlatformEntities.get(valueLower);
+    // Get other platforms where this entity is found (exclude the current OpenCTI entry)
+    const otherPlatformMatches = allPlatformMatches?.filter(p => p.platformType !== 'opencti' && p.found);
     
     highlightInText(fullText, obs.value, nodeMap, {
       type: obs.type,
       found: obs.found,
       data: obs,
-      // If not found in OpenCTI but found in another platform, pass the platform info
-      foundInPlatforms: !obs.found && platformMatches ? platformMatches.filter(p => p.found) : undefined,
+      // Pass other platforms if entity is found there (whether or not found in OpenCTI)
+      foundInPlatforms: otherPlatformMatches && otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     });
   }
   
-  // Find and highlight SDOs (with mixed state check)
+  // Find and highlight SDOs (with multi-platform check)
   for (const sdo of results.sdos) {
     const valueLower = sdo.name.toLowerCase();
-    const platformMatches = valueToPlatformEntities.get(valueLower);
+    const allPlatformMatches = valueToPlatformEntities.get(valueLower);
+    // Get other platforms where this entity is found (exclude the current OpenCTI entry)
+    const otherPlatformMatches = allPlatformMatches?.filter(p => p.platformType !== 'opencti' && p.found);
     
     highlightInText(fullText, sdo.name, nodeMap, {
       type: sdo.type,
       found: sdo.found,
       data: sdo,
-      foundInPlatforms: !sdo.found && platformMatches ? platformMatches.filter(p => p.found) : undefined,
+      // Pass other platforms if entity is found there (whether or not found in OpenCTI)
+      foundInPlatforms: otherPlatformMatches && otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     });
   }
   
@@ -2702,9 +2814,11 @@ function highlightInText(
             // Apply appropriate styling based on status
             // Green for found (all platforms), orange for not found
             // MIXED: not found in OpenCTI but found in another platform (orange+green)
+            // MULTI-PLATFORM: found in OpenCTI AND another platform (green, tooltip shows all)
             // Gray for SDOs that cannot be added
             const isNonDefaultPlatform = isNonDefaultPlatformEntity(meta.type);
             const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
+            const hasMultiPlatform = meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
             
             if (hasMixedState) {
               // Mixed state: not found in OpenCTI but found in another platform
@@ -2717,6 +2831,11 @@ function highlightInText(
             } else if (meta.found) {
               // OpenCTI entity found - green style
               highlight.classList.add('xtm-found');
+              // If also found in other platforms, store that info for tooltip and panel navigation
+              if (hasMultiPlatform) {
+                highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+                highlight.dataset.multiPlatform = 'true';
+              }
             } else if (meta.type === 'Vulnerability') {
               // CVEs cannot be added manually - show as gray "not addable"
               highlight.classList.add('xtm-sdo-not-addable');
@@ -2772,6 +2891,7 @@ function handleHighlightHover(event: MouseEvent): void {
   const isSelected = selectedForImport.has(value);
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
   const isMixedState = target.dataset.mixedState === 'true';
+  const isMultiPlatform = target.dataset.multiPlatform === 'true';
   
   // Use platform registry to get platform name and display type
   const platformDef = getPlatformFromEntity(rawType);
@@ -2817,8 +2937,28 @@ function handleHighlightHover(event: MouseEvent): void {
     }
   } else if (found) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
-    statusText = `Found in ${platformName}`;
-    actionText = 'Click to view details';
+    
+    // Check if found in multiple platforms
+    if (isMultiPlatform) {
+      try {
+        const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+        const otherPlatformNames = otherPlatformEntities.map((p: any) => {
+          const def = getPlatformFromEntity(p.type);
+          return def.name;
+        }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i); // Unique names
+        
+        // Combine primary platform with other platforms
+        const allPlatformNames = [platformName, ...otherPlatformNames];
+        statusText = `Found in ${allPlatformNames.join(' and ')}`;
+        actionText = 'Click to view details • Use arrows to navigate platforms';
+      } catch {
+        statusText = `Found in ${platformName}`;
+        actionText = 'Click to view details';
+      }
+    } else {
+      statusText = `Found in ${platformName}`;
+      actionText = 'Click to view details';
+    }
   } else if (isSdoNotAddable) {
     // CVE/Vulnerability not in platform - cannot be added
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9e9e9e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
@@ -2899,6 +3039,7 @@ function handleHighlightClick(event: MouseEvent): void {
   const found = target.dataset.found === 'true';
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
   const isMixedState = target.dataset.mixedState === 'true';
+  const isMultiPlatform = target.dataset.multiPlatform === 'true';
   // Get the type from dataset (includes oaev- prefix for OpenAEV entities)
   const highlightType = target.dataset.type || '';
   
@@ -2949,17 +3090,47 @@ function handleHighlightClick(event: MouseEvent): void {
       selectedEntity = entity;
       
       if (found) {
+        // Build platformMatches for multi-platform navigation
+        let platformMatches: Array<{ platformId: string; entityId: string; entityData?: any }> | undefined;
+        
+        if (isMultiPlatform) {
+          try {
+            const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+            // Start with the primary entity (OpenCTI)
+            platformMatches = [
+              {
+                platformId: entity.platformId || 'primary',
+                entityId: entity.entityId || entity.id,
+                entityData: entity.entityData || entity,
+              },
+            ];
+            // Add other platforms
+            for (const p of otherPlatformEntities) {
+              platformMatches.push({
+                platformId: p.data.platformId || 'unknown',
+                entityId: p.data.id || p.data.entityId,
+                entityData: p.data,
+              });
+            }
+          } catch {
+            platformMatches = undefined;
+          }
+        }
+        
         // Found entity - open side panel with entity details
+        // Spread entity into payload for consistent structure with SHOW_ENTITY
         chrome.runtime.sendMessage({
           type: 'SHOW_ENTITY_PANEL',
           payload: {
+            ...entity,
             entityType: entity.type?.includes('-') && !entity.name ? 'observable' : 'sdo',
-            entity,
+            existsInPlatform: true,
+            platformMatches, // Include platform matches for navigation
           },
         });
         
-        // Open side panel if available
-        showPanel(entity);
+        // Open side panel if available (passes entity and platformMatches to iframe panel)
+        showPanel(entity, platformMatches);
       } else if (isSdoNotAddable) {
         // SDO not addable (like CVE) - do nothing, just detected for info
         // No panel, no selection - CVEs cannot be added manually
@@ -3031,7 +3202,10 @@ function toggleSelection(element: HTMLElement, value: string): void {
 // Panel Management
 // ============================================================================
 
-async function showPanel(entity: DetectedObservable | DetectedSDO): Promise<void> {
+async function showPanel(
+  entity: DetectedObservable | DetectedSDO,
+  platformMatches?: Array<{ platformId: string; entityId: string; entityData?: any }>
+): Promise<void> {
   ensurePanelElements();
   showPanelElements();
   
@@ -3040,7 +3214,12 @@ async function showPanel(entity: DetectedObservable | DetectedSDO): Promise<void
   
   // Send entity data to panel with existsInPlatform flag based on 'found'
   setTimeout(() => {
-    sendPanelMessage('SHOW_ENTITY', { ...entity, existsInPlatform: entity.found ?? false, theme });
+    sendPanelMessage('SHOW_ENTITY', { 
+      ...entity, 
+      existsInPlatform: entity.found ?? false, 
+      theme,
+      platformMatches, // Include platform matches for multi-platform navigation
+    });
   }, 100);
 }
 

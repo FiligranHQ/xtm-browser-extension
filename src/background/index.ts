@@ -2498,17 +2498,27 @@ async function handleMessage(
       }
       
       case 'CREATE_OBSERVABLES_BULK': {
-        if (!openCTIClient) {
+        if (openCTIClients.size === 0) {
           sendResponse({ success: false, error: 'Not configured' });
           break;
         }
         
-        const { entities } = message.payload as { entities: Array<{ type: string; value: string }> };
+        const { entities, platformId } = message.payload as { 
+          entities: Array<{ type: string; value: string }>;
+          platformId?: string;
+        };
+        
+        // Use specified platform or first available
+        const client = platformId ? openCTIClients.get(platformId) : openCTIClient;
+        if (!client) {
+          sendResponse({ success: false, error: 'Platform not found' });
+          break;
+        }
         
         try {
           const results = await Promise.all(
             // Refang values before creating (OpenCTI stores clean values)
-            entities.map(e => openCTIClient!.createObservable({ 
+            entities.map(e => client.createObservable({ 
               type: e.type as any, 
               value: refangIndicator(e.value) 
             }))

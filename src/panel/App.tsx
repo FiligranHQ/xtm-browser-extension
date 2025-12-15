@@ -46,7 +46,10 @@ import {
   MovieFilterOutlined,
   Kayaking,
   DomainOutlined,
+  CheckCircleOutlined,
+  ErrorOutline,
 } from '@mui/icons-material';
+import { LockPattern } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
@@ -67,7 +70,16 @@ import {
 
 const log = loggers.panel;
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results';
+
+// Interface for import results statistics
+interface ImportResults {
+  success: boolean;
+  total: number;
+  created: Array<{ id: string; type: string; value: string }>;
+  failed: Array<{ type: string; value: string; error?: string }>;
+  platformName: string;
+}
 
 interface EntityData {
   id?: string;
@@ -106,7 +118,11 @@ interface EntityData {
   is_family?: boolean;
   // Multi-platform support
   _platformId?: string;
+  _platformType?: string;
+  _isNonDefaultPlatform?: boolean;
   platformId?: string;
+  // Allow additional properties from platform-specific entities
+  [key: string]: unknown;
 }
 
 interface ContainerData {
@@ -197,6 +213,8 @@ const App: React.FC = () => {
   const [checkingExisting, setCheckingExisting] = useState(false);
   // Container being updated (for upsert mode)
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
+  // Import results for displaying confirmation screen
+  const [importResults, setImportResults] = useState<ImportResults | null>(null);
   // Container-specific fields
   const [containerSpecificFields, setContainerSpecificFields] = useState<{
     // Report
@@ -497,19 +515,93 @@ const App: React.FC = () => {
     return text;
   };
 
-  // Helper to clean HTML for content field
+  // Helper to clean HTML for content field - removes overlays, modals, popups, etc.
   const cleanHtmlContent = (html: string): string => {
     const temp = document.createElement('div');
     temp.innerHTML = html;
-    // Remove scripts, styles, and tracking elements
-    temp.querySelectorAll('script, style, noscript, iframe, svg').forEach(el => el.remove());
-    // Remove inline styles and event handlers
+    
+    // Remove scripts, styles, and non-content elements
+    const elementsToRemove = [
+      // Core non-content elements
+      'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio',
+      'object', 'embed', 'applet', 'form', 'input', 'button', 'select', 'textarea',
+      // Navigation and structural
+      'nav', 'header', 'footer', 'aside', 'menu', 'menuitem',
+      // Common overlay/modal patterns
+      '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]', '[class*="dialog"]',
+      '[class*="lightbox"]', '[class*="drawer"]', '[class*="sheet"]', '[class*="backdrop"]',
+      '[id*="overlay"]', '[id*="modal"]', '[id*="popup"]', '[id*="dialog"]',
+      // Cookie/consent banners
+      '[class*="cookie"]', '[class*="consent"]', '[class*="gdpr"]', '[class*="privacy"]',
+      '[class*="banner"]', '[class*="notice"]', '[class*="alert"]',
+      '[id*="cookie"]', '[id*="consent"]', '[id*="gdpr"]', '[id*="banner"]',
+      // Sticky/fixed elements that could be overlays
+      '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
+      '[class*="toolbar"]', '[class*="toast"]', '[class*="snackbar"]',
+      // Ads and promotions
+      '[class*="ad-"]', '[class*="advert"]', '[class*="advertisement"]', '[class*="sponsor"]',
+      '[class*="promo"]', '[class*="promotion"]', '[class*="cta"]',
+      '[id*="ad-"]', '[id*="advert"]', '[id*="sponsor"]',
+      // Social and sharing
+      '[class*="share"]', '[class*="social"]', '[class*="follow"]', '[class*="like"]',
+      // Comments and related content
+      '[class*="comment"]', '[class*="related"]', '[class*="recommended"]', '[class*="suggested"]',
+      '[class*="sidebar"]', '[class*="widget"]',
+      // Newsletter and subscription
+      '[class*="newsletter"]', '[class*="subscribe"]', '[class*="signup"]', '[class*="login"]',
+      '[class*="paywall"]', '[class*="subscription"]', '[class*="premium"]',
+      // Navigation elements
+      '[class*="breadcrumb"]', '[class*="pagination"]', '[class*="nav-"]', '[class*="menu-"]',
+      // ARIA roles for non-content
+      '[role="navigation"]', '[role="banner"]', '[role="complementary"]', '[role="contentinfo"]',
+      '[role="search"]', '[role="form"]', '[role="menu"]', '[role="menubar"]', '[role="dialog"]',
+      '[role="alertdialog"]', '[role="tooltip"]', '[role="status"]', '[role="alert"]',
+      // Hidden elements
+      '[hidden]', '[aria-hidden="true"]',
+      // Common framework-specific overlays
+      '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root', '.MuiDrawer-root',
+      '.chakra-modal', '.chakra-overlay', '.ant-modal', '.ant-drawer',
+      '.ReactModal__Overlay', '.ReactModal__Content',
+    ];
+    
+    elementsToRemove.forEach(selector => {
+      try {
+        temp.querySelectorAll(selector).forEach(el => el.remove());
+      } catch { /* Skip invalid selectors */ }
+    });
+    
+    // Remove elements with fixed/sticky positioning via computed style check
+    // (since inline styles are already removed, check data attributes or class hints)
+    temp.querySelectorAll('[data-fixed], [data-sticky], [data-overlay]').forEach(el => el.remove());
+    
+    // Remove inline styles, event handlers, and problematic attributes
     temp.querySelectorAll('*').forEach(el => {
+      // Remove all inline styles
       el.removeAttribute('style');
+      // Remove event handlers
       el.removeAttribute('onclick');
       el.removeAttribute('onload');
       el.removeAttribute('onerror');
+      el.removeAttribute('onmouseover');
+      el.removeAttribute('onmouseout');
+      el.removeAttribute('onfocus');
+      el.removeAttribute('onblur');
+      // Remove data attributes that might affect display
+      el.removeAttribute('data-scroll-lock');
+      el.removeAttribute('data-overlay');
+      el.removeAttribute('data-modal');
     });
+    
+    // Remove empty wrapper divs that might cause layout issues
+    temp.querySelectorAll('div, span').forEach(el => {
+      // Keep elements that have text content or meaningful children
+      const hasText = el.textContent?.trim();
+      const hasContent = el.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, li, table, img, figure, blockquote, pre, code, a');
+      if (!hasText && !hasContent) {
+        el.remove();
+      }
+    });
+    
     return temp.innerHTML;
   };
 
@@ -572,7 +664,8 @@ const App: React.FC = () => {
     }
     
     switch (data.type) {
-      case 'SHOW_ENTITY': {
+      case 'SHOW_ENTITY':
+      case 'SHOW_ENTITY_PANEL': {
         const payload = data.payload;
         setEntityContainers([]);
         setEntityFromSearch(false); // Not from search
@@ -586,7 +679,7 @@ const App: React.FC = () => {
         const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
         if (platformMatches && platformMatches.length > 0) {
           // Build multi-platform results for navigation
-          const multiResults = platformMatches.map((match: { platformId: string; entityId: string; entityData?: any }) => {
+          const multiResults: Array<{ platformId: string; platformName: string; entity: EntityData }> = platformMatches.map((match: { platformId: string; entityId: string; entityData?: any }) => {
             const platform = availablePlatforms.find(p => p.id === match.platformId);
             return {
               platformId: match.platformId,
@@ -596,7 +689,7 @@ const App: React.FC = () => {
                 entityId: match.entityId,
                 entityData: match.entityData || payload?.entityData,
                 _platformId: match.platformId,
-              },
+              } as EntityData,
             };
           });
           // Sort results: OpenCTI platforms first (knowledge base reference)
@@ -1097,8 +1190,10 @@ const App: React.FC = () => {
     }
 
     if (result.source === 'opencti') {
-      // Handle OpenCTI result
+      // Handle OpenCTI result - fetch full entity details
       const originalData = result.data as Record<string, unknown>;
+      
+      // Set loading state with basic info first
       setEntity({
         ...originalData,
         type: result.type,
@@ -1109,10 +1204,52 @@ const App: React.FC = () => {
         _platformType: 'opencti',
         _isNonDefaultPlatform: false,
       } as unknown as EntityData);
-      setPanelMode('entity');
-      // Fetch containers for OpenCTI entities
-      if (result.entityId) {
-        fetchEntityContainers(result.entityId, result.platformId);
+      setPanelMode('loading');
+      
+      // Fetch full entity details from OpenCTI API
+      try {
+        if (result.entityId && result.platformId) {
+          const response = await chrome.runtime.sendMessage({
+            type: 'GET_ENTITY_DETAILS',
+            payload: {
+              id: result.entityId,
+              entityType: result.type,
+              platformId: result.platformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            // Update entity with full details
+            setEntity({
+              ...response.data,
+              type: response.data.entity_type || result.type,
+              entity_type: response.data.entity_type || result.type,
+              name: response.data.name || result.name,
+              existsInPlatform: true,
+              _platformId: result.platformId,
+              _platformType: 'opencti',
+              _isNonDefaultPlatform: false,
+            } as unknown as EntityData);
+            setPanelMode('entity');
+            // Fetch containers for OpenCTI entities
+            fetchEntityContainers(result.entityId, result.platformId);
+          } else {
+            // Fall back to search result data
+            setPanelMode('entity');
+            if (result.entityId) {
+              fetchEntityContainers(result.entityId, result.platformId);
+            }
+          }
+        } else {
+          // No entity ID, just show what we have
+          setPanelMode('entity');
+        }
+      } catch (error) {
+        console.warn('Failed to fetch full OpenCTI entity details:', error);
+        setPanelMode('entity');
+        if (result.entityId) {
+          fetchEntityContainers(result.entityId, result.platformId);
+        }
       }
     } else {
       // Handle OpenAEV result - fetch full entity details
@@ -1175,6 +1312,8 @@ const App: React.FC = () => {
   };
 
   const handleOaevSearchResultClick = async (result: any) => {
+    setEntityFromSearch(true);
+    
     // Determine entity type from _entityClass
     const entityClass = result._entityClass || '';
     const oaevType = getOaevTypeFromClass(entityClass);
@@ -1187,7 +1326,7 @@ const App: React.FC = () => {
       setPlatformUrl(platformInfo.url);
     }
     
-    // Set initial entity data from search result
+    // Set initial entity data from search result with loading state
     const entityName = getOaevEntityName(result, oaevType);
     setEntity({
       ...result,
@@ -1199,7 +1338,7 @@ const App: React.FC = () => {
       _platformType: 'openaev',
       _isNonDefaultPlatform: true,
     });
-    setPanelMode('entity');
+    setPanelMode('loading');
     
     // Fetch full entity details from OpenAEV API
     try {
@@ -1232,11 +1371,19 @@ const App: React.FC = () => {
             _platformType: 'openaev',
             _isNonDefaultPlatform: true,
           });
+          setPanelMode('entity');
+        } else {
+          // Fall back to search result data
+          setPanelMode('entity');
         }
+      } else {
+        // No entity ID, just show what we have
+        setPanelMode('entity');
       }
     } catch (error) {
       // Keep the initial entity data from search result if fetch fails
       console.warn('Failed to fetch full OpenAEV entity details:', error);
+      setPanelMode('entity');
     }
   };
 
@@ -1431,9 +1578,17 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setSubmitting(true);
+    
+    // Determine which platform to use (first OpenCTI platform or selected one)
+    const targetPlatformId = selectedPlatformId || openctiPlatforms[0]?.id;
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_OBSERVABLES_BULK',
-      payload: { entities: entitiesToAdd },
+      payload: { 
+        entities: entitiesToAdd,
+        platformId: targetPlatformId,
+      },
     });
 
     if (chrome.runtime.lastError) {
@@ -1441,9 +1596,41 @@ const App: React.FC = () => {
       return;
     }
 
-    if (response?.success) {
-      setPanelMode('empty');
+    if (response?.success && response.data) {
+      // Build import results from the response
+      const createdEntities = response.data as Array<{ id: string; entity_type?: string; observable_value?: string; value?: string; type?: string }>;
+      
+      const results: ImportResults = {
+        success: true,
+        total: entitiesToAdd.length,
+        created: createdEntities.map((e, i) => ({
+          id: e.id,
+          type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown',
+          value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown',
+        })),
+        failed: [],
+        platformName: targetPlatform?.name || 'OpenCTI',
+      };
+      
+      setImportResults(results);
+      setPanelMode('import-results');
       setEntitiesToAdd([]);
+    } else {
+      // Handle error case
+      const results: ImportResults = {
+        success: false,
+        total: entitiesToAdd.length,
+        created: [],
+        failed: entitiesToAdd.map(e => ({
+          type: e.type || 'unknown',
+          value: e.value || e.name || 'unknown',
+          error: response?.error || 'Failed to create entity',
+        })),
+        platformName: targetPlatform?.name || 'OpenCTI',
+      };
+      
+      setImportResults(results);
+      setPanelMode('import-results');
     }
     setSubmitting(false);
   };
@@ -1831,7 +2018,7 @@ const App: React.FC = () => {
         case 'Organization': return <DomainOutlined sx={{ fontSize: 20, color }} />;
         case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: 20, color }} />;
         case 'Exercise': return <Kayaking sx={{ fontSize: 20, color }} />;
-        case 'AttackPattern': return <SecurityOutlined sx={{ fontSize: 20, color }} />;
+        case 'AttackPattern': return <LockPattern sx={{ fontSize: 20, color }} />;
         case 'Finding': return <TravelExploreOutlined sx={{ fontSize: 20, color }} />;
         default: return <ComputerOutlined sx={{ fontSize: 20, color }} />;
       }
@@ -1861,34 +2048,105 @@ const App: React.FC = () => {
           </Box>
         )}
         
-        {/* Platform indicator */}
-        {platform && (
+        {/* Platform indicator bar with navigation */}
+        {(availablePlatforms.length > 1 || multiPlatformResults.length > 1) && (
           <Box 
             sx={{ 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center',
+              justifyContent: 'space-between',
               mb: 2, 
               p: 1, 
               bgcolor: 'action.hover',
               borderRadius: 1,
               border: 1,
               borderColor: 'divider',
-              gap: 1,
             }}
           >
-            <img
-              src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
-                : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
-              }
-              alt="OpenAEV"
-              width={18}
-              height={18}
-            />
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {platform.name || 'OpenAEV'}
-            </Typography>
+            {multiPlatformResults.length > 1 ? (
+              <>
+                <IconButton 
+                  size="small" 
+                  onClick={() => {
+                    if (currentPlatformIndex > 0) {
+                      const prevIndex = currentPlatformIndex - 1;
+                      setCurrentPlatformIndex(prevIndex);
+                      const prevResult = multiPlatformResults[prevIndex];
+                      const prevPlatform = availablePlatforms.find(p => p.id === prevResult.platformId);
+                      const prevPlatformType = prevPlatform?.type || 'opencti';
+                      setEntity({ 
+                        ...prevResult.entity, 
+                        _platformId: prevResult.platformId,
+                        _platformType: prevPlatformType,
+                        _isNonDefaultPlatform: prevPlatformType !== 'opencti',
+                      });
+                      setSelectedPlatformId(prevResult.platformId);
+                      if (prevPlatform) setPlatformUrl(prevPlatform.url);
+                    }
+                  }} 
+                  disabled={currentPlatformIndex === 0}
+                  sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
+                >
+                  <ChevronLeftOutlined />
+                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <img
+                    src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                      ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
+                      : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
+                    }
+                    alt="OpenAEV"
+                    width={18}
+                    height={18}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {platform?.name || 'OpenAEV'}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    ({currentPlatformIndex + 1}/{multiPlatformResults.length})
+                  </Typography>
+                </Box>
+                <IconButton 
+                  size="small" 
+                  onClick={() => {
+                    if (currentPlatformIndex < multiPlatformResults.length - 1) {
+                      const nextIndex = currentPlatformIndex + 1;
+                      setCurrentPlatformIndex(nextIndex);
+                      const nextResult = multiPlatformResults[nextIndex];
+                      const nextPlatform = availablePlatforms.find(p => p.id === nextResult.platformId);
+                      const nextPlatformType = nextPlatform?.type || 'opencti';
+                      setEntity({ 
+                        ...nextResult.entity, 
+                        _platformId: nextResult.platformId,
+                        _platformType: nextPlatformType,
+                        _isNonDefaultPlatform: nextPlatformType !== 'opencti',
+                      });
+                      setSelectedPlatformId(nextResult.platformId);
+                      if (nextPlatform) setPlatformUrl(nextPlatform.url);
+                    }
+                  }} 
+                  disabled={currentPlatformIndex === multiPlatformResults.length - 1}
+                  sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
+                >
+                  <ChevronRightOutlined />
+                </IconButton>
+              </>
+            ) : platform ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
+                <img
+                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                    ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
+                    : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
+                  }
+                  alt="OpenAEV"
+                  width={18}
+                  height={18}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {platform.name || 'OpenAEV'}
+                </Typography>
+              </Box>
+            ) : null}
           </Box>
         )}
 
@@ -2116,6 +2374,50 @@ const App: React.FC = () => {
               </Box>
             )}
             
+            {/* Description */}
+            {description && (
+              <Box sx={{ mb: 2.5 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Description
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    ...contentTextStyle,
+                    lineHeight: 1.6,
+                    maxHeight: 200,
+                    overflow: 'auto',
+                  }}
+                >
+                  {description}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Kill Chain Phases */}
+            {((entityData.attack_pattern_kill_chain_phases) && entityData.attack_pattern_kill_chain_phases.length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Kill Chain Phases
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.attack_pattern_kill_chain_phases.map((phase: string, i: number) => (
+                    <Chip 
+                      key={i} 
+                      label={phase} 
+                      size="small" 
+                      sx={{ 
+                        bgcolor: hexToRGB('#e91e63', 0.15), 
+                        color: '#e91e63',
+                        fontWeight: 500,
+                        borderRadius: 1,
+                      }} 
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+            
             {/* Platforms */}
             {((entityData.attack_pattern_platforms) && entityData.attack_pattern_platforms.length > 0) && (
               <Box sx={{ mb: 2 }}>
@@ -2127,6 +2429,66 @@ const App: React.FC = () => {
                     <Chip key={i} label={platform} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
                   ))}
                 </Box>
+              </Box>
+            )}
+            
+            {/* Permissions Required */}
+            {((entityData.attack_pattern_permissions_required) && entityData.attack_pattern_permissions_required.length > 0) && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Permissions Required
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {entityData.attack_pattern_permissions_required.map((perm: string, i: number) => (
+                    <Chip 
+                      key={i} 
+                      label={perm} 
+                      size="small" 
+                      sx={{ 
+                        bgcolor: hexToRGB('#ff9800', 0.15),
+                        color: '#ff9800',
+                        fontWeight: 500,
+                        borderRadius: 1,
+                      }} 
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+            
+            {/* Parent Attack Pattern */}
+            {entityData.attack_pattern_parent && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Parent Technique
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {entityData.attack_pattern_parent}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Created Date */}
+            {entityData.attack_pattern_created_at && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Created
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {new Date(entityData.attack_pattern_created_at).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Updated Date */}
+            {entityData.attack_pattern_updated_at && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" sx={sectionTitleStyle}>
+                  Last Modified
+                </Typography>
+                <Typography variant="body2" sx={contentTextStyle}>
+                  {new Date(entityData.attack_pattern_updated_at).toLocaleString()}
+                </Typography>
               </Box>
             )}
           </>
@@ -3289,6 +3651,250 @@ const App: React.FC = () => {
     </Box>
   );
 
+  const renderImportResultsView = () => {
+    if (!importResults) return null;
+    
+    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
+    
+    // Group created entities by type for statistics
+    const typeStats = importResults.created.reduce((acc, entity) => {
+      const type = entity.type || 'unknown';
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(entity);
+      return acc;
+    }, {} as Record<string, typeof importResults.created>);
+    
+    const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1].length - a[1].length);
+    
+    return (
+      <Box sx={{ p: 2 }}>
+        {/* Success/Error header */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            alignItems: 'center', 
+            textAlign: 'center',
+            mb: 3,
+            p: 3,
+            bgcolor: importResults.success ? 'success.main' : 'error.main',
+            borderRadius: 2,
+            color: 'white',
+          }}
+        >
+          {importResults.success ? (
+            <CheckCircleOutlined sx={{ fontSize: 48, mb: 1 }} />
+          ) : (
+            <ErrorOutline sx={{ fontSize: 48, mb: 1 }} />
+          )}
+          <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {importResults.success ? 'Import Successful!' : 'Import Failed'}
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+            {importResults.success 
+              ? `${importResults.created.length} entit${importResults.created.length === 1 ? 'y' : 'ies'} created in ${importResults.platformName}`
+              : `Failed to create ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'}`
+            }
+          </Typography>
+        </Box>
+        
+        {/* Platform indicator */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            gap: 1, 
+            mb: 2.5,
+            p: 1.5,
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <img
+            src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+              ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
+              : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
+            }
+            alt="OpenCTI"
+            width={20}
+            height={20}
+          />
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {importResults.platformName}
+          </Typography>
+        </Box>
+        
+        {/* Statistics breakdown by type */}
+        {importResults.success && sortedTypes.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary', fontWeight: 600 }}>
+              BREAKDOWN BY TYPE
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {sortedTypes.map(([type, entities]) => {
+                const color = itemColor(type, mode === 'dark');
+                return (
+                  <Box
+                    key={type}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      bgcolor: hexToRGB(color, 0.08),
+                      border: 1,
+                      borderColor: hexToRGB(color, 0.2),
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1,
+                        bgcolor: hexToRGB(color, 0.15),
+                      }}
+                    >
+                      <ItemIcon type={type} size="small" color={color} />
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                        {type.replace(/-/g, ' ')}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        bgcolor: color,
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: 14,
+                      }}
+                    >
+                      {entities.length}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+        
+        {/* Created entities list (collapsible) */}
+        {importResults.success && importResults.created.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary', fontWeight: 600 }}>
+              CREATED ENTITIES ({importResults.created.length})
+            </Typography>
+            <Box sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+              {importResults.created.map((entity, idx) => {
+                const color = itemColor(entity.type, mode === 'dark');
+                return (
+                  <Box
+                    key={entity.id || idx}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      borderBottom: idx < importResults.created.length - 1 ? 1 : 0,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <ItemIcon type={entity.type} size="small" color={color} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: 500, 
+                          wordBreak: 'break-word',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {entity.value}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                        {entity.type.replace(/-/g, ' ')}
+                      </Typography>
+                    </Box>
+                    <CheckCircleOutlined sx={{ fontSize: 18, color: 'success.main' }} />
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+        
+        {/* Failed entities list */}
+        {importResults.failed.length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'error.main', fontWeight: 600 }}>
+              FAILED ({importResults.failed.length})
+            </Typography>
+            <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.1 }}>
+              {importResults.failed.map((entity, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    p: 1.5,
+                    borderBottom: idx < importResults.failed.length - 1 ? 1 : 0,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <ItemIcon type={entity.type} size="small" />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                      {entity.value}
+                    </Typography>
+                    {entity.error && (
+                      <Typography variant="caption" sx={{ color: 'error.main' }}>
+                        {entity.error}
+                      </Typography>
+                    )}
+                  </Box>
+                  <ErrorOutline sx={{ fontSize: 18, color: 'error.main' }} />
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+        
+        {/* Action buttons */}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setImportResults(null);
+              setPanelMode('empty');
+            }}
+            fullWidth
+            startIcon={<CheckCircleOutlined />}
+          >
+            Done
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
+
   const renderPreviewView = () => (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -3354,9 +3960,15 @@ const App: React.FC = () => {
                   setCheckingExisting(false);
                   if (chrome.runtime.lastError) {
                     // On error, proceed to creation
-                    if (availablePlatforms.length > 1) {
+                    // Only check OpenCTI platforms for container creation (not OpenAEV)
+                    if (openctiPlatforms.length > 1) {
                       setPanelMode('platform-select');
                     } else {
+                      // Auto-select the single OpenCTI platform
+                      if (openctiPlatforms.length === 1) {
+                        setSelectedPlatformId(openctiPlatforms[0].id);
+                        setPlatformUrl(openctiPlatforms[0].url);
+                      }
                       setPanelMode('container-type');
                     }
                     return;
@@ -3368,9 +3980,15 @@ const App: React.FC = () => {
                     setPanelMode('existing-containers');
                   } else {
                     // No existing containers - proceed to creation
-                    if (availablePlatforms.length > 1) {
+                    // Only check OpenCTI platforms for container creation (not OpenAEV)
+                    if (openctiPlatforms.length > 1) {
                       setPanelMode('platform-select');
                     } else {
+                      // Auto-select the single OpenCTI platform
+                      if (openctiPlatforms.length === 1) {
+                        setSelectedPlatformId(openctiPlatforms[0].id);
+                        setPlatformUrl(openctiPlatforms[0].url);
+                      }
                       setPanelMode('container-type');
                     }
                   }
@@ -3378,9 +3996,15 @@ const App: React.FC = () => {
               );
             } else {
               // No page URL - go directly to creation flow
-              if (availablePlatforms.length > 1) {
+              // Only check OpenCTI platforms for container creation (not OpenAEV)
+              if (openctiPlatforms.length > 1) {
                 setPanelMode('platform-select');
               } else {
+                // Auto-select the single OpenCTI platform
+                if (openctiPlatforms.length === 1) {
+                  setSelectedPlatformId(openctiPlatforms[0].id);
+                  setPlatformUrl(openctiPlatforms[0].url);
+                }
                 setPanelMode('container-type');
               }
             }
@@ -3787,10 +4411,15 @@ const App: React.FC = () => {
 
     const handleCreateNew = () => {
       // Clear existing container selection and proceed to create new
-      // If multiple platforms, go to platform select first
-      if (availablePlatforms.length > 1) {
+      // If multiple OpenCTI platforms, go to platform select first (containers are OpenCTI-only)
+      if (openctiPlatforms.length > 1) {
         setPanelMode('platform-select');
       } else {
+        // Auto-select the single OpenCTI platform
+        if (openctiPlatforms.length === 1) {
+          setSelectedPlatformId(openctiPlatforms[0].id);
+          setPlatformUrl(openctiPlatforms[0].url);
+        }
         setPanelMode('container-type');
       }
     };
@@ -4195,7 +4824,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     
     const targetPlatformId = platformId || investigationPlatformId;
-    if (!targetPlatformId && availablePlatforms.length > 1) {
+    // Investigation is OpenCTI-only, so check openctiPlatforms
+    if (!targetPlatformId && openctiPlatforms.length > 1) {
       log.error(' No platform selected for investigation');
       return;
     }
@@ -4206,10 +4836,10 @@ const App: React.FC = () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        // Send scan request with platform ID for filtering
+        // Send scan request with platform ID for filtering (use first OpenCTI platform if none selected)
         chrome.tabs.sendMessage(tab.id, { 
           type: 'SCAN_FOR_INVESTIGATION',
-          payload: { platformId: targetPlatformId || availablePlatforms[0]?.id },
+          payload: { platformId: targetPlatformId || openctiPlatforms[0]?.id },
         });
       }
     } catch (error) {
@@ -5454,6 +6084,8 @@ const App: React.FC = () => {
         return renderNotFoundView();
       case 'add':
         return renderAddView();
+      case 'import-results':
+        return renderImportResultsView();
       case 'preview':
         return renderPreviewView();
       case 'platform-select':

@@ -2110,6 +2110,7 @@ let clientInstance: OpenCTIClient | null = null;
 
 /**
  * Get or create the OpenCTI client instance
+ * Uses the first configured OpenCTI platform
  */
 export async function getOpenCTIClient(): Promise<OpenCTIClient | null> {
   if (clientInstance) {
@@ -2117,15 +2118,18 @@ export async function getOpenCTIClient(): Promise<OpenCTIClient | null> {
   }
 
   const settings = await chrome.storage.local.get('settings') as { settings?: ExtensionSettings };
-  const openctiConfig = settings.settings?.opencti;
+  const openctiPlatforms = settings.settings?.openctiPlatforms;
   
-  if (!openctiConfig?.url || !openctiConfig?.apiToken) {
+  // Use the first enabled platform
+  const firstPlatform = openctiPlatforms?.find(p => p.enabled && p.url && p.apiToken);
+  
+  if (!firstPlatform) {
     return null;
   }
 
   clientInstance = new OpenCTIClient({
-    url: openctiConfig.url,
-    apiToken: openctiConfig.apiToken,
+    url: firstPlatform.url,
+    apiToken: firstPlatform.apiToken,
   });
 
   return clientInstance;

@@ -425,9 +425,11 @@ export async function cleanupOrphanedCaches(validPlatformIds: string[]): Promise
 export interface CachedOAEVEntity {
   id: string;
   name: string;
-  aliases?: string[]; // For hostnames, IPs on assets
+  aliases?: string[];
   type: 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding';
   platformId: string;
+  // Allow index access for compatibility with Record<string, unknown>
+  [key: string]: string | string[] | undefined;
 }
 
 export interface OAEVCache {

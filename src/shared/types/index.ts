@@ -648,7 +648,11 @@ export type MessageType =
   // Scenario Generation
   | 'OPEN_SCENARIO_PANEL'
   | 'SHOW_SCENARIO_PANEL'
-  | 'CREATE_SCENARIO';
+  | 'CREATE_SCENARIO'
+  // Unified scan
+  | 'SCAN_ALL'
+  // AI model management
+  | 'AI_TEST_AND_FETCH_MODELS';
 
 export interface ExtensionMessage {
   type: MessageType;

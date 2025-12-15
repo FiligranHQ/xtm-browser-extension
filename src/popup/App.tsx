@@ -43,6 +43,7 @@ import { Target } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import { loggers } from '../shared/utils/logger';
+import { PLATFORM_REGISTRY, type PlatformType } from '../shared/platform';
 
 const log = loggers.popup;
 
@@ -67,11 +68,19 @@ interface PlatformStatus {
   version?: string;
   userName?: string;
   isEnterprise?: boolean;
+  /** Platform type for identification */
+  platformType?: PlatformType;
 }
 
+/**
+ * Connection status organized by platform type
+ * When adding a new platform, add its key here
+ */
 interface ConnectionStatus {
   opencti: PlatformStatus[];
   openaev: PlatformStatus[];
+  // Add new platforms here as they are integrated:
+  // opengrc: PlatformStatus[];
 }
 
 interface ActionButtonProps {
@@ -151,11 +160,20 @@ const App: React.FC = () => {
     return createTheme(themeOptions);
   }, [mode]);
 
+  // Platform connection status helpers
+  // To add a new platform, add corresponding status checks here
   const hasOpenCTI = status.opencti.some(p => p.connected);
   const hasOpenAEV = status.openaev.some(p => p.connected);
+  // const hasOpenGRC = status.opengrc?.some(p => p.connected) ?? false;
+  
+  // Platform configuration status
   const hasAnyOpenCTIConfigured = status.opencti.length > 0;
   const hasAnyOpenAEVConfigured = status.openaev.length > 0;
+  // const hasAnyOpenGRCConfigured = (status.opengrc?.length ?? 0) > 0;
+  
+  // Combined platform checks
   const hasAnyPlatformConfigured = hasAnyOpenCTIConfigured || hasAnyOpenAEVConfigured;
+  // When adding new platforms: hasAnyPlatformConfigured = hasAnyOpenCTIConfigured || hasAnyOpenAEVConfigured || hasAnyOpenGRCConfigured;
   const hasEnterprise = status.opencti.some(p => p.isEnterprise) || status.openaev.some(p => p.isEnterprise);
 
   useEffect(() => {

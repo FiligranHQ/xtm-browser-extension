@@ -27,10 +27,8 @@ export interface DetectionSettings {
   entityTypes?: string[];
   /** OpenCTI observable types to detect */
   observableTypes?: string[];
-  /** Entity types to detect by platform (keyed by platform type) */
+  /** Entity types to detect by platform (keyed by platform type, e.g., 'openaev') */
   platformEntityTypes?: Record<string, string[]>;
-  /** @deprecated Use platformEntityTypes instead */
-  oaevEntityTypes?: string[];
 }
 
 // ============================================================================
@@ -39,12 +37,22 @@ export interface DetectionSettings {
 
 export type AIProvider = 'openai' | 'anthropic' | 'gemini' | 'xtm-one';
 
+export interface AIModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface AISettings {
   enabled: boolean;
   provider?: AIProvider;
   apiKey?: string;
   // Model selection (optional, uses provider defaults if not set)
   model?: string;
+  // Cached available models from the provider API
+  availableModels?: AIModelInfo[];
+  // Connection test result
+  connectionTested?: boolean;
 }
 
 // Platform affinity options for scenario generation (matching OpenAEV/OpenCTI)
@@ -683,12 +691,7 @@ export interface ScanResultPayload {
   /** CVEs (Vulnerabilities) - separate array for special handling */
   cves?: DetectedSDO[];
   /** 
-   * Platform entities detected (non-OpenCTI platforms)
-   * @deprecated Use platformEntities for multi-platform support
-   */
-  oaevEntities?: DetectedOAEVEntity[];
-  /** 
-   * Generic platform entities (for all non-default platforms)
+   * Platform entities detected (non-OpenCTI platforms like OpenAEV)
    * Each entity has a type with platform prefix (e.g., 'oaev-Asset')
    */
   platformEntities?: DetectedPlatformEntity[];
@@ -701,10 +704,9 @@ export interface ShowEntityPanelPayload {
    * Entity source type
    * 'observable' and 'sdo' are for OpenCTI
    * 'platform' is for any non-default platform (identified by entity type prefix)
-   * @deprecated 'oaev' - use 'platform' instead
    */
-  entityType: 'observable' | 'sdo' | 'oaev' | 'platform';
-  entity: DetectedObservable | DetectedSDO | DetectedOAEVEntity | DetectedPlatformEntity;
+  entityType: 'observable' | 'sdo' | 'platform';
+  entity: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
 }
 
 export interface AddObservablePayload {

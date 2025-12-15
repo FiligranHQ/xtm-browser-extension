@@ -1007,8 +1007,9 @@ async function handleMessage(
       
       case 'TEST_PLATFORM_CONNECTION_TEMP': {
         // Test connection without saving - creates a temporary client
+        // To add a new platform: add a case in the switch below
         const { platformType, url, apiToken } = message.payload as { 
-          platformType: 'opencti' | 'openaev';
+          platformType: PlatformType;
           url: string;
           apiToken: string;
         };
@@ -1018,22 +1019,37 @@ async function handleMessage(
         );
         
         try {
-          if (platformType === 'opencti') {
-            const tempClient = new OpenCTIClient({ url, apiToken });
-            const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-            sendResponse({ success: true, data: info });
-          } else if (platformType === 'openaev') {
-            const tempClient = new OpenAEVClient({ 
-              id: 'temp', 
-              name: 'temp', 
-              url, 
-              apiToken,
-              enabled: true,
-            });
-            const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-            sendResponse({ success: true, data: info });
-          } else {
-            sendResponse({ success: false, error: 'Invalid platform type' });
+          switch (platformType) {
+            case 'opencti': {
+              const tempClient = new OpenCTIClient({ url, apiToken });
+              const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+              sendResponse({ success: true, data: info });
+              break;
+            }
+            
+            case 'openaev': {
+              const tempClient = new OpenAEVClient({ 
+                id: 'temp', 
+                name: 'temp', 
+                url, 
+                apiToken,
+                enabled: true,
+              });
+              const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+              sendResponse({ success: true, data: info });
+              break;
+            }
+            
+            // Add new platform cases here:
+            // case 'opengrc': {
+            //   const tempClient = new OpenGRCClient({ ... });
+            //   const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+            //   sendResponse({ success: true, data: info });
+            //   break;
+            // }
+            
+            default:
+              sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
           }
         } catch (error) {
           sendResponse({
@@ -2706,6 +2722,38 @@ async function handleMessage(
             enabled: settings.ai?.enabled,
           } 
         });
+        break;
+      }
+      
+      case 'AI_TEST_AND_FETCH_MODELS': {
+        // Test AI connection and fetch available models from provider
+        const { provider, apiKey } = message.payload as { provider: string; apiKey: string };
+        
+        try {
+          const aiClient = new AIClient({
+            enabled: true,
+            provider: provider as 'openai' | 'anthropic' | 'gemini',
+            apiKey,
+          });
+          
+          const result = await aiClient.testConnectionAndFetchModels();
+          
+          if (result.success) {
+            sendResponse({ 
+              success: true, 
+              data: { 
+                models: result.models,
+              } 
+            });
+          } else {
+            sendResponse({ success: false, error: result.error });
+          }
+        } catch (error) {
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Failed to test AI connection',
+          });
+        }
         break;
       }
       

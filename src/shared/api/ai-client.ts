@@ -111,6 +111,192 @@ export class AIClient {
   }
 
   /**
+   * Test connection and fetch available models from the provider
+   */
+  async testConnectionAndFetchModels(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; description?: string }>;
+    error?: string;
+  }> {
+    try {
+      switch (this.provider) {
+        case 'openai':
+          return await this.fetchOpenAIModels();
+        case 'anthropic':
+          return await this.fetchAnthropicModels();
+        case 'gemini':
+          return await this.fetchGeminiModels();
+        default:
+          return { success: false, error: 'Unknown AI provider' };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch models',
+      };
+    }
+  }
+
+  /**
+   * Fetch available models from OpenAI
+   */
+  private async fetchOpenAIModels(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; description?: string }>;
+    error?: string;
+  }> {
+    const response = await fetch(`${this.baseUrls.openai}/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    // Filter to only include chat models (GPT models)
+    const chatModels = (data.data || [])
+      .filter((m: { id: string }) => 
+        m.id.includes('gpt-4') || 
+        m.id.includes('gpt-3.5') || 
+        m.id.includes('o1') ||
+        m.id.includes('o3')
+      )
+      .map((m: { id: string }) => ({
+        id: m.id,
+        name: this.formatOpenAIModelName(m.id),
+        description: this.getOpenAIModelDescription(m.id),
+      }))
+      .sort((a: { id: string }, b: { id: string }) => {
+        // Sort by model family and version (newest first)
+        const order = ['o3', 'o1', 'gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5'];
+        for (const prefix of order) {
+          if (a.id.includes(prefix) && !b.id.includes(prefix)) return -1;
+          if (!a.id.includes(prefix) && b.id.includes(prefix)) return 1;
+        }
+        return b.id.localeCompare(a.id);
+      });
+
+    return { success: true, models: chatModels };
+  }
+
+  private formatOpenAIModelName(id: string): string {
+    if (id.includes('gpt-4o')) return 'GPT-4o' + (id.includes('mini') ? ' Mini' : '');
+    if (id.includes('gpt-4-turbo')) return 'GPT-4 Turbo';
+    if (id.includes('gpt-4')) return 'GPT-4';
+    if (id.includes('gpt-3.5-turbo')) return 'GPT-3.5 Turbo';
+    if (id.includes('o1-preview')) return 'o1 Preview';
+    if (id.includes('o1-mini')) return 'o1 Mini';
+    if (id.includes('o1')) return 'o1';
+    if (id.includes('o3-mini')) return 'o3 Mini';
+    if (id.includes('o3')) return 'o3';
+    return id;
+  }
+
+  private getOpenAIModelDescription(id: string): string {
+    if (id.includes('gpt-4o')) return 'Most capable and fast multimodal model';
+    if (id.includes('gpt-4-turbo')) return 'High intelligence with vision capabilities';
+    if (id.includes('gpt-4')) return 'Advanced reasoning model';
+    if (id.includes('gpt-3.5-turbo')) return 'Fast and cost-effective';
+    if (id.includes('o1') || id.includes('o3')) return 'Advanced reasoning model';
+    return '';
+  }
+
+  /**
+   * Fetch available models from Anthropic
+   * Note: Anthropic doesn't have a models list API, so we return known models
+   */
+  private async fetchAnthropicModels(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; description?: string }>;
+    error?: string;
+  }> {
+    // Test the API key by making a minimal request
+    const response = await fetch(`${this.baseUrls.anthropic}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      // Check for auth errors specifically
+      if (response.status === 401) {
+        throw new Error('Invalid API key');
+      }
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+    }
+
+    // Return known Anthropic models (they don't have a models list API)
+    const models = [
+      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest balanced model' },
+      { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', description: 'Extended thinking model' },
+      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', description: 'Fast and intelligent' },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', description: 'Fastest model' },
+      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', description: 'Most powerful model' },
+      { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', description: 'Balanced performance' },
+      { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Fast and compact' },
+    ];
+
+    return { success: true, models };
+  }
+
+  /**
+   * Fetch available models from Google Gemini
+   */
+  private async fetchGeminiModels(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; description?: string }>;
+    error?: string;
+  }> {
+    const response = await fetch(
+      `${this.baseUrls.gemini}/models?key=${this.apiKey}`,
+      { method: 'GET' }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    // Filter to only include generative models
+    const generativeModels = (data.models || [])
+      .filter((m: { name: string; supportedGenerationMethods?: string[] }) => 
+        m.supportedGenerationMethods?.includes('generateContent') &&
+        (m.name.includes('gemini-2') || m.name.includes('gemini-1.5') || m.name.includes('gemini-pro'))
+      )
+      .map((m: { name: string; displayName?: string; description?: string }) => ({
+        id: m.name.replace('models/', ''),
+        name: m.displayName || m.name.replace('models/', ''),
+        description: m.description?.substring(0, 100),
+      }))
+      .sort((a: { id: string }, b: { id: string }) => {
+        // Sort by version (newest first)
+        if (a.id.includes('gemini-2') && !b.id.includes('gemini-2')) return -1;
+        if (!a.id.includes('gemini-2') && b.id.includes('gemini-2')) return 1;
+        return b.id.localeCompare(a.id);
+      });
+
+    return { success: true, models: generativeModels };
+  }
+
+  /**
    * Generate content using the configured AI provider
    */
   async generate(request: AIGenerationRequest): Promise<AIGenerationResponse> {

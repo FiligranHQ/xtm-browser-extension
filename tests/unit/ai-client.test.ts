@@ -475,7 +475,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('claude-3-5-sonnet-20241022');
+    expect(body.model).toBe('claude-sonnet-4-20250514');
     expect(body.system).toBe('You are a helpful assistant');
   });
 

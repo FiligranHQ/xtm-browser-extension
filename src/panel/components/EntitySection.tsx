@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Box, Typography, Chip } from '@mui/material';
+import { formatDate, formatDateTime } from '../../shared/utils/formatters';
 
 interface EntitySectionProps {
   title: string;
@@ -112,8 +113,7 @@ interface EntityDateProps {
 export const EntityDate: React.FC<EntityDateProps> = ({ date, showTime = true }) => {
   if (!date) return null;
   
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const formatted = showTime ? d.toLocaleString() : d.toLocaleDateString();
+  const formatted = showTime ? formatDateTime(date) : formatDate(date);
   
   return <EntityText value={formatted} />;
 };

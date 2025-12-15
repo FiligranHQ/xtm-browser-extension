@@ -4,7 +4,7 @@
 
 import { loggers } from './logger';
 
-const log = loggers.shared;
+const log = loggers.background;
 
 /**
  * Response wrapper type

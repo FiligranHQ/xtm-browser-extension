@@ -91,7 +91,8 @@ export function getEntityId(entity: Record<string, unknown>): string | undefined
  * Get entity name from various entity data structures
  */
 export function getEntityName(entity: Record<string, unknown>): string {
-  return (entity.name || entity.value || entity.representative?.main || 
+  const representative = entity.representative as Record<string, unknown> | undefined;
+  return (entity.name || entity.value || representative?.main || 
     entity.entity_name || 'Unknown') as string;
 }
 

@@ -26,6 +26,7 @@ import {
   OPERATION_DELAY_MS,
   RETRY_DELAY_MS,
 } from '../shared/constants';
+import { successResponse, errorResponse } from '../shared/utils/messaging';
 
 const log = loggers.background;
 import {
@@ -699,7 +700,7 @@ async function handleMessage(
     switch (message.type) {
       case 'GET_SETTINGS': {
         const settings = await getSettings();
-        sendResponse({ success: true, data: settings });
+        sendResponse(successResponse(settings));
         break;
       }
       
@@ -743,7 +744,7 @@ async function handleMessage(
           log.debug('SAVE_SETTINGS: No OpenAEV clients to refresh cache for');
         }
         
-        sendResponse({ success: true });
+        sendResponse(successResponse(null));
         break;
       }
       
@@ -752,7 +753,7 @@ async function handleMessage(
         const { tabId } = (message.payload as { tabId: number }) || {};
         
         if (!tabId) {
-          sendResponse({ success: false, error: 'No tab ID provided' });
+          sendResponse(errorResponse('No tab ID provided'));
           break;
         }
         
@@ -872,7 +873,7 @@ async function handleMessage(
         }
         
         if (!clientToTest) {
-          sendResponse({ success: false, error: 'OpenAEV client not configured' });
+          sendResponse(errorResponse('OpenAEV client not configured'));
           break;
         }
         
@@ -881,7 +882,7 @@ async function handleMessage(
           if (result.success) {
             sendResponse({ success: true, data: { user: result.user } });
           } else {
-            sendResponse({ success: false, error: 'Connection test failed' });
+            sendResponse(errorResponse('Connection test failed'));
           }
         } catch (error) {
           sendResponse({
@@ -894,7 +895,7 @@ async function handleMessage(
       
       case 'TEST_CONNECTION': {
         if (!openCTIClient) {
-          sendResponse({ success: false, error: 'Client not configured' });
+          sendResponse(errorResponse('Client not configured'));
           break;
         }
         
@@ -908,7 +909,7 @@ async function handleMessage(
             );
           }
           
-          sendResponse({ success: true, data: info });
+          sendResponse(successResponse(info));
         } catch (error) {
           sendResponse({
             success: false,
@@ -947,11 +948,11 @@ async function handleMessage(
                 }
               }
               if (!client) {
-                sendResponse({ success: false, error: 'Platform not configured' });
+                sendResponse(errorResponse('Platform not configured'));
                 break;
               }
               const info = await Promise.race([client.testConnection(), timeoutPromise]);
-              sendResponse({ success: true, data: info });
+              sendResponse(successResponse(info));
               break;
             }
             
@@ -965,11 +966,11 @@ async function handleMessage(
                 }
               }
               if (!client) {
-                sendResponse({ success: false, error: 'Platform not configured' });
+                sendResponse(errorResponse('Platform not configured'));
                 break;
               }
               const info = await Promise.race([client.testConnection(), timeoutPromise]);
-              sendResponse({ success: true, data: info });
+              sendResponse(successResponse(info));
               break;
             }
             
@@ -1009,7 +1010,7 @@ async function handleMessage(
             case 'opencti': {
               const tempClient = new OpenCTIClient({ url, apiToken });
               const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-              sendResponse({ success: true, data: info });
+              sendResponse(successResponse(info));
               break;
             }
             
@@ -1022,7 +1023,7 @@ async function handleMessage(
                 enabled: true,
               });
               const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-              sendResponse({ success: true, data: info });
+              sendResponse(successResponse(info));
               break;
             }
             
@@ -1030,7 +1031,7 @@ async function handleMessage(
             // case 'opengrc': {
             //   const tempClient = new OpenGRCClient({ ... });
             //   const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-            //   sendResponse({ success: true, data: info });
+            //   sendResponse(successResponse(info));
             //   break;
             // }
             
@@ -1062,9 +1063,9 @@ async function handleMessage(
               scanTime: result.scanTime,
               url: payload.url,
             };
-            sendResponse({ success: true, data: scanResult });
+            sendResponse(successResponse(scanResult));
           } else {
-            sendResponse({ success: false, error: 'OpenCTI not configured' });
+            sendResponse(errorResponse('OpenCTI not configured'));
           }
         } catch (error) {
           sendResponse({
@@ -1192,7 +1193,7 @@ async function handleMessage(
             scanTime: 0,
             url: payload.url,
           };
-          sendResponse({ success: true, data: scanResult });
+          sendResponse(successResponse(scanResult));
         } catch (error) {
           log.error('SCAN_OAEV error:', error);
           sendResponse({
@@ -1334,7 +1335,7 @@ async function handleMessage(
             (scanResult.platformEntities?.length || 0);
           log.info(`SCAN_ALL: Unified scan complete across ${octiPlatformCount + oaevPlatformCount} total platforms. Found: ${totalFound} entities`);
           
-          sendResponse({ success: true, data: scanResult });
+          sendResponse(successResponse(scanResult));
         } catch (error) {
           log.error('SCAN_ALL error:', error);
           sendResponse({
@@ -1358,12 +1359,12 @@ async function handleMessage(
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
+            sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
           const contracts = await client.searchInjectorContracts(attackPatternId);
-          sendResponse({ success: true, data: contracts });
+          sendResponse(successResponse(contracts));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1379,12 +1380,12 @@ async function handleMessage(
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
+            sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
           const assets = await client.getAllAssets();
-          sendResponse({ success: true, data: assets });
+          sendResponse(successResponse(assets));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1400,12 +1401,12 @@ async function handleMessage(
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
+            sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
           const groups = await client.getAllAssetGroups();
-          sendResponse({ success: true, data: groups });
+          sendResponse(successResponse(groups));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1427,7 +1428,7 @@ async function handleMessage(
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
+            sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
@@ -1437,7 +1438,7 @@ async function handleMessage(
             platforms,
             attackPatternIds,
           });
-          sendResponse({ success: true, data: payload });
+          sendResponse(successResponse(payload));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1461,7 +1462,7 @@ async function handleMessage(
         try {
           const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
           if (!client) {
-            sendResponse({ success: false, error: 'OpenAEV not configured' });
+            sendResponse(errorResponse('OpenAEV not configured'));
             break;
           }
           
@@ -1488,7 +1489,7 @@ async function handleMessage(
       
       case 'GET_ENTITY_DETAILS': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -1505,7 +1506,7 @@ async function handleMessage(
             // Single platform request with timeout
             const client = openCTIClients.get(specificPlatformId);
             if (!client) {
-              sendResponse({ success: false, error: 'Platform not found' });
+              sendResponse(errorResponse('Platform not found'));
               break;
             }
             
@@ -1533,11 +1534,11 @@ async function handleMessage(
               if (entity) {
                 sendResponse({ success: true, data: { ...entity, _platformId: specificPlatformId } });
               } else {
-                sendResponse({ success: false, error: 'Entity not found' });
+                sendResponse(errorResponse('Entity not found'));
               }
             } catch (e) {
               log.debug(`Entity ${id} not found/timeout in platform ${specificPlatformId}`);
-              sendResponse({ success: false, error: 'Entity not found or timeout' });
+              sendResponse(errorResponse('Entity not found or timeout'));
             }
           } else {
             // Search all platforms in PARALLEL
@@ -1575,7 +1576,7 @@ async function handleMessage(
             if (found && found.entity) {
               sendResponse({ success: true, data: { ...found.entity, _platformId: found.platformId } });
             } else {
-              sendResponse({ success: false, error: 'Entity not found in any platform' });
+              sendResponse(errorResponse('Entity not found in any platform'));
             }
           }
         } catch (error) {
@@ -1589,7 +1590,7 @@ async function handleMessage(
       
       case 'ADD_OBSERVABLE': {
         if (!openCTIClient) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -1603,7 +1604,7 @@ async function handleMessage(
             hashType: obsPayload.hashType,
             createIndicator: obsPayload.createIndicator,
           });
-          sendResponse({ success: true, data: created });
+          sendResponse(successResponse(created));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1615,7 +1616,7 @@ async function handleMessage(
       
       case 'CREATE_CONTAINER': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -1645,14 +1646,14 @@ async function handleMessage(
           const platformId = containerPayload.platformId || openCTIClients.keys().next().value as string | undefined;
           
           if (!platformId) {
-            sendResponse({ success: false, error: 'No platform available' });
+            sendResponse(errorResponse('No platform available'));
             break;
           }
           
           const client = openCTIClients.get(platformId);
           
           if (!client) {
-            sendResponse({ success: false, error: 'Platform not found' });
+            sendResponse(errorResponse('Platform not found'));
             break;
           }
           
@@ -1750,19 +1751,19 @@ async function handleMessage(
           themeMode = 'dark'; // Default
         }
         
-        sendResponse({ success: true, data: themeMode });
+        sendResponse(successResponse(themeMode));
         break;
       }
       
       case 'GET_PLATFORM_SETTINGS': {
         if (!openCTIClient) {
-          sendResponse({ success: false, error: 'Not connected to OpenCTI' });
+          sendResponse(errorResponse('Not connected to OpenCTI'));
           break;
         }
         
         try {
           const settings = await openCTIClient.getPlatformSettings();
-          sendResponse({ success: true, data: settings });
+          sendResponse(successResponse(settings));
         } catch (error) {
           sendResponse({ success: false, error: String(error) });
         }
@@ -1771,7 +1772,7 @@ async function handleMessage(
       
       case 'SEARCH_ENTITIES': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -1809,7 +1810,7 @@ async function handleMessage(
           const searchResults = await Promise.all(searchPromises);
           const allResults = searchResults.flatMap(r => r.results);
           
-          sendResponse({ success: true, data: allResults });
+          sendResponse(successResponse(allResults));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1849,7 +1850,7 @@ async function handleMessage(
             }
           }
           
-          sendResponse({ success: true, data: results });
+          sendResponse(successResponse(results));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1861,7 +1862,7 @@ async function handleMessage(
       
       case 'SEARCH_OAEV': {
         if (openAEVClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -1920,7 +1921,7 @@ async function handleMessage(
           const searchResults = await Promise.all(searchPromises);
           const allResults = searchResults.flatMap(r => r.results);
           
-          sendResponse({ success: true, data: allResults });
+          sendResponse(successResponse(allResults));
         } catch (error) {
           sendResponse({
             success: false,
@@ -1940,7 +1941,7 @@ async function handleMessage(
         
         const client = openAEVClients.get(requestedPlatformId);
         if (!client) {
-          sendResponse({ success: false, error: 'OpenAEV platform not found' });
+          sendResponse(errorResponse('OpenAEV platform not found'));
           break;
         }
         
@@ -1988,7 +1989,7 @@ async function handleMessage(
               }
             });
           } else {
-            sendResponse({ success: false, error: 'Entity not found' });
+            sendResponse(errorResponse('Entity not found'));
           }
         } catch (error) {
           log.error(`Failed to fetch OpenAEV entity ${entityId}:`, error);
@@ -2020,7 +2021,7 @@ async function handleMessage(
         }
         
         if (!clientToUse) {
-          sendResponse({ success: false, error: 'OpenAEV client not configured' });
+          sendResponse(errorResponse('OpenAEV client not configured'));
           break;
         }
         
@@ -2034,7 +2035,7 @@ async function handleMessage(
             scenario_category: 'web-threat',
           });
           
-          sendResponse({ success: true, data: scenario });
+          sendResponse(successResponse(scenario));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2046,7 +2047,7 @@ async function handleMessage(
       
       case 'REFRESH_SDO_CACHE': {
         if (openCTIClients.size === 0 && openAEVClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2062,7 +2063,7 @@ async function handleMessage(
           await Promise.all(refreshPromises);
           
           const stats = await getSDOCacheStats();
-          sendResponse({ success: true, data: stats });
+          sendResponse(successResponse(stats));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2216,7 +2217,7 @@ async function handleMessage(
             await clearAllSDOCaches();
             log.debug('Cleared all SDO caches');
           }
-          sendResponse({ success: true });
+          sendResponse(successResponse(null));
         } catch (error) {
           sendResponse({ 
             success: false, 
@@ -2236,7 +2237,7 @@ async function handleMessage(
             await clearAllOAEVCaches();
             log.debug('Cleared all OpenAEV caches');
           }
-          sendResponse({ success: true });
+          sendResponse(successResponse(null));
         } catch (error) {
           sendResponse({ 
             success: false, 
@@ -2260,7 +2261,7 @@ async function handleMessage(
             timestamp: Date.now(),
           }
         });
-        sendResponse({ success: true });
+        sendResponse(successResponse(null));
         break;
       }
       
@@ -2278,7 +2279,7 @@ async function handleMessage(
       
       case 'GET_LABELS_AND_MARKINGS': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2325,7 +2326,7 @@ async function handleMessage(
       
       case 'FETCH_LABELS': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2336,7 +2337,7 @@ async function handleMessage(
           if (labelsPlatformId) {
             const client = openCTIClients.get(labelsPlatformId);
             if (!client) {
-              sendResponse({ success: false, error: 'Platform not found' });
+              sendResponse(errorResponse('Platform not found'));
               break;
             }
             
@@ -2383,7 +2384,7 @@ async function handleMessage(
       
       case 'FETCH_MARKINGS': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2394,7 +2395,7 @@ async function handleMessage(
           if (markingsPlatformId) {
             const client = openCTIClients.get(markingsPlatformId);
             if (!client) {
-              sendResponse({ success: false, error: 'Platform not found' });
+              sendResponse(errorResponse('Platform not found'));
               break;
             }
             
@@ -2441,7 +2442,7 @@ async function handleMessage(
       
       case 'FETCH_VOCABULARY': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2453,12 +2454,12 @@ async function handleMessage(
           const client = openCTIClients.get(targetPlatformId);
           
           if (!client) {
-            sendResponse({ success: false, error: 'Platform not found' });
+            sendResponse(errorResponse('Platform not found'));
             break;
           }
           
           const vocabulary = await client.fetchVocabulary(category);
-          sendResponse({ success: true, data: vocabulary });
+          sendResponse(successResponse(vocabulary));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2470,7 +2471,7 @@ async function handleMessage(
       
       case 'FETCH_IDENTITIES': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2482,12 +2483,12 @@ async function handleMessage(
           const client = openCTIClients.get(targetPlatformId);
           
           if (!client) {
-            sendResponse({ success: false, error: 'Platform not found' });
+            sendResponse(errorResponse('Platform not found'));
             break;
           }
           
           const identities = await client.fetchIdentities();
-          sendResponse({ success: true, data: identities });
+          sendResponse(successResponse(identities));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2499,7 +2500,7 @@ async function handleMessage(
       
       case 'CREATE_OBSERVABLES_BULK': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2511,7 +2512,7 @@ async function handleMessage(
         // Use specified platform or first available
         const client = platformId ? openCTIClients.get(platformId) : openCTIClient;
         if (!client) {
-          sendResponse({ success: false, error: 'Platform not found' });
+          sendResponse(errorResponse('Platform not found'));
           break;
         }
         
@@ -2523,7 +2524,7 @@ async function handleMessage(
               value: refangIndicator(e.value) 
             }))
           );
-          sendResponse({ success: true, data: results });
+          sendResponse(successResponse(results));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2535,7 +2536,7 @@ async function handleMessage(
       
       case 'CREATE_INVESTIGATION_WITH_ENTITIES': {
         if (!openCTIClient) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2564,7 +2565,7 @@ async function handleMessage(
             investigated_entities_ids: entityIds,
           });
           
-          sendResponse({ success: true, data: investigation });
+          sendResponse(successResponse(investigation));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2576,7 +2577,7 @@ async function handleMessage(
       
       case 'CREATE_WORKBENCH': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2593,7 +2594,7 @@ async function handleMessage(
           const client = openCTIClients.get(targetPlatformId);
           
           if (!client) {
-            sendResponse({ success: false, error: 'Platform not found' });
+            sendResponse(errorResponse('Platform not found'));
             break;
           }
           
@@ -2629,7 +2630,7 @@ async function handleMessage(
         
         if (openCTIClients.size === 0) {
           log.warn(' FETCH_ENTITY_CONTAINERS: No OpenCTI clients configured');
-          sendResponse({ success: false, error: 'Not configured' });
+          sendResponse(errorResponse('Not configured'));
           break;
         }
         
@@ -2641,7 +2642,7 @@ async function handleMessage(
         
         if (!entityId) {
           log.warn(' FETCH_ENTITY_CONTAINERS: No entityId provided');
-          sendResponse({ success: false, error: 'No entityId provided' });
+          sendResponse(errorResponse('No entityId provided'));
           break;
         }
         
@@ -2674,7 +2675,7 @@ async function handleMessage(
           const allContainers = results.flatMap(r => r.containers);
           
           log.debug(' FETCH_ENTITY_CONTAINERS: Total containers found:', allContainers.length);
-          sendResponse({ success: true, data: allContainers });
+          sendResponse(successResponse(allContainers));
         } catch (error) {
           log.error(' FETCH_ENTITY_CONTAINERS error:', error);
           sendResponse({
@@ -2687,7 +2688,7 @@ async function handleMessage(
       
       case 'FIND_CONTAINERS_BY_URL': {
         if (openCTIClients.size === 0) {
-          sendResponse({ success: true, data: [] }); // No error, just no containers
+          sendResponse(successResponse([])); // No error, just no containers
           break;
         }
         
@@ -2714,7 +2715,7 @@ async function handleMessage(
           const results = await Promise.all(searchPromises);
           const allContainers = results.flatMap(r => r.containers);
           
-          sendResponse({ success: true, data: allContainers });
+          sendResponse(successResponse(allContainers));
         } catch (error) {
           sendResponse({
             success: false,
@@ -2777,7 +2778,7 @@ async function handleMessage(
       case 'AI_GENERATE_DESCRIPTION': {
         const settings = await getSettings();
         if (!isAIAvailable(settings.ai)) {
-          sendResponse({ success: false, error: 'AI not configured' });
+          sendResponse(errorResponse('AI not configured'));
           break;
         }
         
@@ -2798,7 +2799,7 @@ async function handleMessage(
       case 'AI_GENERATE_SCENARIO': {
         const settings = await getSettings();
         if (!isAIAvailable(settings.ai)) {
-          sendResponse({ success: false, error: 'AI not configured' });
+          sendResponse(errorResponse('AI not configured'));
           break;
         }
         
@@ -2809,7 +2810,7 @@ async function handleMessage(
           
           if (response.success && response.content) {
             const scenario = parseAIJsonResponse(response.content);
-            sendResponse({ success: true, data: scenario });
+            sendResponse(successResponse(scenario));
           } else {
             sendResponse({ success: false, error: response.error || 'Failed to parse scenario' });
           }
@@ -2825,7 +2826,7 @@ async function handleMessage(
       case 'AI_GENERATE_ATOMIC_TEST': {
         const settings = await getSettings();
         if (!isAIAvailable(settings.ai)) {
-          sendResponse({ success: false, error: 'AI not configured' });
+          sendResponse(errorResponse('AI not configured'));
           break;
         }
         
@@ -2850,7 +2851,7 @@ async function handleMessage(
       }
       
       default:
-        sendResponse({ success: false, error: 'Unknown message type' });
+        sendResponse(errorResponse('Unknown message type'));
     }
   } catch (error) {
     log.error('Message handler error:', error);

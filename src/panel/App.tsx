@@ -67,6 +67,14 @@ import {
   PLATFORM_REGISTRY,
   type PlatformType,
 } from '../shared/platform';
+import {
+  getOAEVEntityName,
+  getOAEVEntityId,
+  getOAEVEntityUrl,
+  getOAEVEntityColor,
+  getOAEVTypeFromClass,
+} from '../shared/utils/entity';
+import { formatDate, formatDateTime } from '../shared/utils/formatters';
 
 const log = loggers.panel;
 
@@ -1157,10 +1165,10 @@ const App: React.FC = () => {
         for (const result of oaevResponse.data) {
           const platformInfo = availablePlatforms.find(p => p.id === result._platformId);
           const entityClass = result._entityClass || '';
-          const oaevType = getOaevTypeFromClass(entityClass);
+          const oaevType = getOAEVTypeFromClass(entityClass);
           results.push({
             id: `openaev-${result._id || result.asset_id || result.team_id || result.player_id || Math.random()}-${result._platformId}`,
-            name: getOaevEntityName(result, oaevType),
+            name: getOAEVEntityName(result, oaevType),
             type: oaevType,
             description: result.asset_description || result.team_description || result.scenario_description || undefined,
             source: 'openaev',
@@ -1316,7 +1324,7 @@ const App: React.FC = () => {
     
     // Determine entity type from _entityClass
     const entityClass = result._entityClass || '';
-    const oaevType = getOaevTypeFromClass(entityClass);
+    const oaevType = getOAEVTypeFromClass(entityClass);
     
     // Get platform info
     const platformId = result._platformId;
@@ -1327,7 +1335,7 @@ const App: React.FC = () => {
     }
     
     // Set initial entity data from search result with loading state
-    const entityName = getOaevEntityName(result, oaevType);
+    const entityName = getOAEVEntityName(result, oaevType);
     setEntity({
       ...result,
       type: `oaev-${oaevType}`,
@@ -1387,51 +1395,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to get OAEV entity type from Java class name
-  const getOaevTypeFromClass = (className: string): string => {
-    const simpleName = className.split('.').pop() || className;
-    switch (simpleName) {
-      case 'Endpoint': return 'Asset';
-      case 'AssetGroup': return 'AssetGroup';
-      case 'User': return 'User'; // Keep as User for search results display
-      case 'Player': return 'Player';
-      case 'Team': return 'Team';
-      case 'Organization': return 'Organization';
-      case 'AttackPattern': return 'AttackPattern';
-      case 'Finding': return 'Finding';
-      case 'Scenario': return 'Scenario';
-      case 'Exercise': return 'Exercise';
-      default: return simpleName;
-    }
-  };
-
-  // Helper to get display name for OAEV entity
-  const getOaevEntityName = (result: any, oaevType: string): string => {
-    switch (oaevType) {
-      case 'Asset':
-        return result.endpoint_name || result.asset_name || result.name || 'Unknown Asset';
-      case 'AssetGroup':
-        return result.asset_group_name || result.name || 'Unknown Asset Group';
-      case 'Player':
-        return [result.user_firstname, result.user_lastname].filter(Boolean).join(' ') || result.user_email || 'Unknown Player';
-      case 'User':
-        return [result.user_firstname, result.user_lastname].filter(Boolean).join(' ') || result.user_email || result.name || 'Unknown User';
-      case 'Team':
-        return result.team_name || result.name || 'Unknown Team';
-      case 'Organization':
-        return result.organization_name || result.name || 'Unknown Organization';
-      case 'AttackPattern':
-        return result.attack_pattern_name || result.name || 'Unknown Attack Pattern';
-      case 'Finding':
-        return result.finding_value || result.value || result.name || 'Unknown Finding';
-      case 'Scenario':
-        return result.scenario_name || result.name || 'Unknown Scenario';
-      case 'Exercise':
-        return result.exercise_name || result.name || 'Unknown Simulation';
-      default:
-        return result.name || 'Unknown';
-    }
-  };
 
   const handleSearchResultClick = async (merged: MergedSearchResult) => {
     // Mark that we're coming from search (for back button)
@@ -1887,125 +1850,32 @@ const App: React.FC = () => {
       : availablePlatforms.find(p => p.type === 'openaev');
     const platformUrl = platform?.url || '';
     
-    // Color based on entity type
-    const getOAEVColor = () => {
+    // Color based on entity type (using shared utility)
+    const color = getOAEVEntityColor(oaevType);
+    
+    // Get entity properties using shared utilities
+    const name = getOAEVEntityName(entityData, oaevType);
+    const entityId = getOAEVEntityId(entityData, oaevType);
+    const entityUrl = getOAEVEntityUrl(platformUrl, oaevType, entityId);
+    const mitreId = entityData.attack_pattern_external_id || ''; // For attack patterns
+    
+    // Extract description based on entity type
+    const getDescription = (): string => {
       switch (oaevType) {
-        case 'Asset': return '#00bcd4'; // Cyan
-        case 'AssetGroup': return '#009688'; // Teal
+        case 'Asset': return entityData.endpoint_description || entityData.asset_description || '';
+        case 'AssetGroup': return entityData.asset_group_description || '';
         case 'Player':
-        case 'User': return '#ff9800'; // Orange
-        case 'Team': return '#4caf50'; // Green
-        case 'Organization': return '#3f51b5'; // Indigo
-        case 'Scenario': return '#9c27b0'; // Purple
-        case 'Exercise': return '#ff5722'; // Deep Orange
-        case 'AttackPattern': return '#d4e157'; // Yellow-green (matches OpenCTI Attack-Pattern)
-        case 'Finding': return '#e91e63'; // Pink
-        default: return '#00bcd4';
+        case 'User': return entityData.user_organization || entityData.description || '';
+        case 'Team': return entityData.team_description || '';
+        case 'Organization': return entityData.organization_description || entityData.description || '';
+        case 'AttackPattern': return entityData.attack_pattern_description || '';
+        case 'Finding': return entityData.finding_description || `Type: ${entityData.finding_type || 'Unknown'}`;
+        case 'Scenario': return entityData.scenario_description || entityData.description || '';
+        case 'Exercise': return entityData.exercise_description || entityData.description || '';
+        default: return entityData.description || '';
       }
     };
-    const color = getOAEVColor();
-    
-    // Get entity properties based on type
-    let name = '';
-    let description = '';
-    let entityId = '';
-    let entityUrl = '';
-    let mitreId = ''; // For attack patterns
-    
-    switch (oaevType) {
-      case 'Asset': {
-        const asset = entityData as any;
-        name = asset.endpoint_name || asset.asset_name || asset.name || 'Unknown Asset';
-        description = asset.endpoint_description || asset.asset_description || '';
-        entityId = asset.endpoint_id || asset.asset_id || asset.id || '';
-        entityUrl = `${platformUrl}/admin/assets/endpoints/${entityId}`;
-        break;
-      }
-      case 'AssetGroup': {
-        const group = entityData as any;
-        name = group.asset_group_name || group.name || 'Unknown Asset Group';
-        description = group.asset_group_description || '';
-        entityId = group.asset_group_id || group.id || '';
-        entityUrl = `${platformUrl}/admin/assets/asset_groups/${entityId}`;
-        break;
-      }
-      case 'Player': {
-        const player = entityData as any;
-        name = [player.user_firstname, player.user_lastname].filter(Boolean).join(' ') || player.user_email || 'Unknown Player';
-        description = player.user_organization || '';
-        entityId = player.user_id || player.id || '';
-        entityUrl = `${platformUrl}/admin/teams/players/${entityId}`;
-        break;
-      }
-      case 'Team': {
-        const team = entityData as any;
-        name = team.team_name || team.name || 'Unknown Team';
-        description = team.team_description || '';
-        entityId = team.team_id || team.id || '';
-        entityUrl = `${platformUrl}/admin/teams/${entityId}`;
-        break;
-      }
-      case 'AttackPattern': {
-        const ap = entityData as any;
-        name = ap.attack_pattern_name || ap.name || 'Unknown Attack Pattern';
-        description = ap.attack_pattern_description || '';
-        mitreId = ap.attack_pattern_external_id || '';
-        entityId = ap.attack_pattern_id || ap.id || '';
-        entityUrl = `${platformUrl}/admin/attack_patterns/${entityId}`;
-        break;
-      }
-      case 'Finding': {
-        const finding = entityData as any;
-        name = finding.finding_value || finding.name || 'Unknown Finding';
-        description = finding.finding_description || `Type: ${finding.finding_type || 'Unknown'}`;
-        entityId = finding.finding_id || finding.id || '';
-        entityUrl = `${platformUrl}/admin/findings/${entityId}`;
-        break;
-      }
-      case 'Scenario': {
-        const scenario = entityData as any;
-        name = scenario.scenario_name || scenario.name || 'Unknown Scenario';
-        description = scenario.scenario_description || scenario.description || '';
-        entityId = scenario.scenario_id || scenario.id || '';
-        entityUrl = `${platformUrl}/admin/scenarios/${entityId}`;
-        break;
-      }
-      case 'Exercise': {
-        const exercise = entityData as any;
-        name = exercise.exercise_name || exercise.name || 'Unknown Simulation';
-        description = exercise.exercise_description || exercise.description || '';
-        entityId = exercise.exercise_id || exercise.id || '';
-        entityUrl = `${platformUrl}/admin/simulations/${entityId}`;
-        break;
-      }
-      case 'Organization': {
-        const org = entityData as any;
-        name = org.organization_name || org.name || 'Unknown Organization';
-        description = org.organization_description || org.description || '';
-        entityId = org.organization_id || org.id || '';
-        entityUrl = `${platformUrl}/admin/teams/organizations/${entityId}`;
-        break;
-      }
-      case 'User': {
-        // User is returned from search, same as Player
-        const user = entityData as any;
-        name = [user.user_firstname, user.user_lastname].filter(Boolean).join(' ') || user.user_email || user.name || 'Unknown User';
-        description = user.user_organization || user.description || '';
-        entityId = user.user_id || user.id || '';
-        entityUrl = `${platformUrl}/admin/teams/players/${entityId}`;
-        break;
-      }
-      default: {
-        // Generic fallback for any other entity type from search
-        // FullTextSearchResult has: id, name, description, clazz, tags
-        name = entityData.name || 'Unknown';
-        description = entityData.description || '';
-        entityId = entityData.id || '';
-        // Generic URL, just go to the platform
-        entityUrl = platformUrl;
-        break;
-      }
-    }
+    const description = getDescription();
     
     // Get OpenAEV icon based on type (matches OpenAEV's useEntityIcon.tsx)
     const getOAEVIcon = () => {
@@ -2245,7 +2115,7 @@ const App: React.FC = () => {
                   Last Seen
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {new Date(entityData.asset_last_seen || entityData.endpoint_last_seen).toLocaleString()}
+                  {formatDateTime(entityData.asset_last_seen || entityData.endpoint_last_seen)}
                 </Typography>
               </Box>
             )}
@@ -2475,7 +2345,7 @@ const App: React.FC = () => {
                   Created
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {new Date(entityData.attack_pattern_created_at).toLocaleString()}
+                  {formatDateTime(entityData.attack_pattern_created_at)}
                 </Typography>
               </Box>
             )}
@@ -2487,7 +2357,7 @@ const App: React.FC = () => {
                   Last Modified
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {new Date(entityData.attack_pattern_updated_at).toLocaleString()}
+                  {formatDateTime(entityData.attack_pattern_updated_at)}
                 </Typography>
               </Box>
             )}
@@ -2585,7 +2455,7 @@ const App: React.FC = () => {
                   Start Date
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {new Date(entityData.exercise_start_date).toLocaleDateString()}
+                  {formatDate(entityData.exercise_start_date)}
                 </Typography>
               </Box>
             )}
@@ -2686,7 +2556,7 @@ const App: React.FC = () => {
                   Created
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {new Date(entityData.finding_created_at).toLocaleString()}
+                  {formatDateTime(entityData.finding_created_at)}
                 </Typography>
               </Box>
             )}
@@ -3380,7 +3250,7 @@ const App: React.FC = () => {
                     Created (STIX)
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(created).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(created)}
                   </Typography>
                 </Box>
               )}
@@ -3390,7 +3260,7 @@ const App: React.FC = () => {
                     Modified (STIX)
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(modified).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(modified)}
                   </Typography>
                 </Box>
               )}
@@ -3401,7 +3271,7 @@ const App: React.FC = () => {
                     Created (Platform)
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(entityData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(entityData.created_at)}
                   </Typography>
                 </Box>
               )}
@@ -3411,7 +3281,7 @@ const App: React.FC = () => {
                     Updated (Platform)
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(entityData.updated_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(entityData.updated_at)}
                   </Typography>
                 </Box>
               )}
@@ -3422,7 +3292,7 @@ const App: React.FC = () => {
                     First Seen
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(entityData.first_seen).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(entityData.first_seen)}
                   </Typography>
                 </Box>
               )}
@@ -3432,7 +3302,7 @@ const App: React.FC = () => {
                     Last Seen
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...contentTextStyle }}>
-                    {new Date(entityData.last_seen).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {formatDate(entityData.last_seen)}
                   </Typography>
                 </Box>
               )}
@@ -3491,7 +3361,7 @@ const App: React.FC = () => {
                           </>
                         )}
                         {container.created && (
-                          <span>{new Date(container.created).toLocaleDateString()}</span>
+                          <span>{formatDate(container.created)}</span>
                         )}
                       </Typography>
                     </Box>
@@ -4468,7 +4338,7 @@ const App: React.FC = () => {
                       <span style={{ textTransform: 'capitalize' }}>{container.entity_type.replace(/-/g, ' ')}</span>
                       {containerPlatform && <span>• {containerPlatform.name}</span>}
                       {container.createdBy?.name && <span>• {container.createdBy.name}</span>}
-                      {container.modified && <span>• {new Date(container.modified).toLocaleDateString()}</span>}
+                      {container.modified && <span>• {formatDate(container.modified)}</span>}
                     </Typography>
                   </Box>
                 </Box>
@@ -5849,8 +5719,8 @@ const App: React.FC = () => {
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               {oaevSearchResults.map((result, i) => {
                 const entityClass = result._entityClass || '';
-                const oaevType = getOaevTypeFromClass(entityClass);
-                const displayName = getOaevEntityName(result, oaevType);
+                const oaevType = getOAEVTypeFromClass(entityClass);
+                const displayName = getOAEVEntityName(result, oaevType);
                 const platformInfo = result._platform;
                 
                 return (

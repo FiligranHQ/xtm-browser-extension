@@ -109,9 +109,9 @@ export async function initializeOpenCTIClient(
   log.info(`[${platform.id}] Initializing OpenCTI client for ${platform.name}...`);
   
   // Reset any existing client
-  resetOpenCTIClient(platform.url);
+  resetOpenCTIClient();
   
-  const client = new OpenCTIClient(platform.url, platform.apiKey);
+  const client = new OpenCTIClient({ url: platform.url, apiToken: platform.apiToken });
   state.clients.opencti.set(platform.id, client);
   
   // Set as primary if first client
@@ -122,7 +122,7 @@ export async function initializeOpenCTIClient(
   
   // Initialize detection engine if not exists
   if (!state.detectionEngine) {
-    state.detectionEngine = new DetectionEngine(client);
+    state.detectionEngine = new DetectionEngine(state.clients.opencti);
     log.info(`Detection engine initialized with primary client`);
   }
   
@@ -137,7 +137,7 @@ export async function initializeOpenAEVClient(
 ): Promise<OpenAEVClient> {
   log.info(`[${platform.id}] Initializing OpenAEV client for ${platform.name}...`);
   
-  const client = new OpenAEVClient(platform.url, platform.apiKey);
+  const client = new OpenAEVClient(platform);
   state.clients.openaev.set(platform.id, client);
   
   return client;

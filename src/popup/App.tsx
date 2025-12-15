@@ -606,9 +606,16 @@ const App: React.FC = () => {
               width={32}
               height={32}
             />
-            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: 18, color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
-              Filigran Threat Management
-            </Typography>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: 18, color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
+                  Filigran Threat Management
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 9, color: '#ff9800' }}>
+                  (beta)
+                </Typography>
+              </Box>
+            </Box>
           </Box>
           <Tooltip title="Settings" arrow>
             <IconButton size="small" onClick={handleOpenSettings} sx={{ color: 'primary.main' }}>
@@ -1273,7 +1280,7 @@ const App: React.FC = () => {
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                XTM Browser Extension v1.0.0
+                XTM Browser Extension v0.0.1 (beta)
               </Typography>
               <Typography
                 component="a"

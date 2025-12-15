@@ -77,6 +77,25 @@ export interface AtomicTestRequest {
   context?: string; // Additional context from page
 }
 
+export interface EmailGenerationRequest {
+  pageTitle: string;
+  pageUrl: string;
+  pageContent: string;
+  scenarioName: string;
+  attackPatterns: Array<{
+    id: string;
+    name: string;
+    externalId?: string;
+    killChainPhases?: string[];
+  }>;
+}
+
+export interface GeneratedEmail {
+  attackPatternId: string;
+  subject: string;
+  body: string;
+}
+
 export interface GeneratedAtomicTest {
   name: string;
   description: string;
@@ -93,10 +112,19 @@ export interface GeneratedAtomicTest {
 export class AIClient {
   private provider: AIProvider;
   private apiKey: string;
+  private model?: string;
   private baseUrls = {
     openai: 'https://api.openai.com/v1',
     anthropic: 'https://api.anthropic.com/v1',
     gemini: 'https://generativelanguage.googleapis.com/v1beta',
+  };
+
+  // Default models for each provider (fallback if none selected)
+  private static readonly DEFAULT_MODELS: Record<AIProvider, string> = {
+    openai: 'gpt-4o',
+    anthropic: 'claude-sonnet-4-20250514',
+    gemini: 'gemini-1.5-flash',
+    'xtm-one': '',
   };
 
   constructor(settings: AISettings) {
@@ -108,14 +136,25 @@ export class AIClient {
     }
     this.provider = settings.provider;
     this.apiKey = settings.apiKey;
+    this.model = settings.model;
   }
 
   /**
+   * Get the model to use for generation
+   */
+  private getModel(): string {
+    return this.model || AIClient.DEFAULT_MODELS[this.provider] || '';
+  }
+
+  private static readonly MAX_MODELS = 20;
+
+  /**
    * Test connection and fetch available models from the provider
+   * Returns raw data from APIs, sorted by creation date, limited to 20 models
    */
   async testConnectionAndFetchModels(): Promise<{
     success: boolean;
-    models?: Array<{ id: string; name: string; description?: string }>;
+    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
     error?: string;
   }> {
     try {
@@ -139,10 +178,12 @@ export class AIClient {
 
   /**
    * Fetch available models from OpenAI
+   * API: GET /v1/models
+   * https://platform.openai.com/docs/api-reference/models/list
    */
   private async fetchOpenAIModels(): Promise<{
     success: boolean;
-    models?: Array<{ id: string; name: string; description?: string }>;
+    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
     error?: string;
   }> {
     const response = await fetch(`${this.baseUrls.openai}/models`, {
@@ -154,113 +195,83 @@ export class AIClient {
 
     if (!response.ok) {
       const errorText = await response.text();
+      if (response.status === 401) {
+        throw new Error('Invalid API key');
+      }
       throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     
-    // Filter to only include chat models (GPT models)
-    const chatModels = (data.data || [])
-      .filter((m: { id: string }) => 
-        m.id.includes('gpt-4') || 
-        m.id.includes('gpt-3.5') || 
-        m.id.includes('o1') ||
-        m.id.includes('o3')
-      )
-      .map((m: { id: string }) => ({
+    // Get all models, sort by created date (newest first), limit to MAX_MODELS
+    const models = (data.data || [])
+      .sort((a: { created: number }, b: { created: number }) => (b.created || 0) - (a.created || 0))
+      .slice(0, AIClient.MAX_MODELS)
+      .map((m: { id: string; created?: number; owned_by?: string }) => ({
         id: m.id,
-        name: this.formatOpenAIModelName(m.id),
-        description: this.getOpenAIModelDescription(m.id),
-      }))
-      .sort((a: { id: string }, b: { id: string }) => {
-        // Sort by model family and version (newest first)
-        const order = ['o3', 'o1', 'gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5'];
-        for (const prefix of order) {
-          if (a.id.includes(prefix) && !b.id.includes(prefix)) return -1;
-          if (!a.id.includes(prefix) && b.id.includes(prefix)) return 1;
-        }
-        return b.id.localeCompare(a.id);
-      });
+        name: m.id,
+        description: m.owned_by ? `Owned by: ${m.owned_by}` : undefined,
+        created: m.created,
+      }));
 
-    return { success: true, models: chatModels };
-  }
-
-  private formatOpenAIModelName(id: string): string {
-    if (id.includes('gpt-4o')) return 'GPT-4o' + (id.includes('mini') ? ' Mini' : '');
-    if (id.includes('gpt-4-turbo')) return 'GPT-4 Turbo';
-    if (id.includes('gpt-4')) return 'GPT-4';
-    if (id.includes('gpt-3.5-turbo')) return 'GPT-3.5 Turbo';
-    if (id.includes('o1-preview')) return 'o1 Preview';
-    if (id.includes('o1-mini')) return 'o1 Mini';
-    if (id.includes('o1')) return 'o1';
-    if (id.includes('o3-mini')) return 'o3 Mini';
-    if (id.includes('o3')) return 'o3';
-    return id;
-  }
-
-  private getOpenAIModelDescription(id: string): string {
-    if (id.includes('gpt-4o')) return 'Most capable and fast multimodal model';
-    if (id.includes('gpt-4-turbo')) return 'High intelligence with vision capabilities';
-    if (id.includes('gpt-4')) return 'Advanced reasoning model';
-    if (id.includes('gpt-3.5-turbo')) return 'Fast and cost-effective';
-    if (id.includes('o1') || id.includes('o3')) return 'Advanced reasoning model';
-    return '';
+    return { success: true, models };
   }
 
   /**
    * Fetch available models from Anthropic
-   * Note: Anthropic doesn't have a models list API, so we return known models
+   * API: GET /v1/models
+   * https://docs.anthropic.com/en/api/models-list
    */
   private async fetchAnthropicModels(): Promise<{
     success: boolean;
-    models?: Array<{ id: string; name: string; description?: string }>;
+    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
     error?: string;
   }> {
-    // Test the API key by making a minimal request
-    const response = await fetch(`${this.baseUrls.anthropic}/messages`, {
-      method: 'POST',
+    const response = await fetch(`${this.baseUrls.anthropic}/models`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'Hi' }],
-      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      // Check for auth errors specifically
       if (response.status === 401) {
         throw new Error('Invalid API key');
       }
       throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
     }
 
-    // Return known Anthropic models (they don't have a models list API)
-    const models = [
-      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest balanced model' },
-      { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', description: 'Extended thinking model' },
-      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', description: 'Fast and intelligent' },
-      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', description: 'Fastest model' },
-      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', description: 'Most powerful model' },
-      { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', description: 'Balanced performance' },
-      { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Fast and compact' },
-    ];
+    const data = await response.json();
+    
+    // Get all models, sort by created_at date (newest first), limit to MAX_MODELS
+    // Anthropic returns { data: [...] } with models having created_at as ISO string
+    const models = (data.data || [])
+      .sort((a: { created_at?: string }, b: { created_at?: string }) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, AIClient.MAX_MODELS)
+      .map((m: { id: string; display_name?: string; created_at?: string }) => ({
+        id: m.id,
+        name: m.display_name || m.id,
+        created: m.created_at ? Math.floor(new Date(m.created_at).getTime() / 1000) : undefined,
+      }));
 
     return { success: true, models };
   }
 
   /**
    * Fetch available models from Google Gemini
+   * API: GET /v1beta/models
+   * https://ai.google.dev/api/models#method:-models.list
    */
   private async fetchGeminiModels(): Promise<{
     success: boolean;
-    models?: Array<{ id: string; name: string; description?: string }>;
+    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
     error?: string;
   }> {
     const response = await fetch(
@@ -270,30 +281,24 @@ export class AIClient {
 
     if (!response.ok) {
       const errorText = await response.text();
+      if (response.status === 401 || response.status === 400) {
+        throw new Error('Invalid API key');
+      }
       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     
-    // Filter to only include generative models
-    const generativeModels = (data.models || [])
-      .filter((m: { name: string; supportedGenerationMethods?: string[] }) => 
-        m.supportedGenerationMethods?.includes('generateContent') &&
-        (m.name.includes('gemini-2') || m.name.includes('gemini-1.5') || m.name.includes('gemini-pro'))
-      )
+    // Get all models, limit to MAX_MODELS (Gemini doesn't have created_at, sort by name)
+    const models = (data.models || [])
+      .slice(0, AIClient.MAX_MODELS)
       .map((m: { name: string; displayName?: string; description?: string }) => ({
         id: m.name.replace('models/', ''),
         name: m.displayName || m.name.replace('models/', ''),
         description: m.description?.substring(0, 100),
-      }))
-      .sort((a: { id: string }, b: { id: string }) => {
-        // Sort by version (newest first)
-        if (a.id.includes('gemini-2') && !b.id.includes('gemini-2')) return -1;
-        if (!a.id.includes('gemini-2') && b.id.includes('gemini-2')) return 1;
-        return b.id.localeCompare(a.id);
-      });
+      }));
 
-    return { success: true, models: generativeModels };
+    return { success: true, models };
   }
 
   /**
@@ -434,11 +439,59 @@ Important:
     return this.generate({ prompt, systemPrompt, maxTokens: 1000, temperature: 0.5 });
   }
 
+  /**
+   * Generate email content for table-top scenarios
+   */
+  async generateEmails(request: EmailGenerationRequest): Promise<AIGenerationResponse> {
+    const systemPrompt = `You are a cybersecurity simulation expert creating realistic phishing awareness and incident simulation emails. Generate professional, contextually appropriate email content that simulates real-world security scenarios for training purposes. Output in JSON format.`;
+
+    const attackPatternsInfo = request.attackPatterns.map(ap => 
+      `- ${ap.name}${ap.externalId ? ` (${ap.externalId})` : ''}${ap.killChainPhases?.length ? ` [${ap.killChainPhases.join(', ')}]` : ''}`
+    ).join('\n');
+
+    const prompt = `Generate realistic simulation email content for a table-top security exercise based on the following:
+
+Scenario: ${request.scenarioName}
+Source Intelligence:
+- Page: ${request.pageTitle}
+- URL: ${request.pageUrl}
+
+Attack Patterns to simulate:
+${attackPatternsInfo}
+
+Context from page:
+${request.pageContent.substring(0, 2000)}
+
+For EACH attack pattern listed above, generate an email that:
+1. Has a realistic subject line that would be used in a real attack scenario
+2. Has a body that describes the simulated threat/action in a professional security briefing format
+3. Is appropriate for training/awareness purposes (marked as [SIMULATION])
+
+IMPORTANT: You must generate exactly one email object for each attack pattern provided.
+The attackPatternId in your response must be the EXACT "id" value I provided for each attack pattern (the UUID string, NOT the external ID like T1222).
+
+Generate a JSON response with this structure:
+{
+  "emails": [
+    {
+      "attackPatternId": "copy the exact id value provided for each attack pattern",
+      "subject": "[SIMULATION] Realistic email subject",
+      "body": "Professional email body describing the simulated security event..."
+    }
+  ]
+}
+
+Keep email bodies concise (2-4 sentences) but informative.`;
+
+    return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.7 });
+  }
+
   // ============================================================================
   // Provider-specific implementations
   // ============================================================================
 
   private async generateOpenAI(request: AIGenerationRequest): Promise<AIGenerationResponse> {
+    const modelToUse = this.getModel();
     const response = await fetch(`${this.baseUrls.openai}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -446,7 +499,7 @@ Important:
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: modelToUse,
         messages: [
           ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
           { role: 'user', content: request.prompt },
@@ -469,15 +522,17 @@ Important:
   }
 
   private async generateAnthropic(request: AIGenerationRequest): Promise<AIGenerationResponse> {
+    const modelToUse = this.getModel();
     const response = await fetch(`${this.baseUrls.anthropic}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: modelToUse,
         max_tokens: request.maxTokens || 1500,
         system: request.systemPrompt,
         messages: [
@@ -499,8 +554,9 @@ Important:
   }
 
   private async generateGemini(request: AIGenerationRequest): Promise<AIGenerationResponse> {
+    const modelToUse = this.getModel();
     const response = await fetch(
-      `${this.baseUrls.gemini}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+      `${this.baseUrls.gemini}/models/${modelToUse}:generateContent?key=${this.apiKey}`,
       {
         method: 'POST',
         headers: {

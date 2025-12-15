@@ -1050,15 +1050,32 @@ async function handleMessage(
       case 'SCAN_PAGE': {
         // SCAN_PAGE scans for OpenCTI entities only (observables, SDOs, CVEs)
         // For global scanning across all platforms, use SCAN_ALL instead
+        // Applies detection settings filtering (unlike atomic testing/scenario)
         const payload = message.payload as { content: string; url: string };
         try {
           if (detectionEngine) {
             const result = await detectionEngine.scan(payload.content);
+            
+            // Get detection settings to filter results
+            const settings = await getSettings();
+            const enabledObservableTypes = settings.detection?.observableTypes || [];
+            const enabledEntityTypes = settings.detection?.entityTypes || [];
+            
+            // Filter observables by enabled types
+            const filteredObservables = result.observables.filter(obs => 
+              enabledObservableTypes.includes(obs.type)
+            );
+            
+            // Filter SDOs by enabled types
+            const filteredSdos = result.sdos.filter(sdo => 
+              enabledEntityTypes.includes(sdo.type)
+            );
+            
             // Return OpenCTI results - platformEntities from other platforms are handled by SCAN_ALL
             const scanResult: ScanResultPayload = {
-              observables: result.observables,
-              sdos: result.sdos,
-              cves: result.cves,
+              observables: filteredObservables,
+              sdos: filteredSdos,
+              cves: result.cves, // CVEs are always included
               platformEntities: [], // OpenCTI entities are in observables/sdos/cves, not platformEntities
               scanTime: result.scanTime,
               url: payload.url,
@@ -1319,12 +1336,32 @@ async function handleMessage(
             log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
           }
           
-          // Combine results
+          // Get detection settings to filter results
+          // Note: Detection settings only affect global scan, NOT atomic testing or scenario generation
+          const settings = await getSettings();
+          const enabledObservableTypes = settings.detection?.observableTypes || [];
+          const enabledEntityTypes = settings.detection?.entityTypes || [];
+          const enabledOaevTypes = settings.detection?.platformEntityTypes?.openaev || [];
+          
+          // Filter OpenCTI results by enabled types
+          const filteredObservables = openctiResult.observables.filter(obs => 
+            enabledObservableTypes.includes(obs.type)
+          );
+          const filteredSdos = openctiResult.sdos.filter(sdo => 
+            enabledEntityTypes.includes(sdo.type)
+          );
+          
+          // Filter OpenAEV entities by enabled types
+          const filteredPlatformEntities = platformEntities.filter(entity => 
+            enabledOaevTypes.includes(entity.type)
+          );
+          
+          // Combine filtered results
           const scanResult: ScanResultPayload = {
-            observables: openctiResult.observables,
-            sdos: openctiResult.sdos,
-            cves: openctiResult.cves,
-            platformEntities,
+            observables: filteredObservables,
+            sdos: filteredSdos,
+            cves: openctiResult.cves, // CVEs are always included
+            platformEntities: filteredPlatformEntities,
             scanTime: 0,
             url: payload.url,
           };
@@ -1333,7 +1370,7 @@ async function handleMessage(
             scanResult.observables.filter(o => o.found).length +
             scanResult.sdos.filter(s => s.found).length +
             (scanResult.platformEntities?.length || 0);
-          log.info(`SCAN_ALL: Unified scan complete across ${octiPlatformCount + oaevPlatformCount} total platforms. Found: ${totalFound} entities`);
+          log.info(`SCAN_ALL: Unified scan complete across ${octiPlatformCount + oaevPlatformCount} total platforms. Found: ${totalFound} entities (after detection settings filter)`);
           
           sendResponse(successResponse(scanResult));
         } catch (error) {
@@ -1419,6 +1456,27 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to fetch asset groups',
+          });
+        }
+        break;
+      }
+      
+      case 'FETCH_OAEV_TEAMS': {
+        const { platformId } = message.payload as { platformId?: string };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const teams = await client.getAllTeams();
+          sendResponse(successResponse(teams));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch teams',
           });
         }
         break;
@@ -1691,6 +1749,21 @@ async function handleMessage(
             });
           }
           
+          // Get all kill chain phases first for reference (needed to resolve phase IDs to names)
+          const killChainPhases = await client.getKillChainPhases();
+          
+          // Create a map of phase ID to phase info for quick lookups
+          const phaseIdToInfo: Map<string, { name: string; killChainName: string; order: number }> = new Map();
+          killChainPhases.forEach((phase: any) => {
+            if (phase.phase_id) {
+              phaseIdToInfo.set(phase.phase_id, {
+                name: phase.phase_name,
+                killChainName: phase.phase_kill_chain_name,
+                order: phase.phase_order,
+              });
+            }
+          });
+          
           // Fetch attack patterns with full details
           const attackPatterns = await Promise.all(
             attackPatternIds.map(async (id) => {
@@ -1714,19 +1787,24 @@ async function handleMessage(
                 '(uuid:', attackPatternUuid, '):', contracts.length,
                 'Sample contract APs:', allContracts.slice(0, 2).map((c: any) => c.injector_contract_attack_patterns));
               
+              // Resolve kill chain phase IDs to phase names
+              const rawKillChainPhases: string[] = ap?.attack_pattern_kill_chain_phases || [];
+              const resolvedKillChainPhases = rawKillChainPhases.map(phaseId => {
+                const phaseInfo = phaseIdToInfo.get(phaseId);
+                // Return the phase name if found, otherwise the original ID
+                return phaseInfo?.name || phaseId;
+              }).filter(name => name && name.length > 0);
+              
               return {
                 id: attackPatternUuid,
                 name: ap?.attack_pattern_name || 'Unknown',
                 externalId: ap?.attack_pattern_external_id || '',
                 description: ap?.attack_pattern_description || '',
-                killChainPhases: ap?.attack_pattern_kill_chain_phases || [],
+                killChainPhases: resolvedKillChainPhases,
                 contracts,
               };
             })
           );
-          
-          // Get all kill chain phases for reference
-          const killChainPhases = await client.getKillChainPhases();
           
           log.debug('[FETCH_SCENARIO_OVERVIEW] Final attack patterns with contracts:', 
             attackPatterns.map(ap => ({ name: ap.name, contractCount: ap.contracts.length })));
@@ -1790,6 +1868,9 @@ async function handleMessage(
             inject_content?: Record<string, any>;
             inject_depends_duration?: number;
             inject_depends_on?: string;
+            inject_teams?: string[];
+            inject_assets?: string[];
+            inject_asset_groups?: string[];
           };
           platformId?: string;
         };
@@ -1801,9 +1882,12 @@ async function handleMessage(
             break;
           }
           
+          log.debug(` Adding inject to scenario ${scenarioId}:`, inject);
           const result = await client.addInjectToScenario(scenarioId, inject);
+          log.debug(` Inject added result:`, result);
           sendResponse(successResponse(result));
         } catch (error) {
+          log.error(` Failed to add inject to scenario:`, error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to add inject to scenario',
@@ -3194,6 +3278,44 @@ async function handleMessage(
             sendResponse({ success: true, data: atomicTest });
           } else {
             sendResponse({ success: false, error: response.error || 'Failed to parse atomic test' });
+          }
+        } catch (error) {
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI generation failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'AI_GENERATE_EMAILS': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse(errorResponse('AI not configured'));
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as {
+            pageTitle: string;
+            pageUrl: string;
+            pageContent: string;
+            scenarioName: string;
+            attackPatterns: Array<{
+              id: string;
+              name: string;
+              externalId?: string;
+              killChainPhases?: string[];
+            }>;
+          };
+          const response = await aiClient.generateEmails(request);
+          
+          if (response.success && response.content) {
+            const emails = parseAIJsonResponse(response.content);
+            sendResponse(successResponse(emails));
+          } else {
+            sendResponse({ success: false, error: response.error || 'Failed to parse emails' });
           }
         } catch (error) {
           sendResponse({ 

@@ -105,6 +105,7 @@ const ENTITY_TYPES = [
 const OAEV_ENTITY_TYPES = [
   { value: 'AssetGroup', label: 'Asset Groups' },
   { value: 'Asset', label: 'Assets (Endpoints)' },
+  { value: 'AttackPattern', label: 'Attack Patterns' },
   { value: 'Finding', label: 'Findings' },
   { value: 'Player', label: 'People' },
   { value: 'Team', label: 'Teams' },
@@ -561,6 +562,25 @@ const App: React.FC = () => {
     setTheme('auto');
   };
 
+  const handleClearAI = () => {
+    if (!settings) return;
+    if (!confirm('Are you sure you want to clear AI configuration? This will disable all AI features.')) {
+      return;
+    }
+    // Clear AI settings completely
+    setAiTestResult(null);
+    setAvailableModels([]);
+    updateSetting('ai', {
+      enabled: false,
+      provider: undefined,
+      apiKey: undefined,
+      model: undefined,
+      availableModels: undefined,
+      connectionTested: false,
+    });
+    setSnackbar({ open: true, message: 'AI configuration cleared', severity: 'success' });
+  };
+
   const handleRefreshCache = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
@@ -801,9 +821,14 @@ const App: React.FC = () => {
                 width={24}
                 height={24}
               />
-              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11, lineHeight: 1.2 }}>
-                Filigran Threat Management
-              </Typography>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11, lineHeight: 1.2 }}>
+                  Filigran Threat Management
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 9, color: '#ff9800' }}>
+                  v0.0.1 (beta)
+                </Typography>
+              </Box>
             </Box>
           </Box>
 
@@ -1161,6 +1186,12 @@ const App: React.FC = () => {
                     </Box>
                   )}
                 </Paper>
+
+                {/* Info about scope of detection settings */}
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  These settings affect which entity types are detected during <strong>Scan</strong> and <strong>Investigation</strong> modes only. 
+                  <strong> Atomic Testing</strong> and <strong>Scenario Generation</strong> will always detect attack patterns and hostnames/domains regardless of these settings.
+                </Alert>
 
                 {/* Observable Types */}
                 <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
@@ -1585,6 +1616,24 @@ const App: React.FC = () => {
                           }
                         />
                       </>
+                    )}
+
+                    {/* Clear AI Configuration */}
+                    {settings?.ai?.provider && (
+                      <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          startIcon={<LinkOffOutlined />}
+                          onClick={handleClearAI}
+                          fullWidth
+                        >
+                          Clear AI Configuration
+                        </Button>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, textAlign: 'center' }}>
+                          Remove API key and disable all AI features
+                        </Typography>
+                      </Box>
                     )}
                   </Paper>
 

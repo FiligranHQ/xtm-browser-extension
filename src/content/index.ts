@@ -1079,6 +1079,12 @@ let panelOverlay: HTMLDivElement | null = null;
 let selectedEntity: DetectedObservable | DetectedSDO | null = null;
 let selectedForImport: Set<string> = new Set(); // Track selected items for bulk import
 let highlightClickInProgress = false; // Prevent panel close during highlight navigation
+// Track current mode to control highlight behavior
+// 'scan' = highlights persist when panel closes, clicking highlight re-opens panel
+// 'atomic' | 'scenario' | 'investigation' | null = highlights cleared when panel closes
+let currentScanMode: 'scan' | 'atomic' | 'scenario' | 'investigation' | null = null;
+// Store last scan data for re-opening panel from highlight clicks
+let lastScanData: ScanResultPayload | null = null;
 
 // ============================================================================
 // Panel Communication Utility
@@ -1505,12 +1511,12 @@ const HIGHLIGHT_STYLES = `
 
   /* ========================================
      ATOMIC TESTING MODE - Visual-only highlights (non-clickable)
-     Clean red/orange style to show detected patterns/domains
+     Colors match the panel: yellow/lime for attack patterns, teal for domains
      ======================================== */
   .xtm-highlight.xtm-atomic-testing {
-    background: rgba(244, 67, 54, 0.25) !important;
-    border: 2px solid #f44336 !important;
-    border-color: #f44336 !important;
+    background: rgba(212, 225, 87, 0.25) !important;
+    border: 2px solid #d4e157 !important;
+    border-color: #d4e157 !important;
     padding: 2px 6px !important;  /* Simple padding, no extra space for icons */
     cursor: default !important;  /* Not clickable */
     pointer-events: none !important;  /* Disable all mouse events */
@@ -1530,20 +1536,20 @@ const HIGHLIGHT_STYLES = `
     border-color: #00bcd4 !important;
   }
   
-  /* Attack pattern variant - red/orange color */
+  /* Attack pattern variant - lime/yellow color (matches panel) */
   .xtm-highlight.xtm-atomic-testing.xtm-atomic-attack-pattern {
-    background: rgba(244, 67, 54, 0.25) !important;
-    border-color: #f44336 !important;
+    background: rgba(212, 225, 87, 0.25) !important;
+    border-color: #d4e157 !important;
   }
 
   /* ========================================
      SCENARIO MODE - Visual-only highlights (non-clickable)
-     Purple style to show detected attack patterns for scenario creation
+     Uses same lime/yellow color as atomic testing for attack patterns
      ======================================== */
   .xtm-highlight.xtm-scenario {
-    background: rgba(156, 39, 176, 0.25) !important;
-    border: 2px solid #9c27b0 !important;
-    border-color: #9c27b0 !important;
+    background: rgba(212, 225, 87, 0.25) !important;
+    border: 2px solid #d4e157 !important;
+    border-color: #d4e157 !important;
     padding: 2px 6px !important;
     cursor: default !important;
     pointer-events: none !important;
@@ -1737,6 +1743,7 @@ const HIGHLIGHT_STYLES = `
 
   /* ========================================
      BOTTOM SELECTION PANEL
+     Must be above the side panel (2147483646) so buttons are visible
      ======================================== */
   .xtm-selection-panel {
     position: fixed;
@@ -1747,7 +1754,7 @@ const HIGHLIGHT_STYLES = `
     color: rgba(255, 255, 255, 0.9);
     padding: 16px 24px;
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    z-index: 2147483645;
+    z-index: 2147483647;
     box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.5);
     border-top: 1px solid rgba(15, 188, 255, 0.3);
     display: flex;
@@ -1981,8 +1988,18 @@ function initialize(): void {
   // Listen for messages from the panel iframe
   window.addEventListener('message', async (event) => {
     if (event.data?.type === 'XTM_CLOSE_PANEL') {
-      clearHighlights(); // Also clear highlights when panel closes
+      // Only clear highlights if NOT in scan mode
+      // In scan mode, highlights persist and clicking them re-opens the panel
+      if (currentScanMode !== 'scan') {
+        clearHighlights();
+        currentScanMode = null;
+      }
       hidePanel();
+    } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS') {
+      // Explicit request to clear highlights (e.g., when starting a new scan from panel)
+      clearHighlights();
+      currentScanMode = null;
+      lastScanData = null;
     } else if (event.data?.type === 'XTM_COPY_TO_CLIPBOARD' && event.data.text) {
       // Handle clipboard copy from iframe
       try {
@@ -2118,6 +2135,9 @@ function scrollToFirstHighlight(event?: MouseEvent): void {
 async function scanPage(): Promise<void> {
   showScanOverlay();
   
+  // Set scan mode - highlights will persist when panel closes
+  currentScanMode = 'scan';
+  
   try {
     // Get page content
     const content = document.body.innerText;
@@ -2132,6 +2152,7 @@ async function scanPage(): Promise<void> {
     if (response.success && response.data) {
       const data = response.data;
       scanResults = data;
+      lastScanData = data; // Store for re-opening panel from highlight clicks
       
       // Highlight results
       clearHighlights();
@@ -2265,6 +2286,9 @@ async function scanPageForOAEV(): Promise<void> {
 async function scanAllPlatforms(): Promise<void> {
   showScanOverlay();
   
+  // Set scan mode - highlights will persist when panel closes
+  currentScanMode = 'scan';
+  
   try {
     // Clear existing highlights first
     clearHighlights();
@@ -2288,6 +2312,7 @@ async function scanAllPlatforms(): Promise<void> {
     if (response.success && response.data) {
       const data = response.data;
       scanResults = data;
+      lastScanData = data; // Store for re-opening panel from highlight clicks
       
       // Highlight results (highlightResults already handles both OpenCTI and OpenAEV entities)
       highlightResults(data);
@@ -2341,6 +2366,9 @@ let atomicTestingTarget: { value: string; type: string; data: any } | null = nul
  */
 async function scanPageForAtomicTesting(): Promise<void> {
   showScanOverlay();
+  
+  // Set mode - highlights will be cleared when panel closes
+  currentScanMode = 'atomic';
   
   try {
     // Clear existing highlights first
@@ -2616,6 +2644,9 @@ function highlightForAtomicTesting(
 async function scanPageForScenario(): Promise<void> {
   showScanOverlay();
   
+  // Set mode - highlights will be cleared when panel closes
+  currentScanMode = 'scenario';
+  
   try {
     // Clear existing highlights first
     clearHighlights();
@@ -2868,6 +2899,9 @@ function highlightInTextForScenario(
  */
 async function scanPageForInvestigation(platformId?: string): Promise<void> {
   showScanOverlay();
+  
+  // Set mode - highlights will be cleared when panel closes
+  currentScanMode = 'investigation';
   
   try {
     // Clear existing highlights first
@@ -3528,6 +3562,18 @@ function handleHighlightClick(event: MouseEvent): void {
   // Return false to prevent default (older browsers)
   if (event.returnValue !== undefined) {
     event.returnValue = false;
+  }
+  
+  // In scan mode, if panel is closed, re-open it with scan results
+  // This allows user to close panel, keep highlights, and click to re-open
+  if (currentScanMode === 'scan' && panelFrame?.classList.contains('hidden') && lastScanData) {
+    ensurePanelElements();
+    showPanelElements();
+    // Send scan results back to panel
+    setTimeout(() => {
+      sendPanelMessage('SCAN_RESULTS', lastScanData);
+    }, 100);
+    // Continue to process the highlight click - the panel will show entity when ready
   }
   
   // Find and block any parent anchor tags from navigating

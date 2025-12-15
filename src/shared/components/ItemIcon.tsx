@@ -11,16 +11,21 @@ import {
   BugReportOutlined,
   CampaignOutlined,
   CenterFocusStrongOutlined,
+  ComputerOutlined,
   DescriptionOutlined,
   DiamondOutlined,
   DomainOutlined,
   EventOutlined,
   FlagOutlined,
+  GroupsOutlined,
   HelpOutlined,
+  LanOutlined,
   MapOutlined,
+  MovieFilterOutlined,
   PersonOutlined,
   PlaceOutlined,
   PublicOutlined,
+  RocketLaunchOutlined,
   RouterOutlined,
   SpeakerNotesOutlined,
   StorageOutlined,
@@ -43,11 +48,13 @@ import {
   CityVariantOutline,
   Fire,
   HexagonOutline,
+  Kayaking,
   LabelOutline,
   LaptopAccount,
   LockPattern,
   ProgressWrench,
   ShieldSearch,
+  Target,
   VectorRadius,
 } from 'mdi-material-ui';
 import { itemColor } from '../theme/colors';
@@ -210,6 +217,42 @@ const ItemIcon: React.FC<ItemIconProps> = ({
     case 'relationship':
     case 'stix-core-relationship':
       return <VectorRadius style={style} fontSize={size} />;
+    
+    // ============================================================================
+    // OpenAEV Entity Types
+    // ============================================================================
+    case 'asset':
+    case 'oaev-asset':
+      return <ComputerOutlined style={style} fontSize={size} />;
+    case 'assetgroup':
+    case 'asset-group':
+    case 'oaev-assetgroup':
+      return <LanOutlined style={style} fontSize={size} />;
+    case 'player':
+    case 'oaev-player':
+      return <PersonOutlined style={style} fontSize={size} />;
+    case 'team':
+    case 'oaev-team':
+      return <GroupsOutlined style={style} fontSize={size} />;
+    case 'finding':
+    case 'oaev-finding':
+      return <TravelExploreOutlined style={style} fontSize={size} />;
+    case 'attackpattern':
+    case 'oaev-attackpattern':
+      return <LockPattern style={style} fontSize={size} />;
+    case 'scenario':
+    case 'oaev-scenario':
+      return <MovieFilterOutlined style={style} fontSize={size} />;
+    case 'exercise':
+    case 'oaev-exercise':
+      return <Kayaking style={style} fontSize={size} />;
+    case 'inject':
+    case 'oaev-inject':
+      return <Target style={style} fontSize={size} />;
+    case 'payload':
+    case 'oaev-payload':
+      return <RocketLaunchOutlined style={style} fontSize={size} />;
+    
     default:
       return <HexagonOutline style={style} fontSize={size} />;
   }

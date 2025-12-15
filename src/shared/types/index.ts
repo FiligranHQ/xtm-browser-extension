@@ -120,7 +120,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       'StixFile', 'Url', 'User-Agent'
     ],
     platformEntityTypes: {
-      openaev: ['Asset', 'AssetGroup', 'Player', 'Team', 'Finding'],
+      openaev: ['Asset', 'AssetGroup', 'AttackPattern', 'Player', 'Team', 'Finding'],
     },
   },
   ai: {
@@ -573,6 +573,7 @@ export interface OAEVScenario {
 }
 
 export interface OAEVKillChainPhase {
+  phase_id: string;
   phase_kill_chain_name: string;
   phase_name: string;
   phase_order: number;
@@ -680,6 +681,7 @@ export type MessageType =
   | 'FETCH_INJECTOR_CONTRACTS'
   | 'FETCH_OAEV_ASSETS'
   | 'FETCH_OAEV_ASSET_GROUPS'
+  | 'FETCH_OAEV_TEAMS'
   | 'CREATE_OAEV_PAYLOAD'
   | 'FETCH_OAEV_PAYLOAD'
   | 'FIND_DNS_RESOLUTION_PAYLOAD'
@@ -693,6 +695,7 @@ export type MessageType =
   | 'AI_GENERATE_DESCRIPTION'
   | 'AI_GENERATE_SCENARIO'
   | 'AI_GENERATE_ATOMIC_TEST'
+  | 'AI_GENERATE_EMAILS'
   | 'AI_CHECK_STATUS'
   // Scenario Generation
   | 'OPEN_SCENARIO_PANEL'

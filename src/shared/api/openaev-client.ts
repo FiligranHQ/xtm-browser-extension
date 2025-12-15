@@ -654,17 +654,24 @@ export class OpenAEVClient {
     inject_content?: Record<string, any>;
     inject_depends_duration?: number;
     inject_depends_on?: string;
+    inject_teams?: string[];
+    inject_assets?: string[];
+    inject_asset_groups?: string[];
   }): Promise<any> {
-    return this.request<any>(`/api/scenarios/${scenarioId}/injects`, {
+    log.debug(` Adding inject to scenario ${scenarioId}:`, inject);
+    const result = await this.request<any>(`/api/scenarios/${scenarioId}/injects`, {
       method: 'POST',
       body: JSON.stringify(inject),
     });
+    log.debug(` Inject added:`, result);
+    return result;
   }
 
   /**
    * Get all kill chain phases
    */
   async getKillChainPhases(): Promise<Array<{
+    phase_id: string;
     phase_kill_chain_name: string;
     phase_name: string;
     phase_order: number;

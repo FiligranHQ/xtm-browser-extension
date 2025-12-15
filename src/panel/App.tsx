@@ -59,7 +59,7 @@ import {
   InfoOutlined,
   AutoAwesomeOutlined,
 } from '@mui/icons-material';
-import { LockPattern, Target } from 'mdi-material-ui';
+import { LockPattern, Target, MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
@@ -87,6 +87,47 @@ import {
 import { formatDate, formatDateTime } from '../shared/utils/formatters';
 
 const log = loggers.panel;
+
+// Helper function to get platform icon and color
+const getPlatformIcon = (platform: string, size: 'small' | 'medium' = 'small') => {
+  const iconSize = size === 'small' ? 14 : 18;
+  const platformLower = platform.toLowerCase();
+  
+  switch (platformLower) {
+    case 'windows':
+      return <MicrosoftWindows sx={{ fontSize: iconSize }} />;
+    case 'linux':
+      return <Linux sx={{ fontSize: iconSize }} />;
+    case 'macos':
+    case 'darwin':
+      return <Apple sx={{ fontSize: iconSize }} />;
+    case 'android':
+      return <Android sx={{ fontSize: iconSize }} />;
+    default:
+      return <ComputerOutlined sx={{ fontSize: iconSize }} />;
+  }
+};
+
+const getPlatformColor = (platform: string): string => {
+  const platformLower = platform.toLowerCase();
+  switch (platformLower) {
+    case 'windows':
+      return '#0078d4';
+    case 'linux':
+      return '#f57c00';
+    case 'macos':
+    case 'darwin':
+      return '#7b1fa2';
+    case 'android':
+      return '#3ddc84';
+    case 'ios':
+      return '#a2aaad';
+    case 'browser':
+      return '#4285f4';
+    default:
+      return '#757575';
+  }
+};
 
 type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form';
 
@@ -304,6 +345,8 @@ const App: React.FC = () => {
     available: boolean;
   }>({ enabled: false, available: false });
   const [aiGeneratingDescription, setAiGeneratingDescription] = useState(false);
+  const [aiSelectingInjects, setAiSelectingInjects] = useState(false);
+  const [aiFillingEmails, setAiFillingEmails] = useState(false);
 
   // Scenario creation state (OpenAEV)
   const [scenarioOverviewData, setScenarioOverviewData] = useState<{
@@ -316,6 +359,7 @@ const App: React.FC = () => {
       contracts: any[];
     }>;
     killChainPhases: Array<{
+      phase_id: string;
       phase_kill_chain_name: string;
       phase_name: string;
       phase_order: number;
@@ -337,10 +381,17 @@ const App: React.FC = () => {
     contractLabel: string;
     delayMinutes: number;
   }>>([]);
+  // AI-generated email content for table-top scenarios
+  const [scenarioEmails, setScenarioEmails] = useState<Array<{
+    attackPatternId: string;
+    subject: string;
+    body: string;
+  }>>([]);
   const [scenarioLoading, setScenarioLoading] = useState(false);
   const [scenarioStep, setScenarioStep] = useState<0 | 1 | 2>(0); // 0: Affinity, 1: Injects, 2: Details
   const [scenarioTypeAffinity, setScenarioTypeAffinity] = useState<'ENDPOINT' | 'CLOUD' | 'WEB' | 'TABLE-TOP'>('ENDPOINT');
   const [scenarioPlatformsAffinity, setScenarioPlatformsAffinity] = useState<string[]>(['windows', 'linux', 'macos']);
+  const [scenarioInjectSpacing, setScenarioInjectSpacing] = useState<number>(1); // Spacing between injects in minutes (1 for technical, 5 for table-top)
   // Scenario platform selection (when multiple OpenAEV platforms are configured)
   const [scenarioPlatformSelected, setScenarioPlatformSelected] = useState(false);
   const [scenarioPlatformId, setScenarioPlatformId] = useState<string | null>(null);
@@ -354,6 +405,14 @@ const App: React.FC = () => {
     killChainPhases?: string[];
     platformId?: string;
   }>>([]);
+  // Scenario target selection (for technical scenarios: asset/asset_group, for table-top: team)
+  const [scenarioTargetType, setScenarioTargetType] = useState<'asset' | 'asset_group'>('asset');
+  const [scenarioAssets, setScenarioAssets] = useState<any[]>([]);
+  const [scenarioAssetGroups, setScenarioAssetGroups] = useState<any[]>([]);
+  const [scenarioTeams, setScenarioTeams] = useState<any[]>([]);
+  const [scenarioSelectedAsset, setScenarioSelectedAsset] = useState<string | null>(null);
+  const [scenarioSelectedAssetGroup, setScenarioSelectedAssetGroup] = useState<string | null>(null);
+  const [scenarioSelectedTeam, setScenarioSelectedTeam] = useState<string | null>(null);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -1265,6 +1324,11 @@ const App: React.FC = () => {
         // Initialize scenario creation with attack patterns from the page
         const { attackPatterns, pageTitle, pageUrl, pageDescription, theme: themeFromPayload } = data.payload || {};
         
+        log.debug(' SHOW_SCENARIO_PANEL received:', {
+          attackPatternsCount: attackPatterns?.length || 0,
+          attackPatterns: attackPatterns?.slice(0, 3).map((ap: any) => ({ name: ap.name, platformId: ap.platformId })),
+        });
+        
         // Set theme if provided
         if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
           setMode(themeFromPayload);
@@ -1293,7 +1357,44 @@ const App: React.FC = () => {
         setScenarioRawAttackPatterns(attackPatterns || []);
         
         // Check how many OpenAEV platforms are configured
-        const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
+        // Use ref to get latest value (avoid stale closure)
+        let currentPlatforms = availablePlatformsRef.current;
+        
+        // If platforms haven't loaded yet, try to fetch them from settings
+        if (currentPlatforms.length === 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          log.debug(' Platforms not loaded yet, fetching from settings...');
+          try {
+            const settingsResponse = await new Promise<any>((resolve) => {
+              chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
+            });
+            
+            if (settingsResponse?.success && settingsResponse.data) {
+              const platforms = settingsResponse.data?.platforms || [];
+              const enabledPlatforms = platforms
+                .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
+                .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const }));
+              
+              const oaevPlatformsFromSettings = settingsResponse.data?.openaevPlatforms || [];
+              const enabledOAEVPlatforms = oaevPlatformsFromSettings
+                .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
+                .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const }));
+              
+              currentPlatforms = [...enabledPlatforms, ...enabledOAEVPlatforms];
+              
+              // Update state and ref
+              setAvailablePlatforms(currentPlatforms);
+              availablePlatformsRef.current = currentPlatforms;
+              
+              log.debug(' Loaded platforms from settings:', currentPlatforms.map(p => ({ id: p.id, name: p.name, type: p.type })));
+            }
+          } catch (error) {
+            log.warn(' Failed to fetch platforms:', error);
+          }
+        }
+        
+        const oaevPlatforms = currentPlatforms.filter(p => p.type === 'openaev');
+        log.debug(' OpenAEV platforms:', oaevPlatforms.map(p => ({ id: p.id, name: p.name })));
+        log.debug(' All platforms:', currentPlatforms.map(p => ({ id: p.id, name: p.name, type: p.type })));
         
         if (oaevPlatforms.length > 1) {
           // Multiple OpenAEV platforms - show platform selection first
@@ -1309,10 +1410,42 @@ const App: React.FC = () => {
           setSelectedPlatformId(singlePlatformId);
           setPlatformUrl(oaevPlatforms[0].url);
           
+          log.debug(' Single platform selected:', singlePlatformId);
+          log.debug(' Attack patterns platformIds:', (attackPatterns || []).map((ap: any) => ap.platformId));
+          
+          // Fetch assets, asset groups, and teams for target selection
+          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            Promise.all([
+              chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }),
+              chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId: singlePlatformId } }),
+              chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId: singlePlatformId } }),
+            ]).then(([assetsRes, assetGroupsRes, teamsRes]) => {
+              if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
+              if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
+              if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
+              
+              log.debug(' Scenario targets loaded (single platform):', {
+                assets: assetsRes?.data?.length || 0,
+                assetGroups: assetGroupsRes?.data?.length || 0,
+                teams: teamsRes?.data?.length || 0,
+              });
+            }).catch((error) => {
+              log.error(' Failed to fetch scenario targets:', error);
+            });
+          }
+          
+          // Reset target selections
+          setScenarioSelectedAsset(null);
+          setScenarioSelectedAssetGroup(null);
+          setScenarioSelectedTeam(null);
+          
           // Filter attack patterns to only those from this platform
+          // If attack patterns don't have platformId or all have same platformId, include them all
           const filteredPatterns = (attackPatterns || []).filter(
-            (ap: any) => ap.platformId === singlePlatformId
+            (ap: any) => !ap.platformId || ap.platformId === singlePlatformId
           );
+          
+          log.debug(' Filtered patterns count:', filteredPatterns.length);
           
           // Fetch contracts for filtered attack patterns
           if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -1334,25 +1467,8 @@ const App: React.FC = () => {
                   pageDescription: pageDescription || '',
                 });
                 
-                // Auto-select one inject per attack pattern (first available contract)
-                const autoSelectedInjects: typeof selectedInjects = [];
-                for (const ap of response.data.attackPatterns) {
-                  if (ap.contracts && ap.contracts.length > 0) {
-                    const contract = ap.contracts[0];
-                    const contractLabel = contract.injector_contract_labels?.en || 
-                      contract.injector_contract_labels?.['en-US'] || 
-                      contract.injector_name || 
-                      'Unknown Inject';
-                    autoSelectedInjects.push({
-                      attackPatternId: ap.id,
-                      attackPatternName: ap.name,
-                      contractId: contract.injector_contract_id,
-                      contractLabel,
-                      delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
-                    });
-                  }
-                }
-                setSelectedInjects(autoSelectedInjects);
+                // Don't auto-select contracts - let the user choose
+                setSelectedInjects([]);
               }
             });
           } else {
@@ -1367,11 +1483,25 @@ const App: React.FC = () => {
             setPanelMode('scenario-overview');
           }
         } else {
-          // No OpenAEV platforms configured
+          // No OpenAEV platforms configured or not loaded yet
+          // Still show the attack patterns from the page so user can see what was detected
           setScenarioPlatformSelected(false);
           setScenarioPlatformId(null);
+          
+          // Convert raw attack patterns to the format expected by the UI
+          const rawPatternsForDisplay = (attackPatterns || []).map((ap: any) => ({
+            id: ap.id || ap.entityId,
+            name: ap.name,
+            externalId: ap.externalId,
+            description: ap.description,
+            killChainPhases: ap.killChainPhases || [],
+            contracts: [], // No contracts available without platform
+          }));
+          
+          log.debug(' Showing raw attack patterns (no platform):', rawPatternsForDisplay.length);
+          
           setScenarioOverviewData({
-            attackPatterns: [],
+            attackPatterns: rawPatternsForDisplay,
             killChainPhases: [],
             pageTitle: pageTitle || '',
             pageUrl: pageUrl || '',
@@ -1655,7 +1785,7 @@ const App: React.FC = () => {
       const originalData = result.data as Record<string, unknown>;
       const prefixedType = createPrefixedType(result.type, 'openaev');
       
-      // Set initial entity data from search result
+      // Set initial entity data from search result with LOADING state
       setEntity({
         ...originalData,
         type: prefixedType,
@@ -1666,7 +1796,7 @@ const App: React.FC = () => {
         _platformType: 'openaev',
         _isNonDefaultPlatform: true,
       } as unknown as EntityData);
-      setPanelMode('entity');
+      setPanelMode('loading'); // Show loading state while fetching full details
       
       // Fetch full entity details from OpenAEV API
       try {
@@ -1675,7 +1805,7 @@ const App: React.FC = () => {
           (originalData as any).user_id || (originalData as any).scenario_id ||
           (originalData as any).exercise_id || (originalData as any).finding_id ||
           (originalData as any).asset_group_id || (originalData as any).attack_pattern_id ||
-          (originalData as any).organization_id;
+          (originalData as any).organization_id || (originalData as any).player_id;
           
         if (entityId && result.platformId) {
           const response = await chrome.runtime.sendMessage({
@@ -1694,18 +1824,27 @@ const App: React.FC = () => {
               type: prefixedType,
               name: result.name || response.data.asset_name || response.data.team_name || 
                 response.data.user_email || response.data.scenario_name || response.data.exercise_name ||
-                response.data.attack_pattern_name || response.data.finding_name || response.data.organization_name,
+                response.data.attack_pattern_name || response.data.finding_name || response.data.organization_name ||
+                response.data.player_name || response.data.asset_group_name,
               entityData: response.data,
               existsInPlatform: true,
               _platformId: result.platformId,
               _platformType: 'openaev',
               _isNonDefaultPlatform: true,
             } as unknown as EntityData);
+            setPanelMode('entity');
+          } else {
+            // Fall back to search result data
+            setPanelMode('entity');
           }
+        } else {
+          // No entity ID, just show what we have from search
+          setPanelMode('entity');
         }
       } catch (error) {
         // Keep the initial entity data from search result if fetch fails
         console.warn('Failed to fetch full OpenAEV entity details:', error);
+        setPanelMode('entity');
       }
     }
   };
@@ -2209,9 +2348,14 @@ const App: React.FC = () => {
           width={28}
           height={28}
         />
-        <Typography variant="h5" sx={{ fontWeight: 600, fontSize: 20, color: mode === 'dark' ? '#ffffff' : '#1a1a2e' }}>
-          Filigran Threat Management
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600, fontSize: 20, color: mode === 'dark' ? '#ffffff' : '#1a1a2e' }}>
+            Filigran Threat Management
+          </Typography>
+          <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 10, color: '#ff9800' }}>
+            (beta)
+          </Typography>
+        </Box>
       </Box>
       <IconButton size="small" onClick={handleClose} sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
         <CloseOutlined fontSize="small" />
@@ -7260,16 +7404,15 @@ const App: React.FC = () => {
                             {target.data.availablePlatforms.map((platform: string) => (
                               <Chip
                                 key={platform}
+                                icon={getPlatformIcon(platform)}
                                 label={platform}
                                 size="small"
                                 sx={{ 
-                                  height: 16, 
-                                  fontSize: 9,
-                                  bgcolor: platform === 'Windows' ? '#0078d4' : 
-                                          platform === 'Linux' ? '#f57c00' : 
-                                          platform === 'MacOS' ? '#7b1fa2' : 
-                                          platform === 'Android' ? '#3ddc84' : 'action.selected',
+                                  height: 20, 
+                                  fontSize: 10,
+                                  bgcolor: getPlatformColor(platform),
                                   color: 'white',
+                                  '& .MuiChip-icon': { color: 'white', ml: 0.5 },
                                 }}
                               />
                             ))}
@@ -7542,9 +7685,24 @@ const App: React.FC = () => {
                     }
                   }}
                 >
-                  <MenuItem value="Windows">Windows</MenuItem>
-                  <MenuItem value="Linux">Linux</MenuItem>
-                  <MenuItem value="MacOS">macOS</MenuItem>
+                  <MenuItem value="Windows">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getPlatformIcon('Windows')}
+                      <span>Windows</span>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="Linux">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getPlatformIcon('Linux')}
+                      <span>Linux</span>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="MacOS">
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getPlatformIcon('MacOS')}
+                      <span>macOS</span>
+                    </Box>
+                  </MenuItem>
                 </Select>
               </FormControl>
               
@@ -7823,15 +7981,15 @@ const App: React.FC = () => {
                                 {platforms.map((platform: string) => (
                                   <Chip
                                     key={platform}
+                                    icon={getPlatformIcon(platform)}
                                     label={platform}
                                     size="small"
                                     sx={{ 
-                                      height: 18, 
+                                      height: 20, 
                                       fontSize: 10,
-                                      bgcolor: platform === 'Windows' ? '#0078d4' : 
-                                              platform === 'Linux' ? '#f57c00' : 
-                                              platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
+                                      bgcolor: getPlatformColor(platform),
                                       color: 'white',
+                                      '& .MuiChip-icon': { color: 'white', ml: 0.5 },
                                     }}
                                   />
                                 ))}
@@ -7859,15 +8017,15 @@ const App: React.FC = () => {
                       return platforms.map((platform: string) => (
                         <Chip
                           key={platform}
+                          icon={getPlatformIcon(platform)}
                           label={platform}
                           size="small"
                           sx={{ 
-                            height: 20, 
+                            height: 22, 
                             fontSize: 11,
-                            bgcolor: platform === 'Windows' ? '#0078d4' : 
-                                    platform === 'Linux' ? '#f57c00' : 
-                                    platform === 'MacOS' ? '#7b1fa2' : 'action.selected',
+                            bgcolor: getPlatformColor(platform),
                             color: 'white',
+                            '& .MuiChip-icon': { color: 'white', ml: 0.5 },
                           }}
                         />
                       ));
@@ -7967,6 +8125,7 @@ const App: React.FC = () => {
               {mergedResults.map((merged, i) => {
                 const platformCount = merged.platforms.length;
                 const platformNames = merged.platforms.map(p => p.platformName).join(', ');
+                const entityColor = itemColor(merged.type, mode === 'dark');
                 
                 return (
                   <Paper
@@ -7985,18 +8144,38 @@ const App: React.FC = () => {
                       borderColor: 'divider',
                       transition: 'all 0.15s',
                       '&:hover': { 
-                        bgcolor: 'action.hover',
-                        borderColor: 'primary.main',
+                        bgcolor: hexToRGB(entityColor, 0.08),
+                        borderColor: entityColor,
                       },
                     }}
                   >
-                    <ItemIcon type={merged.type} size="small" />
+                    {/* Entity type icon with color */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1,
+                        bgcolor: hexToRGB(entityColor, 0.15),
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ItemIcon type={merged.type} size="small" color={entityColor} />
+                    </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                         {merged.name}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            color: entityColor, 
+                            fontWeight: 500,
+                          }}
+                        >
                           {merged.type.replace(/-/g, ' ')}
                         </Typography>
                         {platformCount > 1 ? (
@@ -8047,24 +8226,10 @@ const App: React.FC = () => {
   // Alias for search results view - redirects to unified search view
   const renderSearchResultsView = () => renderSearchView();
 
-  // Helper to get icon for OAEV entity type (matches OpenAEV's useEntityIcon.tsx)
-  const getOaevSearchIcon = (entityClass: string) => {
+  // Helper to get icon and color for OAEV entity type - now uses centralized itemColor
+  const getOaevEntityColor = (entityClass: string): string => {
     const simpleName = entityClass.split('.').pop() || entityClass;
-    const iconSize = 20;
-    switch (simpleName) {
-      case 'Endpoint': return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
-      case 'Asset': return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
-      case 'AssetGroup': return <LanOutlined sx={{ fontSize: iconSize, color: '#009688' }} />;
-      case 'User': return <PersonOutlined sx={{ fontSize: iconSize, color: '#ff9800' }} />;
-      case 'Player': return <PersonOutlined sx={{ fontSize: iconSize, color: '#ff9800' }} />;
-      case 'Team': return <GroupsOutlined sx={{ fontSize: iconSize, color: '#4caf50' }} />;
-      case 'Organization': return <DomainOutlined sx={{ fontSize: iconSize, color: '#3f51b5' }} />;
-      case 'AttackPattern': return <LockPattern sx={{ fontSize: iconSize, color: '#d4e157' }} />;
-      case 'Finding': return <TravelExploreOutlined sx={{ fontSize: iconSize, color: '#e91e63' }} />;
-      case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: iconSize, color: '#9c27b0' }} />;
-      case 'Exercise': return <Kayaking sx={{ fontSize: iconSize, color: '#ff5722' }} />;
-      default: return <ComputerOutlined sx={{ fontSize: iconSize, color: '#00bcd4' }} />;
-    }
+    return itemColor(`oaev-${simpleName}`, mode === 'dark');
   };
 
   const renderOAEVSearchView = () => {
@@ -8121,6 +8286,8 @@ const App: React.FC = () => {
                 const oaevType = getOAEVTypeFromClass(entityClass);
                 const displayName = getOAEVEntityName(result, oaevType);
                 const platformInfo = result._platform;
+                const entityColor = getOaevEntityColor(entityClass);
+                const typeForIcon = `oaev-${oaevType}`;
                 
                 return (
                   <Paper
@@ -8139,18 +8306,42 @@ const App: React.FC = () => {
                       borderColor: 'divider',
                       transition: 'all 0.15s',
                       '&:hover': { 
-                        bgcolor: 'action.hover',
-                        borderColor: 'primary.main',
+                        bgcolor: hexToRGB(entityColor, 0.08),
+                        borderColor: entityColor,
                       },
                     }}
                   >
-                    {getOaevSearchIcon(entityClass)}
+                    {/* Entity type icon with color */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1,
+                        bgcolor: hexToRGB(entityColor, 0.15),
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ItemIcon 
+                        type={typeForIcon} 
+                        size="small" 
+                        color={entityColor}
+                      />
+                    </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                         {displayName}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            color: entityColor, 
+                            fontWeight: 500,
+                          }}
+                        >
                           {oaevType.replace(/([A-Z])/g, ' $1').trim()}
                         </Typography>
                         {platformInfo && (
@@ -8246,54 +8437,77 @@ const App: React.FC = () => {
               </Box>
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {unifiedSearchResults.map((result) => (
-                <Paper
-                  key={result.id}
-                  onClick={() => handleUnifiedSearchResultClick(result)}
-                  sx={{
-                    p: 1.5,
-                    mb: 1,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    transition: 'all 0.15s',
-                    '&:hover': { 
-                      bgcolor: 'action.hover',
-                      borderColor: result.source === 'opencti' ? '#00bcd4' : '#9c27b0',
-                    },
-                  }}
-                >
-                  {/* Source indicator */}
-                  <Box
+              {unifiedSearchResults.map((result) => {
+                // Get the proper type for color/icon lookup
+                const typeForColor = result.source === 'openaev' 
+                  ? `oaev-${result.type}` 
+                  : result.type;
+                const entityColor = itemColor(typeForColor, mode === 'dark');
+                
+                return (
+                  <Paper
+                    key={result.id}
+                    onClick={() => handleUnifiedSearchResultClick(result)}
                     sx={{
-                      width: 4,
-                      height: 40,
-                      borderRadius: 1,
-                      bgcolor: result.source === 'opencti' ? '#00bcd4' : '#9c27b0',
-                      flexShrink: 0,
+                      p: 1.5,
+                      mb: 1,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      transition: 'all 0.15s',
+                      '&:hover': { 
+                        bgcolor: hexToRGB(entityColor, 0.08),
+                        borderColor: entityColor,
+                      },
                     }}
-                  />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                      {result.name}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
-                        {result.type.replace(/([A-Z])/g, ' $1').trim()}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-                      <Typography variant="caption" sx={{ color: result.source === 'opencti' ? '#00bcd4' : '#9c27b0' }}>
-                        {result.platformName}
-                      </Typography>
+                  >
+                    {/* Entity type icon with color */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1,
+                        bgcolor: hexToRGB(entityColor, 0.15),
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ItemIcon 
+                        type={typeForColor} 
+                        size="small" 
+                        color={entityColor}
+                      />
                     </Box>
-                  </Box>
-                  <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
-                </Paper>
-              ))}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                        {result.name}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            color: entityColor, 
+                            fontWeight: 500,
+                          }}
+                        >
+                          {result.type.replace(/([A-Z])/g, ' $1').trim()}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {result.platformName}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </Paper>
+                );
+              })}
             </Box>
           </>
         ) : (
@@ -8311,10 +8525,25 @@ const App: React.FC = () => {
   // Scenario Creation Views (OpenAEV)
   // ============================================================================
   
+  // OpenAEV email injector contract ID (hardcoded in OpenAEV platform)
+  const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
+  
   const handleCreateScenario = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setSubmitting(true);
+    
+    // Use scenarioPlatformId if available, fallback to selectedPlatformId
+    const targetPlatformId = scenarioPlatformId || selectedPlatformId;
+    log.debug(' Creating scenario with platformId:', targetPlatformId, '(scenarioPlatformId:', scenarioPlatformId, ', selectedPlatformId:', selectedPlatformId, ')');
+    log.debug(' Scenario type:', scenarioTypeAffinity);
+    log.debug(' Selected injects:', selectedInjects.length, selectedInjects);
+    
+    if (!targetPlatformId) {
+      log.error(' No platform ID available for scenario creation');
+      setSubmitting(false);
+      return;
+    }
     
     try {
       // First create the scenario
@@ -8325,7 +8554,7 @@ const App: React.FC = () => {
           description: scenarioForm.description,
           subtitle: scenarioForm.subtitle,
           category: scenarioForm.category,
-          platformId: selectedPlatformId,
+          platformId: targetPlatformId,
         },
       });
       
@@ -8340,32 +8569,77 @@ const App: React.FC = () => {
       
       // Add selected injects to the scenario
       let previousInjectId: string | null = null;
-      for (const inject of selectedInjects) {
+      const isTableTop = scenarioTypeAffinity === 'TABLE-TOP';
+      
+      for (let i = 0; i < selectedInjects.length; i++) {
+        const inject = selectedInjects[i];
+        
+        // Build inject payload based on scenario type
         const injectPayload: any = {
-          inject_title: `${inject.attackPatternName} - ${inject.contractLabel}`,
-          inject_description: `Inject for ${inject.attackPatternName}`,
-          inject_injector_contract: inject.contractId,
-          inject_depends_duration: inject.delayMinutes * 60, // Convert to seconds
+          inject_title: isTableTop 
+            ? `Email - ${inject.attackPatternName}`
+            : `${inject.attackPatternName} - ${inject.contractLabel}`,
+          inject_description: isTableTop
+            ? `Email notification for ${inject.attackPatternName}`
+            : `Inject for ${inject.attackPatternName}`,
+          inject_injector_contract: isTableTop 
+            ? EMAIL_INJECTOR_CONTRACT_ID  // Use email contract for TABLE-TOP
+            : inject.contractId,          // Use selected contract for technical
+          inject_depends_duration: i * scenarioInjectSpacing * 60, // Convert to seconds, sequential timing
         };
+        
+        // Add target based on scenario type
+        if (isTableTop) {
+          // For TABLE-TOP scenarios, target the selected team
+          if (scenarioSelectedTeam) {
+            injectPayload.inject_teams = [scenarioSelectedTeam];
+          }
+          
+          // Check if we have AI-generated content for this attack pattern
+          const aiContent = scenarioEmails.find((e: { attackPatternId: string; subject: string; body: string }) => e.attackPatternId === inject.attackPatternId);
+          
+          injectPayload.inject_content = {
+            subject: aiContent?.subject || `[SIMULATION] Security Alert: ${inject.attackPatternName}`,
+            body: aiContent?.body || `<p>This is a simulated security exercise notification.</p>
+<p><strong>Attack Pattern:</strong> ${inject.attackPatternName}</p>
+<p><strong>Description:</strong> A simulated ${inject.attackPatternName} attack has been detected in this exercise.</p>
+<p>Please follow your incident response procedures.</p>
+<p><em>This is a simulation exercise - no actual security incident has occurred.</em></p>`,
+          };
+        } else {
+          // For technical scenarios, target the selected asset or asset group
+          if (scenarioTargetType === 'asset' && scenarioSelectedAsset) {
+            injectPayload.inject_assets = [scenarioSelectedAsset];
+          } else if (scenarioTargetType === 'asset_group' && scenarioSelectedAssetGroup) {
+            injectPayload.inject_asset_groups = [scenarioSelectedAssetGroup];
+          }
+        }
         
         // Chain injects if there's a previous one
         if (previousInjectId) {
           injectPayload.inject_depends_on = previousInjectId;
         }
         
+        log.debug(` Adding inject ${i + 1}/${selectedInjects.length}:`, injectPayload);
+        
         const injectResponse = await chrome.runtime.sendMessage({
           type: 'ADD_INJECT_TO_SCENARIO',
           payload: {
             scenarioId: scenario.scenario_id,
             inject: injectPayload,
-            platformId: selectedPlatformId,
+            platformId: targetPlatformId,
           },
         });
         
         if (injectResponse?.success && injectResponse.data?.inject_id) {
           previousInjectId = injectResponse.data.inject_id;
+          log.debug(` Inject created:`, injectResponse.data.inject_id);
+        } else {
+          log.error(` Failed to create inject:`, injectResponse?.error);
         }
       }
+      
+      log.info(` Scenario creation complete with ${selectedInjects.length} injects`);
       
       // Open the scenario in the platform
       if (scenario.url) {
@@ -8376,6 +8650,7 @@ const App: React.FC = () => {
       setScenarioForm({ name: '', description: '', subtitle: '', category: 'attack-scenario' });
       setSelectedInjects([]);
       setScenarioOverviewData(null);
+      setScenarioEmails([]);
       handleClose();
     } catch (error) {
       log.error(' Scenario creation error:', error);
@@ -8394,6 +8669,34 @@ const App: React.FC = () => {
     if (platform) {
       setPlatformUrl(platform.url);
     }
+    
+    // Fetch assets, asset groups, and teams for target selection
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      try {
+        const [assetsRes, assetGroupsRes, teamsRes] = await Promise.all([
+          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId } }),
+          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId } }),
+          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId } }),
+        ]);
+        
+        if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
+        if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
+        if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
+        
+        log.debug(' Scenario targets loaded:', {
+          assets: assetsRes?.data?.length || 0,
+          assetGroups: assetGroupsRes?.data?.length || 0,
+          teams: teamsRes?.data?.length || 0,
+        });
+      } catch (error) {
+        log.error(' Failed to fetch scenario targets:', error);
+      }
+    }
+    
+    // Reset target selections when platform changes
+    setScenarioSelectedAsset(null);
+    setScenarioSelectedAssetGroup(null);
+    setScenarioSelectedTeam(null);
     
     // Filter attack patterns to only those from the selected platform
     const filteredPatterns = scenarioRawAttackPatterns.filter(
@@ -8421,25 +8724,8 @@ const App: React.FC = () => {
             pageDescription: scenarioForm.description || '',
           });
           
-          // Auto-select one inject per attack pattern (first available contract)
-          const autoSelectedInjects: typeof selectedInjects = [];
-          for (const ap of response.data.attackPatterns) {
-            if (ap.contracts && ap.contracts.length > 0) {
-              const contract = ap.contracts[0];
-              const contractLabel = contract.injector_contract_labels?.en || 
-                contract.injector_contract_labels?.['en-US'] || 
-                contract.injector_name || 
-                'Unknown Inject';
-              autoSelectedInjects.push({
-                attackPatternId: ap.id,
-                attackPatternName: ap.name,
-                contractId: contract.injector_contract_id,
-                contractLabel,
-                delayMinutes: autoSelectedInjects.length * 10, // 10 minutes apart
-              });
-            }
-          }
-          setSelectedInjects(autoSelectedInjects);
+          // Don't auto-select contracts - let the user choose
+          setSelectedInjects([]);
         }
       });
     } else {
@@ -8601,7 +8887,11 @@ const App: React.FC = () => {
                 <Paper
                   key={option.value}
                   elevation={0}
-                  onClick={() => setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity)}
+                  onClick={() => {
+                    setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity);
+                    // Set default inject spacing: 1 min for technical, 5 min for table-top
+                    setScenarioInjectSpacing(option.value === 'TABLE-TOP' ? 5 : 1);
+                  }}
                   sx={{
                     p: 1.5,
                     flex: '1 1 calc(50% - 4px)',
@@ -8639,15 +8929,17 @@ const App: React.FC = () => {
                 
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
                   {[
-                    { value: 'windows', label: 'Windows', color: '#0078d4' },
-                    { value: 'linux', label: 'Linux', color: '#f57c00' },
-                    { value: 'macos', label: 'macOS', color: '#7b1fa2' },
-                    { value: 'android', label: 'Android', color: '#3ddc84' },
+                    { value: 'windows', label: 'Windows' },
+                    { value: 'linux', label: 'Linux' },
+                    { value: 'macos', label: 'macOS' },
+                    { value: 'android', label: 'Android' },
                   ].map((platform) => {
                     const isSelected = scenarioPlatformsAffinity.includes(platform.value);
+                    const color = getPlatformColor(platform.value);
                     return (
                       <Chip
                         key={platform.value}
+                        icon={getPlatformIcon(platform.value)}
                         label={platform.label}
                         onClick={() => {
                           if (isSelected) {
@@ -8660,12 +8952,13 @@ const App: React.FC = () => {
                           }
                         }}
                         sx={{
-                          bgcolor: isSelected ? platform.color : 'transparent',
+                          bgcolor: isSelected ? color : 'transparent',
                           color: isSelected ? 'white' : 'text.primary',
                           border: 1,
-                          borderColor: isSelected ? platform.color : 'divider',
+                          borderColor: isSelected ? color : 'divider',
+                          '& .MuiChip-icon': { color: isSelected ? 'white' : color },
                           '&:hover': {
-                            bgcolor: isSelected ? platform.color : 'action.hover',
+                            bgcolor: isSelected ? color : 'action.hover',
                           },
                         }}
                       />
@@ -8739,11 +9032,31 @@ const App: React.FC = () => {
             {scenarioTypeAffinity === 'TABLE-TOP' ? (
               /* Table-top: Email placeholders */
               <>
+                {/* Email Spacing Selector */}
+                <TextField
+                  select
+                  label="Email spacing"
+                  size="small"
+                  fullWidth
+                  value={scenarioInjectSpacing}
+                  onChange={(e) => setScenarioInjectSpacing(Number(e.target.value))}
+                  helperText="Time interval between each email notification"
+                  sx={{ mb: 2 }}
+                >
+                  <MenuItem value={1}>1 minute</MenuItem>
+                  <MenuItem value={2}>2 minutes</MenuItem>
+                  <MenuItem value={5}>5 minutes</MenuItem>
+                  <MenuItem value={10}>10 minutes</MenuItem>
+                  <MenuItem value={15}>15 minutes</MenuItem>
+                  <MenuItem value={30}>30 minutes</MenuItem>
+                  <MenuItem value={60}>1 hour</MenuItem>
+                </TextField>
+                
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  Email Notifications ({scenarioOverviewData?.attackPatterns?.length || 0})
+                  Select Attack Patterns ({selectedInjects.length}/{scenarioOverviewData?.attackPatterns?.length || 0})
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
-                  Each attack pattern will generate an email notification for simulation purposes
+                  Select which attack patterns to include. Email body will contain placeholders only.
                 </Typography>
                 
                 {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
@@ -8752,46 +9065,236 @@ const App: React.FC = () => {
                   </Alert>
                 ) : (
                   <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
-                    {scenarioOverviewData.attackPatterns.map((ap, index) => (
-                      <Paper
-                        key={ap.id}
-                        elevation={0}
-                        sx={{
-                          p: 1.5,
-                          mb: 1,
-                          border: 1,
-                          borderColor: 'divider',
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                          <EmailOutlined sx={{ fontSize: 18, color: '#42a5f5' }} />
-                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                            {ap.name}
-                          </Typography>
-                          <Chip label={`+${index * 10}min`} size="small" sx={{ fontSize: 10, height: 20, bgcolor: 'action.selected' }} />
-                        </Box>
-                        {ap.killChainPhases && ap.killChainPhases.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {ap.killChainPhases.map((phase, i) => (
-                              <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
-                            ))}
+                    {scenarioOverviewData.attackPatterns.map((ap) => {
+                      const isSelected = selectedInjects.some(i => i.attackPatternId === ap.id);
+                      const selectedIndex = selectedInjects.findIndex(i => i.attackPatternId === ap.id);
+                      
+                      return (
+                        <Paper
+                          key={ap.id}
+                          elevation={0}
+                          onClick={() => {
+                            if (isSelected) {
+                              // Remove from selection
+                              setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                            } else {
+                              // Add to selection with email placeholder
+                              setSelectedInjects(prev => [
+                                ...prev,
+                                {
+                                  attackPatternId: ap.id,
+                                  attackPatternName: ap.name,
+                                  contractId: 'email-placeholder',
+                                  contractLabel: 'Email Notification (placeholder)',
+                                  delayMinutes: prev.length * scenarioInjectSpacing,
+                                },
+                              ]);
+                            }
+                          }}
+                          sx={{
+                            p: 1.5,
+                            mb: 1,
+                            border: 2,
+                            borderColor: isSelected ? '#42a5f5' : 'divider',
+                            borderRadius: 1,
+                            cursor: 'pointer',
+                            bgcolor: isSelected ? 'rgba(66, 165, 245, 0.08)' : 'transparent',
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                              bgcolor: isSelected ? 'rgba(66, 165, 245, 0.12)' : 'action.hover',
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Checkbox
+                              checked={isSelected}
+                              size="small"
+                              sx={{ p: 0, mr: 0.5 }}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => {
+                                if (isSelected) {
+                                  setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                                } else {
+                                  setSelectedInjects(prev => [
+                                    ...prev,
+                                    {
+                                      attackPatternId: ap.id,
+                                      attackPatternName: ap.name,
+                                      contractId: 'email-placeholder',
+                                      contractLabel: 'Email Notification (placeholder)',
+                                      delayMinutes: prev.length * scenarioInjectSpacing,
+                                    },
+                                  ]);
+                                }
+                              }}
+                            />
+                            <EmailOutlined sx={{ fontSize: 18, color: isSelected ? '#42a5f5' : 'text.secondary' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                              {ap.name}
+                            </Typography>
+                            <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
+                            {isSelected && (
+                              <Chip 
+                                label={`#${selectedIndex + 1}`} 
+                                size="small" 
+                                sx={{ fontSize: 10, height: 20, bgcolor: '#42a5f5', color: 'white' }} 
+                              />
+                            )}
                           </Box>
-                        )}
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-                          Email Subject: [Simulation] {ap.name} ({ap.externalId})
-                        </Typography>
-                      </Paper>
-                    ))}
+                          {ap.killChainPhases && ap.killChainPhases.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, ml: 4 }}>
+                              {ap.killChainPhases.map((phase, i) => (
+                                <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
+                              ))}
+                            </Box>
+                          )}
+                          {isSelected && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, ml: 4 }}>
+                              Email Subject: [Simulation] {ap.name} ({ap.externalId})
+                            </Typography>
+                          )}
+                        </Paper>
+                      );
+                    })}
                   </Box>
                 )}
               </>
             ) : (
               /* Technical: Inject contracts */
               <>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
-                </Typography>
+                {/* Inject Spacing Selector */}
+                <TextField
+                  select
+                  label="Inject spacing"
+                  size="small"
+                  fullWidth
+                  value={scenarioInjectSpacing}
+                  onChange={(e) => setScenarioInjectSpacing(Number(e.target.value))}
+                  helperText="Time interval between each inject execution"
+                  sx={{ mb: 2 }}
+                >
+                  <MenuItem value={1}>1 minute</MenuItem>
+                  <MenuItem value={2}>2 minutes</MenuItem>
+                  <MenuItem value={5}>5 minutes</MenuItem>
+                  <MenuItem value={10}>10 minutes</MenuItem>
+                  <MenuItem value={15}>15 minutes</MenuItem>
+                  <MenuItem value={30}>30 minutes</MenuItem>
+                  <MenuItem value={60}>1 hour</MenuItem>
+                </TextField>
+                
+                {/* AI Select Injects Button */}
+                {(() => {
+                  const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
+                  const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+                  const hasPlayableAps = scenarioOverviewData?.attackPatterns?.some(ap => getFilteredContracts(ap.contracts).length > 0);
+                  
+                  let tooltipMessage = '';
+                  if (!aiSettings.available) {
+                    tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+                  } else if (!targetPlatform?.isEnterprise) {
+                    tooltipMessage = 'AI features require Enterprise Edition.';
+                  } else if (!hasPlayableAps) {
+                    tooltipMessage = 'No playable attack patterns available to select from.';
+                  } else {
+                    tooltipMessage = 'Use AI to automatically select the most relevant injects based on page context';
+                  }
+                  
+                  return hasPlayableAps ? (
+                    <Tooltip title={tooltipMessage}>
+                      <span>
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          disabled={!isAIAvailable || aiSelectingInjects}
+                          onClick={async () => {
+                            if (!isAIAvailable) return;
+                            
+                            setAiSelectingInjects(true);
+                            try {
+                              const playableAps = scenarioOverviewData?.attackPatterns?.filter(ap => getFilteredContracts(ap.contracts).length > 0) || [];
+                              
+                              // Prepare the request
+                              const response = await chrome.runtime.sendMessage({
+                                type: 'AI_GENERATE_SCENARIO',
+                                payload: {
+                                  pageTitle: currentPageTitle,
+                                  pageUrl: currentPageUrl,
+                                  pageContent: document.body?.innerText?.substring(0, 3000) || '',
+                                  scenarioName: scenarioForm.name || 'Security Simulation',
+                                  typeAffinity: scenarioTypeAffinity,
+                                  platformAffinity: scenarioPlatformsAffinity,
+                                  detectedAttackPatterns: playableAps.map(ap => ({
+                                    name: ap.name,
+                                    id: ap.externalId,
+                                    description: ap.description,
+                                    availableInjects: getFilteredContracts(ap.contracts).map((c: any) => ({
+                                      id: c.injector_contract_id,
+                                      label: c.injector_contract_labels?.en || c.injector_contract_labels?.['en-US'] || c.injector_name || 'Unknown',
+                                      platforms: c.injector_contract_platforms || [],
+                                    })),
+                                  })),
+                                },
+                              });
+                              
+                              if (response?.success && response.data?.injects) {
+                                // Map AI response to selectedInjects
+                                const newSelectedInjects: typeof selectedInjects = [];
+                                let delayAccumulator = 0;
+                                
+                                for (const aiInject of response.data.injects) {
+                                  // Find the matching attack pattern and contract
+                                  const ap = playableAps.find(p => 
+                                    p.name.toLowerCase().includes(aiInject.title?.toLowerCase() || '') ||
+                                    aiInject.title?.toLowerCase().includes(p.name.toLowerCase()) ||
+                                    p.externalId === aiInject.attackPatternId
+                                  );
+                                  
+                                  if (ap) {
+                                    const contracts = getFilteredContracts(ap.contracts);
+                                    // Try to find the specific contract AI suggested, or use the first one
+                                    const contract = contracts.find((c: any) => 
+                                      c.injector_contract_id === aiInject.contractId ||
+                                      (c.injector_contract_labels?.en || '').toLowerCase().includes((aiInject.injectLabel || '').toLowerCase())
+                                    ) || contracts[0];
+                                    
+                                    if (contract) {
+                                      const contractLabel = contract.injector_contract_labels?.en || 
+                                        contract.injector_contract_labels?.['en-US'] || 
+                                        contract.injector_name || 'Unknown';
+                                      
+                                      newSelectedInjects.push({
+                                        attackPatternId: ap.id,
+                                        attackPatternName: ap.name,
+                                        contractId: contract.injector_contract_id,
+                                        contractLabel,
+                                        delayMinutes: delayAccumulator,
+                                      });
+                                      
+                                      delayAccumulator += scenarioInjectSpacing;
+                                    }
+                                  }
+                                }
+                                
+                                if (newSelectedInjects.length > 0) {
+                                  setSelectedInjects(newSelectedInjects);
+                                  log.debug(' AI selected', newSelectedInjects.length, 'injects');
+                                }
+                              }
+                            } catch (error) {
+                              log.error(' AI inject selection failed:', error);
+                            } finally {
+                              setAiSelectingInjects(false);
+                            }
+                          }}
+                          startIcon={aiSelectingInjects ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
+                          sx={{ mb: 2, textTransform: 'none' }}
+                        >
+                          {aiSelectingInjects ? 'Selecting injects...' : 'Select using AI'}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  ) : null;
+                })()}
                 
                 {(!scenarioOverviewData?.attackPatterns || scenarioOverviewData.attackPatterns.length === 0) ? (
                   <Alert severity="info" sx={{ mb: 2 }}>
@@ -8799,32 +9302,60 @@ const App: React.FC = () => {
                   </Alert>
                 ) : (
                   <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
-                    {scenarioOverviewData.attackPatterns.map((ap) => {
-                      const filteredContracts = getFilteredContracts(ap.contracts);
-                      return (
-                        <Paper
-                          key={ap.id}
-                          elevation={0}
-                          sx={{ p: 1.5, mb: 1, border: 1, borderColor: 'divider', borderRadius: 1 }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <LockPattern sx={{ fontSize: 18, color: '#d4e157' }} />
-                            <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>{ap.name}</Typography>
-                            <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
-                          </Box>
-                          
-                          {ap.killChainPhases && ap.killChainPhases.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                              {ap.killChainPhases.map((phase, i) => (
-                                <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
-                              ))}
+                    {/* Group attack patterns by kill chain phase */}
+                    {(() => {
+                      const allAps = scenarioOverviewData.attackPatterns;
+                      const playableAps = allAps.filter(ap => getFilteredContracts(ap.contracts).length > 0);
+                      const nonPlayableAps = allAps.filter(ap => getFilteredContracts(ap.contracts).length === 0);
+                      
+                      // Group playable attack patterns by kill chain phase
+                      const groupedByPhase: Record<string, typeof playableAps> = {};
+                      playableAps.forEach(ap => {
+                        const phase = ap.killChainPhases?.[0] || 'Unknown Phase';
+                        if (!groupedByPhase[phase]) {
+                          groupedByPhase[phase] = [];
+                        }
+                        groupedByPhase[phase].push(ap);
+                      });
+                      
+                      // Sort phases by kill chain order (if available)
+                      const knownPhases = scenarioOverviewData.killChainPhases || [];
+                      const sortedPhases = Object.keys(groupedByPhase).sort((a, b) => {
+                        const orderA = knownPhases.find(p => p.phase_name === a)?.phase_order ?? 999;
+                        const orderB = knownPhases.find(p => p.phase_name === b)?.phase_order ?? 999;
+                        return orderA - orderB;
+                      });
+                      
+                      // Render attack pattern card
+                      const renderAttackPatternCard = (ap: typeof playableAps[0]) => {
+                        const filteredContracts = getFilteredContracts(ap.contracts);
+                        return (
+                          <Paper
+                            key={ap.id}
+                            elevation={0}
+                            sx={{ 
+                              p: 1.5, 
+                              mb: 1, 
+                              border: 1, 
+                              borderColor: 'divider', 
+                              borderRadius: 1,
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                              <LockPattern sx={{ fontSize: 18, color: '#d4e157' }} />
+                              <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>{ap.name}</Typography>
+                              <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
+                              <Chip 
+                                label={`${filteredContracts.length} inject${filteredContracts.length !== 1 ? 's' : ''}`} 
+                                size="small" 
+                                sx={{ fontSize: 10, height: 20, bgcolor: '#4caf50', color: 'white' }} 
+                              />
                             </Box>
-                          )}
-                          
-                          {filteredContracts.length > 0 ? (
+                            
                             <TextField
                               select
-                              label="Select Inject Contract"
+                              label="Select inject"
                               size="small"
                               fullWidth
                               value={selectedInjects.find(i => i.attackPatternId === ap.id)?.contractId || ''}
@@ -8845,7 +9376,7 @@ const App: React.FC = () => {
                                       attackPatternName: ap.name,
                                       contractId,
                                       contractLabel,
-                                      delayMinutes: existing >= 0 ? prev[existing].delayMinutes : prev.length * 10,
+                                      delayMinutes: existing >= 0 ? prev[existing].delayMinutes : prev.length * scenarioInjectSpacing,
                                     };
                                     
                                     if (existing >= 0) {
@@ -8871,13 +9402,19 @@ const App: React.FC = () => {
                                       <Typography variant="body2" sx={{ flex: 1 }}>{label}</Typography>
                                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                                         {platforms.slice(0, 2).map((p: string) => (
-                                          <Chip key={p} label={p} size="small" sx={{ 
-                                            height: 16, fontSize: 9,
-                                            bgcolor: p.toLowerCase() === 'windows' ? '#0078d4' : 
-                                                    p.toLowerCase() === 'linux' ? '#f57c00' : 
-                                                    p.toLowerCase() === 'macos' ? '#7b1fa2' : 'action.selected',
-                                            color: 'white',
-                                          }} />
+                                          <Chip 
+                                            key={p} 
+                                            icon={getPlatformIcon(p)}
+                                            label={p} 
+                                            size="small" 
+                                            sx={{ 
+                                              height: 20, 
+                                              fontSize: 9,
+                                              bgcolor: getPlatformColor(p),
+                                              color: 'white',
+                                              '& .MuiChip-icon': { color: 'white', ml: 0.5 },
+                                            }} 
+                                          />
                                         ))}
                                       </Box>
                                     </Box>
@@ -8885,14 +9422,81 @@ const App: React.FC = () => {
                                 );
                               })}
                             </TextField>
-                          ) : (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                              No injects available for selected platforms ({scenarioPlatformsAffinity.join(', ')})
-                            </Typography>
+                          </Paper>
+                        );
+                      };
+                      
+                      return (
+                        <>
+                          {/* Playable Attack Patterns grouped by Kill Chain Phase */}
+                          {playableAps.length > 0 && (
+                            <>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                  Playable Attack Patterns ({playableAps.length})
+                                </Typography>
+                                <Chip label="Injects available" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#4caf50', color: 'white' }} />
+                              </Box>
+                              
+                              {sortedPhases.map((phase, phaseIndex) => (
+                                <Box key={phase} sx={{ mb: phaseIndex < sortedPhases.length - 1 ? 2 : 0 }}>
+                                  {/* Kill Chain Phase Header */}
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 1, 
+                                    mb: 1,
+                                    py: 0.5,
+                                    px: 1,
+                                    bgcolor: 'action.hover',
+                                    borderRadius: 1,
+                                    borderLeft: 3,
+                                    borderColor: '#ff9800',
+                                  }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: '#ff9800' }}>
+                                      {phase}
+                                    </Typography>
+                                    <Chip 
+                                      label={`${groupedByPhase[phase].length}`} 
+                                      size="small" 
+                                      sx={{ height: 16, fontSize: 10, bgcolor: '#ff9800', color: 'white', minWidth: 24 }} 
+                                    />
+                                  </Box>
+                                  
+                                  {/* Attack Patterns in this phase */}
+                                  {groupedByPhase[phase].map(ap => renderAttackPatternCard(ap))}
+                                </Box>
+                              ))}
+                            </>
                           )}
-                        </Paper>
+                          
+                          {/* Non-playable Attack Patterns (no injects) */}
+                          {nonPlayableAps.length > 0 && (
+                            <>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: playableAps.length > 0 ? 2 : 0 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                  Non-playable Attack Patterns ({nonPlayableAps.length})
+                                </Typography>
+                                <Chip label="No injects" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'text.disabled', color: 'white' }} />
+                              </Box>
+                              {nonPlayableAps.map((ap) => (
+                                <Paper
+                                  key={ap.id}
+                                  elevation={0}
+                                  sx={{ p: 1.5, mb: 1, border: 1, borderColor: 'divider', borderRadius: 1, opacity: 0.6 }}
+                                >
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <LockPattern sx={{ fontSize: 18, color: 'text.disabled' }} />
+                                    <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, color: 'text.secondary' }}>{ap.name}</Typography>
+                                    <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
+                                  </Box>
+                                </Paper>
+                              ))}
+                            </>
+                          )}
+                        </>
                       );
-                    })}
+                    })()}
                   </Box>
                 )}
               </>
@@ -8902,15 +9506,12 @@ const App: React.FC = () => {
             <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, mb: 2, flexShrink: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {scenarioTypeAffinity === 'TABLE-TOP' 
-                  ? `${scenarioOverviewData?.attackPatterns?.length || 0} email notification${(scenarioOverviewData?.attackPatterns?.length || 0) !== 1 ? 's' : ''}`
+                  ? `${selectedInjects.length} email notification${selectedInjects.length !== 1 ? 's' : ''} selected`
                   : `${selectedInjects.length} inject${selectedInjects.length !== 1 ? 's' : ''} selected`
                 }
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {scenarioTypeAffinity === 'TABLE-TOP'
-                  ? `Total scenario duration: ~${((scenarioOverviewData?.attackPatterns?.length || 1) - 1) * 10} minutes`
-                  : `Total scenario duration: ~${selectedInjects.length > 0 ? (selectedInjects.length - 1) * 10 : 0} minutes`
-                }
+                Total scenario duration: ~{selectedInjects.length > 0 ? (selectedInjects.length - 1) * scenarioInjectSpacing : 0} minutes
               </Typography>
             </Box>
             
@@ -8946,15 +9547,18 @@ const App: React.FC = () => {
       { value: 'purple-team', label: 'Purple Team' },
     ];
     
-    // For table-top, create email timeline from attack patterns
-    const emailTimeline = scenarioTypeAffinity === 'TABLE-TOP' && scenarioOverviewData?.attackPatterns
-      ? scenarioOverviewData.attackPatterns.map((ap, index) => ({
-          attackPatternId: ap.id,
-          attackPatternName: ap.name,
-          externalId: ap.externalId,
-          killChainPhases: ap.killChainPhases,
-          delayMinutes: index * 10,
-        }))
+    // For table-top, create email timeline from selected attack patterns only
+    const emailTimeline = scenarioTypeAffinity === 'TABLE-TOP' && selectedInjects.length > 0
+      ? selectedInjects.map((inject, index) => {
+          const ap = scenarioOverviewData?.attackPatterns?.find(p => p.id === inject.attackPatternId);
+          return {
+            attackPatternId: inject.attackPatternId,
+            attackPatternName: inject.attackPatternName,
+            externalId: ap?.externalId || '',
+            killChainPhases: ap?.killChainPhases || [],
+            delayMinutes: index * scenarioInjectSpacing,
+          };
+        })
       : [];
     
     return (
@@ -8985,7 +9589,10 @@ const App: React.FC = () => {
           <Button
             size="small"
             startIcon={<ChevronLeftOutlined />}
-            onClick={() => setScenarioStep(1)}
+            onClick={() => {
+              setScenarioStep(1);
+              setPanelMode('scenario-overview');
+            }}
             sx={{ 
               color: 'text.secondary',
               textTransform: 'none',
@@ -9008,15 +9615,14 @@ const App: React.FC = () => {
           />
           {scenarioTypeAffinity !== 'TABLE-TOP' && scenarioPlatformsAffinity.map(p => (
             <Chip 
-              key={p} 
-              label={p} 
+              key={p}
+              icon={getPlatformIcon(p)}
+              label={p.charAt(0).toUpperCase() + p.slice(1)} 
               size="small" 
               sx={{ 
-                bgcolor: p === 'windows' ? '#0078d4' : 
-                        p === 'linux' ? '#f57c00' : 
-                        p === 'macos' ? '#7b1fa2' : 
-                        p === 'android' ? '#3ddc84' : 'action.selected',
+                bgcolor: getPlatformColor(p),
                 color: 'white',
+                '& .MuiChip-icon': { color: 'white', ml: 0.5 },
               }} 
             />
           ))}
@@ -9071,39 +9677,251 @@ const App: React.FC = () => {
             sx={{ mb: 2 }}
           />
           
+          {/* Target Selection */}
+          {scenarioTypeAffinity === 'TABLE-TOP' ? (
+            /* Team Selection for Table-top */
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
+                Default Team (for all email notifications)
+              </Typography>
+              <Autocomplete
+                options={scenarioTeams}
+                getOptionLabel={(option) => option.team_name || 'Unknown'}
+                value={scenarioTeams.find(t => t.team_id === scenarioSelectedTeam) || null}
+                onChange={(_, value) => setScenarioSelectedTeam(value?.team_id || null)}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Select Team" 
+                    size="small" 
+                    placeholder={scenarioTeams.length === 0 ? 'Loading teams...' : 'Choose a team'}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} key={option.team_id}>
+                    <GroupsOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                    <Typography variant="body2">{option.team_name}</Typography>
+                  </Box>
+                )}
+                size="small"
+                noOptionsText={scenarioTeams.length === 0 ? 'Loading...' : 'No teams found'}
+              />
+            </Box>
+          ) : (
+            /* Asset/Asset Group Selection for Technical scenarios */
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
+                Default Target (for all injects)
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <Button
+                  variant={scenarioTargetType === 'asset' ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => setScenarioTargetType('asset')}
+                  startIcon={<ComputerOutlined />}
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  Asset
+                </Button>
+                <Button
+                  variant={scenarioTargetType === 'asset_group' ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => setScenarioTargetType('asset_group')}
+                  startIcon={<LanOutlined />}
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  Asset Group
+                </Button>
+              </Box>
+              {scenarioTargetType === 'asset' ? (
+                <Autocomplete
+                  options={scenarioAssets}
+                  getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
+                  value={scenarioAssets.find(a => a.asset_id === scenarioSelectedAsset) || null}
+                  onChange={(_, value) => setScenarioSelectedAsset(value?.asset_id || null)}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Asset" 
+                      size="small"
+                      placeholder={scenarioAssets.length === 0 ? 'Loading assets...' : 'Choose an asset'}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.asset_id}>
+                      <ComputerOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                      <Typography variant="body2">{option.asset_name || option.endpoint_hostname}</Typography>
+                    </Box>
+                  )}
+                  size="small"
+                  noOptionsText={scenarioAssets.length === 0 ? 'Loading...' : 'No assets found'}
+                />
+              ) : (
+                <Autocomplete
+                  options={scenarioAssetGroups}
+                  getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
+                  value={scenarioAssetGroups.find(g => g.asset_group_id === scenarioSelectedAssetGroup) || null}
+                  onChange={(_, value) => setScenarioSelectedAssetGroup(value?.asset_group_id || null)}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Asset Group" 
+                      size="small"
+                      placeholder={scenarioAssetGroups.length === 0 ? 'Loading asset groups...' : 'Choose an asset group'}
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.asset_group_id}>
+                      <LanOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                      <Typography variant="body2">{option.asset_group_name}</Typography>
+                    </Box>
+                  )}
+                  size="small"
+                  noOptionsText={scenarioAssetGroups.length === 0 ? 'Loading...' : 'No asset groups found'}
+                />
+              )}
+            </Box>
+          )}
+          
           {/* Timeline Preview */}
           {scenarioTypeAffinity === 'TABLE-TOP' ? (
             /* Email Timeline for Table-top */
             emailTimeline.length > 0 && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  Email Timeline ({emailTimeline.length})
-                </Typography>
-                <Box sx={{ pl: 2, borderLeft: 2, borderColor: '#42a5f5' }}>
-                  {emailTimeline.map((email) => (
-                    <Box key={email.attackPatternId} sx={{ mb: 1.5, position: 'relative' }}>
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          left: -11,
-                          top: 4,
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: '#42a5f5',
-                        }}
-                      />
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        +{email.delayMinutes} min
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        [Simulation] {email.attackPatternName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {email.externalId} • Email Notification
-                      </Typography>
-                    </Box>
-                  ))}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Email Timeline ({emailTimeline.length})
+                  </Typography>
+                  {/* Fill emails using AI button */}
+                  {(() => {
+                    const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
+                    const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+                    
+                    let tooltipMessage = '';
+                    if (!aiSettings.available) {
+                      tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+                    } else if (!targetPlatform?.isEnterprise) {
+                      tooltipMessage = 'AI features require Enterprise Edition.';
+                    } else {
+                      tooltipMessage = 'Use AI to generate realistic email subjects and body content based on page context';
+                    }
+                    
+                    return (
+                      <Tooltip title={tooltipMessage}>
+                        <span>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            disabled={!isAIAvailable || aiFillingEmails}
+                            onClick={async () => {
+                              if (!isAIAvailable) return;
+                              
+                              setAiFillingEmails(true);
+                              try {
+                                const response = await chrome.runtime.sendMessage({
+                                  type: 'AI_GENERATE_EMAILS',
+                                  payload: {
+                                    pageTitle: currentPageTitle,
+                                    pageUrl: currentPageUrl,
+                                    pageContent: document.body?.innerText?.substring(0, 3000) || '',
+                                    scenarioName: scenarioForm.name || 'Security Simulation',
+                                    attackPatterns: emailTimeline.map(email => ({
+                                      id: email.attackPatternId,
+                                      name: email.attackPatternName,
+                                      externalId: email.externalId,
+                                      killChainPhases: email.killChainPhases,
+                                    })),
+                                  },
+                                });
+                                
+                                if (response?.success && response.data?.emails) {
+                                  setScenarioEmails(response.data.emails);
+                                  log.debug(' AI generated', response.data.emails.length, 'email contents');
+                                }
+                              } catch (error) {
+                                log.error(' AI email generation failed:', error);
+                              } finally {
+                                setAiFillingEmails(false);
+                              }
+                            }}
+                            startIcon={aiFillingEmails ? <CircularProgress size={14} color="inherit" /> : <AutoAwesomeOutlined />}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            {aiFillingEmails ? 'Generating...' : 'Fill with AI'}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    );
+                  })()}
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {emailTimeline.map((email, index) => {
+                    const aiEmail = scenarioEmails.find(e => e.attackPatternId === email.attackPatternId);
+                    const emailSubject = aiEmail?.subject || `[Simulation] ${email.attackPatternName}`;
+                    const emailBody = aiEmail?.body || '';
+                    
+                    return (
+                      <Box key={email.attackPatternId} sx={{ display: 'flex', gap: 1.5 }}>
+                        {/* Timeline column */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              bgcolor: aiEmail ? '#4caf50' : '#42a5f5',
+                              border: 2,
+                              borderColor: 'background.paper',
+                              boxShadow: 1,
+                              zIndex: 1,
+                            }}
+                          />
+                          {index < emailTimeline.length - 1 && (
+                            <Box sx={{ width: 2, flex: 1, bgcolor: '#42a5f5', opacity: 0.5, minHeight: emailBody ? 60 : 40 }} />
+                          )}
+                        </Box>
+                        {/* Content */}
+                        <Box sx={{ flex: 1, pb: 2 }}>
+                          <Chip 
+                            label={`+${email.delayMinutes} min`} 
+                            size="small" 
+                            sx={{ 
+                              height: 18, 
+                              fontSize: 10, 
+                              bgcolor: 'action.selected',
+                              mb: 0.5,
+                            }} 
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {emailSubject}
+                          </Typography>
+                          {aiEmail ? (
+                            <>
+                              <Chip 
+                                label="AI generated" 
+                                size="small" 
+                                sx={{ 
+                                  height: 16, 
+                                  fontSize: 9, 
+                                  bgcolor: '#4caf50', 
+                                  color: 'white',
+                                  mt: 0.5,
+                                  mb: 0.5,
+                                }} 
+                              />
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', whiteSpace: 'pre-wrap' }}>
+                                {emailBody.substring(0, 200)}{emailBody.length > 200 ? '...' : ''}
+                              </Typography>
+                            </>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic' }}>
+                              {email.externalId} • Email body placeholder
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    );
+                  })}
                 </Box>
               </Box>
             )
@@ -9111,32 +9929,49 @@ const App: React.FC = () => {
             /* Inject Timeline for Technical scenarios */
             selectedInjects.length > 0 && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
                   Inject Timeline ({selectedInjects.length})
                 </Typography>
-                <Box sx={{ pl: 2, borderLeft: 2, borderColor: 'primary.main' }}>
-                  {selectedInjects.map((inject) => (
-                    <Box key={inject.contractId} sx={{ mb: 1.5, position: 'relative' }}>
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          left: -11,
-                          top: 4,
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: 'primary.main',
-                        }}
-                      />
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        +{inject.delayMinutes} min
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {inject.attackPatternName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {inject.contractLabel}
-                      </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {selectedInjects.map((inject, index) => (
+                    <Box key={inject.contractId} sx={{ display: 'flex', gap: 1.5 }}>
+                      {/* Timeline column */}
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, flexShrink: 0 }}>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            bgcolor: 'primary.main',
+                            border: 2,
+                            borderColor: 'background.paper',
+                            boxShadow: 1,
+                            zIndex: 1,
+                          }}
+                        />
+                        {index < selectedInjects.length - 1 && (
+                          <Box sx={{ width: 2, flex: 1, bgcolor: 'primary.main', opacity: 0.5, minHeight: 40 }} />
+                        )}
+                      </Box>
+                      {/* Content */}
+                      <Box sx={{ flex: 1, pb: 2 }}>
+                        <Chip 
+                          label={`+${inject.delayMinutes} min`} 
+                          size="small" 
+                          sx={{ 
+                            height: 18, 
+                            fontSize: 10, 
+                            bgcolor: 'action.selected',
+                            mb: 0.5,
+                          }} 
+                        />
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {inject.attackPatternName}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                          {inject.contractLabel}
+                        </Typography>
+                      </Box>
                     </Box>
                   ))}
                 </Box>
@@ -9149,14 +9984,10 @@ const App: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 1, pt: 2, flexShrink: 0 }}>
           <Button
             variant="outlined"
-            onClick={() => {
-              setScenarioStep(1);
-              setPanelMode('scenario-overview');
-            }}
-            startIcon={<ArrowBackOutlined />}
+            onClick={handleClose}
             sx={{ flex: 1 }}
           >
-            Back
+            Cancel
           </Button>
           <Button
             variant="contained"

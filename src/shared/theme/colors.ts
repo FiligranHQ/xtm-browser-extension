@@ -245,6 +245,67 @@ export const itemColor = (type: string | null | undefined, dark = true, reversed
     case 'Relationship':
     case 'relationship':
       return dark ? '#616161' : '#9e9e9e';
+    
+    // ============================================================================
+    // OpenAEV Entity Colors
+    // ============================================================================
+    case 'Asset':
+    case 'asset':
+    case 'oaev-Asset':
+    case 'oaev-asset':
+      return dark ? '#00bcd4' : '#006064'; // Cyan - matching OpenAEV
+    case 'AssetGroup':
+    case 'assetgroup':
+    case 'asset-group':
+    case 'oaev-AssetGroup':
+    case 'oaev-assetgroup':
+      return dark ? '#26a69a' : '#00796b'; // Teal - for groups of assets
+    case 'Player':
+    case 'player':
+    case 'oaev-Player':
+    case 'oaev-player':
+      return dark ? '#7e57c2' : '#512da8'; // Deep Purple - for people/players
+    case 'Team':
+    case 'team':
+    case 'oaev-Team':
+    case 'oaev-team':
+      return dark ? '#5c6bc0' : '#3949ab'; // Indigo - for teams
+    case 'Finding':
+    case 'finding':
+    case 'oaev-Finding':
+    case 'oaev-finding':
+      return dark ? '#ef5350' : '#c62828'; // Red - for findings/alerts
+    case 'AttackPattern':
+    case 'attackpattern':
+    case 'oaev-AttackPattern':
+    case 'oaev-attackpattern':
+      return dark ? '#d4e157' : '#827717'; // Lime/Yellow-green - same as OpenCTI
+    case 'Scenario':
+    case 'scenario':
+    case 'oaev-Scenario':
+    case 'oaev-scenario':
+      return dark ? '#ab47bc' : '#7b1fa2'; // Purple - for scenarios
+    case 'Exercise':
+    case 'exercise':
+    case 'oaev-Exercise':
+    case 'oaev-exercise':
+      return dark ? '#42a5f5' : '#1565c0'; // Blue - for exercises
+    case 'Inject':
+    case 'inject':
+    case 'oaev-Inject':
+    case 'oaev-inject':
+      return dark ? '#ff7043' : '#d84315'; // Deep Orange - for injects
+    case 'Payload':
+    case 'payload':
+    case 'oaev-Payload':
+    case 'oaev-payload':
+      return dark ? '#ffa726' : '#ef6c00'; // Orange - for payloads
+    case 'Injector':
+    case 'injector':
+    case 'oaev-Injector':
+    case 'oaev-injector':
+      return dark ? '#78909c' : '#455a64'; // Blue Grey - for injectors
+    
     default:
       return stringToColour(type, reversed);
   }

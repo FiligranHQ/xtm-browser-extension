@@ -696,6 +696,7 @@ export type MessageType =
   | 'AI_GENERATE_SCENARIO'
   | 'AI_GENERATE_ATOMIC_TEST'
   | 'AI_GENERATE_EMAILS'
+  | 'AI_DISCOVER_ENTITIES'
   | 'AI_CHECK_STATUS'
   // Scenario Generation
   | 'OPEN_SCENARIO_PANEL'

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOLTZITE: ICS Threat to Energy Infrastructure | CISA Alert</title>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: #ffffff;
+            color: #1b1b1b;
+            line-height: 1.75;
+        }
+        
+        .gov-banner {
+            background: #112e51;
+            color: white;
+            padding: 12px 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .gov-banner img { height: 20px; }
+        
+        header {
+            background: white;
+            border-bottom: 4px solid #005ea2;
+            padding: 20px 0;
+        }
+        
+        .header-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .agency-logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: #005ea2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        .agency-name {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1b1b1b;
+        }
+        
+        .agency-name span {
+            display: block;
+            font-size: 13px;
+            font-weight: 400;
+            color: #71767a;
+        }
+        
+        .alert-banner {
+            background: linear-gradient(90deg, #d63e04, #b50909);
+            color: white;
+            padding: 20px 30px;
+            text-align: center;
+        }
+        
+        .alert-banner h2 {
+            font-size: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 50px 30px;
+        }
+        
+        .alert-header {
+            background: #f0f0f0;
+            border-left: 5px solid #005ea2;
+            padding: 25px 30px;
+            margin-bottom: 40px;
+        }
+        
+        .alert-id {
+            font-family: 'Source Code Pro', monospace;
+            color: #71767a;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        h1 {
+            font-size: 2.2rem;
+            color: #1b1b1b;
+            line-height: 1.3;
+            margin-bottom: 20px;
+        }
+        
+        .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            font-size: 14px;
+            color: #71767a;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            background: #d63e04;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        
+        h2 {
+            font-size: 1.5rem;
+            color: #005ea2;
+            margin: 45px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dfe1e2;
+        }
+        
+        h3 {
+            font-size: 1.15rem;
+            color: #1b1b1b;
+            margin: 30px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 18px;
+            color: #3d4551;
+        }
+        
+        .info-box {
+            background: #e7f6f8;
+            border: 1px solid #99deea;
+            border-radius: 4px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .info-box h4 {
+            color: #005ea2;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .warning-box {
+            background: #fef0c7;
+            border: 1px solid #face00;
+            border-radius: 4px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .warning-box h4 {
+            color: #947100;
+            margin-bottom: 10px;
+        }
+        
+        .critical-box {
+            background: #f8dfe2;
+            border: 1px solid #d63e04;
+            border-radius: 4px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .critical-box h4 {
+            color: #b50909;
+            margin-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background: #005ea2;
+            color: white;
+            padding: 14px 18px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #dfe1e2;
+        }
+        
+        tr:nth-child(even) { background: #f9f9f9; }
+        
+        .ttp-id {
+            font-family: 'Source Code Pro', monospace;
+            background: #1b1b1b;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .asset-tag {
+            background: #fef0c7;
+            color: #947100;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .ioc-section {
+            background: #f9f9f9;
+            border: 1px solid #dfe1e2;
+            border-radius: 4px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .ioc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .ioc-column h5 {
+            color: #005ea2;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #005ea2;
+        }
+        
+        .ioc-item {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+            padding: 10px 0;
+            border-bottom: 1px solid #dfe1e2;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .ioc-label {
+            background: #e7f6f8;
+            color: #005ea2;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .checklist {
+            background: white;
+            border: 2px solid #005ea2;
+            border-radius: 4px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .checklist h4 {
+            color: #005ea2;
+            margin-bottom: 20px;
+        }
+        
+        .checklist ul {
+            list-style: none;
+        }
+        
+        .checklist li {
+            padding: 10px 0;
+            padding-left: 35px;
+            position: relative;
+            border-bottom: 1px solid #dfe1e2;
+        }
+        
+        .checklist li:last-child { border-bottom: none; }
+        
+        .checklist li::before {
+            content: '☐';
+            position: absolute;
+            left: 0;
+            color: #005ea2;
+            font-size: 18px;
+        }
+        
+        .sector-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 25px 0;
+        }
+        
+        .sector-card {
+            background: white;
+            border: 1px solid #dfe1e2;
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .sector-icon { font-size: 2rem; margin-bottom: 10px; }
+        .sector-name { font-weight: 600; color: #1b1b1b; }
+        .sector-risk {
+            font-size: 12px;
+            color: #d63e04;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .timeline {
+            border-left: 3px solid #005ea2;
+            margin: 30px 0;
+            padding-left: 25px;
+        }
+        
+        .timeline-event {
+            position: relative;
+            padding: 20px 0;
+        }
+        
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -32px;
+            top: 25px;
+            width: 12px;
+            height: 12px;
+            background: #005ea2;
+            border-radius: 50%;
+        }
+        
+        .timeline-date {
+            font-weight: 600;
+            color: #005ea2;
+            font-size: 14px;
+        }
+        
+        footer {
+            background: #112e51;
+            color: white;
+            padding: 40px 30px;
+            margin-top: 50px;
+        }
+        
+        .footer-content {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="gov-banner">
+        🇺🇸 An official cybersecurity alert from the Cybersecurity and Infrastructure Security Agency
+    </div>
+    
+    <header>
+        <div class="header-content">
+            <div class="agency-logo">
+                <div class="logo-icon">CISA</div>
+                <div class="agency-name">
+                    CISA
+                    <span>Cybersecurity and Infrastructure Security Agency</span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="alert-banner">
+        <h2>⚡ Critical Infrastructure Threat Alert</h2>
+    </div>
+    
+    <div class="container">
+        <div class="alert-header">
+            <div class="alert-id">Alert ID: AA24-340A | TLP:CLEAR</div>
+            <h1>VOLTZITE: Advanced Persistent Threat Targeting Energy Sector Industrial Control Systems</h1>
+            <div class="meta-row">
+                <span>📅 Released: December 5, 2024</span>
+                <span>🔄 Last Updated: December 7, 2024</span>
+                <span class="severity-badge">Critical</span>
+            </div>
+        </div>
+        
+        <h2>Summary</h2>
+        <p>CISA, in coordination with the Department of Energy (DOE) and FBI, is releasing this joint Cybersecurity Advisory (CSA) to warn organizations in the energy sector about ongoing cyber operations by an advanced persistent threat (APT) actor we track as VOLTZITE. This threat actor has demonstrated capability and intent to disrupt industrial control systems (ICS) at electric utilities and oil & gas facilities.</p>
+        
+        <div class="critical-box">
+            <h4>⚠️ Immediate Action Required</h4>
+            <p style="margin: 0;">Organizations operating industrial control systems should immediately review network segmentation between IT and OT environments, audit remote access pathways, and implement the mitigations outlined in this advisory.</p>
+        </div>
+        
+        <h2>Targeted Sectors and Geography</h2>
+        <div class="sector-grid">
+            <div class="sector-card">
+                <div class="sector-icon">⚡</div>
+                <div class="sector-name">Electric Utilities</div>
+                <div class="sector-risk">HIGH RISK</div>
+            </div>
+            <div class="sector-card">
+                <div class="sector-icon">🛢️</div>
+                <div class="sector-name">Oil & Gas</div>
+                <div class="sector-risk">HIGH RISK</div>
+            </div>
+            <div class="sector-card">
+                <div class="sector-icon">☢️</div>
+                <div class="sector-name">Nuclear</div>
+                <div class="sector-risk">ELEVATED RISK</div>
+            </div>
+            <div class="sector-card">
+                <div class="sector-icon">💧</div>
+                <div class="sector-name">Water Systems</div>
+                <div class="sector-risk">MODERATE RISK</div>
+            </div>
+            <div class="sector-card">
+                <div class="sector-icon">🏭</div>
+                <div class="sector-name">Manufacturing</div>
+                <div class="sector-risk">MODERATE RISK</div>
+            </div>
+            <div class="sector-card">
+                <div class="sector-icon">🚆</div>
+                <div class="sector-name">Transportation</div>
+                <div class="sector-risk">MODERATE RISK</div>
+            </div>
+        </div>
+        
+        <p>Confirmed targeting has been observed at facilities in <strong>Texas</strong>, <strong>Louisiana</strong>, <strong>California</strong>, <strong>Alberta (Canada)</strong>, and <strong>North Sea (UK)</strong> offshore platforms. The threat actor demonstrates particular interest in SCADA systems controlling power generation and transmission infrastructure.</p>
+        
+        <h2>Attack Timeline</h2>
+        <div class="timeline">
+            <div class="timeline-event">
+                <div class="timeline-date">July 2024</div>
+                <p>Initial reconnaissance activity detected targeting public-facing assets of multiple US electric utilities.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">August 15, 2024</div>
+                <p>First confirmed intrusion at a Texas power generation facility. Threat actor gained access to corporate network through VPN vulnerability.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">September 2024</div>
+                <p>Lateral movement to OT network observed. Attackers compromised engineering workstations including <span class="asset-tag">oaev-test-win-05</span> and <span class="asset-tag">oaev-test-win-02</span>.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">October 12, 2024</div>
+                <p>Evidence of ICS reconnaissance on historian servers and HMI systems. Attacker deployed custom ICS-aware malware.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">November 2024</div>
+                <p>Campaign expanded to target Canadian and UK energy infrastructure. Linux-based jump hosts including <span class="asset-tag">oaev-test-linux-01</span> compromised for persistent access.</p>
+            </div>
+        </div>
+        
+        <h2>Technical Analysis</h2>
+        
+        <h3>Initial Access</h3>
+        <p>VOLTZITE primarily gains initial access through exploitation of public-facing applications, particularly VPN concentrators and remote access gateways. The threat actor has demonstrated capability to exploit both known vulnerabilities (including CVE-2024-21887 in Ivanti products) and zero-day vulnerabilities in industrial remote access solutions.</p>
+        
+        <h3>IT to OT Pivot</h3>
+        <p>After establishing a foothold in corporate IT networks, VOLTZITE methodically maps network architecture to identify pathways into operational technology environments. The threat actor specifically targets jump servers, historian systems, and engineering workstations that bridge IT and OT networks. Command and control communications have been observed using encrypted channels to infrastructure at <span class="asset-tag">honey.scanme.sh</span> for DNS tunneling.</p>
+        
+        <div class="info-box">
+            <h4>ℹ️ ICS-Specific Tools</h4>
+            <p style="margin: 0;">The threat actor has been observed using custom tools capable of interacting with Modbus, DNP3, and IEC 61850 protocols. These tools appear designed for reconnaissance rather than immediate disruption, suggesting preparation for potential future sabotage operations.</p>
+        </div>
+        
+        <h2>MITRE ATT&CK for ICS Mapping</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tactic</th>
+                    <th>ID</th>
+                    <th>Technique</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Initial Access</td>
+                    <td><span class="ttp-id">T0866</span></td>
+                    <td>Exploitation of Remote Services</td>
+                </tr>
+                <tr>
+                    <td>Execution</td>
+                    <td><span class="ttp-id">T0807</span></td>
+                    <td>Command-Line Interface</td>
+                </tr>
+                <tr>
+                    <td>Persistence</td>
+                    <td><span class="ttp-id">T0839</span></td>
+                    <td>Module Firmware</td>
+                </tr>
+                <tr>
+                    <td>Evasion</td>
+                    <td><span class="ttp-id">T0820</span></td>
+                    <td>Exploitation for Evasion</td>
+                </tr>
+                <tr>
+                    <td>Discovery</td>
+                    <td><span class="ttp-id">T0846</span></td>
+                    <td>Remote System Discovery</td>
+                </tr>
+                <tr>
+                    <td>Lateral Movement</td>
+                    <td><span class="ttp-id">T0812</span></td>
+                    <td>Default Credentials</td>
+                </tr>
+                <tr>
+                    <td>Collection</td>
+                    <td><span class="ttp-id">T0802</span></td>
+                    <td>Automated Collection</td>
+                </tr>
+                <tr>
+                    <td>Impact</td>
+                    <td><span class="ttp-id">T0831</span></td>
+                    <td>Manipulation of Control (Potential)</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h2>Indicators of Compromise</h2>
+        <p style="background: #fff3cd; border: 1px solid #ffeeba; padding: 12px 18px; border-radius: 4px; font-size: 13px; margin-bottom: 20px;">
+            <strong>⚠️ Note:</strong> All network indicators below are <strong>defanged</strong> (brackets added) for safe handling in reports and emails.
+        </p>
+        <div class="ioc-section">
+            <div class="ioc-grid">
+                <div class="ioc-column">
+                    <h5>Network Indicators (Defanged)</h5>
+                    <div class="ioc-item">
+                        <span class="ioc-label">IPv4</span>
+                        <span>203[.]0[.]113[.]42</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">IPv4</span>
+                        <span>198[.]51[.]100[.]89</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">IPv4</span>
+                        <span>192[.]0[.]2[.]155</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">Domain</span>
+                        <span>honey[.]scanme[.]sh</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">Domain</span>
+                        <span>scada-update[.]net</span>
+                    </div>
+                </div>
+                <div class="ioc-column">
+                    <h5>File Indicators</h5>
+                    <div class="ioc-item">
+                        <span class="ioc-label">SHA256</span>
+                        <span>abc123def456...</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">SHA256</span>
+                        <span>789xyz012abc...</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">File</span>
+                        <span>icsrecon.exe</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-label">File</span>
+                        <span>modbus_scan.py</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Mitigation Checklist</h2>
+        <div class="checklist">
+            <h4>Immediate Actions</h4>
+            <ul>
+                <li>Audit and restrict remote access to OT networks</li>
+                <li>Implement network segmentation between IT and OT environments</li>
+                <li>Patch all known vulnerabilities in VPN and remote access systems</li>
+                <li>Enable multi-factor authentication for all remote access</li>
+                <li>Review and restrict use of default credentials on ICS devices</li>
+                <li>Monitor for anomalous Modbus, DNP3, and IEC 61850 traffic</li>
+                <li>Implement application allowlisting on engineering workstations</li>
+                <li>Establish out-of-band communication for incident response</li>
+            </ul>
+        </div>
+        
+        <div class="warning-box">
+            <h4>📞 Report Incidents</h4>
+            <p style="margin: 0;">Organizations that identify indicators of compromise or suspicious activity should report to CISA at report@cisa.gov or call 1-888-282-0870. For incidents involving ICS systems, contact the CISA ICS-CERT at ics-cert@cisa.dhs.gov.</p>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="footer-content">
+            <p>Cybersecurity and Infrastructure Security Agency | Department of Homeland Security</p>
+            <p style="margin-top: 10px; opacity: 0.7;">This advisory is provided "as is" for informational purposes only.</p>
+        </div>
+    </footer>
+</body>
+</html>
+

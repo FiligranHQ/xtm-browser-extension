@@ -211,6 +211,7 @@ function getFallbackContent(): string {
 /**
  * Clean HTML content from Readability output - removes overlays, modals, and problematic elements
  * This ensures the content field doesn't have elements that prevent text selection
+ * Note: Preserves CSS styling (style tags, inline styles, classes) for proper rendering
  */
 function cleanArticleHtml(html: string): string {
   if (!html) return '';
@@ -218,10 +219,11 @@ function cleanArticleHtml(html: string): string {
   const temp = document.createElement('div');
   temp.innerHTML = html;
   
-  // Remove remaining problematic elements (Readability may not catch all)
+  // Remove problematic elements that interfere with content display
+  // Note: We keep 'style' tags and inline styles to preserve CSS styling
   const selectorsToRemove = [
     // Scripts and interactive elements (should be gone, but double-check)
-    'script', 'style', 'noscript', 'iframe', 'object', 'embed',
+    'script', 'noscript', 'iframe', 'object', 'embed',
     'form', 'input', 'button', 'select', 'textarea',
     // Overlay patterns
     '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]', '[class*="dialog"]',
@@ -230,16 +232,16 @@ function cleanArticleHtml(html: string): string {
     // Cookie/banner patterns
     '[class*="cookie"]', '[class*="consent"]', '[class*="banner"]', '[class*="notice"]',
     '[id*="cookie"]', '[id*="consent"]', '[id*="banner"]',
-    // Fixed/sticky elements
+    // Fixed/sticky elements that may interfere
     '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
     '[class*="toolbar"]', '[class*="toast"]',
     // Ads
     '[class*="ad-"]', '[class*="advert"]', '[class*="sponsor"]', '[class*="promo"]',
-    // Social/share
+    // Social/share widgets
     '[class*="share"]', '[class*="social"]',
     // Newsletter/subscription
     '[class*="newsletter"]', '[class*="subscribe"]', '[class*="paywall"]',
-    // Navigation
+    // Navigation elements
     '[class*="breadcrumb"]', '[class*="pagination"]',
     // ARIA roles for overlays
     '[role="dialog"]', '[role="alertdialog"]', '[role="tooltip"]',
@@ -256,9 +258,9 @@ function cleanArticleHtml(html: string): string {
     } catch { /* Skip invalid selectors */ }
   });
   
-  // Remove all inline styles and event handlers
+  // Remove only event handlers and problematic data attributes (preserve styling)
   temp.querySelectorAll('*').forEach(el => {
-    el.removeAttribute('style');
+    // Remove JavaScript event handlers
     el.removeAttribute('onclick');
     el.removeAttribute('onload');
     el.removeAttribute('onerror');
@@ -266,20 +268,25 @@ function cleanArticleHtml(html: string): string {
     el.removeAttribute('onmouseout');
     el.removeAttribute('onfocus');
     el.removeAttribute('onblur');
+    el.removeAttribute('onsubmit');
+    el.removeAttribute('onchange');
+    el.removeAttribute('onkeydown');
+    el.removeAttribute('onkeyup');
+    el.removeAttribute('onkeypress');
+    // Remove problematic data attributes
     el.removeAttribute('data-scroll-lock');
     el.removeAttribute('data-overlay');
     el.removeAttribute('data-modal');
-    // Remove class attribute to prevent CSS from affecting display
-    // Keep the element structure but remove styling hooks
-    el.removeAttribute('class');
-    el.removeAttribute('id');
+    // Note: We intentionally keep style, class, and id attributes for proper styling
   });
   
-  // Remove empty wrapper elements
+  // Remove empty wrapper elements (but preserve structural elements with styling)
   temp.querySelectorAll('div, span').forEach(el => {
     const hasText = el.textContent?.trim();
     const hasContent = el.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, li, table, img, figure, blockquote, pre, code, a');
-    if (!hasText && !hasContent) {
+    const hasStyle = el.hasAttribute('style') || el.hasAttribute('class');
+    // Only remove if no text, no content children, and no styling
+    if (!hasText && !hasContent && !hasStyle) {
       el.remove();
     }
   });
@@ -1396,6 +1403,70 @@ const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
+     AI DISCOVERED - Purple theme for entities discovered by AI
+     Shows checkbox on left for selection, AI icon on right
+     Colors from OpenCTI ThemeDark: main=#9575cd, light=#d1c4e9, dark=#673ab7
+     ======================================== */
+  .xtm-highlight.xtm-ai-discovered {
+    background: rgba(149, 117, 205, 0.25) !important;
+    border: 2px solid #9575cd !important;
+    border-color: #9575cd !important;
+    padding: 4px 26px 4px 30px !important;  /* Extra space on left for checkbox */
+  }
+  
+  /* Unchecked checkbox on LEFT */
+  .xtm-highlight.xtm-ai-discovered::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 12px !important;
+    height: 12px !important;
+    border: 2px solid #9575cd !important;
+    border-radius: 3px !important;
+    background: transparent !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+  }
+  
+  /* AI sparkle icon on RIGHT */
+  .xtm-highlight.xtm-ai-discovered::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 14px !important;
+    height: 14px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239575cd'%3E%3Cpath d='M19,8L20.5,11.5L24,13L20.5,14.5L19,18L17.5,14.5L14,13L17.5,11.5L19,8M11.1,5L13.6,10.4L19,12.9L13.6,15.4L11.1,20.8L8.6,15.4L3.2,12.9L8.6,10.4L11.1,5Z'/%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+  }
+  
+  .xtm-highlight.xtm-ai-discovered:hover {
+    background: rgba(149, 117, 205, 0.4) !important;
+    border-color: #673ab7 !important;
+    box-shadow: 0 0 8px rgba(149, 117, 205, 0.5) !important;
+  }
+  
+  /* Checked checkbox when AI-discovered entity is selected */
+  .xtm-highlight.xtm-ai-discovered.xtm-selected::before {
+    background: #9575cd !important;
+    border-color: #9575cd !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 10px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+  }
+
+  /* ========================================
      MIXED STATE - Not found in OpenCTI but FOUND in another platform
      Orange base with checkbox on left, green indicator on right showing found
      ======================================== */
@@ -2091,6 +2162,71 @@ function initialize(): void {
         selectedCount: 0,
         selectedItems: [],
       });
+    } else if (event.data?.type === 'XTM_HIGHLIGHT_AI_ENTITIES' && event.data.entities) {
+      // Highlight AI-discovered entities on the page
+      const entities = event.data.entities as Array<{ type: string; value: string; name: string }>;
+      log.debug(' Highlighting AI-discovered entities:', entities.length);
+      
+      // Get all text nodes in the document
+      const textNodes = getTextNodes(document.body);
+      let highlightedCount = 0;
+      
+      for (const entity of entities) {
+        const searchValue = entity.value || entity.name;
+        if (!searchValue) continue;
+        
+        // Find and highlight occurrences of this entity value
+        for (const node of textNodes) {
+          const text = node.textContent || '';
+          const lowerText = text.toLowerCase();
+          const lowerSearch = searchValue.toLowerCase();
+          
+          // Find all occurrences in this text node
+          let searchIndex = 0;
+          while (true) {
+            const index = lowerText.indexOf(lowerSearch, searchIndex);
+            if (index === -1) break;
+            
+            // Check if already highlighted
+            const parent = node.parentElement;
+            if (parent?.classList.contains('xtm-highlight')) {
+              searchIndex = index + lowerSearch.length;
+              continue;
+            }
+            
+            // Create highlight span
+            const range = document.createRange();
+            range.setStart(node, index);
+            range.setEnd(node, index + searchValue.length);
+            
+            const highlightSpan = document.createElement('span');
+            highlightSpan.className = 'xtm-highlight xtm-ai-discovered';
+            highlightSpan.setAttribute('data-type', entity.type);
+            highlightSpan.setAttribute('data-value', searchValue);
+            highlightSpan.setAttribute('data-ai-discovered', 'true');
+            highlightSpan.setAttribute('title', `AI Discovered: ${entity.type.replace(/-/g, ' ')}`);
+            
+            try {
+              range.surroundContents(highlightSpan);
+              highlightedCount++;
+              
+              // Add click handler for selection toggle
+              highlightSpan.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSelection(highlightSpan, searchValue);
+              });
+            } catch (error) {
+              // Range may cross element boundaries, skip
+              log.debug(' Could not highlight AI entity (range issue):', searchValue);
+            }
+            
+            break; // Move to next text node after highlighting one occurrence
+          }
+        }
+      }
+      
+      log.info(` AI entity highlighting complete: ${highlightedCount} highlights created for ${entities.length} entities`);
     }
   });
   

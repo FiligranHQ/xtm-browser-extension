@@ -105,6 +105,34 @@ export interface GeneratedAtomicTest {
   prerequisites?: string[];
 }
 
+export interface EntityDiscoveryRequest {
+  pageTitle: string;
+  pageUrl: string;
+  pageContent: string;
+  /** Already detected entities (known or unknown) - to avoid duplicates */
+  alreadyDetected: Array<{
+    type: string;
+    name: string;
+    value?: string;
+    found: boolean;
+  }>;
+}
+
+export interface DiscoveredEntity {
+  /** Entity type (e.g., 'IPv4-Addr', 'Domain-Name', 'Malware', 'Threat-Actor-Group') */
+  type: string;
+  /** Display name or identifier */
+  name: string;
+  /** The actual value as found in the page (for observables) */
+  value: string;
+  /** Why this entity is relevant - brief explanation */
+  reason: string;
+  /** Confidence level: high, medium, low */
+  confidence: 'high' | 'medium' | 'low';
+  /** The exact text excerpt from the page where this was found */
+  excerpt?: string;
+}
+
 // ============================================================================
 // AI Client Class
 // ============================================================================
@@ -484,6 +512,85 @@ Generate a JSON response with this structure:
 Keep email bodies concise (2-4 sentences) but informative.`;
 
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.7 });
+  }
+
+  /**
+   * Discover additional entities from page content using AI
+   * This helps find entities that regex patterns might miss
+   */
+  async discoverEntities(request: EntityDiscoveryRequest): Promise<AIGenerationResponse> {
+    const systemPrompt = `You are a cybersecurity threat intelligence analyst expert at extracting indicators of compromise (IOCs) and threat intelligence entities from text. Your task is to identify relevant cybersecurity entities that may have been missed by automated regex-based detection.
+
+IMPORTANT RULES:
+1. Only extract entities that are EXPLICITLY mentioned in the text - never hallucinate or infer
+2. Return ONLY entities you are confident about - it's better to return nothing than to make up entities
+3. The entity value must be an EXACT match to text in the page content
+4. Do not return entities that are already in the "already detected" list
+5. Focus on cybersecurity-relevant entities for threat intelligence platforms
+
+ENTITY TYPES YOU CAN DETECT:
+- IPv4-Addr: IPv4 addresses (e.g., 192.168.1.1)
+- IPv6-Addr: IPv6 addresses
+- Domain-Name: Domain names (e.g., malicious-domain.com)
+- Hostname: Hostnames including subdomains
+- Url: Full URLs
+- Email-Addr: Email addresses
+- StixFile: File hashes (MD5, SHA1, SHA256, SHA512)
+- Mac-Addr: MAC addresses
+- Cryptocurrency-Wallet: Bitcoin/Ethereum/crypto wallet addresses
+- Bank-Account: IBAN numbers
+- Phone-Number: Phone numbers
+- User-Agent: Browser/HTTP user agent strings
+- Malware: Malware names/families
+- Threat-Actor-Group: Threat actor group names (APT groups, cybercrime groups)
+- Threat-Actor-Individual: Individual threat actor names
+- Intrusion-Set: Intrusion set names
+- Campaign: Campaign names
+- Attack-Pattern: Attack technique names (not MITRE IDs, but technique names)
+- Vulnerability: CVE identifiers (CVE-XXXX-XXXXX)
+- Tool: Hacking tools, utilities
+- Country: Country names relevant to threats
+- Sector: Industry sectors being targeted
+
+Output ONLY valid JSON, no additional text.`;
+
+    // Build a summary of already detected entities
+    const alreadyDetectedSummary = request.alreadyDetected.length > 0
+      ? request.alreadyDetected.map(e => `- ${e.type}: ${e.value || e.name}`).join('\n')
+      : 'None detected yet';
+
+    const prompt = `Analyze the following page content and extract any cybersecurity entities that are NOT already in the detected list.
+
+PAGE TITLE: ${request.pageTitle}
+PAGE URL: ${request.pageUrl}
+
+ALREADY DETECTED ENTITIES (do NOT include these):
+${alreadyDetectedSummary}
+
+PAGE CONTENT:
+${request.pageContent.substring(0, 6000)}
+
+Extract any additional cybersecurity-relevant entities that were missed. Only include entities you find EXPLICITLY in the text above.
+
+Return JSON in this EXACT format:
+{
+  "entities": [
+    {
+      "type": "Entity-Type",
+      "name": "Display name",
+      "value": "exact value as it appears in text",
+      "reason": "Brief explanation of why this is relevant",
+      "confidence": "high|medium|low",
+      "excerpt": "Short text excerpt where this was found"
+    }
+  ]
+}
+
+If no additional entities are found, return: {"entities": []}
+
+Remember: Only include entities that are EXPLICITLY mentioned in the page content. Do not hallucinate or infer entities.`;
+
+    return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.3 });
   }
 
   // ============================================================================

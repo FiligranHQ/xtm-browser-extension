@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Credential Phishing Campaign Targeting European Enterprises | Proofpoint Threat Insight</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Fira+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Nunito Sans', sans-serif;
+            background: #f5f6fa;
+            color: #2f3640;
+            line-height: 1.8;
+        }
+        
+        header {
+            background: white;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-top {
+            background: #192a56;
+            color: white;
+            padding: 8px 40px;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .header-main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #192a56;
+        }
+        
+        .logo span { color: #e84118; }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 50px 40px;
+        }
+        
+        .article-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        .article-hero {
+            background: linear-gradient(135deg, #192a56 0%, #273c75 50%, #40739e 100%);
+            color: white;
+            padding: 60px 50px;
+        }
+        
+        .hero-tags {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .hero-tag {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 6px 16px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        h1 {
+            font-size: 2.3rem;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 20px;
+        }
+        
+        .hero-meta {
+            display: flex;
+            gap: 25px;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+        
+        .article-body {
+            padding: 50px;
+        }
+        
+        .highlight-strip {
+            background: linear-gradient(90deg, #e84118, #c23616);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            margin: -30px 50px 40px;
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .highlight-icon {
+            font-size: 2rem;
+        }
+        
+        .highlight-text {
+            flex: 1;
+        }
+        
+        .highlight-text strong { display: block; margin-bottom: 5px; }
+        
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #192a56;
+            margin: 45px 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        h2::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(to bottom, #e84118, #c23616);
+            border-radius: 3px;
+        }
+        
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #40739e;
+            margin: 30px 0 12px;
+        }
+        
+        p {
+            margin-bottom: 18px;
+            color: #4a5568;
+        }
+        
+        .email-preview {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            margin: 30px 0;
+            overflow: hidden;
+        }
+        
+        .email-header {
+            background: #f0f0f0;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .email-field {
+            display: flex;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        
+        .email-label {
+            color: #718096;
+            width: 60px;
+            font-weight: 600;
+        }
+        
+        .email-value { color: #2f3640; }
+        
+        .email-body {
+            padding: 25px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        
+        .phishing-link {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Fira Mono', monospace;
+            font-size: 12px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 35px 0;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #f5f6fa, #e8e8e8);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #192a56;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 14px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #192a56;
+            color: white;
+            padding: 15px 18px;
+            text-align: left;
+            font-weight: 700;
+        }
+        
+        td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #e0e0e0;
+            background: white;
+        }
+        
+        tr:hover td { background: #f8f9fa; }
+        
+        .ttp-chip {
+            background: #e84118;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Fira Mono', monospace;
+            font-size: 12px;
+        }
+        
+        .asset-tag {
+            background: #fff3cd;
+            color: #856404;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-family: 'Fira Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .ioc-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .ioc-section h4 {
+            color: #192a56;
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .ioc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+        
+        .ioc-column h5 {
+            color: #e84118;
+            font-size: 12px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .ioc-item {
+            font-family: 'Fira Mono', monospace;
+            font-size: 13px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .ioc-type {
+            background: #192a56;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 55px;
+            text-align: center;
+        }
+        
+        .country-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin: 25px 0;
+        }
+        
+        .country-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .country-flag { font-size: 2rem; margin-bottom: 8px; }
+        .country-name { font-weight: 700; font-size: 13px; }
+        .country-count { font-size: 12px; color: #718096; }
+        
+        .timeline-container {
+            border-left: 3px solid #e84118;
+            margin: 35px 0;
+            padding-left: 30px;
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding: 20px 0;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -38px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            background: #e84118;
+            border-radius: 50%;
+            border: 3px solid white;
+        }
+        
+        .timeline-date {
+            font-weight: 700;
+            color: #e84118;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        blockquote {
+            background: linear-gradient(135deg, #f0f4ff, #e8eeff);
+            border-left: 4px solid #192a56;
+            padding: 25px;
+            margin: 35px 0;
+            border-radius: 0 12px 12px 0;
+            font-style: italic;
+            color: #4a5568;
+        }
+        
+        .recommendations {
+            background: #d4edda;
+            border: 1px solid #28a745;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .recommendations h4 {
+            color: #155724;
+            margin-bottom: 15px;
+        }
+        
+        .recommendations ul {
+            margin-left: 20px;
+            color: #155724;
+        }
+        
+        .recommendations li { padding: 8px 0; }
+        
+        footer {
+            background: #192a56;
+            color: white;
+            padding: 40px;
+            text-align: center;
+            font-size: 13px;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            🔒 Proofpoint Threat Research — Protecting People, Defending Data
+        </div>
+        <div class="header-main">
+            <div class="logo">Proof<span>point</span></div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="article-card">
+            <div class="article-hero">
+                <div class="hero-tags">
+                    <span class="hero-tag">Phishing</span>
+                    <span class="hero-tag">Credential Theft</span>
+                    <span class="hero-tag">Europe</span>
+                </div>
+                <h1>TA577 Credential Phishing Campaign Targets European Financial and Legal Sectors</h1>
+                <div class="hero-meta">
+                    <span>📅 December 1, 2024</span>
+                    <span>👤 Threat Research Team</span>
+                    <span>⏱️ 11 min read</span>
+                </div>
+            </div>
+            
+            <div class="highlight-strip">
+                <span class="highlight-icon">⚠️</span>
+                <div class="highlight-text">
+                    <strong>Active Threat</strong>
+                    Over 15,000 phishing emails detected across European organizations in the past 30 days.
+                </div>
+            </div>
+            
+            <div class="article-body">
+                <h2>Campaign Overview</h2>
+                <p>Proofpoint researchers have identified a large-scale credential phishing campaign attributed to the threat actor TA577. The campaign specifically targets employees in the <strong>financial services</strong>, <strong>legal</strong>, and <strong>professional services</strong> sectors across <strong>Germany</strong>, <strong>France</strong>, <strong>Netherlands</strong>, <strong>Belgium</strong>, and the <strong>United Kingdom</strong>.</p>
+                
+                <p>The phishing emails impersonate popular cloud services and financial institutions, directing recipients to convincing credential harvesting pages hosted on compromised infrastructure and actor-controlled domains.</p>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-number">15K+</div>
+                        <div class="stat-label">Emails Detected</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">847</div>
+                        <div class="stat-label">Organizations</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">23</div>
+                        <div class="stat-label">Phishing Domains</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">4.2%</div>
+                        <div class="stat-label">Click Rate</div>
+                    </div>
+                </div>
+                
+                <h2>Geographic Distribution</h2>
+                <div class="country-grid">
+                    <div class="country-card">
+                        <div class="country-flag">🇩🇪</div>
+                        <div class="country-name">Germany</div>
+                        <div class="country-count">4,521 emails</div>
+                    </div>
+                    <div class="country-card">
+                        <div class="country-flag">🇫🇷</div>
+                        <div class="country-name">France</div>
+                        <div class="country-count">3,892 emails</div>
+                    </div>
+                    <div class="country-card">
+                        <div class="country-flag">🇬🇧</div>
+                        <div class="country-name">UK</div>
+                        <div class="country-count">3,104 emails</div>
+                    </div>
+                    <div class="country-card">
+                        <div class="country-flag">🇳🇱</div>
+                        <div class="country-name">Netherlands</div>
+                        <div class="country-count">2,156 emails</div>
+                    </div>
+                    <div class="country-card">
+                        <div class="country-flag">🇧🇪</div>
+                        <div class="country-name">Belgium</div>
+                        <div class="country-count">1,443 emails</div>
+                    </div>
+                </div>
+                
+                <h2>Campaign Timeline</h2>
+                <div class="timeline-container">
+                    <div class="timeline-item">
+                        <div class="timeline-date">October 28, 2024</div>
+                        <p>First wave of phishing emails detected targeting German financial institutions.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-date">November 5, 2024</div>
+                        <p>Campaign expands to France and UK. New lures impersonating DocuSign detected.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-date">November 15, 2024</div>
+                        <p>Compromised enterprise systems <span class="asset-tag">oaev-test-win-05</span> and <span class="asset-tag">oaev-test-win-02</span> used as email relay infrastructure.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-date">November 22, 2024</div>
+                        <p>Actor begins using DNS tunneling via <span class="asset-tag">honey.scanme.sh</span> for credential exfiltration.</p>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-date">November 30, 2024</div>
+                        <p>Campaign shifts to target legal sector. New Microsoft 365 themed lures deployed.</p>
+                    </div>
+                </div>
+                
+                <h2>Example Phishing Email</h2>
+                <div class="email-preview">
+                    <div class="email-header">
+                        <div class="email-field">
+                            <span class="email-label">From:</span>
+                            <span class="email-value">noreply@sharepoint-docs.com</span>
+                        </div>
+                        <div class="email-field">
+                            <span class="email-label">Subject:</span>
+                            <span class="email-value">Document shared: Q4 Financial Report - Action Required</span>
+                        </div>
+                        <div class="email-field">
+                            <span class="email-label">To:</span>
+                            <span class="email-value">[victim]@[company].com</span>
+                        </div>
+                    </div>
+                    <div class="email-body">
+                        <p>Hello,</p>
+                        <p>Your colleague has shared an important document with you that requires immediate review.</p>
+                        <p><strong>Document:</strong> Q4_Financial_Report_2024.xlsx</p>
+                        <p>Please click the link below to access the document:</p>
+                        <p><span class="phishing-link">hxxps://sharepoint-docs[.]com/view/doc?id=a8f3c2</span></p>
+                        <p>This link will expire in 24 hours.</p>
+                        <p style="color: #888; font-size: 12px; margin-top: 20px;">Microsoft SharePoint • Shared with you via Microsoft 365</p>
+                    </div>
+                </div>
+                
+                <h2>Technical Analysis</h2>
+                
+                <h3>Credential Harvesting Infrastructure</h3>
+                <p>The threat actor utilizes a multi-layered infrastructure for credential collection. Initial landing pages are hosted on compromised legitimate websites, which then redirect victims to actor-controlled phishing pages. Harvested credentials are exfiltrated via encrypted channels to backend servers.</p>
+                
+                <p>Analysis of compromised infrastructure revealed several enterprise systems being abused as mail relays, including hosts identified as <span class="asset-tag">oaev-test-linux-01</span> in victim network logs.</p>
+                
+                <h3>Evasion Techniques</h3>
+                <p>The campaign employs several techniques to evade detection:</p>
+                <ul style="margin: 15px 0 20px 25px; color: #4a5568;">
+                    <li>URL shorteners and redirectors to obscure final destination</li>
+                    <li>CAPTCHA challenges to prevent automated analysis</li>
+                    <li>Geofencing to only display phishing content to targeted regions</li>
+                    <li>Client-side JavaScript rendering to evade email gateway scanning</li>
+                </ul>
+                
+                <h2>MITRE ATT&CK Mapping</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tactic</th>
+                            <th>ID</th>
+                            <th>Technique</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Initial Access</td>
+                            <td><span class="ttp-chip">T1566.002</span></td>
+                            <td>Phishing: Spearphishing Link</td>
+                        </tr>
+                        <tr>
+                            <td>Resource Development</td>
+                            <td><span class="ttp-chip">T1583.001</span></td>
+                            <td>Acquire Infrastructure: Domains</td>
+                        </tr>
+                        <tr>
+                            <td>Resource Development</td>
+                            <td><span class="ttp-chip">T1584.004</span></td>
+                            <td>Compromise Infrastructure: Server</td>
+                        </tr>
+                        <tr>
+                            <td>Collection</td>
+                            <td><span class="ttp-chip">T1056.003</span></td>
+                            <td>Input Capture: Web Portal Capture</td>
+                        </tr>
+                        <tr>
+                            <td>Exfiltration</td>
+                            <td><span class="ttp-chip">T1048.003</span></td>
+                            <td>Exfiltration Over Alternative Protocol</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="ioc-section">
+                    <h4>Indicators of Compromise</h4>
+                    <div class="ioc-grid">
+                        <div class="ioc-column">
+                            <h5>Phishing Domains</h5>
+                            <div class="ioc-item">
+                                <span class="ioc-type">Domain</span>
+                                <span>sharepoint-docs.com</span>
+                            </div>
+                            <div class="ioc-item">
+                                <span class="ioc-type">Domain</span>
+                                <span>msft-login.net</span>
+                            </div>
+                            <div class="ioc-item">
+                                <span class="ioc-type">Domain</span>
+                                <span>honey.scanme.sh</span>
+                            </div>
+                            <div class="ioc-item">
+                                <span class="ioc-type">Domain</span>
+                                <span>docusign-portal.com</span>
+                            </div>
+                        </div>
+                        <div class="ioc-column">
+                            <h5>Infrastructure IPs</h5>
+                            <div class="ioc-item">
+                                <span class="ioc-type">IPv4</span>
+                                <span>104.21.45.89</span>
+                            </div>
+                            <div class="ioc-item">
+                                <span class="ioc-type">IPv4</span>
+                                <span>172.67.182.33</span>
+                            </div>
+                            <div class="ioc-item">
+                                <span class="ioc-type">IPv4</span>
+                                <span>185.199.108.153</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <blockquote>
+                    "TA577 continues to demonstrate sophisticated social engineering capabilities, adapting their lures to current events and regional business practices. The high click rate observed indicates these campaigns remain effective despite increased security awareness." — Proofpoint Threat Research
+                </blockquote>
+                
+                <div class="recommendations">
+                    <h4>✅ Recommendations</h4>
+                    <ul>
+                        <li>Implement URL rewriting and time-of-click analysis for email links</li>
+                        <li>Enable browser isolation for accessing links from unknown senders</li>
+                        <li>Deploy phishing-resistant MFA (FIDO2/WebAuthn) for cloud applications</li>
+                        <li>Conduct targeted security awareness training on document sharing lures</li>
+                        <li>Monitor for anomalous authentication patterns indicating credential compromise</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2024 Proofpoint, Inc. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+

@@ -54,9 +54,12 @@ import {
   AutoAwesomeOutlined,
   KeyOutlined,
 } from '@mui/icons-material';
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
+import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
+import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
 import type { ExtensionSettings, PlatformConfig, AIProvider, AISettings } from '../shared/types';
+
+// Helper to get AI colors based on theme mode
+const getAiColor = (mode: 'dark' | 'light') => mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
 import { PLATFORM_REGISTRY, type PlatformType } from '../shared/platform';
 
 // Observable types that can be detected - sorted alphabetically by label
@@ -165,6 +168,9 @@ const App: React.FC = () => {
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  
+  // Track saved settings to detect changes (for disabling Save button when nothing changed)
+  const [savedSettings, setSavedSettings] = useState<ExtensionSettings | null>(null);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -191,6 +197,24 @@ const App: React.FC = () => {
 
     loadSettings();
     loadCacheStats();
+    
+    // Listen for storage changes to keep settings in sync
+    // This ensures the options page updates when settings are saved from popup/splash
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.settings) {
+        const newSettings = changes.settings.newValue;
+        if (newSettings) {
+          // Reload settings when they change from another source (e.g., popup splash)
+          loadSettings();
+        }
+      }
+    };
+    
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
 
   // Reload cache stats when switching to detection tab
@@ -226,6 +250,8 @@ const App: React.FC = () => {
         loadedSettings.detection.platformEntityTypes.openaev = OAEV_ENTITY_TYPES.map(o => o.value);
       }
       setSettings(loadedSettings);
+      // Store a deep copy of the loaded settings for change detection
+      setSavedSettings(JSON.parse(JSON.stringify(loadedSettings)));
       
       // Mark existing platforms as tested
       const existingTested = new Set<string>();
@@ -342,14 +368,21 @@ const App: React.FC = () => {
       // Get enterprise edition status from response
       const isEnterprise = response.data?.enterprise_edition ?? false;
       
-      // Update platform with name (if default) and enterprise status
-      if (platformIndex >= 0) {
-        const updates: Partial<PlatformConfig> = { isEnterprise };
-        if (remotePlatformName && isDefaultName) {
-          updates.name = remotePlatformName;
-        }
-        updatePlatform(type, platformIndex, updates);
+      // Build updated settings and save immediately
+      const settingsKey = `${type}Platforms` as const;
+      const updatedPlatforms = [...(settings[settingsKey] || [])];
+      if (platformIndex >= 0 && currentPlatform) {
+        const updatedPlatform: PlatformConfig = { 
+          ...currentPlatform,
+          isEnterprise,
+          name: (remotePlatformName && isDefaultName) ? remotePlatformName : currentPlatform.name,
+        };
+        updatedPlatforms[platformIndex] = updatedPlatform;
       }
+      const updatedSettings = { ...settings, [settingsKey]: updatedPlatforms };
+      
+      // Update local state
+      setSettings(updatedSettings);
       
       setTestResults({
         ...testResults,
@@ -361,6 +394,36 @@ const App: React.FC = () => {
         },
       });
       setTestedPlatforms(prev => new Set(prev).add(key));
+      
+      // Auto-save after successful test
+      try {
+        // Normalize URLs
+        const normalizedSettings = {
+          ...updatedSettings,
+          openctiPlatforms: updatedSettings.openctiPlatforms.map(p => ({
+            ...p,
+            url: p.url.replace(/\/+$/, ''),
+          })),
+          openaevPlatforms: updatedSettings.openaevPlatforms.map(p => ({
+            ...p,
+            url: p.url.replace(/\/+$/, ''),
+          })),
+        };
+        
+        const saveResponse = await chrome.runtime.sendMessage({
+          type: 'SAVE_SETTINGS',
+          payload: normalizedSettings,
+        });
+        
+        if (saveResponse?.success) {
+          setSavedSettings(JSON.parse(JSON.stringify(normalizedSettings)));
+          setSettings(normalizedSettings);
+          setSnackbar({ open: true, message: 'Platform connected and saved', severity: 'success' });
+        }
+      } catch (error) {
+        // Save failed silently - user can still manually save
+        console.error('Auto-save after test failed:', error);
+      }
     } else {
       setTestResults({
         ...testResults,
@@ -403,6 +466,9 @@ const App: React.FC = () => {
       });
       
       if (response?.success) {
+        // Update saved settings to reflect current state
+        setSavedSettings(JSON.parse(JSON.stringify(normalizedSettings)));
+        setSettings(normalizedSettings);
         setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
         
         // Start polling for cache refresh completion
@@ -486,6 +552,8 @@ const App: React.FC = () => {
         type: 'SAVE_SETTINGS',
         payload: updatedSettings,
       });
+      // Update saved settings to reflect the new state
+      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
       setSnackbar({ open: true, message: 'All OpenCTI platforms removed', severity: 'success' });
     }
     
@@ -518,6 +586,8 @@ const App: React.FC = () => {
         type: 'SAVE_SETTINGS',
         payload: updatedSettings,
       });
+      // Update saved settings to reflect the new state
+      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
       setSnackbar({ open: true, message: 'All OpenAEV platforms removed', severity: 'success' });
     }
     
@@ -665,13 +735,79 @@ const App: React.FC = () => {
     }
   };
 
-  const removePlatform = (type: 'opencti' | 'openaev', index: number) => {
+  const removePlatform = async (type: 'opencti' | 'openaev', index: number) => {
     if (!settings) return;
     if (!confirm('Are you sure you want to remove this platform?')) return;
+    
     const key = `${type}Platforms` as const;
     const platforms = [...settings[key]];
+    const removedPlatform = platforms[index];
     platforms.splice(index, 1);
-    updateSetting(key, platforms);
+    
+    // Update local state
+    const updatedSettings = { ...settings, [key]: platforms };
+    setSettings(updatedSettings);
+    
+    // Clear test results for removed platform
+    const platformKey = `${type}-${removedPlatform.id}`;
+    setTestedPlatforms(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(platformKey);
+      return newSet;
+    });
+    setTestResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[platformKey];
+      return newResults;
+    });
+    
+    // Save immediately
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'SAVE_SETTINGS',
+          payload: updatedSettings,
+        });
+        
+        if (response?.success) {
+          // Update saved settings to reflect the new state
+          setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
+          setSnackbar({ open: true, message: 'Platform removed', severity: 'success' });
+        } else {
+          setSnackbar({ open: true, message: response?.error || 'Failed to save', severity: 'error' });
+        }
+      } catch (error) {
+        setSnackbar({ open: true, message: 'Failed to save settings', severity: 'error' });
+      }
+    }
+  };
+
+  // Check if platform settings have changed from saved state
+  const hasPlatformChanges = (type: 'opencti' | 'openaev'): boolean => {
+    if (!settings || !savedSettings) return false;
+    const currentPlatforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const savedPlatforms = type === 'opencti' ? savedSettings.openctiPlatforms : savedSettings.openaevPlatforms;
+    
+    // Compare arrays - different length means changes
+    if (currentPlatforms.length !== savedPlatforms.length) return true;
+    
+    // Compare each platform
+    for (let i = 0; i < currentPlatforms.length; i++) {
+      const current = currentPlatforms[i];
+      const saved = savedPlatforms[i];
+      
+      // Compare relevant fields
+      if (current.id !== saved.id ||
+          current.name !== saved.name ||
+          current.url !== saved.url ||
+          current.apiToken !== saved.apiToken ||
+          current.enabled !== saved.enabled ||
+          current.isEnterprise !== saved.isEnterprise) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   const isPlatformSaveDisabled = (type: 'opencti' | 'openaev') => {
@@ -698,6 +834,12 @@ const App: React.FC = () => {
         return true; // Has untested platform with credentials
       }
     }
+    
+    // If no validation issues, check if there are any changes to save
+    if (!hasPlatformChanges(type)) {
+      return true; // No changes to save
+    }
+    
     return false;
   };
 
@@ -1668,6 +1810,15 @@ const App: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>On-the-fly Atomic Testing</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                             Generate custom atomic tests with executable commands
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Smart Entity Discovery</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Discover additional entities that regex patterns might miss during page scans
                           </Typography>
                         </Box>
                       </Box>

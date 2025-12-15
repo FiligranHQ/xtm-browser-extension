@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APT29 Midnight Blizzard Campaign Analysis | ThreatWatch</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            line-height: 1.8;
+        }
+        
+        .cyber-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 40px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        header {
+            margin-bottom: 50px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            padding-bottom: 30px;
+        }
+        
+        .threat-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 20px;
+        }
+        
+        .meta {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .meta span { margin-right: 20px; }
+        
+        h2 {
+            color: #00ff88;
+            font-size: 1.6rem;
+            margin: 50px 0 20px;
+            padding-left: 15px;
+            border-left: 3px solid #00ff88;
+        }
+        
+        h3 {
+            color: #00ccff;
+            font-size: 1.2rem;
+            margin: 30px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            color: #c0c0c0;
+        }
+        
+        .ioc-box {
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .ioc-box h4 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .ioc-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .ioc-item:last-child { border-bottom: none; }
+        
+        .ioc-type {
+            background: rgba(0, 204, 255, 0.2);
+            color: #00ccff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 15px;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .ioc-value {
+            color: #fff;
+            word-break: break-all;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 14px;
+        }
+        
+        tr:hover { background: rgba(0, 255, 136, 0.03); }
+        
+        .ttp-tag {
+            display: inline-block;
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff6b6b;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            margin: 2px;
+        }
+        
+        .asset-highlight {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        blockquote {
+            border-left: 3px solid #ff4444;
+            padding-left: 20px;
+            margin: 30px 0;
+            font-style: italic;
+            color: #999;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+            margin: 30px 0;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #00ff88, #00ccff, #ff4444);
+        }
+        
+        .timeline-item {
+            position: relative;
+            padding: 15px 0;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -34px;
+            top: 20px;
+            width: 10px;
+            height: 10px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        .timeline-date {
+            color: #00ccff;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        footer {
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: #666;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cyber-grid"></div>
+    <div class="container">
+        <header>
+            <span class="threat-badge">Critical Threat</span>
+            <h1>APT29 Midnight Blizzard: A Deep Dive into Recent Cloud Infrastructure Attacks</h1>
+            <div class="meta">
+                <span>📅 December 12, 2024</span>
+                <span>👤 ThreatWatch Research Team</span>
+                <span>⏱️ 12 min read</span>
+            </div>
+        </header>
+        
+        <article>
+            <p>The Russian state-sponsored threat actor known as APT29 (also tracked as Midnight Blizzard, Cozy Bear, and NOBELIUM) has launched a sophisticated campaign targeting government agencies and critical infrastructure across North America and Europe. Our analysis reveals a complex multi-stage attack leveraging compromised cloud services and novel persistence mechanisms.</p>
+            
+            <h2>Executive Summary</h2>
+            <p>Between September and November 2024, we observed APT29 conducting targeted intrusions against organizations in the <strong>financial services</strong>, <strong>energy</strong>, and <strong>government</strong> sectors. The attacks primarily affected organizations in <strong>Washington D.C.</strong>, <strong>London</strong>, <strong>Berlin</strong>, and <strong>Paris</strong>. Initial access was achieved through spear-phishing campaigns impersonating IT administrators, followed by exploitation of misconfigured Azure Active Directory tenants.</p>
+            
+            <blockquote>
+                "This campaign represents one of the most sophisticated cloud-targeting operations we've observed from APT29, demonstrating their continued evolution in TTPs." — Senior Threat Analyst
+            </blockquote>
+            
+            <h2>Attack Timeline</h2>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-date">September 15, 2024</div>
+                    <p>Initial phishing emails sent to 47 organizations across the financial sector. Emails contained malicious OAuth application consent links.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-date">September 22, 2024</div>
+                    <p>First confirmed compromise detected. Attackers established persistence on <span class="asset-highlight">oaev-test-win-05</span> and <span class="asset-highlight">oaev-test-win-02</span> systems within the victim's Azure environment.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-date">October 3, 2024</div>
+                    <p>Lateral movement observed to Linux infrastructure including <span class="asset-highlight">oaev-test-linux-01</span>. Attackers deployed custom backdoor communicating with C2 infrastructure.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-date">October 18, 2024</div>
+                    <p>Data exfiltration attempts detected. Attackers targeted email archives and SharePoint documents containing sensitive policy information.</p>
+                </div>
+            </div>
+            
+            <h2>Technical Analysis</h2>
+            
+            <h3>Initial Access</h3>
+            <p>The threat actors utilized spear-phishing emails (T1566.001) containing links to malicious OAuth applications. These applications requested excessive permissions including <code>Mail.Read</code>, <code>Files.ReadWrite.All</code>, and <code>Directory.Read.All</code>. Once consent was granted, attackers gained persistent access to victim email and cloud storage.</p>
+            
+            <h3>Persistence Mechanisms</h3>
+            <p>APT29 demonstrated sophisticated persistence techniques including the abuse of Azure AD application registrations (T1098.001). The attackers also deployed scheduled tasks on compromised Windows systems and cron jobs on Linux hosts. Communication with command and control infrastructure was observed using the domain <span class="asset-highlight">honey.scanme.sh</span> as a DNS beacon relay point.</p>
+            
+            <h2>MITRE ATT&CK Mapping</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tactic</th>
+                        <th>Technique</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Initial Access</td>
+                        <td><span class="ttp-tag">T1566.001</span></td>
+                        <td>Spear-phishing with malicious OAuth consent links</td>
+                    </tr>
+                    <tr>
+                        <td>Execution</td>
+                        <td><span class="ttp-tag">T1059.001</span></td>
+                        <td>PowerShell scripts for reconnaissance and payload delivery</td>
+                    </tr>
+                    <tr>
+                        <td>Persistence</td>
+                        <td><span class="ttp-tag">T1098.001</span></td>
+                        <td>Additional Cloud Credentials via Azure AD app registrations</td>
+                    </tr>
+                    <tr>
+                        <td>Defense Evasion</td>
+                        <td><span class="ttp-tag">T1562.001</span></td>
+                        <td>Disable or Modify Tools - Cloud logging manipulation</td>
+                    </tr>
+                    <tr>
+                        <td>Credential Access</td>
+                        <td><span class="ttp-tag">T1528</span></td>
+                        <td>Steal Application Access Token</td>
+                    </tr>
+                    <tr>
+                        <td>Discovery</td>
+                        <td><span class="ttp-tag">T1087.004</span></td>
+                        <td>Cloud Account enumeration</td>
+                    </tr>
+                    <tr>
+                        <td>Lateral Movement</td>
+                        <td><span class="ttp-tag">T1021.004</span></td>
+                        <td>SSH-based lateral movement to Linux systems</td>
+                    </tr>
+                    <tr>
+                        <td>Collection</td>
+                        <td><span class="ttp-tag">T1114.002</span></td>
+                        <td>Remote Email Collection via Graph API</td>
+                    </tr>
+                    <tr>
+                        <td>Exfiltration</td>
+                        <td><span class="ttp-tag">T1567.002</span></td>
+                        <td>Exfiltration to Cloud Storage</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h2>Indicators of Compromise</h2>
+            <p style="color: #888; font-size: 13px; font-style: italic;">Note: Indicators below are defanged for safe handling.</p>
+            <div class="ioc-box">
+                <h4>Network Indicators (Defanged)</h4>
+                <div class="ioc-item">
+                    <span class="ioc-type">IPv4</span>
+                    <span class="ioc-value">185[.]220[.]101[.]42</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">IPv4</span>
+                    <span class="ioc-value">91[.]234[.]99[.]127</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">IPv4</span>
+                    <span class="ioc-value">45[.]142[.]212[.]89</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Domain</span>
+                    <span class="ioc-value">update-microsoft-service[.]com</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Domain</span>
+                    <span class="ioc-value">honey[.]scanme[.]sh</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Domain</span>
+                    <span class="ioc-value">cdn-assets-update[.]net</span>
+                </div>
+            </div>
+            
+            <div class="ioc-box">
+                <h4>File Indicators</h4>
+                <div class="ioc-item">
+                    <span class="ioc-type">SHA256</span>
+                    <span class="ioc-value">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">SHA256</span>
+                    <span class="ioc-value">ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">MD5</span>
+                    <span class="ioc-value">d41d8cd98f00b204e9800998ecf8427e</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Filename</span>
+                    <span class="ioc-value">update_service.exe</span>
+                </div>
+            </div>
+            
+            <h2>Targeted Sectors and Geography</h2>
+            <p>The campaign primarily targeted organizations in the following sectors:</p>
+            <ul style="margin: 20px 0 20px 30px; color: #c0c0c0;">
+                <li><strong>Financial Services</strong> - Investment banks and trading firms in New York, London, and Frankfurt</li>
+                <li><strong>Energy</strong> - Oil & gas companies and utilities in Houston and Calgary</li>
+                <li><strong>Government</strong> - Foreign ministries and defense contractors in Washington D.C., Brussels, and Canberra</li>
+                <li><strong>Technology</strong> - Cloud service providers and semiconductor companies in San Francisco and Tel Aviv</li>
+            </ul>
+            
+            <h2>Recommendations</h2>
+            <p>Organizations should immediately review Azure AD application registrations and revoke any unauthorized OAuth consents. Enable conditional access policies requiring MFA for all cloud application access. Monitor for anomalous Graph API activity and implement alerting for suspicious email forwarding rules. Network defenders should block the IOCs listed above and hunt for historical connections to the identified infrastructure.</p>
+            
+            <footer>
+                <p>© 2024 ThreatWatch Research. This report is provided for informational purposes only.</p>
+                <p>Tags: APT29, Midnight Blizzard, Russia, Cloud Security, Azure AD, OAuth Abuse</p>
+            </footer>
+        </article>
+    </div>
+</body>
+</html>
+

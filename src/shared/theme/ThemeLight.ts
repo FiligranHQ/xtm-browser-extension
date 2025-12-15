@@ -12,6 +12,15 @@ export const THEME_LIGHT_DEFAULT_ACCENT = '#dfdfdf';
 export const THEME_LIGHT_DEFAULT_PAPER = '#ffffff';
 export const THEME_LIGHT_DEFAULT_NAV = '#ffffff';
 
+// AI colors matching OpenCTI's ThemeLight
+export const THEME_LIGHT_AI = {
+  main: '#9c27b0',
+  light: '#ba68c8',
+  dark: '#7b1fa2',
+  contrastText: '#000000',
+  text: '#673ab7',
+};
+
 const ThemeLight = (
   background: string | null = null,
   paper: string | null = null,

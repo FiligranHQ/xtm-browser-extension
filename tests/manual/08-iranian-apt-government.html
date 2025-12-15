@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuddyWater: Iranian Threat Actor Targeting Government Entities | Recorded Future</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #ffffff;
+            color: #2c3e50;
+            line-height: 1.8;
+        }
+        
+        .top-stripe {
+            height: 5px;
+            background: linear-gradient(90deg, #3498db, #2ecc71, #9b59b6, #e74c3c);
+        }
+        
+        header {
+            background: white;
+            padding: 20px 40px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .logo span { color: #3498db; }
+        
+        .article-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 80px 40px;
+        }
+        
+        .article-header-content {
+            max-width: 850px;
+            margin: 0 auto;
+        }
+        
+        .tag-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .tag {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 16px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 25px;
+        }
+        
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 50px 40px;
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+            border-radius: 16px;
+            padding: 35px;
+            margin: -60px 0 50px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card h3 {
+            color: #667eea;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .summary-card ul {
+            list-style: none;
+        }
+        
+        .summary-card li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #4a5568;
+        }
+        
+        .summary-card li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: 700;
+        }
+        
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 50px 0 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #4a5568;
+            margin: 35px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            color: #4a5568;
+        }
+        
+        .profile-box {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 30px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 35px;
+            margin: 35px 0;
+            align-items: start;
+        }
+        
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+        
+        .profile-details h4 {
+            font-size: 1.4rem;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .profile-aliases {
+            color: #718096;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        
+        .profile-meta {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .meta-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        .meta-label {
+            font-size: 11px;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .meta-value {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-top: 5px;
+        }
+        
+        .geo-section {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .geo-section h4 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .country-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+        
+        .country-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .country-flag { font-size: 2rem; margin-bottom: 10px; }
+        .country-name { font-weight: 600; font-size: 14px; }
+        .country-sector { font-size: 12px; color: #718096; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 14px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: white;
+        }
+        
+        tr:hover td { background: #f7fafc; }
+        
+        .technique-badge {
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-family: 'Source Code Pro', monospace;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .asset-highlight {
+            background: linear-gradient(135deg, #fef3cd, #feeab7);
+            color: #856404;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+        }
+        
+        .ioc-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin: 35px 0;
+        }
+        
+        .ioc-box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+        }
+        
+        .ioc-box h4 {
+            color: #667eea;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .ioc-line {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .ioc-type {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 55px;
+            text-align: center;
+        }
+        
+        .timeline-section {
+            border-left: 3px solid #667eea;
+            margin: 40px 0;
+            padding-left: 30px;
+        }
+        
+        .timeline-event {
+            position: relative;
+            padding: 20px 0;
+        }
+        
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -38px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            border: 3px solid white;
+        }
+        
+        .timeline-date {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        blockquote {
+            background: linear-gradient(135deg, #667eea10, #764ba210);
+            border-left: 4px solid #667eea;
+            padding: 25px 30px;
+            margin: 35px 0;
+            border-radius: 0 12px 12px 0;
+            font-style: italic;
+            color: #4a5568;
+        }
+        
+        .recommendations {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .recommendations h4 {
+            color: #276749;
+            margin-bottom: 15px;
+        }
+        
+        .recommendations ul {
+            margin-left: 20px;
+            color: #2f855a;
+        }
+        
+        .recommendations li { padding: 8px 0; }
+        
+        footer {
+            background: #2c3e50;
+            color: white;
+            padding: 50px 40px;
+            margin-top: 60px;
+        }
+        
+        .footer-content {
+            max-width: 850px;
+            margin: 0 auto;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-stripe"></div>
+    
+    <header>
+        <div class="header-content">
+            <div class="logo">Recorded <span>Future</span></div>
+        </div>
+    </header>
+    
+    <div class="article-header">
+        <div class="article-header-content">
+            <div class="tag-row">
+                <span class="tag">Iran</span>
+                <span class="tag">APT</span>
+                <span class="tag">Government</span>
+                <span class="tag">Espionage</span>
+            </div>
+            <h1>MuddyWater: Iranian State-Sponsored Operations Targeting Middle Eastern Government Networks</h1>
+            <div class="article-meta">
+                <span>📅 December 3, 2024</span>
+                <span>👤 Insikt Group</span>
+                <span>⏱️ 16 min read</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="summary-card">
+            <h3>🔑 Key Assessments</h3>
+            <ul>
+                <li>MuddyWater maintains persistent access to multiple Middle Eastern government networks</li>
+                <li>New malware variant "PowGoop" identified with enhanced evasion capabilities</li>
+                <li>Operations linked to MOIS (Iranian Ministry of Intelligence and Security)</li>
+                <li>Targeting expands to include defense contractors in Turkey and Egypt</li>
+            </ul>
+        </div>
+        
+        <h2>Threat Actor Profile</h2>
+        <div class="profile-box">
+            <div class="profile-avatar">🐍</div>
+            <div class="profile-details">
+                <h4>MuddyWater</h4>
+                <div class="profile-aliases">Also known as: MERCURY, Static Kitten, Seedworm, TEMP.Zagros</div>
+                <p style="margin: 0; font-size: 14px;">MuddyWater is an Iranian threat actor assessed to be a subordinate element within Iran's Ministry of Intelligence and Security (MOIS). The group primarily conducts espionage operations against government and defense sector targets across the Middle East.</p>
+                <div class="profile-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Nation State</div>
+                        <div class="meta-value">🇮🇷 Iran</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Active Since</div>
+                        <div class="meta-value">2017</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Motivation</div>
+                        <div class="meta-value">Espionage</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Geographic Targeting</h2>
+        <div class="geo-section">
+            <h4>Confirmed Target Countries (2024)</h4>
+            <div class="country-grid">
+                <div class="country-item">
+                    <div class="country-flag">🇸🇦</div>
+                    <div class="country-name">Saudi Arabia</div>
+                    <div class="country-sector">Government</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇦🇪</div>
+                    <div class="country-name">UAE</div>
+                    <div class="country-sector">Defense</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇮🇶</div>
+                    <div class="country-name">Iraq</div>
+                    <div class="country-sector">Government</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇯🇴</div>
+                    <div class="country-name">Jordan</div>
+                    <div class="country-sector">Telecom</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇹🇷</div>
+                    <div class="country-name">Turkey</div>
+                    <div class="country-sector">Defense</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇪🇬</div>
+                    <div class="country-name">Egypt</div>
+                    <div class="country-sector">Government</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇮🇱</div>
+                    <div class="country-name">Israel</div>
+                    <div class="country-sector">Technology</div>
+                </div>
+                <div class="country-item">
+                    <div class="country-flag">🇵🇰</div>
+                    <div class="country-name">Pakistan</div>
+                    <div class="country-sector">Military</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Campaign Timeline</h2>
+        <div class="timeline-section">
+            <div class="timeline-event">
+                <div class="timeline-date">July 2024</div>
+                <p>Initial compromise of Saudi government ministry through spear-phishing campaign using job recruitment lures.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">August 2024</div>
+                <p>Lateral movement to domain controllers. Systems <span class="asset-highlight">oaev-test-win-05</span> and <span class="asset-highlight">oaev-test-win-02</span> identified as compromised hosts in network logs.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">September 2024</div>
+                <p>New PowGoop malware variant deployed with enhanced anti-analysis features. Communications observed to <span class="asset-highlight">honey.scanme.sh</span> for C2.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">October 2024</div>
+                <p>Campaign expands to target Turkish defense contractors. Linux servers including <span class="asset-highlight">oaev-test-linux-01</span> compromised via SSH brute-forcing.</p>
+            </div>
+            <div class="timeline-event">
+                <div class="timeline-date">November 2024</div>
+                <p>Data exfiltration detected. Stolen documents related to regional defense cooperation agreements.</p>
+            </div>
+        </div>
+        
+        <h2>Technical Analysis</h2>
+        
+        <h3>Initial Access</h3>
+        <p>MuddyWater continues to rely heavily on spear-phishing for initial access. Recent campaigns have used recruitment-themed lures, often impersonating legitimate job postings from major regional employers. The emails contain malicious macro-enabled documents that deliver the first-stage payload.</p>
+        
+        <h3>Malware Arsenal</h3>
+        <p>The group's malware toolkit includes several custom tools:</p>
+        <ul style="margin: 20px 0 20px 25px; color: #4a5568;">
+            <li><strong>PowGoop</strong> - PowerShell-based downloader with DLL side-loading capability</li>
+            <li><strong>POWERSTATS</strong> - Backdoor for command execution and file operations</li>
+            <li><strong>Mori</strong> - Lightweight backdoor for persistence</li>
+            <li><strong>Small Sieve</strong> - Python-based implant targeting Linux systems</li>
+        </ul>
+        
+        <h2>MITRE ATT&CK Mapping</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tactic</th>
+                    <th>ID</th>
+                    <th>Technique</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Initial Access</td>
+                    <td><span class="technique-badge">T1566.001</span></td>
+                    <td>Spearphishing Attachment</td>
+                </tr>
+                <tr>
+                    <td>Execution</td>
+                    <td><span class="technique-badge">T1059.001</span></td>
+                    <td>PowerShell</td>
+                </tr>
+                <tr>
+                    <td>Persistence</td>
+                    <td><span class="technique-badge">T1547.001</span></td>
+                    <td>Registry Run Keys</td>
+                </tr>
+                <tr>
+                    <td>Defense Evasion</td>
+                    <td><span class="technique-badge">T1574.002</span></td>
+                    <td>DLL Side-Loading</td>
+                </tr>
+                <tr>
+                    <td>Credential Access</td>
+                    <td><span class="technique-badge">T1003.001</span></td>
+                    <td>LSASS Memory</td>
+                </tr>
+                <tr>
+                    <td>Discovery</td>
+                    <td><span class="technique-badge">T1082</span></td>
+                    <td>System Information Discovery</td>
+                </tr>
+                <tr>
+                    <td>Collection</td>
+                    <td><span class="technique-badge">T1560.001</span></td>
+                    <td>Archive via Utility</td>
+                </tr>
+                <tr>
+                    <td>Exfiltration</td>
+                    <td><span class="technique-badge">T1041</span></td>
+                    <td>Exfiltration Over C2 Channel</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h2>Indicators of Compromise</h2>
+        <div class="ioc-container">
+            <div class="ioc-box">
+                <h4>Network Indicators</h4>
+                <div class="ioc-line">
+                    <span class="ioc-type">IPv4</span>
+                    <span>185.141.27.143</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">IPv4</span>
+                    <span>91.214.124.36</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">Domain</span>
+                    <span>honey.scanme.sh</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">Domain</span>
+                    <span>gov-portal-update.com</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">Domain</span>
+                    <span>careers-ministry.net</span>
+                </div>
+            </div>
+            <div class="ioc-box">
+                <h4>File Indicators</h4>
+                <div class="ioc-line">
+                    <span class="ioc-type">SHA256</span>
+                    <span>abc123def456789...</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">SHA256</span>
+                    <span>789xyz012abc345...</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">File</span>
+                    <span>JobDescription.docm</span>
+                </div>
+                <div class="ioc-line">
+                    <span class="ioc-type">File</span>
+                    <span>goopdate.dll</span>
+                </div>
+            </div>
+        </div>
+        
+        <blockquote>
+            "MuddyWater's sustained operations against regional government targets demonstrate Iran's continued investment in cyber espionage capabilities. The group's ability to maintain long-term access suggests sophisticated operational security practices."
+        </blockquote>
+        
+        <div class="recommendations">
+            <h4>✅ Recommended Mitigations</h4>
+            <ul>
+                <li>Implement strict macro security policies in Microsoft Office</li>
+                <li>Enable PowerShell Script Block Logging and Constrained Language Mode</li>
+                <li>Monitor for suspicious DLL side-loading in common applications</li>
+                <li>Deploy endpoint detection focused on PowerShell-based attacks</li>
+                <li>Conduct security awareness training focused on recruitment-themed phishing</li>
+            </ul>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="footer-content">
+            <p>© 2024 Recorded Future, Inc. Intelligence to make the world safer.</p>
+        </div>
+    </footer>
+</body>
+</html>
+

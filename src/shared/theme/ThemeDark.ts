@@ -12,6 +12,15 @@ export const THEME_DARK_DEFAULT_ACCENT = '#0f1e38';
 export const THEME_DARK_DEFAULT_PAPER = '#09101e';
 export const THEME_DARK_DEFAULT_NAV = '#070d19';
 
+// AI colors matching OpenCTI's ThemeDark
+export const THEME_DARK_AI = {
+  main: '#9575cd',
+  light: '#d1c4e9',
+  dark: '#673ab7',
+  contrastText: '#000000',
+  text: '#9575cd',
+};
+
 const ThemeDark = (
   background: string | null = null,
   paper: string | null = null,

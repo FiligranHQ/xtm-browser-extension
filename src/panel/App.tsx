@@ -62,10 +62,13 @@ import {
   CheckBoxOutlineBlankOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Target, MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
+import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
+import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../shared/theme/colors';
+
+// Helper to get AI colors based on theme mode
+const getAiColor = (mode: 'dark' | 'light') => mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
 import { loggers } from '../shared/utils/logger';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -155,6 +158,10 @@ interface ScanResultEntity {
   entityData?: any;
   // Multi-platform support: track all platforms where this entity was found
   platformMatches?: ScanResultPlatformMatch[];
+  // AI discovery fields
+  discoveredByAI?: boolean;
+  aiReason?: string;
+  aiConfidence?: 'high' | 'medium' | 'low';
 }
 
 // Interface for import results statistics
@@ -353,6 +360,9 @@ const App: React.FC = () => {
   const [aiGeneratingDescription, setAiGeneratingDescription] = useState(false);
   const [aiSelectingInjects, setAiSelectingInjects] = useState(false);
   const [aiFillingEmails, setAiFillingEmails] = useState(false);
+  const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
+  // Store page content for AI discovery (set when scan completes)
+  const [scanPageContent, setScanPageContent] = useState<string>('');
 
   // Scenario creation state (OpenAEV)
   const [scenarioOverviewData, setScenarioOverviewData] = useState<{
@@ -543,17 +553,29 @@ const App: React.FC = () => {
           setMode(themeMode);
         }
         
-        // Get all enabled platforms
+        // Get all enabled platforms - include isEnterprise from saved settings
         const platforms = response.data?.openctiPlatforms || [];
         const enabledPlatforms = platforms
           .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const }));
+          .map((p: any) => ({ 
+            id: p.id, 
+            name: p.name || 'OpenCTI', 
+            url: p.url, 
+            type: 'opencti' as const,
+            isEnterprise: p.isEnterprise, // Include saved EE status
+          }));
         
-        // Also add OpenAEV platforms
+        // Also add OpenAEV platforms - include isEnterprise from saved settings
         const oaevPlatforms = response.data?.openaevPlatforms || [];
         const enabledOAEVPlatforms = oaevPlatforms
           .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const }));
+          .map((p: any) => ({ 
+            id: p.id, 
+            name: p.name || 'OpenAEV', 
+            url: p.url, 
+            type: 'openaev' as const,
+            isEnterprise: p.isEnterprise, // Include saved EE status
+          }));
         
         setAvailablePlatforms([...enabledPlatforms, ...enabledOAEVPlatforms]);
         
@@ -1391,15 +1413,28 @@ const App: React.FC = () => {
             });
             
             if (settingsResponse?.success && settingsResponse.data) {
-              const platforms = settingsResponse.data?.platforms || [];
+              // Use openctiPlatforms to match the initial load logic
+              const platforms = settingsResponse.data?.openctiPlatforms || settingsResponse.data?.platforms || [];
               const enabledPlatforms = platforms
                 .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-                .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const }));
+                .map((p: any) => ({ 
+                  id: p.id, 
+                  name: p.name || 'OpenCTI', 
+                  url: p.url, 
+                  type: 'opencti' as const,
+                  isEnterprise: p.isEnterprise, // Include saved EE status
+                }));
               
               const oaevPlatformsFromSettings = settingsResponse.data?.openaevPlatforms || [];
               const enabledOAEVPlatforms = oaevPlatformsFromSettings
                 .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-                .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const }));
+                .map((p: any) => ({ 
+                  id: p.id, 
+                  name: p.name || 'OpenAEV', 
+                  url: p.url, 
+                  type: 'openaev' as const,
+                  isEnterprise: p.isEnterprise, // Include saved EE status
+                }));
               
               currentPlatforms = [...enabledPlatforms, ...enabledOAEVPlatforms];
               
@@ -2222,6 +2257,130 @@ const App: React.FC = () => {
       log.error(' AI description generation error:', error);
     } finally {
       setAiGeneratingDescription(false);
+    }
+  };
+
+  /**
+   * Discover additional entities using AI
+   * Analyzes page content and finds entities that regex patterns might have missed
+   */
+  const handleDiscoverEntitiesWithAI = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    // Check if AI is available
+    if (!aiSettings.available) {
+      log.warn('AI is not configured for entity discovery');
+      return;
+    }
+    
+    // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
+    const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
+    if (!hasEnterprisePlatform) {
+      log.warn('AI entity discovery requires at least one Enterprise Edition platform');
+      return;
+    }
+    
+    setAiDiscoveringEntities(true);
+    
+    try {
+      // Get page content from the active tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      let pageContent = '';
+      let pageTitle = currentPageTitle;
+      let pageUrl = currentPageUrl;
+      
+      if (tab?.id) {
+        const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
+        if (contentResponse?.success) {
+          pageContent = contentResponse.data?.content || '';
+          pageTitle = contentResponse.data?.title || pageTitle;
+          pageUrl = contentResponse.data?.url || pageUrl;
+        }
+      }
+      
+      if (!pageContent) {
+        log.error('Could not get page content for AI discovery');
+        return;
+      }
+      
+      // Build list of already detected entities (both found and not found)
+      const alreadyDetected = scanResultsEntities.map(e => ({
+        type: e.type,
+        name: e.name,
+        value: e.value,
+        found: e.found,
+      }));
+      
+      log.debug('AI discovery request:', {
+        alreadyDetectedCount: alreadyDetected.length,
+        contentLength: pageContent.length,
+      });
+      
+      const response = await chrome.runtime.sendMessage({
+        type: 'AI_DISCOVER_ENTITIES',
+        payload: {
+          pageTitle,
+          pageUrl,
+          pageContent,
+          alreadyDetected,
+        },
+      });
+      
+      if (response?.success && response.data?.entities) {
+        const discoveredEntities = response.data.entities;
+        log.info(`AI discovered ${discoveredEntities.length} new entities`);
+        
+        if (discoveredEntities.length > 0) {
+          // Add AI-discovered entities to scan results
+          const newEntities: ScanResultEntity[] = discoveredEntities.map((e: any, index: number) => ({
+            id: `ai-${Date.now()}-${index}`,
+            type: e.type,
+            name: e.name,
+            value: e.value,
+            found: false, // AI-discovered entities are not yet in the platform
+            discoveredByAI: true,
+            aiReason: e.reason,
+            aiConfidence: e.confidence,
+          }));
+          
+          // Add to scan results - avoid duplicates
+          const existingValues = new Set(
+            scanResultsEntities.map(e => (e.value || e.name).toLowerCase())
+          );
+          
+          const uniqueNewEntities = newEntities.filter(e => 
+            !existingValues.has((e.value || e.name).toLowerCase())
+          );
+          
+          if (uniqueNewEntities.length > 0) {
+            setScanResultsEntities(prev => [...prev, ...uniqueNewEntities]);
+            
+            // Highlight the new AI-discovered entities on the page
+            if (tab?.id) {
+              window.parent.postMessage({
+                type: 'XTM_HIGHLIGHT_AI_ENTITIES',
+                entities: uniqueNewEntities.map(e => ({
+                  type: e.type,
+                  value: e.value || e.name,
+                  name: e.name,
+                })),
+              }, '*');
+            }
+            
+            log.info(`Added ${uniqueNewEntities.length} AI-discovered entities to scan results`);
+          } else {
+            log.info('All AI-discovered entities were already in the list');
+          }
+        } else {
+          log.info('AI did not discover any additional entities');
+        }
+      } else {
+        log.error('AI entity discovery failed:', response?.error);
+      }
+    } catch (error) {
+      log.error('AI entity discovery error:', error);
+    } finally {
+      setAiDiscoveringEntities(false);
     }
   };
 
@@ -6487,6 +6646,54 @@ const App: React.FC = () => {
               </Box>
             )}
             
+            {/* Discover more with AI button - always visible */}
+            {(() => {
+              const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
+              const isAiButtonDisabled = aiDiscoveringEntities || !aiSettings.available || !hasEnterprisePlatform;
+              const aiColors = getAiColor(mode);
+              
+              // Determine tooltip message based on state
+              let tooltipMessage = 'Use AI to find additional entities that may have been missed by pattern matching';
+              if (aiDiscoveringEntities) {
+                tooltipMessage = 'Analyzing page content...';
+              } else if (!aiSettings.available) {
+                tooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
+              } else if (!hasEnterprisePlatform) {
+                tooltipMessage = 'Requires at least one Enterprise Edition platform';
+              }
+              
+              return (
+                <Box sx={{ mb: 2 }}>
+                  <Tooltip title={tooltipMessage} placement="top">
+                    <span>
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={handleDiscoverEntitiesWithAI}
+                        disabled={isAiButtonDisabled}
+                        startIcon={aiDiscoveringEntities ? <CircularProgress size={16} /> : <AutoAwesomeOutlined />}
+                        sx={{
+                          textTransform: 'none',
+                          borderColor: aiColors.main,
+                          color: aiColors.main,
+                          '&:hover': {
+                            borderColor: aiColors.dark,
+                            bgcolor: hexToRGB(aiColors.main, 0.08),
+                          },
+                          '&.Mui-disabled': {
+                            borderColor: hexToRGB(aiColors.main, 0.3),
+                            color: hexToRGB(aiColors.main, 0.5),
+                          },
+                        }}
+                      >
+                        {aiDiscoveringEntities ? 'Discovering...' : 'Discover more with AI'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+              );
+            })()}
+            
             {/* Select All / Deselect All for new (not found) entities */}
             {(() => {
               const notFoundEntities = filteredScanResultsEntities.filter(e => !e.found);
@@ -6535,7 +6742,8 @@ const App: React.FC = () => {
             {/* Entity list */}
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               {filteredScanResultsEntities.map((entity, index) => {
-                const entityColor = itemColor(entity.type, mode === 'dark');
+                const aiColors = getAiColor(mode);
+                const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
                 const displayType = entity.type.replace('oaev-', '');
                 
                 // Count platforms by type
@@ -6545,6 +6753,11 @@ const App: React.FC = () => {
                 
                 const entityValue = entity.value || entity.name;
                 const isSelected = selectedScanItems.has(entityValue);
+                
+                // Determine border color: AI color for AI-discovered, green for found, orange for not found
+                const borderColor = entity.discoveredByAI 
+                  ? aiColors.main 
+                  : (entity.found ? 'success.main' : 'warning.main');
                 
                 return (
                   <Paper
@@ -6557,20 +6770,24 @@ const App: React.FC = () => {
                       gap: 1,
                       p: 1.5,
                       mb: 1,
-                      bgcolor: isSelected ? hexToRGB('#1976d2', 0.08) : 'background.paper',
+                      bgcolor: isSelected 
+                        ? hexToRGB('#1976d2', 0.08) 
+                        : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.05) : 'background.paper'),
                       border: 1,
-                      borderColor: isSelected ? 'primary.main' : (entity.found ? 'success.main' : 'warning.main'),
+                      borderColor: isSelected ? 'primary.main' : borderColor,
                       borderRadius: 1,
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                       borderLeftWidth: 4,
                       '&:hover': {
-                        bgcolor: isSelected ? hexToRGB('#1976d2', 0.12) : 'action.hover',
+                        bgcolor: isSelected 
+                          ? hexToRGB('#1976d2', 0.12) 
+                          : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.1) : 'action.hover'),
                         boxShadow: 1,
                       },
                     }}
                   >
-                    {/* Checkbox for non-found entities */}
+                    {/* Checkbox for non-found entities (including AI-discovered) */}
                     {!entity.found && (
                       <Checkbox
                         checked={isSelected}
@@ -6591,7 +6808,7 @@ const App: React.FC = () => {
                         sx={{ 
                           p: 0.5, 
                           mr: 0.5,
-                          '&.Mui-checked': { color: 'primary.main' },
+                          '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : 'primary.main' },
                         }}
                       />
                     )}
@@ -6601,11 +6818,29 @@ const App: React.FC = () => {
                         {entity.name || entity.value}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        <Typography variant="caption" sx={{ color: entity.discoveredByAI ? aiColors.main : 'text.secondary' }}>
                           {displayType.replace(/-/g, ' ')}
                         </Typography>
+                        {/* Show AI indicator for AI-discovered entities */}
+                        {entity.discoveredByAI && (
+                          <Tooltip title={entity.aiReason || 'Detected by AI analysis'} placement="top">
+                            <Chip 
+                              icon={<AutoAwesomeOutlined sx={{ fontSize: '0.7rem !important' }} />}
+                              label="AI"
+                              size="small" 
+                              sx={{ 
+                                height: 16, 
+                                fontSize: '0.6rem',
+                                bgcolor: hexToRGB(aiColors.main, 0.2),
+                                color: aiColors.main,
+                                '& .MuiChip-label': { px: 0.5 },
+                                '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+                              }} 
+                            />
+                          </Tooltip>
+                        )}
                         {/* Show platform counts */}
-                        {(octiCount > 0 || oaevCount > 0) && (
+                        {!entity.discoveredByAI && (octiCount > 0 || oaevCount > 0) && (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
                             {octiCount > 0 && (
                               <Chip 
@@ -6637,12 +6872,17 @@ const App: React.FC = () => {
                         )}
                       </Box>
                     </Box>
+                    {/* Status chip: Found (green), New (orange), or AI (purple) */}
                     <Chip
-                      label={entity.found ? 'Found' : 'New'}
+                      label={entity.found ? 'Found' : (entity.discoveredByAI ? 'AI' : 'New')}
                       size="small"
-                      color={entity.found ? 'success' : 'warning'}
                       variant="outlined"
-                      sx={{ minWidth: 50 }}
+                      sx={{ 
+                        minWidth: 50,
+                        borderColor: entity.discoveredByAI ? aiColors.main : undefined,
+                        color: entity.discoveredByAI ? aiColors.main : undefined,
+                      }}
+                      color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
                     />
                     <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
                   </Paper>

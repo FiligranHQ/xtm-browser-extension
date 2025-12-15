@@ -7,7 +7,7 @@
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
 import { AIClient, isAIAvailable, parseAIJsonResponse } from '../shared/api/ai-client';
-import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest } from '../shared/api/ai-client';
+import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest, EntityDiscoveryRequest } from '../shared/api/ai-client';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
@@ -700,12 +700,22 @@ async function handleMessage(
     switch (message.type) {
       case 'GET_SETTINGS': {
         const settings = await getSettings();
+        // Debug: Log platform EE status when settings are requested
+        log.debug('GET_SETTINGS: OpenCTI platforms EE status:', 
+          settings.openctiPlatforms?.map(p => ({ id: p.id, name: p.name, isEnterprise: p.isEnterprise })));
         sendResponse(successResponse(settings));
         break;
       }
       
       case 'SAVE_SETTINGS': {
         const settings = message.payload as ExtensionSettings;
+        
+        // Debug: Log platform EE status before saving
+        log.debug('SAVE_SETTINGS: OpenCTI platforms EE status:', 
+          settings.openctiPlatforms?.map(p => ({ id: p.id, name: p.name, isEnterprise: p.isEnterprise })));
+        log.debug('SAVE_SETTINGS: OpenAEV platforms EE status:', 
+          settings.openaevPlatforms?.map(p => ({ id: p.id, name: p.name, isEnterprise: p.isEnterprise })));
+        
         await saveSettings(settings);
         
         // Clean up orphaned caches for OpenCTI
@@ -3343,6 +3353,71 @@ async function handleMessage(
           sendResponse({ 
             success: false, 
             error: error instanceof Error ? error.message : 'AI generation failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'AI_DISCOVER_ENTITIES': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse(errorResponse('AI not configured'));
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as EntityDiscoveryRequest;
+          
+          log.debug('AI_DISCOVER_ENTITIES request:', {
+            pageTitle: request.pageTitle,
+            alreadyDetectedCount: request.alreadyDetected?.length || 0,
+            contentLength: request.pageContent?.length || 0,
+          });
+          
+          const response = await aiClient.discoverEntities(request);
+          
+          log.debug('AI discovery response success:', response.success);
+          
+          if (response.success && response.content) {
+            const parsed = parseAIJsonResponse<{ entities: Array<{
+              type: string;
+              name: string;
+              value: string;
+              reason: string;
+              confidence: 'high' | 'medium' | 'low';
+              excerpt?: string;
+            }> }>(response.content);
+            
+            log.debug('Parsed AI discovery response:', parsed);
+            
+            if (!parsed || !parsed.entities || !Array.isArray(parsed.entities)) {
+              log.warn('AI discovery returned invalid structure, returning empty');
+              sendResponse(successResponse({ entities: [] }));
+              break;
+            }
+            
+            // Filter out entities that were already detected (double-check)
+            const alreadyDetectedValues = new Set(
+              request.alreadyDetected.map(e => (e.value || e.name).toLowerCase())
+            );
+            
+            const newEntities = parsed.entities.filter(e => 
+              !alreadyDetectedValues.has((e.value || e.name).toLowerCase())
+            );
+            
+            log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${request.alreadyDetected.length} already detected)`);
+            
+            sendResponse(successResponse({ entities: newEntities }));
+          } else {
+            log.error('AI entity discovery failed:', response.error);
+            sendResponse({ success: false, error: response.error || 'Failed to discover entities' });
+          }
+        } catch (error) {
+          log.error('AI entity discovery exception:', error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI discovery failed' 
           });
         }
         break;

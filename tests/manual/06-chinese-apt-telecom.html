@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volt Typhoon: Telecom Infrastructure Compromise | CrowdStrike Intelligence</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.75;
+        }
+        
+        .red-accent {
+            background: linear-gradient(90deg, #e31937, #ff2d4b);
+            height: 3px;
+        }
+        
+        header {
+            background: #1a1a1a;
+            color: white;
+            padding: 15px 0;
+        }
+        
+        .header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: #e31937;
+            border-radius: 6px;
+        }
+        
+        .breadcrumb {
+            font-size: 13px;
+            color: #888;
+        }
+        
+        .breadcrumb a { color: #888; text-decoration: none; }
+        .breadcrumb span { color: #e31937; }
+        
+        .hero {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: white;
+            padding: 70px 40px;
+        }
+        
+        .hero-inner {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .threat-level {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(227, 25, 55, 0.2);
+            border: 1px solid #e31937;
+            color: #ff4d6a;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 25px;
+        }
+        
+        .threat-level::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #e31937;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        h1 {
+            font-size: 2.6rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: #b0b0b0;
+            font-weight: 300;
+            max-width: 700px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 50px 40px;
+        }
+        
+        .key-intel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: -80px 0 50px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .intel-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border-left: 4px solid #e31937;
+        }
+        
+        .intel-card h3 {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .intel-card p {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin: 0;
+        }
+        
+        h2 {
+            font-size: 1.7rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin: 55px 0 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        h2::before {
+            content: '';
+            width: 4px;
+            height: 30px;
+            background: #e31937;
+            border-radius: 2px;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin: 35px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 18px;
+            color: #4a4a4a;
+        }
+        
+        .adversary-card {
+            background: linear-gradient(135deg, #f8f8f8, #f0f0f0);
+            border-radius: 16px;
+            padding: 35px;
+            margin: 35px 0;
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+        
+        .adversary-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #e31937, #ff4d6a);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+        
+        .adversary-info h4 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        
+        .adversary-aliases {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        .adversary-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .tag {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .tag-nation { border-color: #e31937; color: #e31937; }
+        
+        .geo-targets {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .geo-item {
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 20px 15px;
+            text-align: center;
+        }
+        
+        .geo-flag { font-size: 2rem; margin-bottom: 8px; }
+        .geo-name { font-size: 13px; font-weight: 600; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 14px;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        
+        th {
+            background: #1a1a1a;
+            color: white;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        tr:hover { background: #fafafa; }
+        
+        .mitre-tag {
+            display: inline-block;
+            background: #f0f0f0;
+            color: #333;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .hostname-highlight {
+            background: linear-gradient(135deg, #fff3cd, #ffeeba);
+            color: #856404;
+            padding: 3px 10px;
+            border-radius: 5px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        .ioc-section {
+            background: #1a1a1a;
+            color: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin: 40px 0;
+        }
+        
+        .ioc-section h3 {
+            color: white;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0 0 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .ioc-list {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .ioc-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .ioc-item:last-child { border-bottom: none; }
+        
+        .ioc-type {
+            background: #e31937;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 15px;
+            min-width: 70px;
+            text-align: center;
+        }
+        
+        .ioc-value { color: #ccc; word-break: break-all; }
+        
+        .timeline {
+            position: relative;
+            margin: 40px 0;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #e31937, #1a1a1a);
+        }
+        
+        .timeline-item {
+            padding-left: 60px;
+            padding-bottom: 30px;
+            position: relative;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 5px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border: 3px solid #e31937;
+            border-radius: 50%;
+        }
+        
+        .timeline-date {
+            font-weight: 600;
+            color: #e31937;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .code-block {
+            background: #0d0d0d;
+            color: #e0e0e0;
+            padding: 25px;
+            border-radius: 10px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 25px 0;
+            border: 1px solid #333;
+        }
+        
+        .code-block .comment { color: #666; }
+        .code-block .string { color: #7ec699; }
+        .code-block .command { color: #e31937; }
+        
+        blockquote {
+            background: linear-gradient(135deg, #fff5f5, #ffe5e5);
+            border-left: 4px solid #e31937;
+            padding: 25px 30px;
+            margin: 35px 0;
+            border-radius: 0 12px 12px 0;
+            font-style: italic;
+            color: #666;
+        }
+        
+        footer {
+            background: #1a1a1a;
+            color: #666;
+            padding: 40px;
+            text-align: center;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="red-accent"></div>
+    
+    <header>
+        <div class="header-inner">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                CrowdStrike Intelligence
+            </div>
+            <div class="breadcrumb">
+                <a href="#">Reports</a> / <a href="#">APT</a> / <span>Volt Typhoon</span>
+            </div>
+        </div>
+    </header>
+    
+    <div class="hero">
+        <div class="hero-inner">
+            <div class="threat-level">Active Campaign</div>
+            <h1>Volt Typhoon: China-Nexus Threat Actor Targeting Critical Telecom Infrastructure</h1>
+            <p class="hero-subtitle">Stealthy intrusion campaign prepositioning for potential disruption of communications during geopolitical crisis</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="key-intel">
+            <div class="intel-card">
+                <h3>Attribution</h3>
+                <p>People's Republic of China (PRC)</p>
+            </div>
+            <div class="intel-card">
+                <h3>Primary Motivation</h3>
+                <p>Espionage & Prepositioning</p>
+            </div>
+            <div class="intel-card">
+                <h3>Active Since</h3>
+                <p>Mid-2021 (escalating 2024)</p>
+            </div>
+            <div class="intel-card">
+                <h3>Confidence Level</h3>
+                <p>High Confidence</p>
+            </div>
+        </div>
+        
+        <div class="adversary-card">
+            <div class="adversary-avatar">🐉</div>
+            <div class="adversary-info">
+                <h4>VOLT TYPHOON</h4>
+                <div class="adversary-aliases">Also tracked as: VANGUARD PANDA, Bronze Silhouette, DEV-0391, UNC3236</div>
+                <div class="adversary-tags">
+                    <span class="tag tag-nation">🇨🇳 China</span>
+                    <span class="tag">State-Sponsored</span>
+                    <span class="tag">Living off the Land</span>
+                    <span class="tag">Critical Infrastructure</span>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Executive Summary</h2>
+        <p>CrowdStrike Intelligence has tracked a significant escalation in activity by the China-nexus threat actor Volt Typhoon throughout 2024. Unlike typical Chinese APT operations focused on intellectual property theft, Volt Typhoon demonstrates a singular focus on establishing persistent access to critical infrastructure networks—particularly telecommunications providers—for potential future disruptive operations.</p>
+        
+        <p>The campaign has affected organizations across the <strong>United States</strong>, <strong>Guam</strong>, <strong>Japan</strong>, <strong>Australia</strong>, and <strong>Philippines</strong>—regions of strategic importance in potential Taiwan Strait contingencies. The threat actor's techniques emphasize stealth and persistence over immediate data exfiltration.</p>
+        
+        <h2>Geographic Targeting</h2>
+        <div class="geo-targets">
+            <div class="geo-item">
+                <div class="geo-flag">🇺🇸</div>
+                <div class="geo-name">United States</div>
+            </div>
+            <div class="geo-item">
+                <div class="geo-flag">🇬🇺</div>
+                <div class="geo-name">Guam</div>
+            </div>
+            <div class="geo-item">
+                <div class="geo-flag">🇯🇵</div>
+                <div class="geo-name">Japan</div>
+            </div>
+            <div class="geo-item">
+                <div class="geo-flag">🇦🇺</div>
+                <div class="geo-name">Australia</div>
+            </div>
+            <div class="geo-item">
+                <div class="geo-flag">🇵🇭</div>
+                <div class="geo-name">Philippines</div>
+            </div>
+        </div>
+        
+        <h2>Campaign Timeline</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-date">June 2024</div>
+                <p>Compromise of major US telecom provider discovered during incident response engagement. Attackers had maintained access for over 18 months.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">August 2024</div>
+                <p>Additional victims identified in Guam telecommunications sector. Systems including <span class="hostname-highlight">oaev-test-win-05</span> found compromised with web shells.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">September 2024</div>
+                <p>Evidence of lateral movement to network management systems. Attackers accessed router configurations and network topology documentation.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">October 2024</div>
+                <p>Japanese and Australian telecom providers report similar intrusions. Linux systems <span class="hostname-highlight">oaev-test-linux-01</span> compromised for persistent access.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">November 2024</div>
+                <p>DNS tunneling communications observed to <span class="hostname-highlight">honey.scanme.sh</span>. Threat actor begins targeting undersea cable management systems.</p>
+            </div>
+        </div>
+        
+        <h2>Technical Analysis</h2>
+        
+        <h3>Living off the Land Techniques</h3>
+        <p>Volt Typhoon almost exclusively uses built-in operating system tools and legitimate administrative utilities for post-compromise activity. This "living off the land" approach significantly complicates detection, as the tools generate activity indistinguishable from normal system administration.</p>
+        
+        <div class="code-block">
+<span class="comment"># Observed reconnaissance commands</span>
+<span class="command">wmic</span> process list brief
+<span class="command">netstat</span> -ano | findstr ESTABLISHED
+<span class="command">systeminfo</span>
+<span class="command">net</span> user /domain
+<span class="command">net</span> group <span class="string">"Domain Admins"</span> /domain
+
+<span class="comment"># Network discovery using native tools</span>
+<span class="command">arp</span> -a
+<span class="command">route</span> print
+<span class="command">nslookup</span> <span class="string">oaev-test-win-02</span>
+
+<span class="comment"># Credential access via NTDS.dit</span>
+<span class="command">ntdsutil</span> <span class="string">"ac i ntds"</span> <span class="string">"ifm"</span> <span class="string">"create full c:\temp"</span> q q
+        </div>
+        
+        <h3>Compromised Network Equipment</h3>
+        <p>A distinguishing feature of Volt Typhoon operations is the compromise of network edge devices—particularly small office/home office (SOHO) routers and VPN appliances. These compromised devices serve as operational relay nodes, making attribution and traffic analysis more difficult.</p>
+        
+        <h2>MITRE ATT&CK Mapping</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Tactic</th>
+                    <th>ID</th>
+                    <th>Technique</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Initial Access</td>
+                    <td><span class="mitre-tag">T1190</span></td>
+                    <td>Exploit Public-Facing Application</td>
+                </tr>
+                <tr>
+                    <td>Execution</td>
+                    <td><span class="mitre-tag">T1059.001</span></td>
+                    <td>PowerShell</td>
+                </tr>
+                <tr>
+                    <td>Persistence</td>
+                    <td><span class="mitre-tag">T1505.003</span></td>
+                    <td>Web Shell</td>
+                </tr>
+                <tr>
+                    <td>Defense Evasion</td>
+                    <td><span class="mitre-tag">T1218.011</span></td>
+                    <td>Rundll32</td>
+                </tr>
+                <tr>
+                    <td>Credential Access</td>
+                    <td><span class="mitre-tag">T1003.003</span></td>
+                    <td>NTDS</td>
+                </tr>
+                <tr>
+                    <td>Discovery</td>
+                    <td><span class="mitre-tag">T1016</span></td>
+                    <td>System Network Configuration Discovery</td>
+                </tr>
+                <tr>
+                    <td>Lateral Movement</td>
+                    <td><span class="mitre-tag">T1021.002</span></td>
+                    <td>SMB/Windows Admin Shares</td>
+                </tr>
+                <tr>
+                    <td>Collection</td>
+                    <td><span class="mitre-tag">T1560</span></td>
+                    <td>Archive Collected Data</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="ioc-section">
+            <h3>Indicators of Compromise</h3>
+            <div class="ioc-list">
+                <div class="ioc-item">
+                    <span class="ioc-type">IPv4</span>
+                    <span class="ioc-value">149.28.134.209</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">IPv4</span>
+                    <span class="ioc-value">139.180.194.115</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Domain</span>
+                    <span class="ioc-value">honey.scanme.sh</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Domain</span>
+                    <span class="ioc-value">telecom-update.net</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">SHA256</span>
+                    <span class="ioc-value">a1b2c3d4e5f6789012345678901234567890abcdefabcdefabcdef123456789</span>
+                </div>
+                <div class="ioc-item">
+                    <span class="ioc-type">Web Shell</span>
+                    <span class="ioc-value">/admin/shell.aspx</span>
+                </div>
+            </div>
+        </div>
+        
+        <blockquote>
+            "Volt Typhoon represents a departure from traditional Chinese cyber espionage. The focus on persistence and prepositioning in critical infrastructure suggests planning for potential disruptive or destructive operations during a future crisis." — CrowdStrike Intelligence
+        </blockquote>
+        
+        <h2>Recommendations</h2>
+        <ul style="margin: 20px 0 20px 25px; color: #4a4a4a;">
+            <li>Implement robust network segmentation between IT and telecommunications infrastructure</li>
+            <li>Enable comprehensive logging for all administrative tools (PowerShell, WMI, etc.)</li>
+            <li>Hunt for anomalous use of legitimate system utilities during non-business hours</li>
+            <li>Audit and secure all network edge devices, particularly SOHO routers</li>
+            <li>Implement privileged access management for domain administrator accounts</li>
+        </ul>
+    </div>
+    
+    <footer>
+        <p>© 2024 CrowdStrike, Inc. All rights reserved. | Adversary Intelligence</p>
+    </footer>
+</body>
+</html>
+

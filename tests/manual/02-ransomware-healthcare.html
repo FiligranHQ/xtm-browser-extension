@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Sector Under Siege: LockBit 3.0 Analysis | SecureHealth Weekly</title>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: #f8f9fa;
+            color: #2d3748;
+            line-height: 1.9;
+        }
+        
+        .top-bar {
+            background: linear-gradient(90deg, #1a365d, #2c5282);
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+            font-size: 13px;
+        }
+        
+        nav {
+            background: white;
+            border-bottom: 3px solid #e53e3e;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .nav-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-family: 'Merriweather', serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a365d;
+        }
+        
+        .logo span { color: #e53e3e; }
+        
+        .nav-links a {
+            color: #4a5568;
+            text-decoration: none;
+            margin-left: 30px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 50px 30px;
+        }
+        
+        .category {
+            color: #e53e3e;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        h1 {
+            font-family: 'Merriweather', serif;
+            font-size: 2.5rem;
+            color: #1a365d;
+            line-height: 1.3;
+            margin-bottom: 25px;
+        }
+        
+        .author-info {
+            display: flex;
+            align-items: center;
+            padding: 25px 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 35px;
+        }
+        
+        .author-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            margin-right: 15px;
+        }
+        
+        .author-details { font-size: 14px; }
+        .author-name { font-weight: 600; color: #2d3748; }
+        .author-date { color: #718096; }
+        
+        .featured-image {
+            width: 100%;
+            height: 350px;
+            background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 50%, #4299e1 100%);
+            border-radius: 12px;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 4rem;
+        }
+        
+        h2 {
+            font-family: 'Merriweather', serif;
+            font-size: 1.6rem;
+            color: #1a365d;
+            margin: 45px 0 20px;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            color: #2c5282;
+            margin: 30px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            color: #4a5568;
+        }
+        
+        .alert-box {
+            background: linear-gradient(135deg, #fff5f5, #fed7d7);
+            border-left: 4px solid #e53e3e;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .alert-box h4 {
+            color: #c53030;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .alert-box p { margin: 0; color: #742a2a; }
+        
+        .info-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        
+        .info-card h4 {
+            color: #1a365d;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e53e3e;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 14px;
+        }
+        
+        th {
+            background: #1a365d;
+            color: white;
+            padding: 14px 18px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        tr:nth-child(even) { background: #f7fafc; }
+        tr:hover { background: #edf2f7; }
+        
+        .tech-id {
+            display: inline-block;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .hostname {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .severity {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .severity-critical { background: #fed7d7; color: #c53030; }
+        .severity-high { background: #feebc8; color: #c05621; }
+        .severity-medium { background: #fefcbf; color: #975a16; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .stat-box {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #e53e3e;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #718096;
+            margin-top: 5px;
+        }
+        
+        .code-block {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 25px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 25px 0;
+        }
+        
+        .code-block .comment { color: #68d391; }
+        .code-block .string { color: #fbd38d; }
+        .code-block .keyword { color: #63b3ed; }
+        
+        blockquote {
+            background: #f7fafc;
+            border-left: 4px solid #4299e1;
+            padding: 25px;
+            margin: 30px 0;
+            font-style: italic;
+            color: #4a5568;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .tag {
+            display: inline-block;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin: 3px;
+        }
+        
+        footer {
+            background: #1a365d;
+            color: white;
+            padding: 50px 30px;
+            margin-top: 60px;
+        }
+        
+        .footer-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        🔒 SecureHealth Weekly — Cybersecurity Intelligence for Healthcare Organizations
+    </div>
+    
+    <nav>
+        <div class="nav-content">
+            <div class="logo">Secure<span>Health</span></div>
+            <div class="nav-links">
+                <a href="#">Threat Intel</a>
+                <a href="#">Research</a>
+                <a href="#">Compliance</a>
+                <a href="#">Resources</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <article>
+            <div class="category">Ransomware Analysis</div>
+            <h1>Healthcare Sector Under Siege: LockBit 3.0 Campaign Targets Hospital Networks Across North America</h1>
+            
+            <div class="author-info">
+                <div class="author-avatar"></div>
+                <div class="author-details">
+                    <div class="author-name">Dr. Sarah Mitchell, CISSP</div>
+                    <div class="author-date">December 10, 2024 • 15 min read</div>
+                </div>
+            </div>
+            
+            <div class="featured-image">🏥</div>
+            
+            <p>A coordinated ransomware campaign leveraging LockBit 3.0 has compromised multiple healthcare organizations across the United States and Canada over the past six weeks. The attacks have resulted in significant operational disruptions, with several hospitals reporting delays in patient care and emergency services.</p>
+            
+            <div class="alert-box">
+                <h4>⚠️ Active Threat Advisory</h4>
+                <p>This campaign remains ongoing. Healthcare organizations should immediately review their security posture and implement the mitigations outlined in this report.</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-number">23</div>
+                    <div class="stat-label">Organizations Affected</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">$45M</div>
+                    <div class="stat-label">Ransom Demands</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">847K</div>
+                    <div class="stat-label">Patient Records Exposed</div>
+                </div>
+            </div>
+            
+            <h2>Campaign Overview</h2>
+            <p>Our incident response teams have been engaged with multiple healthcare organizations responding to LockBit 3.0 infections since late October 2024. The attacks share common characteristics including initial access through compromised VPN appliances and rapid lateral movement through Active Directory environments. Organizations in <strong>Chicago</strong>, <strong>Houston</strong>, <strong>Toronto</strong>, and <strong>Phoenix</strong> have been particularly impacted.</p>
+            
+            <p>The threat actors demonstrated deep knowledge of healthcare IT infrastructure, specifically targeting Electronic Health Record (EHR) systems, medical imaging archives (PACS), and laboratory information systems. The encryption routine was designed to maximize operational impact while preserving some systems needed for ransom negotiation.</p>
+            
+            <h2>Affected Infrastructure</h2>
+            <p>Analysis of compromised systems reveals a pattern of targeting Windows Server infrastructure hosting critical healthcare applications. The following systems were identified as key targets in multiple incidents:</p>
+            
+            <div class="info-card">
+                <h4>Compromised Assets</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hostname</th>
+                            <th>Role</th>
+                            <th>Impact</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="hostname">oaev-test-win-05</span></td>
+                            <td>Domain Controller</td>
+                            <td><span class="severity severity-critical">Critical</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="hostname">oaev-test-win-02</span></td>
+                            <td>EHR Application Server</td>
+                            <td><span class="severity severity-critical">Critical</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="hostname">oaev-test-linux-01</span></td>
+                            <td>PACS Archive</td>
+                            <td><span class="severity severity-high">High</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="hostname">HIS-PROD-SQL01</span></td>
+                            <td>Database Server</td>
+                            <td><span class="severity severity-critical">Critical</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="hostname">LAB-SRV-03</span></td>
+                            <td>Lab Information System</td>
+                            <td><span class="severity severity-high">High</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <h2>Attack Chain Analysis</h2>
+            
+            <h3>Phase 1: Initial Access</h3>
+            <p>The threat actors gained initial access through exploitation of CVE-2024-21887, a critical vulnerability in Ivanti Connect Secure VPN appliances. Organizations that had not applied the January 2024 security patches were particularly vulnerable. Initial reconnaissance commands were executed to enumerate the network topology and identify high-value targets.</p>
+            
+            <h3>Phase 2: Credential Harvesting</h3>
+            <p>Once inside the network, attackers deployed Mimikatz variants to harvest credentials from memory. The attackers specifically targeted service accounts with elevated privileges, particularly those used for backup operations and database access. Beaconing traffic was observed to infrastructure at 192.168.45.128 and command callbacks to honey.scanme.sh for DNS tunneling.</p>
+            
+            <div class="code-block">
+<span class="comment"># Observed PowerShell reconnaissance commands</span>
+Get-ADComputer -Filter * | Select-Object Name,OperatingSystem
+Get-ADUser -Filter {ServicePrincipalName -ne <span class="string">"$null"</span>} -Properties ServicePrincipalName
+<span class="keyword">Invoke-Command</span> -ComputerName <span class="string">"oaev-test-win-05"</span> -ScriptBlock { Get-Process }
+nltest /dclist:healthcare.local
+            </div>
+            
+            <h3>Phase 3: Lateral Movement</h3>
+            <p>Lateral movement was achieved through a combination of Remote Desktop Protocol (RDP), Windows Management Instrumentation (WMI), and PsExec. The attackers moved methodically through the network, targeting systems with access to patient data and critical healthcare applications.</p>
+            
+            <h2>MITRE ATT&CK Techniques</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tactic</th>
+                        <th>Technique ID</th>
+                        <th>Technique Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Initial Access</td>
+                        <td><span class="tech-id">T1190</span></td>
+                        <td>Exploit Public-Facing Application</td>
+                    </tr>
+                    <tr>
+                        <td>Execution</td>
+                        <td><span class="tech-id">T1059.001</span></td>
+                        <td>PowerShell</td>
+                    </tr>
+                    <tr>
+                        <td>Persistence</td>
+                        <td><span class="tech-id">T1136.002</span></td>
+                        <td>Domain Account Creation</td>
+                    </tr>
+                    <tr>
+                        <td>Privilege Escalation</td>
+                        <td><span class="tech-id">T1068</span></td>
+                        <td>Exploitation for Privilege Escalation</td>
+                    </tr>
+                    <tr>
+                        <td>Defense Evasion</td>
+                        <td><span class="tech-id">T1070.001</span></td>
+                        <td>Clear Windows Event Logs</td>
+                    </tr>
+                    <tr>
+                        <td>Credential Access</td>
+                        <td><span class="tech-id">T1003.001</span></td>
+                        <td>LSASS Memory</td>
+                    </tr>
+                    <tr>
+                        <td>Lateral Movement</td>
+                        <td><span class="tech-id">T1021.001</span></td>
+                        <td>Remote Desktop Protocol</td>
+                    </tr>
+                    <tr>
+                        <td>Impact</td>
+                        <td><span class="tech-id">T1486</span></td>
+                        <td>Data Encrypted for Impact</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h2>Network Indicators</h2>
+            <div class="info-card">
+                <h4>Command & Control Infrastructure</h4>
+                <p>The following network indicators were observed across multiple incidents:</p>
+                <ul style="margin: 20px 0 0 25px;">
+                    <li><strong>IP Address:</strong> 45.227.253.102 (Bulletproof hosting, Moldova)</li>
+                    <li><strong>IP Address:</strong> 185.220.101.55 (Tor exit node)</li>
+                    <li><strong>IP Address:</strong> 91.215.85.147 (C2 server)</li>
+                    <li><strong>Domain:</strong> honey.scanme.sh (DNS beacon)</li>
+                    <li><strong>Domain:</strong> lockbit-decryptor.onion (Ransom portal)</li>
+                    <li><strong>User-Agent:</strong> Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1)</li>
+                </ul>
+            </div>
+            
+            <blockquote>
+                "The sophistication of these attacks suggests a well-resourced threat actor with specific expertise in healthcare environments. The timing—during the fall respiratory illness season—appears intentional to maximize pressure on healthcare systems."
+            </blockquote>
+            
+            <h2>File-Based Indicators</h2>
+            <p>Security teams should monitor for the following file indicators:</p>
+            <ul style="margin: 20px 0 20px 25px;">
+                <li><strong>SHA256:</strong> 3ba4cd2947e03d2a5952ad8d02061e8a9a6df0fc66fd3ee49a6b7a4f8e0d4f1a</li>
+                <li><strong>SHA256:</strong> 7f9a8cb2e5d3f1a4b6c8e2d9f0a1b3c5d7e9f1a2b4c6d8e0f2a4b6c8d0e2f4a6</li>
+                <li><strong>MD5:</strong> a1b2c3d4e5f67890abcdef1234567890</li>
+                <li><strong>Filename patterns:</strong> *_lockbit.README.txt, *.lockbit</li>
+            </ul>
+            
+            <h2>Recommendations</h2>
+            <p>Healthcare organizations should implement the following mitigations immediately:</p>
+            <ol style="margin: 20px 0 20px 25px;">
+                <li>Patch all Ivanti Connect Secure appliances to the latest version</li>
+                <li>Implement network segmentation between clinical and administrative systems</li>
+                <li>Enable multi-factor authentication for all remote access</li>
+                <li>Review and restrict service account privileges</li>
+                <li>Implement offline backup solutions for critical systems</li>
+                <li>Deploy endpoint detection and response (EDR) solutions across all servers</li>
+            </ol>
+            
+            <div style="margin-top: 40px;">
+                <strong>Tags:</strong>
+                <span class="tag">LockBit</span>
+                <span class="tag">Ransomware</span>
+                <span class="tag">Healthcare</span>
+                <span class="tag">HIPAA</span>
+                <span class="tag">Critical Infrastructure</span>
+            </div>
+        </article>
+    </div>
+    
+    <footer>
+        <div class="footer-content">
+            <p>© 2024 SecureHealth Weekly. Protecting healthcare through intelligence.</p>
+        </div>
+    </footer>
+</body>
+</html>
+

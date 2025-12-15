@@ -1297,6 +1297,29 @@ export class OpenCTIClient {
         'phone-number': 'Phone-Number',
         'bankaccount': 'Bank-Account',
         'bank-account': 'Bank-Account',
+        'artifact': 'Artifact',
+        'directory': 'Directory',
+        'emailmessage': 'Email-Message',
+        'email-message': 'Email-Message',
+        'mutex': 'Mutex',
+        'networktraffic': 'Network-Traffic',
+        'network-traffic': 'Network-Traffic',
+        'process': 'Process',
+        'software': 'Software',
+        'windowsregistrykey': 'Windows-Registry-Key',
+        'windows-registry-key': 'Windows-Registry-Key',
+        'windowsregistryvaluetype': 'Windows-Registry-Value-Type',
+        'windows-registry-value-type': 'Windows-Registry-Value-Type',
+        'x509certificate': 'X509-Certificate',
+        'x509-certificate': 'X509-Certificate',
+        'paymentcard': 'Payment-Card',
+        'payment-card': 'Payment-Card',
+        'credential': 'Credential',
+        'trackingnumber': 'Tracking-Number',
+        'tracking-number': 'Tracking-Number',
+        'mediacontent': 'Media-Content',
+        'media-content': 'Media-Content',
+        'text': 'Text',
       };
       return typeNormalizationMap[type.toLowerCase()] || type;
     };
@@ -1316,6 +1339,21 @@ export class OpenCTIClient {
       'User-Agent': 'UserAgent',
       'Phone-Number': 'PhoneNumber',
       'Bank-Account': 'BankAccount',
+      'Artifact': 'Artifact',
+      'Directory': 'Directory',
+      'Email-Message': 'EmailMessage',
+      'Mutex': 'Mutex',
+      'Network-Traffic': 'NetworkTraffic',
+      'Process': 'Process',
+      'Software': 'Software',
+      'Windows-Registry-Key': 'WindowsRegistryKey',
+      'Windows-Registry-Value-Type': 'WindowsRegistryValueType',
+      'X509-Certificate': 'X509Certificate',
+      'Payment-Card': 'PaymentCard',
+      'Credential': 'Credential',
+      'Tracking-Number': 'TrackingNumber',
+      'Media-Content': 'MediaContent',
+      'Text': 'Text',
     };
 
     // Normalize to STIX format first
@@ -1323,13 +1361,98 @@ export class OpenCTIClient {
     // Then convert to GraphQL format
     const gqlType = stixToGqlType[stixType] || stixType.replace(/-/g, '');
     
+    // Helper to detect hash type from value
+    const detectHashType = (value: string): HashType | null => {
+      const cleanValue = value.trim().toLowerCase();
+      if (/^[a-f0-9]{32}$/i.test(cleanValue)) return 'MD5';
+      if (/^[a-f0-9]{40}$/i.test(cleanValue)) return 'SHA-1';
+      if (/^[a-f0-9]{64}$/i.test(cleanValue)) return 'SHA-256';
+      if (/^[a-f0-9]{128}$/i.test(cleanValue)) return 'SHA-512';
+      // SSDEEP format: blocksize:hash1:hash2
+      if (/^\d+:[a-z0-9+/]+:[a-z0-9+/]+$/i.test(cleanValue)) return 'SSDEEP';
+      return null;
+    };
+    
+    // Build the appropriate input based on observable type
+    // Different observable types require different input structures per OpenCTI GraphQL schema
     let observableInput: Record<string, unknown> = {};
     
-    if (input.hashType && (stixType === 'StixFile' || input.type.toLowerCase() === 'file' || input.type.toLowerCase() === 'stixfile')) {
-      observableInput = {
-        hashes: [{ algorithm: input.hashType, hash: input.value }],
-      };
+    const isFileType = stixType === 'StixFile' || gqlType === 'StixFile';
+    const isArtifact = stixType === 'Artifact' || gqlType === 'Artifact';
+    const isX509 = stixType === 'X509-Certificate' || gqlType === 'X509Certificate';
+    
+    if (isFileType || isArtifact || isX509) {
+      // Hash-based observables: StixFile, Artifact, X509Certificate
+      // These types use 'hashes' field, NOT 'value'
+      const hashType = input.hashType || detectHashType(input.value);
+      if (hashType) {
+        observableInput = {
+          hashes: [{ algorithm: hashType, hash: input.value }],
+        };
+      } else if (isFileType) {
+        // For StixFile without detectable hash, use name field (filename)
+        observableInput = { name: input.value };
+      } else if (isArtifact) {
+        // For Artifact without hash, use url or payload_bin
+        observableInput = input.value.startsWith('http') ? { url: input.value } : { payload_bin: input.value };
+      } else if (isX509) {
+        // For X509 without hash, use serial_number
+        observableInput = { serial_number: input.value };
+      }
+    } else if (stixType === 'Autonomous-System' || gqlType === 'AutonomousSystem') {
+      // AutonomousSystem requires 'number' (Int), not 'value'
+      // Extract ASN number from formats like "AS12345", "ASN12345", or just "12345"
+      const asnMatch = input.value.match(/(?:AS[N]?)?(\d+)/i);
+      const asnNumber = asnMatch ? parseInt(asnMatch[1], 10) : parseInt(input.value, 10);
+      observableInput = { number: asnNumber, name: input.value };
+    } else if (stixType === 'Bank-Account' || gqlType === 'BankAccount') {
+      // BankAccount uses 'iban', 'bic', or 'account_number'
+      // IBAN format: 2 letters + 2 digits + up to 30 alphanumeric
+      if (/^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/i.test(input.value.replace(/\s/g, ''))) {
+        observableInput = { iban: input.value.replace(/\s/g, '').toUpperCase() };
+      } else if (/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/i.test(input.value.replace(/\s/g, ''))) {
+        // BIC/SWIFT format: 8 or 11 characters
+        observableInput = { bic: input.value.replace(/\s/g, '').toUpperCase() };
+      } else {
+        observableInput = { account_number: input.value };
+      }
+    } else if (stixType === 'Payment-Card' || gqlType === 'PaymentCard') {
+      // PaymentCard requires 'card_number'
+      observableInput = { card_number: input.value.replace(/[\s-]/g, '') };
+    } else if (stixType === 'Media-Content' || gqlType === 'MediaContent') {
+      // MediaContent requires 'url'
+      observableInput = { url: input.value, title: input.value };
+    } else if (stixType === 'Directory' || gqlType === 'Directory') {
+      // Directory requires 'path'
+      observableInput = { path: input.value };
+    } else if (stixType === 'Process' || gqlType === 'Process') {
+      // Process requires 'command_line'
+      observableInput = { command_line: input.value };
+    } else if (stixType === 'Software' || gqlType === 'Software') {
+      // Software uses 'name'
+      observableInput = { name: input.value };
+    } else if (stixType === 'Mutex' || gqlType === 'Mutex') {
+      // Mutex uses 'name'
+      observableInput = { name: input.value };
+    } else if (stixType === 'Windows-Registry-Key' || gqlType === 'WindowsRegistryKey') {
+      // WindowsRegistryKey uses 'attribute_key'
+      observableInput = { attribute_key: input.value };
+    } else if (stixType === 'Windows-Registry-Value-Type' || gqlType === 'WindowsRegistryValueType') {
+      // WindowsRegistryValueType uses 'name' and 'data'
+      observableInput = { name: input.value, data: input.value };
+    } else if (stixType === 'Network-Traffic' || gqlType === 'NetworkTraffic') {
+      // NetworkTraffic - try to parse port info
+      observableInput = { protocols: ['tcp'] };
+    } else if (stixType === 'Email-Message' || gqlType === 'EmailMessage') {
+      // EmailMessage uses 'subject' or 'body'
+      observableInput = { subject: input.value };
+    } else if (stixType === 'User-Account' || gqlType === 'UserAccount') {
+      // UserAccount uses 'account_login' or 'user_id'
+      observableInput = { account_login: input.value };
     } else {
+      // Default: types that use 'value' field
+      // IPv4Addr, IPv6Addr, DomainName, Hostname, EmailAddr, Url, MacAddr,
+      // CryptocurrencyWallet, UserAgent, PhoneNumber, Text, Credential, TrackingNumber
       observableInput = { value: input.value };
     }
 

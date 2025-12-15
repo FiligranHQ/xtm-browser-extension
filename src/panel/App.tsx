@@ -1284,6 +1284,14 @@ const App: React.FC = () => {
         const targets = data.payload?.targets || [];
         const themeFromPayload = data.payload?.theme;
         
+        // Clear previous entity state
+        setEntity(null);
+        setMultiPlatformResults([]);
+        multiPlatformResultsRef.current = [];
+        setCurrentPlatformIndex(0);
+        currentPlatformIndexRef.current = 0;
+        setEntityContainers([]);
+        
         // Set theme if provided
         if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
           setMode(themeFromPayload);
@@ -1339,6 +1347,14 @@ const App: React.FC = () => {
       }
       case 'INVESTIGATION_SCAN_RESULTS': {
         // Receive results from investigation scan (only entities found in platform)
+        // Clear previous entity state
+        setEntity(null);
+        setMultiPlatformResults([]);
+        multiPlatformResultsRef.current = [];
+        setCurrentPlatformIndex(0);
+        currentPlatformIndexRef.current = 0;
+        setEntityContainers([]);
+        
         const entities = data.payload?.entities || [];
         setInvestigationEntities(entities.map((e: any) => ({
           id: e.entityId || e.id,
@@ -1355,6 +1371,16 @@ const App: React.FC = () => {
       case 'SCAN_RESULTS': {
         // Receive results from page scan (all detected entities)
         const results = data.payload || {};
+        
+        // CRITICAL: Clear all previous entity state when a new scan starts
+        // This prevents showing old entity data from previous page
+        setEntity(null);
+        setMultiPlatformResults([]);
+        multiPlatformResultsRef.current = [];
+        setCurrentPlatformIndex(0);
+        currentPlatformIndexRef.current = 0;
+        setEntityContainers([]);
+        setEntityFromSearchMode(null);
         
         // Map to group entities by their normalized name/value (case-insensitive)
         // This allows us to track the same entity found in multiple platforms

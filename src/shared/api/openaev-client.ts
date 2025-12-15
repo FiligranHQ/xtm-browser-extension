@@ -55,6 +55,18 @@ export class OpenAEVClient {
   private tagsCache: Map<string, string> = new Map();
 
   /**
+   * Cache of kill chain phases for resolving IDs to names
+   * Maps phase_id -> phase_name
+   */
+  private killChainPhasesCache: Map<string, string> = new Map();
+
+  /**
+   * Cache of attack patterns for resolving parent technique IDs to names
+   * Maps attack_pattern_id -> { name, external_id }
+   */
+  private attackPatternsCache: Map<string, { name: string; externalId: string }> = new Map();
+
+  /**
    * Default page size for pagination
    */
   private static readonly DEFAULT_PAGE_SIZE = 500;
@@ -164,6 +176,100 @@ export class OpenAEVClient {
   async ensureTagsCached(): Promise<void> {
     if (this.tagsCache.size === 0) {
       await this.fetchAllTags();
+    }
+  }
+
+  // ============================================================================
+  // Kill Chain Phases - For resolving kill chain phase IDs to names
+  // ============================================================================
+
+  /**
+   * Fetch all kill chain phases from the platform and populate the cache
+   */
+  async fetchAllKillChainPhases(): Promise<void> {
+    try {
+      const response = await this.request<Array<{
+        phase_id: string;
+        phase_kill_chain_name: string;
+        phase_name: string;
+        phase_order: number;
+      }>>('/api/kill_chain_phases');
+      this.killChainPhasesCache.clear();
+      for (const phase of response) {
+        this.killChainPhasesCache.set(phase.phase_id, phase.phase_name);
+      }
+      log.debug(`[OpenAEV] Cached ${this.killChainPhasesCache.size} kill chain phases`);
+    } catch (error) {
+      log.warn('[OpenAEV] Failed to fetch kill chain phases:', error);
+    }
+  }
+
+  /**
+   * Resolve a list of kill chain phase IDs to phase names
+   * Returns empty array if cache is empty
+   */
+  resolveKillChainPhaseIds(phaseIds: string[] | undefined): string[] {
+    if (!phaseIds || phaseIds.length === 0) return [];
+    
+    return phaseIds
+      .map(id => this.killChainPhasesCache.get(id) || id) // Fall back to ID if not found
+      .filter(Boolean);
+  }
+
+  /**
+   * Ensure kill chain phases are cached before resolving
+   */
+  async ensureKillChainPhasesCached(): Promise<void> {
+    if (this.killChainPhasesCache.size === 0) {
+      await this.fetchAllKillChainPhases();
+    }
+  }
+
+  // ============================================================================
+  // Attack Patterns Cache - For resolving parent technique IDs to names
+  // ============================================================================
+
+  /**
+   * Fetch all attack patterns from the platform and populate the cache
+   * Used for resolving parent technique IDs to names
+   */
+  async fetchAllAttackPatternsForCache(): Promise<void> {
+    try {
+      const attackPatterns = await this.getAllAttackPatterns();
+      this.attackPatternsCache.clear();
+      for (const ap of attackPatterns) {
+        this.attackPatternsCache.set(ap.attack_pattern_id, {
+          name: ap.attack_pattern_name,
+          externalId: ap.attack_pattern_external_id || '',
+        });
+      }
+      log.debug(`[OpenAEV] Cached ${this.attackPatternsCache.size} attack patterns for parent resolution`);
+    } catch (error) {
+      log.warn('[OpenAEV] Failed to fetch attack patterns for cache:', error);
+    }
+  }
+
+  /**
+   * Resolve a single attack pattern ID to its name and external ID
+   * Returns the ID if not found in cache
+   */
+  resolveAttackPatternId(attackPatternId: string | undefined): string | undefined {
+    if (!attackPatternId) return undefined;
+    
+    const cached = this.attackPatternsCache.get(attackPatternId);
+    if (cached) {
+      // Return formatted as "Name (T1234)" if external ID exists, otherwise just name
+      return cached.externalId ? `${cached.name} (${cached.externalId})` : cached.name;
+    }
+    return attackPatternId; // Fall back to ID if not found
+  }
+
+  /**
+   * Ensure attack patterns are cached before resolving
+   */
+  async ensureAttackPatternsCached(): Promise<void> {
+    if (this.attackPatternsCache.size === 0) {
+      await this.fetchAllAttackPatternsForCache();
     }
   }
 

@@ -967,9 +967,6 @@ const App: React.FC = () => {
                 <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11, lineHeight: 1.2 }}>
                   Filigran Threat Management
                 </Typography>
-                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 9, color: '#ff9800' }}>
-                  v0.0.1 (beta)
-                </Typography>
               </Box>
             </Box>
           </Box>

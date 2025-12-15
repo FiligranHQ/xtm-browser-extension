@@ -2398,8 +2398,17 @@ async function handleMessage(
             setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
           );
           
-          // Ensure tags are cached for resolution
+          // Ensure caches are populated for resolution
           await client.ensureTagsCached();
+          
+          // For AttackPattern entities, also cache kill chain phases and attack patterns
+          const normalizedEntityType = entityType.replace(/^oaev-/, '');
+          if (normalizedEntityType === 'AttackPattern') {
+            await Promise.all([
+              client.ensureKillChainPhasesCached(),
+              client.ensureAttackPatternsCached(),
+            ]);
+          }
           
           const entity = await Promise.race([
             client.getEntityById(entityId, entityType),
@@ -2425,6 +2434,16 @@ async function handleMessage(
             }
             if (entity.exercise_tags && Array.isArray(entity.exercise_tags)) {
               entity.exercise_tags_resolved = client.resolveTagIds(entity.exercise_tags);
+            }
+            
+            // For AttackPattern: resolve kill chain phase IDs and parent technique ID
+            if (normalizedEntityType === 'AttackPattern') {
+              if (entity.attack_pattern_kill_chain_phases && Array.isArray(entity.attack_pattern_kill_chain_phases)) {
+                entity.attack_pattern_kill_chain_phases_resolved = client.resolveKillChainPhaseIds(entity.attack_pattern_kill_chain_phases);
+              }
+              if (entity.attack_pattern_parent) {
+                entity.attack_pattern_parent_resolved = client.resolveAttackPatternId(entity.attack_pattern_parent);
+              }
             }
             
             sendResponse({ 

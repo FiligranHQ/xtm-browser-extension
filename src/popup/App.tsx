@@ -709,9 +709,6 @@ const App: React.FC = () => {
                 <Typography variant="h6" sx={{ fontWeight: 600, fontSize: 18, color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
                   Filigran Threat Management
                 </Typography>
-                <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 9, color: '#ff9800' }}>
-                  (beta)
-                </Typography>
               </Box>
             </Box>
           </Box>
@@ -1381,7 +1378,7 @@ const App: React.FC = () => {
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                XTM Browser Extension v0.0.1 (beta)
+                XTM Browser Extension v0.0.1
               </Typography>
               <Typography
                 component="a"

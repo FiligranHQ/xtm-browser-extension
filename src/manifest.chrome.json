@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Filigran Threat Management (beta)",
+  "name": "Filigran Threat Management",
   "short_name": "XTM",
   "version": "0.0.1",
   "description": "Scan web pages for threat intelligence indicators, detect IOCs and entities, create reports, and integrate with OpenCTI and OpenAEV platforms.",

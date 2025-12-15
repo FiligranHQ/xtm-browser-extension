@@ -287,6 +287,10 @@ export interface OAEVAttackPattern {
   attack_pattern_description?: string;
   attack_pattern_platforms?: string[];
   attack_pattern_kill_chain_phases?: string[];
+  attack_pattern_parent?: string; // UUID of parent technique (for sub-techniques)
+  attack_pattern_permissions_required?: string[];
+  attack_pattern_created_at?: string;
+  attack_pattern_updated_at?: string;
 }
 
 export interface OAEVFinding {

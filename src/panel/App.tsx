@@ -290,6 +290,12 @@ const App: React.FC = () => {
   // Multi-platform entity results (same entity found in multiple platforms)
   const [multiPlatformResults, setMultiPlatformResults] = useState<Array<{ platformId: string; platformName: string; entity: EntityData }>>([]);
   const [currentPlatformIndex, setCurrentPlatformIndex] = useState(0);
+  // Refs for reading latest values in navigation handlers (updated inline wherever state is set)
+  const multiPlatformResultsRef = React.useRef<Array<{ platformId: string; platformName: string; entity: EntityData }>>([]);
+  const currentPlatformIndexRef = React.useRef(0);
+  // NOTE: Refs are updated inline wherever setMultiPlatformResults/setCurrentPlatformIndex are called
+  // No useEffect sync needed - inline updates ensure refs are always current
+  
   // Track container workflow origin: 'preview' (from bulk selection), 'direct' (from action button), or 'import' (import without container)
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
   // Track which search mode the entity view came from (to show back button and return to correct mode)
@@ -948,35 +954,65 @@ const App: React.FC = () => {
         const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
         if (platformMatches && platformMatches.length > 0) {
           // Build multi-platform results for navigation
-          const multiResults: Array<{ platformId: string; platformName: string; entity: EntityData }> = platformMatches.map((match: { platformId: string; entityId: string; entityData?: any }) => {
+          // IMPORTANT: Set entity data structure consistently for navigation to work
+          const multiResults: Array<{ platformId: string; platformName: string; entity: EntityData }> = platformMatches.map((match: { platformId: string; platformType?: string; entityId: string; entityData?: any; type?: string }) => {
             const platform = availablePlatforms.find(p => p.id === match.platformId);
+            const matchPlatformType = match.platformType || platform?.type || 'opencti';
+            // Get the entity type from match data
+            const matchType = match.type || match.entityData?.entity_type || payload?.type || entityType || '';
+            // Clean type without oaev- prefix for API calls
+            const cleanType = matchType.replace(/^oaev-/, '');
+            // Prefixed type for display (add oaev- if OpenAEV and not already prefixed)
+            const displayType = matchPlatformType === 'openaev' && !matchType.startsWith('oaev-') 
+              ? `oaev-${cleanType}` 
+              : matchType;
+            
             return {
               platformId: match.platformId,
               platformName: platform?.name || match.platformId,
               entity: {
                 ...payload,
+                id: match.entityId,
                 entityId: match.entityId,
-                entityData: match.entityData || payload?.entityData,
+                type: displayType, // Prefixed type for display
+                entity_type: cleanType, // Clean type for API calls
+                name: payload?.name || payload?.value || match.entityData?.name,
+                value: payload?.value || payload?.name,
+                existsInPlatform: true,
+                platformId: match.platformId,
                 _platformId: match.platformId,
+                _platformType: matchPlatformType,
+                _isNonDefaultPlatform: matchPlatformType !== 'opencti',
+                entityData: {
+                  ...(match.entityData || payload?.entityData || {}),
+                  entity_type: cleanType, // Also include in entityData for navigation handlers
+                },
               } as EntityData,
             };
           });
           // Sort results: OpenCTI platforms first (knowledge base reference)
           const sortedResults = sortPlatformResults(multiResults);
           setMultiPlatformResults(sortedResults);
+          multiPlatformResultsRef.current = sortedResults; // Update ref synchronously
           setCurrentPlatformIndex(0);
+          currentPlatformIndexRef.current = 0; // Update ref synchronously
         } else if (platformId) {
           // Single platform result - still set it for consistent display
           const platform = availablePlatforms.find(p => p.id === platformId);
-          setMultiPlatformResults([{
+          const singleResult = [{
             platformId,
             platformName: platform?.name || platformId,
             entity: { ...payload, _platformId: platformId },
-          }]);
+          }];
+          setMultiPlatformResults(singleResult);
+          multiPlatformResultsRef.current = singleResult; // Update ref synchronously
           setCurrentPlatformIndex(0);
+          currentPlatformIndexRef.current = 0; // Update ref synchronously
         } else {
           setMultiPlatformResults([]);
+          multiPlatformResultsRef.current = []; // Update ref synchronously
           setCurrentPlatformIndex(0);
+          currentPlatformIndexRef.current = 0; // Update ref synchronously
         }
         
         // Update platform URL based on entity's platform
@@ -1020,27 +1056,36 @@ const App: React.FC = () => {
         );
         
         if (isMinimalData && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-          // Set loading state with basic info
-          setEntity(payload);
-          setPanelMode('loading');
+          // Set entity immediately with what we have - don't wait for fetch
+          // This prevents race conditions where user navigates before fetch completes
+          const initialEntity = { 
+            ...payload, 
+            _platformId: platformId,
+            _platformType: entityPlatformType, 
+            _isNonDefaultPlatform: isNonDefaultPlatform 
+          };
+          setEntity(initialEntity);
+          setPanelMode('entity');
           
-          try {
-            // Fetch full entity details from appropriate API based on platform
-            // TODO: When adding new platforms, add their message types here
-            const messageType = entityPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
-            const response = await chrome.runtime.sendMessage({
-              type: messageType,
-              payload: { 
-                id: entityId,
-                entityId: entityId, // For OpenAEV
-                entityType: actualEntityType,
-                platformId,
-              },
-            });
+          // Fetch full details in background - only update if user hasn't navigated
+          const fetchStartIndex = currentPlatformIndexRef.current;
+          const messageType = entityPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+          
+          chrome.runtime.sendMessage({
+            type: messageType,
+            payload: { 
+              id: entityId,
+              entityId: entityId,
+              entityType: actualEntityType,
+              platformId,
+            },
+          }, (response) => {
+            if (chrome.runtime.lastError) return;
+            // Only update if user is still on the same platform index (hasn't navigated)
+            if (currentPlatformIndexRef.current !== fetchStartIndex) return;
             
             if (response?.success && response.data) {
-              // Merge full data with original payload (keep platform info)
-              setEntity({ 
+              const fullEntity = { 
                 ...payload, 
                 ...response.data, 
                 entityData: response.data,
@@ -1048,22 +1093,36 @@ const App: React.FC = () => {
                 _platformId: platformId,
                 _platformType: entityPlatformType,
                 _isNonDefaultPlatform: isNonDefaultPlatform,
-              });
-              setPanelMode('entity');
-              // Only fetch containers for default platform (OpenCTI) entities
+              };
+              setEntity(fullEntity);
+              // Also update the cached entity in multiPlatformResults - BOTH state AND ref!
+              setMultiPlatformResults(prev => prev.map((r, i) => 
+                i === fetchStartIndex ? { 
+                  ...r, 
+                  entity: { 
+                    ...r.entity, 
+                    ...response.data, 
+                    entityData: response.data,
+                  } 
+                } : r
+              ));
+              // CRITICAL: Also update the ref so navigation works correctly
+              multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
+                i === fetchStartIndex ? { 
+                  ...r, 
+                  entity: { 
+                    ...r.entity, 
+                    ...response.data, 
+                    entityData: response.data,
+                  } as EntityData
+                } : r
+              );
+              // Fetch containers for OpenCTI entities
               if (!isNonDefaultPlatform) {
                 fetchEntityContainers(entityId, platformId);
               }
-            } else {
-              // Fall back to original data
-              setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
-              setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
             }
-          } catch (error) {
-            log.error(' Failed to fetch entity details:', error);
-            setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
-            setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
-          }
+          });
         } else {
           // Full data already present or not in platform
           setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
@@ -2132,7 +2191,9 @@ const App: React.FC = () => {
       
       // Set up multi-platform navigation
       setMultiPlatformResults(sortedResults);
+      multiPlatformResultsRef.current = sortedResults; // Update ref inline
       setCurrentPlatformIndex(0);
+      currentPlatformIndexRef.current = 0; // Update ref inline
       setEntity(sortedResults[0].entity);
       setPanelMode('entity');
       // Only fetch containers for OpenCTI platforms
@@ -2618,9 +2679,6 @@ const App: React.FC = () => {
           <Typography variant="h5" sx={{ fontWeight: 600, fontSize: 20, color: mode === 'dark' ? '#ffffff' : '#1a1a2e' }}>
             Filigran Threat Management
           </Typography>
-          <Typography variant="caption" sx={{ fontWeight: 500, fontSize: 10, color: '#ff9800' }}>
-            (beta)
-          </Typography>
         </Box>
       </Box>
       <IconButton size="small" onClick={handleClose} sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
@@ -2818,85 +2876,31 @@ const App: React.FC = () => {
           >
             {multiPlatformResults.length > 1 ? (
               (() => {
-                // Get current platform info for display
+                // Get current platform info for display - use entity's stored _platformType
                 const currentResult = multiPlatformResults[currentPlatformIndex];
                 const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
-                const currentPlatformType = currentPlatform?.type || 'opencti';
+                const currentPlatformType = currentResult?.entity?._platformType || currentPlatform?.type || 'opencti';
                 const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
                 
                 return (
                   <>
                     <IconButton 
                       size="small" 
-                      onClick={async () => {
-                        if (currentPlatformIndex > 0) {
-                          const prevIndex = currentPlatformIndex - 1;
-                          setCurrentPlatformIndex(prevIndex);
-                          const prevResult = multiPlatformResults[prevIndex];
-                          const prevPlatform = availablePlatforms.find(p => p.id === prevResult.platformId);
-                          const prevPlatformType = prevPlatform?.type || 'opencti';
+                      onClick={() => {
+                        // SIMPLE: Just switch to previous platform using cached data
+                        const idx = currentPlatformIndexRef.current;
+                        const results = multiPlatformResultsRef.current;
+                        if (idx > 0 && results.length > 1) {
+                          const newIdx = idx - 1;
+                          const target = results[newIdx];
+                          const platform = availablePlatforms.find(p => p.id === target.platformId);
                           
-                          // Fetch full entity data when switching platforms
-                          // Use the appropriate message type based on platform
-                          setPanelMode('loading');
-                          try {
-                            const entityDataObj = (prevResult.entity as any).entityData || prevResult.entity;
-                            // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
-                            const rawEntityType = entityDataObj?.entity_type || prevResult.entity.type || prevResult.entity.entity_type || entityDataObj?.type || '';
-                            // Strip oaev- prefix if present for the API call
-                            const entityType = rawEntityType?.replace(/^oaev-/, '');
-                            
-                            // For OpenAEV entities, use the helper function to get the proper ID
-                            // OpenAEV uses type-specific ID fields (e.g., attack_pattern_id, team_id)
-                            const entityId = prevPlatformType === 'openaev'
-                              ? getOAEVEntityId(entityDataObj, entityType) || entityDataObj.id || (prevResult.entity as any).entityId
-                              : prevResult.entity.id || (prevResult.entity as any).entityId || entityDataObj?.id;
-                            
-                            const messageType = prevPlatformType === 'openaev' 
-                              ? 'GET_OAEV_ENTITY_DETAILS' 
-                              : 'GET_ENTITY_DETAILS';
-                            
-                            const response = await chrome.runtime.sendMessage({
-                              type: messageType,
-                              payload: {
-                                id: entityId,
-                                entityId: entityId,
-                                entityType: entityType,
-                                platformId: prevResult.platformId,
-                              },
-                            });
-                            
-                            if (response?.success && response.data) {
-                              const fullEntity = {
-                                ...response.data,
-                                _platformId: prevResult.platformId,
-                                _platformType: prevPlatformType,
-                                _isNonDefaultPlatform: prevPlatformType !== 'opencti',
-                              };
-                              // Update the multiPlatformResults with full data
-                              setMultiPlatformResults(prev => prev.map((r, i) => 
-                                i === prevIndex ? { ...r, entity: fullEntity } : r
-                              ));
-                              setEntity(fullEntity);
-                            } else {
-                              setEntity({ 
-                                ...prevResult.entity, 
-                                _platformId: prevResult.platformId,
-                                _platformType: prevPlatformType,
-                                _isNonDefaultPlatform: prevPlatformType !== 'opencti',
-                              });
-                            }
-                          } catch (error) {
-                            setEntity({ 
-                              ...prevResult.entity, 
-                              _platformId: prevResult.platformId,
-                              _platformType: prevPlatformType,
-                              _isNonDefaultPlatform: prevPlatformType !== 'opencti',
-                            });
-                          }
-                          setPanelMode('entity');
-                          setSelectedPlatformId(prevResult.platformId);
-                          if (prevPlatform) setPlatformUrl(prevPlatform.url);
+                          // Update all state synchronously - entity already has _platformType etc.
+                          setCurrentPlatformIndex(newIdx);
+                          currentPlatformIndexRef.current = newIdx;
+                          setEntity(target.entity);
+                          setSelectedPlatformId(target.platformId);
+                          if (platform) setPlatformUrl(platform.url);
                         }
                       }} 
                       disabled={currentPlatformIndex === 0}
@@ -2923,75 +2927,21 @@ const App: React.FC = () => {
                     </Box>
                     <IconButton 
                       size="small" 
-                      onClick={async () => {
-                        if (currentPlatformIndex < multiPlatformResults.length - 1) {
-                          const nextIndex = currentPlatformIndex + 1;
-                          setCurrentPlatformIndex(nextIndex);
-                          const nextResult = multiPlatformResults[nextIndex];
-                          const nextPlatform = availablePlatforms.find(p => p.id === nextResult.platformId);
-                          const nextPlatformType = nextPlatform?.type || 'opencti';
+                      onClick={() => {
+                        // SIMPLE: Just switch to next platform using cached data
+                        const idx = currentPlatformIndexRef.current;
+                        const results = multiPlatformResultsRef.current;
+                        if (idx < results.length - 1) {
+                          const newIdx = idx + 1;
+                          const target = results[newIdx];
+                          const platform = availablePlatforms.find(p => p.id === target.platformId);
                           
-                          // Fetch full entity data when switching platforms
-                          // Use the appropriate message type based on platform
-                          setPanelMode('loading');
-                          try {
-                            const entityDataObj = (nextResult.entity as any).entityData || nextResult.entity;
-                            // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
-                            const rawEntityType = entityDataObj?.entity_type || nextResult.entity.type || nextResult.entity.entity_type || entityDataObj?.type || '';
-                            // Strip oaev- prefix if present for the API call
-                            const entityType = rawEntityType?.replace(/^oaev-/, '');
-                            
-                            // For OpenAEV entities, use the helper function to get the proper ID
-                            // OpenAEV uses type-specific ID fields (e.g., attack_pattern_id, team_id)
-                            const entityId = nextPlatformType === 'openaev'
-                              ? getOAEVEntityId(entityDataObj, entityType) || entityDataObj.id || (nextResult.entity as any).entityId
-                              : nextResult.entity.id || (nextResult.entity as any).entityId || entityDataObj?.id;
-                            
-                            const messageType = nextPlatformType === 'openaev' 
-                              ? 'GET_OAEV_ENTITY_DETAILS' 
-                              : 'GET_ENTITY_DETAILS';
-                            
-                            const response = await chrome.runtime.sendMessage({
-                              type: messageType,
-                              payload: {
-                                id: entityId,
-                                entityId: entityId,
-                                entityType: entityType,
-                                platformId: nextResult.platformId,
-                              },
-                            });
-                            
-                            if (response?.success && response.data) {
-                              const fullEntity = {
-                                ...response.data,
-                                _platformId: nextResult.platformId,
-                                _platformType: nextPlatformType,
-                                _isNonDefaultPlatform: nextPlatformType !== 'opencti',
-                              };
-                              // Update the multiPlatformResults with full data
-                              setMultiPlatformResults(prev => prev.map((r, i) => 
-                                i === nextIndex ? { ...r, entity: fullEntity } : r
-                              ));
-                              setEntity(fullEntity);
-                            } else {
-                              setEntity({ 
-                                ...nextResult.entity, 
-                                _platformId: nextResult.platformId,
-                                _platformType: nextPlatformType,
-                                _isNonDefaultPlatform: nextPlatformType !== 'opencti',
-                              });
-                            }
-                          } catch (error) {
-                            setEntity({ 
-                              ...nextResult.entity, 
-                              _platformId: nextResult.platformId,
-                              _platformType: nextPlatformType,
-                              _isNonDefaultPlatform: nextPlatformType !== 'opencti',
-                            });
-                          }
-                          setPanelMode('entity');
-                          setSelectedPlatformId(nextResult.platformId);
-                          if (nextPlatform) setPlatformUrl(nextPlatform.url);
+                          // Update all state synchronously - entity already has _platformType etc.
+                          setCurrentPlatformIndex(newIdx);
+                          currentPlatformIndexRef.current = newIdx;
+                          setEntity(target.entity);
+                          setSelectedPlatformId(target.platformId);
+                          if (platform) setPlatformUrl(platform.url);
                         }
                       }} 
                       disabled={currentPlatformIndex === multiPlatformResults.length - 1}
@@ -3254,49 +3204,35 @@ const App: React.FC = () => {
               </Box>
             )}
             
-            {/* Description */}
-            {description && (
-              <Box sx={{ mb: 2.5 }}>
-                <Typography variant="caption" sx={sectionTitleStyle}>
-                  Description
-                </Typography>
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    ...contentTextStyle,
-                    lineHeight: 1.6,
-                    maxHeight: 200,
-                    overflow: 'auto',
-                  }}
-                >
-                  {description}
-                </Typography>
-              </Box>
-            )}
+            {/* Description is rendered in the common section at the bottom */}
             
             {/* Kill Chain Phases */}
-            {((entityData.attack_pattern_kill_chain_phases) && entityData.attack_pattern_kill_chain_phases.length > 0) && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={sectionTitleStyle}>
-                  Kill Chain Phases
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                  {entityData.attack_pattern_kill_chain_phases.map((phase: string, i: number) => (
-                    <Chip 
-                      key={i} 
-                      label={phase} 
-                      size="small" 
-                      sx={{ 
-                        bgcolor: hexToRGB('#e91e63', 0.15), 
-                        color: '#e91e63',
-                        fontWeight: 500,
-                        borderRadius: 1,
-                      }} 
-                    />
-                  ))}
+            {(() => {
+              // Use resolved phases if available, fall back to raw phases
+              const phases = entityData.attack_pattern_kill_chain_phases_resolved || entityData.attack_pattern_kill_chain_phases;
+              return phases && phases.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="caption" sx={sectionTitleStyle}>
+                    Kill Chain Phases
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                    {phases.map((phase: string, i: number) => (
+                      <Chip 
+                        key={i} 
+                        label={phase} 
+                        size="small" 
+                        sx={{ 
+                          bgcolor: hexToRGB('#e91e63', 0.15), 
+                          color: '#e91e63',
+                          fontWeight: 500,
+                          borderRadius: 1,
+                        }} 
+                      />
+                    ))}
+                  </Box>
                 </Box>
-              </Box>
-            )}
+              );
+            })()}
             
             {/* Platforms */}
             {((entityData.attack_pattern_platforms) && entityData.attack_pattern_platforms.length > 0) && (
@@ -3343,7 +3279,7 @@ const App: React.FC = () => {
                   Parent Technique
                 </Typography>
                 <Typography variant="body2" sx={contentTextStyle}>
-                  {entityData.attack_pattern_parent}
+                  {entityData.attack_pattern_parent_resolved || entityData.attack_pattern_parent}
                 </Typography>
               </Box>
             )}
@@ -3607,15 +3543,49 @@ const App: React.FC = () => {
           </>
         )}
 
-        {/* Description (common to all types) */}
+        {/* Description (common to all types) - Rendered as Markdown like OpenCTI */}
         {description && (
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 2.5 }}>
             <Typography variant="caption" sx={sectionTitleStyle}>
               Description
             </Typography>
-            <Typography variant="body2" sx={contentTextStyle}>
-              {description}
-            </Typography>
+            <Box 
+              className="markdown-content"
+              sx={{ 
+                ...contentTextStyle,
+                '& p': { margin: '0 0 8px 0' },
+                '& p:last-child': { margin: 0 },
+                '& a': { color: 'primary.main', textDecoration: 'none' },
+                '& a:hover': { textDecoration: 'underline' },
+                '& code': { 
+                  bgcolor: 'action.hover', 
+                  px: 0.5, 
+                  py: 0.25, 
+                  borderRadius: 0.5,
+                  fontSize: '0.875em',
+                },
+                '& pre': { 
+                  bgcolor: 'action.hover', 
+                  p: 1, 
+                  borderRadius: 1,
+                  overflow: 'auto',
+                  fontSize: '0.875em',
+                },
+                '& ul, & ol': { pl: 2, my: 1 },
+                '& li': { mb: 0.5 },
+                '& blockquote': { 
+                  borderLeft: 3, 
+                  borderColor: 'divider', 
+                  pl: 1.5, 
+                  my: 1,
+                  color: 'text.secondary',
+                },
+              }}
+            >
+              <Markdown remarkPlugins={[remarkGfm]}>
+                {description.length > 500 ? description.slice(0, 500) + '...' : description}
+              </Markdown>
+            </Box>
           </Box>
         )}
         
@@ -3753,156 +3723,112 @@ const App: React.FC = () => {
 
     const isVulnerability = type.toLowerCase() === 'vulnerability';
 
-    // Platform navigation handlers - fetch full entity data when switching
-    const handlePrevPlatform = async () => {
-      if (currentPlatformIndex > 0) {
-        const prevIndex = currentPlatformIndex - 1;
-        setCurrentPlatformIndex(prevIndex);
-        const prevResult = multiPlatformResults[prevIndex];
-        const platform = availablePlatforms.find(p => p.id === prevResult.platformId);
-        const platformType = platform?.type || 'opencti';
+    // Helper to check if entity has full data loaded
+    const hasFullEntityData = (entityObj: EntityData | undefined): boolean => {
+      if (!entityObj) return false;
+      const platformType = entityObj._platformType || 'opencti';
+      if (platformType === 'openaev') {
+        // OpenAEV: check for type-specific detailed fields in entityData
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ed = (entityObj.entityData || entityObj) as any;
+        return !!(ed.finding_type || ed.finding_created_at || ed.endpoint_name || 
+                  ed.asset_group_name || ed.team_name || ed.attack_pattern_name || 
+                  ed.attack_pattern_description || ed.scenario_name || ed.exercise_name || 
+                  ed.user_email || ed.asset_description);
+      }
+      // OpenCTI: check for description or objectLabel
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ed = (entityObj.entityData || {}) as any;
+      return !!(entityObj.description || ed.description || 
+                entityObj.objectLabel || ed.objectLabel);
+    };
+
+    // Navigate to a specific platform index - fetches full data if needed
+    const navigateToPlatformIndex = async (newIdx: number) => {
+      const results = multiPlatformResultsRef.current;
+      if (newIdx < 0 || newIdx >= results.length) return;
+      
+      const target = results[newIdx];
+      const platform = availablePlatforms.find(p => p.id === target.platformId);
+      const platformType = target.entity._platformType || (target.entity.type?.startsWith('oaev-') ? 'openaev' : 'opencti');
+      
+      // Update index and platform info immediately
+      setCurrentPlatformIndex(newIdx);
+      currentPlatformIndexRef.current = newIdx;
+      setSelectedPlatformId(target.platformId);
+      if (platform) setPlatformUrl(platform.url);
+      
+      // Check if we already have full data for this entity
+      if (hasFullEntityData(target.entity)) {
+        // Already have full data, just set entity
+        setEntity(target.entity);
+        return;
+      }
+      
+      // Need to fetch full entity data
+      const entityId = target.entity.entityId || target.entity.id;
+      const entityType = (target.entity.entity_type || target.entity.type || '').replace('oaev-', '');
+      
+      if (!entityId || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+        setEntity(target.entity);
+        return;
+      }
+      
+      // Set minimal entity first so something shows
+      setEntity(target.entity);
+      
+      try {
+        const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+        const response = await chrome.runtime.sendMessage({
+          type: messageType,
+          payload: {
+            id: entityId,
+            entityId: entityId,
+            entityType: entityType,
+            platformId: target.platformId,
+          },
+        });
         
-        // Fetch full entity data when switching platforms
-        // Use the appropriate message type based on platform
-        setPanelMode('loading');
-        try {
-          const entityDataObj = (prevResult.entity as any).entityData || prevResult.entity;
-          // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
-          const rawEntityType = entityDataObj?.entity_type || prevResult.entity.type || prevResult.entity.entity_type || entityDataObj?.type || '';
-          // Strip oaev- prefix if present for the API call
-          const entityType = rawEntityType?.replace(/^oaev-/, '');
-          
-          // For OpenAEV entities, get the ID from multiple possible sources
-          // Priority: entityId on result > getOAEVEntityId helper > id field
-          const entityIdToFetch = platformType === 'openaev'
-            ? (prevResult.entity as any).entityId || getOAEVEntityId(entityDataObj, entityType) || entityDataObj?.id || ''
-            : prevResult.entity.id || (prevResult.entity as any).entityId || entityDataObj?.id;
-          
-          const messageType = platformType === 'openaev' 
-            ? 'GET_OAEV_ENTITY_DETAILS' 
-            : 'GET_ENTITY_DETAILS';
-          
-          const response = await chrome.runtime.sendMessage({
-            type: messageType,
-            payload: {
-              id: entityIdToFetch,
-              entityId: entityIdToFetch,
-              entityType: entityType,
-              platformId: prevResult.platformId,
-            },
-          });
-          
-          if (response?.success && response.data) {
-            // Preserve the original type from prevResult.entity for view rendering
-            const originalType = prevResult.entity.type || prevResult.entity.entity_type || '';
-            const fullEntity = {
-              ...response.data,
-              type: originalType, // Preserve type for view rendering
-              entity_type: originalType.replace(/^oaev-/, ''), // Clean type
-              _platformId: prevResult.platformId,
-              _platformType: platformType,
-              _isNonDefaultPlatform: platformType !== 'opencti',
-            };
-            // Update the multiPlatformResults with full data
-            setMultiPlatformResults(prev => prev.map((r, i) => 
-              i === prevIndex ? { ...r, entity: fullEntity } : r
-            ));
-            setEntity(fullEntity);
-          } else {
-            setEntity({ 
-              ...prevResult.entity, 
-              _platformId: prevResult.platformId,
-              _platformType: platformType,
-              _isNonDefaultPlatform: platformType !== 'opencti',
-            });
-          }
-        } catch (error) {
-          setEntity({ 
-            ...prevResult.entity, 
-            _platformId: prevResult.platformId,
+        // Check if user navigated away while we were fetching
+        if (currentPlatformIndexRef.current !== newIdx) return;
+        
+        if (response?.success && response.data) {
+          const fullEntity = {
+            ...target.entity,
+            ...response.data,
+            entityData: response.data,
+            existsInPlatform: true,
+            _platformId: target.platformId,
             _platformType: platformType,
             _isNonDefaultPlatform: platformType !== 'opencti',
-          });
+          };
+          setEntity(fullEntity);
+          // Update the cached entity in multiPlatformResults for future navigation
+          setMultiPlatformResults(prev => prev.map((r, i) => 
+            i === newIdx ? { ...r, entity: fullEntity as EntityData } : r
+          ));
+          multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
+            i === newIdx ? { ...r, entity: fullEntity as EntityData } : r
+          );
         }
-        setPanelMode('entity');
-        setSelectedPlatformId(prevResult.platformId);
-        if (platform) setPlatformUrl(platform.url);
+      } catch (error) {
+        log.error(' Failed to fetch entity details during navigation:', error);
       }
     };
 
-    const handleNextPlatform = async () => {
-      if (currentPlatformIndex < multiPlatformResults.length - 1) {
-        const nextIndex = currentPlatformIndex + 1;
-        setCurrentPlatformIndex(nextIndex);
-        const nextResult = multiPlatformResults[nextIndex];
-        const platform = availablePlatforms.find(p => p.id === nextResult.platformId);
-        const platformType = platform?.type || 'opencti';
-        
-        // Fetch full entity data when switching platforms
-        // Use the appropriate message type based on platform
-        setPanelMode('loading');
-        try {
-          const entityDataObj = (nextResult.entity as any).entityData || nextResult.entity;
-          // Check multiple possible sources for entity type - prefer entity_type (clean) over type (prefixed)
-          const rawEntityType = entityDataObj?.entity_type || nextResult.entity.type || nextResult.entity.entity_type || entityDataObj?.type || '';
-          // Strip oaev- prefix if present for the API call
-          const entityType = rawEntityType?.replace(/^oaev-/, '');
-          
-          // For OpenAEV entities, get the ID from multiple possible sources
-          // Priority: entityId on result > getOAEVEntityId helper > id field
-          const entityIdToFetch = platformType === 'openaev'
-            ? (nextResult.entity as any).entityId || getOAEVEntityId(entityDataObj, entityType) || entityDataObj?.id || ''
-            : nextResult.entity.id || (nextResult.entity as any).entityId || entityDataObj?.id;
-          
-          const messageType = platformType === 'openaev' 
-            ? 'GET_OAEV_ENTITY_DETAILS' 
-            : 'GET_ENTITY_DETAILS';
-          
-          const response = await chrome.runtime.sendMessage({
-            type: messageType,
-            payload: {
-              id: entityIdToFetch,
-              entityId: entityIdToFetch,
-              entityType: entityType,
-              platformId: nextResult.platformId,
-            },
-          });
-          
-          if (response?.success && response.data) {
-            // Preserve the original type from nextResult.entity for view rendering
-            const originalType = nextResult.entity.type || nextResult.entity.entity_type || '';
-            const fullEntity = {
-              ...response.data,
-              type: originalType, // Preserve type for view rendering
-              entity_type: originalType.replace(/^oaev-/, ''), // Clean type
-              _platformId: nextResult.platformId,
-              _platformType: platformType,
-              _isNonDefaultPlatform: platformType !== 'opencti',
-            };
-            // Update the multiPlatformResults with full data
-            setMultiPlatformResults(prev => prev.map((r, i) => 
-              i === nextIndex ? { ...r, entity: fullEntity } : r
-            ));
-            setEntity(fullEntity);
-          } else {
-            setEntity({ 
-              ...nextResult.entity, 
-              _platformId: nextResult.platformId,
-              _platformType: platformType,
-              _isNonDefaultPlatform: platformType !== 'opencti',
-            });
-          }
-        } catch (error) {
-          setEntity({ 
-            ...nextResult.entity, 
-            _platformId: nextResult.platformId,
-            _platformType: platformType,
-            _isNonDefaultPlatform: platformType !== 'opencti',
-          });
-        }
-        setPanelMode('entity');
-        setSelectedPlatformId(nextResult.platformId);
-        if (platform) setPlatformUrl(platform.url);
+    // Platform navigation handlers
+    const handlePrevPlatform = () => {
+      const idx = currentPlatformIndexRef.current;
+      if (idx > 0) {
+        navigateToPlatformIndex(idx - 1);
+      }
+    };
+
+    const handleNextPlatform = () => {
+      const idx = currentPlatformIndexRef.current;
+      const results = multiPlatformResultsRef.current;
+      if (idx < results.length - 1) {
+        navigateToPlatformIndex(idx + 1);
       }
     };
 
@@ -6477,7 +6403,9 @@ const App: React.FC = () => {
       // Sort: OpenCTI first
       const sorted = sortPlatformResults(multiResults);
       setMultiPlatformResults(sorted);
+      multiPlatformResultsRef.current = sorted; // Update ref inline
       setCurrentPlatformIndex(0);
+      currentPlatformIndexRef.current = 0; // Update ref inline
       
       // Use the first sorted result
       const firstResult = sorted[0];

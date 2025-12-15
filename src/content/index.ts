@@ -1219,6 +1219,7 @@ const HIGHLIGHT_STYLES = `
   .xtm-highlight * {
     visibility: visible !important;
     opacity: 1 !important;
+    cursor: pointer !important;
   }
   
   /* CRITICAL: Force parent elements to NOT clip highlights
@@ -1228,6 +1229,11 @@ const HIGHLIGHT_STYLES = `
     clip: auto !important;
     clip-path: none !important;
     -webkit-clip-path: none !important;
+  }
+  
+  /* Ensure clickable cursor on all interactive highlights */
+  .xtm-highlight:not(.xtm-atomic-testing):not(.xtm-scenario):hover {
+    cursor: pointer !important;
   }
 
   /* ========================================
@@ -3927,17 +3933,35 @@ function handleHighlightClick(event: MouseEvent): void {
           selectedEntity = entity;
           
           // Build platformMatches for multi-platform navigation
-          // Include all platform entities for navigation
-          const platformMatches = platformEntities.map((pe: any) => {
-            const peData = pe.data || {};
-            const peCacheData = peData.entityData || {};
-            const peId = peData.entityId || peData.id || peCacheData.id || '';
-            return {
-              platformId: peData.platformId || peCacheData.platformId || '',
-              entityId: peId,
-              entityData: peCacheData,
-            };
-          });
+          // Include all platform entities for navigation with proper type info
+          // Filter duplicates by platformId
+          const seenPlatformIds = new Set<string>();
+          const platformMatches = platformEntities
+            .map((pe: any) => {
+              const peData = pe.data || {};
+              const peCacheData = peData.entityData || {};
+              const peType = pe.type || peData.type || peCacheData.type || '';
+              const peCleanType = peType.replace(/^oaev-/, '');
+              const pePlatformType = peType.startsWith('oaev-') ? 'openaev' : 'opencti';
+              const peId = peData.entityId || peData.id || peCacheData.id || '';
+              const pePlatformId = peData.platformId || peCacheData.platformId || '';
+              return {
+                platformId: pePlatformId,
+                platformType: pePlatformType,
+                entityId: peId,
+                type: peType,
+                entityData: {
+                  ...peCacheData,
+                  type: peType,
+                  entity_type: peCleanType,
+                },
+              };
+            })
+            .filter((match: { platformId: string }) => {
+              if (seenPlatformIds.has(match.platformId)) return false;
+              seenPlatformIds.add(match.platformId);
+              return true;
+            });
           
           chrome.runtime.sendMessage({
             type: 'SHOW_ENTITY_PANEL',
@@ -3972,30 +3996,51 @@ function handleHighlightClick(event: MouseEvent): void {
       
       if (found) {
         // Build platformMatches for multi-platform navigation
-        let platformMatches: Array<{ platformId: string; entityId: string; entityData?: any }> | undefined;
+        // IMPORTANT: Include platformType and type for proper navigation in the panel
+        let platformMatches: Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: any }> | undefined;
         
         if (isMultiPlatform) {
           try {
             const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-            // Start with the primary entity (OpenCTI)
+            // Determine primary entity's platform type
+            const primaryPlatformType = entity.type?.startsWith('oaev-') ? 'openaev' : 'opencti';
+            const primaryType = entity.type || '';
+            const primaryCleanType = primaryType.replace(/^oaev-/, '');
+            const primaryPlatformId = entity.platformId || 'primary';
+            
+            // Track seen platform IDs to avoid duplicates
+            const seenPlatformIds = new Set<string>();
+            seenPlatformIds.add(primaryPlatformId);
+            
+            // Start with the primary entity
             platformMatches = [
               {
-                platformId: entity.platformId || 'primary',
+                platformId: primaryPlatformId,
+                platformType: primaryPlatformType,
                 entityId: entity.entityId || entity.id,
-                entityData: entity.entityData || entity,
+                type: primaryType,
+                entityData: {
+                  ...(entity.entityData || entity),
+                  entity_type: primaryCleanType,
+                },
               },
             ];
-            // Add other platforms
+            
+            // Add other platforms (skip duplicates)
             for (const p of otherPlatformEntities) {
               const pData = p.data || {};
               const pType = p.type || pData.type || '';
-              // Strip oaev- prefix for type-based ID extraction
               const cleanType = pType.replace(/^oaev-/, '');
+              const pPlatformType = pType.startsWith('oaev-') ? 'openaev' : 'opencti';
+              const pPlatformId = pData.platformId || 'unknown';
+              
+              // Skip if we already have this platform
+              if (seenPlatformIds.has(pPlatformId)) continue;
+              seenPlatformIds.add(pPlatformId);
+              
               // For OpenAEV entities, extract ID using type-specific field names
-              // e.g., attack_pattern_id for AttackPattern, team_id for Team, etc.
               let pEntityId = pData.entityId || pData.id;
               if (!pEntityId && cleanType) {
-                // Try type-specific ID fields used by OpenAEV
                 const typeToIdField: Record<string, string> = {
                   'AttackPattern': 'attack_pattern_id',
                   'Attack-Pattern': 'attack_pattern_id',
@@ -4015,12 +4060,14 @@ function handleHighlightClick(event: MouseEvent): void {
                 }
               }
               platformMatches.push({
-                platformId: pData.platformId || 'unknown',
+                platformId: pPlatformId,
+                platformType: pPlatformType,
                 entityId: pEntityId || '',
+                type: pType,
                 entityData: {
                   ...pData,
-                  type: pType, // Include the type with prefix for proper rendering
-                  entity_type: cleanType, // Include clean type for API calls
+                  type: pType,
+                  entity_type: cleanType,
                 },
               });
             }

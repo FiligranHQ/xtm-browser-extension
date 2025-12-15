@@ -1963,6 +1963,7 @@ export class OpenCTIClient {
 
   /**
    * Fetch containers that contain a specific entity
+   * Uses the root containers query with filters and ordering (sorted by created desc)
    */
   async fetchContainersForEntity(entityId: string, limit: number = 10): Promise<Array<{
     id: string;
@@ -1972,52 +1973,61 @@ export class OpenCTIClient {
     modified: string;
     createdBy?: { id: string; name: string };
   }>> {
+    // Use root containers query with filters and ordering (like OpenCTI frontend does)
     const query = `
-      query GetContainersForEntity($id: String!, $first: Int) {
-        stixCoreObject(id: $id) {
-          containers(first: $first, orderBy: modified, orderMode: desc) {
-            edges {
-              node {
-                id
-                entity_type
-                created
-                modified
-                createdBy {
-                  ... on Identity {
-                    id
-                    name
-                  }
-                }
-                ... on Report {
+      query GetContainersForEntity(
+        $first: Int
+        $orderBy: ContainersOrdering
+        $orderMode: OrderingMode
+        $filters: FilterGroup
+      ) {
+        containers(
+          first: $first
+          orderBy: $orderBy
+          orderMode: $orderMode
+          filters: $filters
+        ) {
+          edges {
+            node {
+              id
+              entity_type
+              created
+              modified
+              createdBy {
+                ... on Identity {
+                  id
                   name
                 }
-                ... on Grouping {
-                  name
-                }
-                ... on Note {
-                  attribute_abstract
-                  content
-                }
-                ... on Opinion {
-                  opinion
-                }
-                ... on ObservedData {
-                  name
-                  first_observed
-                  last_observed
-                }
-                ... on CaseIncident {
-                  name
-                }
-                ... on CaseRfi {
-                  name
-                }
-                ... on CaseRft {
-                  name
-                }
-                ... on Task {
-                  name
-                }
+              }
+              ... on Report {
+                name
+              }
+              ... on Grouping {
+                name
+              }
+              ... on Note {
+                attribute_abstract
+                content
+              }
+              ... on Opinion {
+                opinion
+              }
+              ... on ObservedData {
+                name
+                first_observed
+                last_observed
+              }
+              ... on CaseIncident {
+                name
+              }
+              ... on CaseRfi {
+                name
+              }
+              ... on CaseRft {
+                name
+              }
+              ... on Task {
+                name
               }
             }
           }
@@ -2025,30 +2035,45 @@ export class OpenCTIClient {
       }
     `;
 
+    // Build filters to find containers that include this entity
+    const filters = {
+      mode: 'and',
+      filters: [
+        {
+          key: 'objects',
+          values: [entityId],
+        },
+      ],
+      filterGroups: [],
+    };
+
     try {
       const data = await this.query<{
-        stixCoreObject: {
-          containers: {
-            edges: Array<{
-              node: {
-                id: string;
-                entity_type: string;
-                name?: string;
-                attribute_abstract?: string;
-                content?: string;
-                opinion?: string;
-                first_observed?: string;
-                last_observed?: string;
-                created: string;
-                modified: string;
-                createdBy?: { id: string; name: string };
-              };
-            }>;
-          };
+        containers: {
+          edges: Array<{
+            node: {
+              id: string;
+              entity_type: string;
+              name?: string;
+              attribute_abstract?: string;
+              content?: string;
+              opinion?: string;
+              first_observed?: string;
+              last_observed?: string;
+              created: string;
+              modified: string;
+              createdBy?: { id: string; name: string };
+            };
+          }>;
         };
-      }>(query, { id: entityId, first: limit });
+      }>(query, { 
+        first: limit, 
+        orderBy: 'created',
+        orderMode: 'desc',
+        filters,
+      });
 
-      return data.stixCoreObject?.containers?.edges?.map(edge => {
+      return data.containers?.edges?.map(edge => {
         const node = edge.node;
         // Determine name based on entity type
         let name = node.name;

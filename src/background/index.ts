@@ -1628,6 +1628,7 @@ async function handleMessage(
           labels?: string[];
           markings?: string[];
           entities?: string[];
+          entitiesToCreate?: Array<{ type: string; value: string }>;
           platformId?: string;
           pdfAttachment?: { data: string; filename: string } | null;
           pageUrl?: string;
@@ -1657,6 +1658,34 @@ async function handleMessage(
             break;
           }
           
+          // Step 0: Create any entities that don't exist yet
+          const allEntityIds: string[] = [...(containerPayload.entities || [])];
+          
+          if (containerPayload.entitiesToCreate && containerPayload.entitiesToCreate.length > 0) {
+            log.info(`Creating ${containerPayload.entitiesToCreate.length} new entities for container...`);
+            
+            for (const entityToCreate of containerPayload.entitiesToCreate) {
+              try {
+                // Refang the value before creating (OpenCTI stores clean values)
+                const cleanValue = refangIndicator(entityToCreate.value);
+                const created = await client.createObservable({
+                  type: entityToCreate.type as any,
+                  value: cleanValue,
+                });
+                
+                if (created?.id) {
+                  allEntityIds.push(created.id);
+                  log.debug(`Created observable: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
+                }
+              } catch (entityError) {
+                log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
+                // Continue with other entities
+              }
+            }
+            
+            log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}`);
+          }
+          
           // Step 1: Create external reference first if page URL is provided
           let externalReferenceId: string | undefined;
           if (containerPayload.pageUrl) {
@@ -1674,13 +1703,13 @@ async function handleMessage(
             }
           }
           
-          // Step 2: Create the container (without externalReferences - will attach separately)
+          // Step 2: Create the container with all entity IDs (existing + newly created)
           const container = await client.createContainer({
             type: containerPayload.type as ContainerType,
             name: containerPayload.name,
             description: containerPayload.description,
             content: containerPayload.content,
-            objects: containerPayload.entities || [],
+            objects: allEntityIds,
             objectLabel: containerPayload.labels || [],
             objectMarking: containerPayload.markings || [],
             // Type-specific fields

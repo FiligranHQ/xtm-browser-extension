@@ -22,6 +22,10 @@ import {
   FormControlLabel,
   Checkbox,
   Switch,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   CloseOutlined,
@@ -78,7 +82,20 @@ import { formatDate, formatDateTime } from '../shared/utils/formatters';
 
 const log = loggers.panel;
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results';
+
+// Interface for scan result entity
+interface ScanResultEntity {
+  id: string;
+  type: string;
+  name: string;
+  value?: string;
+  found: boolean;
+  entityId?: string;
+  platformId?: string;
+  platformType?: 'opencti' | 'openaev';
+  entityData?: any;
+}
 
 // Interface for import results statistics
 interface ImportResults {
@@ -206,10 +223,16 @@ const App: React.FC = () => {
   // Multi-platform entity results (same entity found in multiple platforms)
   const [multiPlatformResults, setMultiPlatformResults] = useState<Array<{ platformId: string; platformName: string; entity: EntityData }>>([]);
   const [currentPlatformIndex, setCurrentPlatformIndex] = useState(0);
-  // Track container workflow origin: 'preview' (from bulk selection) or 'direct' (from action button)
-  const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | null>(null);
+  // Track container workflow origin: 'preview' (from bulk selection), 'direct' (from action button), or 'import' (import without container)
+  const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
   // Track if entity view came from search (to show back button)
   const [entityFromSearch, setEntityFromSearch] = useState(false);
+  // Track if entity view came from scan results (to show back button)
+  const [entityFromScanResults, setEntityFromScanResults] = useState(false);
+  // Scan results entities (from page scan)
+  const [scanResultsEntities, setScanResultsEntities] = useState<ScanResultEntity[]>([]);
+  const [scanResultsTypeFilter, setScanResultsTypeFilter] = useState<string>('all');
+  const [scanResultsFoundFilter, setScanResultsFoundFilter] = useState<'all' | 'found' | 'not-found'>('all');
   // PDF attachment option
   const [attachPdf, setAttachPdf] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -523,53 +546,26 @@ const App: React.FC = () => {
     return text;
   };
 
-  // Helper to clean HTML for content field - removes overlays, modals, popups, etc.
+  // Helper to clean HTML for content field - minimal cleaning to preserve article content
+  // We intentionally do LIGHT cleaning to avoid breaking paywalled/restricted content
   const cleanHtmlContent = (html: string): string => {
     const temp = document.createElement('div');
     temp.innerHTML = html;
     
-    // Remove scripts, styles, and non-content elements
+    // Remove ONLY elements that are definitely not content
+    // Be conservative - better to include too much than lose actual content
     const elementsToRemove = [
-      // Core non-content elements
-      'script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'video', 'audio',
-      'object', 'embed', 'applet', 'form', 'input', 'button', 'select', 'textarea',
-      // Navigation and structural
-      'nav', 'header', 'footer', 'aside', 'menu', 'menuitem',
-      // Common overlay/modal patterns
-      '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]', '[class*="dialog"]',
-      '[class*="lightbox"]', '[class*="drawer"]', '[class*="sheet"]', '[class*="backdrop"]',
-      '[id*="overlay"]', '[id*="modal"]', '[id*="popup"]', '[id*="dialog"]',
-      // Cookie/consent banners
-      '[class*="cookie"]', '[class*="consent"]', '[class*="gdpr"]', '[class*="privacy"]',
-      '[class*="banner"]', '[class*="notice"]', '[class*="alert"]',
-      '[id*="cookie"]', '[id*="consent"]', '[id*="gdpr"]', '[id*="banner"]',
-      // Sticky/fixed elements that could be overlays
-      '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
-      '[class*="toolbar"]', '[class*="toast"]', '[class*="snackbar"]',
-      // Ads and promotions
-      '[class*="ad-"]', '[class*="advert"]', '[class*="advertisement"]', '[class*="sponsor"]',
-      '[class*="promo"]', '[class*="promotion"]', '[class*="cta"]',
-      '[id*="ad-"]', '[id*="advert"]', '[id*="sponsor"]',
-      // Social and sharing
-      '[class*="share"]', '[class*="social"]', '[class*="follow"]', '[class*="like"]',
-      // Comments and related content
-      '[class*="comment"]', '[class*="related"]', '[class*="recommended"]', '[class*="suggested"]',
-      '[class*="sidebar"]', '[class*="widget"]',
-      // Newsletter and subscription
-      '[class*="newsletter"]', '[class*="subscribe"]', '[class*="signup"]', '[class*="login"]',
-      '[class*="paywall"]', '[class*="subscription"]', '[class*="premium"]',
-      // Navigation elements
-      '[class*="breadcrumb"]', '[class*="pagination"]', '[class*="nav-"]', '[class*="menu-"]',
-      // ARIA roles for non-content
-      '[role="navigation"]', '[role="banner"]', '[role="complementary"]', '[role="contentinfo"]',
-      '[role="search"]', '[role="form"]', '[role="menu"]', '[role="menubar"]', '[role="dialog"]',
-      '[role="alertdialog"]', '[role="tooltip"]', '[role="status"]', '[role="alert"]',
+      // Scripts and styles (never content)
+      'script', 'style', 'noscript',
+      // Interactive elements that don't render as text
+      'iframe', 'object', 'embed', 'applet',
+      // Form elements
+      'input', 'button', 'select', 'textarea',
+      // Only remove clearly modal/overlay framework elements (exact class matches)
+      '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root',
+      '.ReactModal__Overlay', '.ReactModal__Content',
       // Hidden elements
       '[hidden]', '[aria-hidden="true"]',
-      // Common framework-specific overlays
-      '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root', '.MuiDrawer-root',
-      '.chakra-modal', '.chakra-overlay', '.ant-modal', '.ant-drawer',
-      '.ReactModal__Overlay', '.ReactModal__Content',
     ];
     
     elementsToRemove.forEach(selector => {
@@ -578,15 +574,9 @@ const App: React.FC = () => {
       } catch { /* Skip invalid selectors */ }
     });
     
-    // Remove elements with fixed/sticky positioning via computed style check
-    // (since inline styles are already removed, check data attributes or class hints)
-    temp.querySelectorAll('[data-fixed], [data-sticky], [data-overlay]').forEach(el => el.remove());
-    
-    // Remove inline styles, event handlers, and problematic attributes
+    // Remove ONLY event handlers (keep styles - they may affect layout/images)
     temp.querySelectorAll('*').forEach(el => {
-      // Remove all inline styles
-      el.removeAttribute('style');
-      // Remove event handlers
+      // Remove event handlers only
       el.removeAttribute('onclick');
       el.removeAttribute('onload');
       el.removeAttribute('onerror');
@@ -594,20 +584,6 @@ const App: React.FC = () => {
       el.removeAttribute('onmouseout');
       el.removeAttribute('onfocus');
       el.removeAttribute('onblur');
-      // Remove data attributes that might affect display
-      el.removeAttribute('data-scroll-lock');
-      el.removeAttribute('data-overlay');
-      el.removeAttribute('data-modal');
-    });
-    
-    // Remove empty wrapper divs that might cause layout issues
-    temp.querySelectorAll('div, span').forEach(el => {
-      // Keep elements that have text content or meaningful children
-      const hasText = el.textContent?.trim();
-      const hasContent = el.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, li, table, img, figure, blockquote, pre, code, a');
-      if (!hasText && !hasContent) {
-        el.remove();
-      }
     });
     
     return temp.innerHTML;
@@ -677,6 +653,7 @@ const App: React.FC = () => {
         const payload = data.payload;
         setEntityContainers([]);
         setEntityFromSearch(false); // Not from search
+        setEntityFromScanResults(false); // Not from scan results list (direct click on highlight)
         
         // Check if we need to fetch full entity details (SDOs from cache have minimal data)
         const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
@@ -734,10 +711,29 @@ const App: React.FC = () => {
         const entityPlatformType = parsedType?.platformType || 'opencti';
         
         // Determine if this looks like minimal cache data (has id and name but no description/labels)
-        const isMinimalData = entityId && payload?.existsInPlatform && 
-          !payload?.entityData?.description && 
-          !payload?.entityData?.objectLabel &&
-          !payload?.description;
+        // For OpenCTI: check for description and objectLabel
+        // For OpenAEV: check for type-specific fields (finding_type, endpoint_name, etc.)
+        const isMinimalData = entityId && payload?.existsInPlatform && (
+          entityPlatformType === 'openaev' 
+            ? (
+                // OpenAEV minimal data check: no type-specific detailed fields
+                !payload?.entityData?.finding_type && 
+                !payload?.entityData?.finding_created_at &&
+                !payload?.entityData?.endpoint_name &&
+                !payload?.entityData?.asset_group_name &&
+                !payload?.entityData?.team_name &&
+                !payload?.entityData?.attack_pattern_name &&
+                !payload?.entityData?.scenario_name &&
+                !payload?.entityData?.exercise_name &&
+                !payload?.entityData?.user_email
+              )
+            : (
+                // OpenCTI minimal data check
+                !payload?.entityData?.description && 
+                !payload?.entityData?.objectLabel &&
+                !payload?.description
+              )
+        );
         
         if (isMinimalData && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
           // Set loading state with basic info
@@ -966,6 +962,98 @@ const App: React.FC = () => {
         })));
         setInvestigationScanning(false);
         setInvestigationTypeFilter('all'); // Reset filter
+        break;
+      }
+      case 'SCAN_RESULTS': {
+        // Receive results from page scan (all detected entities)
+        const results = data.payload || {};
+        const allEntities: ScanResultEntity[] = [];
+        const seenKeys = new Set<string>(); // For de-duplication
+        
+        // Helper to add entity with de-duplication
+        const addEntity = (entity: ScanResultEntity) => {
+          // Create unique key based on value/name and type (case-insensitive)
+          const key = `${(entity.value || entity.name || '').toLowerCase()}::${entity.type.toLowerCase()}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            allEntities.push(entity);
+          }
+        };
+        
+        // Add OpenCTI observables
+        if (results.observables) {
+          for (const obs of results.observables) {
+            addEntity({
+              id: obs.entityId || obs.id || `obs-${obs.value}`,
+              type: obs.type,
+              name: obs.value,
+              value: obs.value,
+              found: obs.found,
+              entityId: obs.entityId,
+              platformId: obs.platformId,
+              platformType: 'opencti',
+              entityData: obs,
+            });
+          }
+        }
+        
+        // Add OpenCTI SDOs
+        if (results.sdos) {
+          for (const sdo of results.sdos) {
+            addEntity({
+              id: sdo.entityId || sdo.id || `sdo-${sdo.name}`,
+              type: sdo.type,
+              name: sdo.name,
+              value: sdo.name,
+              found: sdo.found,
+              entityId: sdo.entityId,
+              platformId: sdo.platformId,
+              platformType: 'opencti',
+              entityData: sdo,
+            });
+          }
+        }
+        
+        // Add CVEs
+        if (results.cves) {
+          for (const cve of results.cves) {
+            addEntity({
+              id: cve.entityId || cve.id || `cve-${cve.name}`,
+              type: 'Vulnerability',
+              name: cve.name,
+              value: cve.name,
+              found: cve.found,
+              entityId: cve.entityId,
+              platformId: cve.platformId,
+              platformType: 'opencti',
+              entityData: cve,
+            });
+          }
+        }
+        
+        // Add OpenAEV entities
+        if (results.platformEntities) {
+          for (const entity of results.platformEntities) {
+            const platformType = entity.platformType || 'openaev';
+            addEntity({
+              id: entity.entityId || entity.id || `${platformType}-${entity.name}`,
+              type: platformType === 'openaev' ? `oaev-${entity.type}` : entity.type,
+              name: entity.name,
+              value: entity.value || entity.name,
+              found: entity.found ?? true,
+              entityId: entity.entityId,
+              platformId: entity.platformId,
+              platformType: platformType as 'opencti' | 'openaev',
+              entityData: entity,
+            });
+          }
+        }
+        
+        setScanResultsEntities(allEntities);
+        setScanResultsTypeFilter('all');
+        setScanResultsFoundFilter('all');
+        setEntityFromScanResults(false);
+        setPanelMode('scan-results');
         break;
       }
       case 'INVESTIGATION_TOGGLE_ENTITY': {
@@ -1540,11 +1628,31 @@ const App: React.FC = () => {
   const handleAddEntities = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
+    // Check if we have any OpenCTI platforms - observables can only be created in OpenCTI
+    if (openctiPlatforms.length === 0) {
+      const results: ImportResults = {
+        success: false,
+        total: entitiesToAdd.length,
+        created: [],
+        failed: entitiesToAdd.map(e => ({
+          type: e.type || 'unknown',
+          value: e.value || e.name || 'unknown',
+          error: 'No OpenCTI platform configured. Observables can only be created in OpenCTI.',
+        })),
+        platformName: 'OpenCTI',
+      };
+      setImportResults(results);
+      setPanelMode('import-results');
+      return;
+    }
+    
     setSubmitting(true);
     
-    // Determine which platform to use (first OpenCTI platform or selected one)
-    const targetPlatformId = selectedPlatformId || openctiPlatforms[0]?.id;
-    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    // Always use an OpenCTI platform for observable creation
+    // Check if selectedPlatformId is an OpenCTI platform, otherwise use first OpenCTI platform
+    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
+    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0].id;
+    const targetPlatform = openctiPlatforms.find(p => p.id === targetPlatformId) || openctiPlatforms[0];
     
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_OBSERVABLES_BULK',
@@ -1572,7 +1680,7 @@ const App: React.FC = () => {
           value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown',
         })),
         failed: [],
-        platformName: targetPlatform?.name || 'OpenCTI',
+        platformName: targetPlatform.name,
       };
       
       setImportResults(results);
@@ -1589,7 +1697,7 @@ const App: React.FC = () => {
           value: e.value || e.name || 'unknown',
           error: response?.error || 'Failed to create entity',
         })),
-        platformName: targetPlatform?.name || 'OpenCTI',
+        platformName: targetPlatform.name,
       };
       
       setImportResults(results);
@@ -1625,6 +1733,13 @@ const App: React.FC = () => {
       setGeneratingPdf(false);
     }
     
+    // Separate entities that exist (have IDs) from those that need to be created
+    const existingEntityIds = entitiesToAdd.filter(e => e.id).map(e => e.id as string);
+    const entitiesToCreate = entitiesToAdd.filter(e => !e.id && (e.value || e.observable_value)).map(e => ({
+      type: e.type || e.entity_type || 'Unknown',
+      value: e.value || e.observable_value || e.name || '',
+    }));
+    
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_CONTAINER',
       payload: {
@@ -1634,7 +1749,8 @@ const App: React.FC = () => {
         content: containerForm.content,
         labels: selectedLabels.map((l) => l.id),
         markings: selectedMarkings.map((m) => m.id),
-        entities: entitiesToAdd.map((e) => e.id).filter(Boolean),
+        entities: existingEntityIds,
+        entitiesToCreate: entitiesToCreate,
         platformId: selectedPlatformId || undefined,
         pdfAttachment: pdfData,
         pageUrl: currentPageUrl,
@@ -1896,16 +2012,22 @@ const App: React.FC = () => {
     
     return (
       <Box sx={{ p: 2, overflow: 'auto' }}>
-        {/* Back to search button */}
-        {entityFromSearch && (
+        {/* Back to search/scan results button */}
+        {(entityFromSearch || entityFromScanResults) && (
           <Box sx={{ mb: 1.5 }}>
             <Button
               size="small"
               startIcon={<ChevronLeftOutlined />}
               onClick={() => {
-                setEntityFromSearch(false);
-                setMultiPlatformResults([]);
-                setPanelMode('search');
+                if (entityFromScanResults) {
+                  setEntityFromScanResults(false);
+                  setMultiPlatformResults([]);
+                  setPanelMode('scan-results');
+                } else {
+                  setEntityFromSearch(false);
+                  setMultiPlatformResults([]);
+                  setPanelMode('search');
+                }
               }}
               sx={{ 
                 color: 'text.secondary',
@@ -1913,7 +2035,7 @@ const App: React.FC = () => {
                 '&:hover': { bgcolor: 'action.hover' },
               }}
             >
-              Back to search
+              {entityFromScanResults ? 'Back to scan results' : 'Back to search'}
             </Button>
           </Box>
         )}
@@ -1934,89 +2056,180 @@ const App: React.FC = () => {
             }}
           >
             {multiPlatformResults.length > 1 ? (
-              <>
-                <IconButton 
-                  size="small" 
-                  onClick={() => {
-                    if (currentPlatformIndex > 0) {
-                      const prevIndex = currentPlatformIndex - 1;
-                      setCurrentPlatformIndex(prevIndex);
-                      const prevResult = multiPlatformResults[prevIndex];
-                      const prevPlatform = availablePlatforms.find(p => p.id === prevResult.platformId);
-                      const prevPlatformType = prevPlatform?.type || 'opencti';
-                      setEntity({ 
-                        ...prevResult.entity, 
-                        _platformId: prevResult.platformId,
-                        _platformType: prevPlatformType,
-                        _isNonDefaultPlatform: prevPlatformType !== 'opencti',
-                      });
-                      setSelectedPlatformId(prevResult.platformId);
-                      if (prevPlatform) setPlatformUrl(prevPlatform.url);
-                    }
-                  }} 
-                  disabled={currentPlatformIndex === 0}
-                  sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
-                >
-                  <ChevronLeftOutlined />
-                </IconButton>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              (() => {
+                // Get current platform info for display
+                const currentResult = multiPlatformResults[currentPlatformIndex];
+                const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
+                const currentPlatformType = currentPlatform?.type || 'opencti';
+                const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
+                
+                return (
+                  <>
+                    <IconButton 
+                      size="small" 
+                      onClick={async () => {
+                        if (currentPlatformIndex > 0) {
+                          const prevIndex = currentPlatformIndex - 1;
+                          setCurrentPlatformIndex(prevIndex);
+                          const prevResult = multiPlatformResults[prevIndex];
+                          const prevPlatform = availablePlatforms.find(p => p.id === prevResult.platformId);
+                          const prevPlatformType = prevPlatform?.type || 'opencti';
+                          
+                          // Fetch full entity data when switching platforms
+                          setPanelMode('loading');
+                          try {
+                            const response = await chrome.runtime.sendMessage({
+                              type: 'GET_ENTITY',
+                              payload: {
+                                entityId: prevResult.entity.id || prevResult.entity.entityId,
+                                entityType: prevResult.entity.type || prevResult.entity.entity_type,
+                                platformId: prevResult.platformId,
+                              },
+                            });
+                            
+                            if (response?.success && response.data) {
+                              const fullEntity = {
+                                ...response.data,
+                                _platformId: prevResult.platformId,
+                                _platformType: prevPlatformType,
+                                _isNonDefaultPlatform: prevPlatformType !== 'opencti',
+                              };
+                              // Update the multiPlatformResults with full data
+                              setMultiPlatformResults(prev => prev.map((r, i) => 
+                                i === prevIndex ? { ...r, entity: fullEntity } : r
+                              ));
+                              setEntity(fullEntity);
+                            } else {
+                              setEntity({ 
+                                ...prevResult.entity, 
+                                _platformId: prevResult.platformId,
+                                _platformType: prevPlatformType,
+                                _isNonDefaultPlatform: prevPlatformType !== 'opencti',
+                              });
+                            }
+                          } catch (error) {
+                            setEntity({ 
+                              ...prevResult.entity, 
+                              _platformId: prevResult.platformId,
+                              _platformType: prevPlatformType,
+                              _isNonDefaultPlatform: prevPlatformType !== 'opencti',
+                            });
+                          }
+                          setPanelMode('entity');
+                          setSelectedPlatformId(prevResult.platformId);
+                          if (prevPlatform) setPlatformUrl(prevPlatform.url);
+                        }
+                      }} 
+                      disabled={currentPlatformIndex === 0}
+                      sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
+                    >
+                      <ChevronLeftOutlined />
+                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <img
+                        src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                          ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                          : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
+                        }
+                        alt={currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
+                        width={18}
+                        height={18}
+                      />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {currentPlatform?.name || (currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI')}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        ({currentPlatformIndex + 1}/{multiPlatformResults.length})
+                      </Typography>
+                    </Box>
+                    <IconButton 
+                      size="small" 
+                      onClick={async () => {
+                        if (currentPlatformIndex < multiPlatformResults.length - 1) {
+                          const nextIndex = currentPlatformIndex + 1;
+                          setCurrentPlatformIndex(nextIndex);
+                          const nextResult = multiPlatformResults[nextIndex];
+                          const nextPlatform = availablePlatforms.find(p => p.id === nextResult.platformId);
+                          const nextPlatformType = nextPlatform?.type || 'opencti';
+                          
+                          // Fetch full entity data when switching platforms
+                          setPanelMode('loading');
+                          try {
+                            const response = await chrome.runtime.sendMessage({
+                              type: 'GET_ENTITY',
+                              payload: {
+                                entityId: nextResult.entity.id || nextResult.entity.entityId,
+                                entityType: nextResult.entity.type || nextResult.entity.entity_type,
+                                platformId: nextResult.platformId,
+                              },
+                            });
+                            
+                            if (response?.success && response.data) {
+                              const fullEntity = {
+                                ...response.data,
+                                _platformId: nextResult.platformId,
+                                _platformType: nextPlatformType,
+                                _isNonDefaultPlatform: nextPlatformType !== 'opencti',
+                              };
+                              // Update the multiPlatformResults with full data
+                              setMultiPlatformResults(prev => prev.map((r, i) => 
+                                i === nextIndex ? { ...r, entity: fullEntity } : r
+                              ));
+                              setEntity(fullEntity);
+                            } else {
+                              setEntity({ 
+                                ...nextResult.entity, 
+                                _platformId: nextResult.platformId,
+                                _platformType: nextPlatformType,
+                                _isNonDefaultPlatform: nextPlatformType !== 'opencti',
+                              });
+                            }
+                          } catch (error) {
+                            setEntity({ 
+                              ...nextResult.entity, 
+                              _platformId: nextResult.platformId,
+                              _platformType: nextPlatformType,
+                              _isNonDefaultPlatform: nextPlatformType !== 'opencti',
+                            });
+                          }
+                          setPanelMode('entity');
+                          setSelectedPlatformId(nextResult.platformId);
+                          if (nextPlatform) setPlatformUrl(nextPlatform.url);
+                        }
+                      }} 
+                      disabled={currentPlatformIndex === multiPlatformResults.length - 1}
+                      sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
+                    >
+                      <ChevronRightOutlined />
+                    </IconButton>
+                  </>
+                );
+              })()
+            ) : (() => {
+              // Single platform display - determine logo based on entity platform type
+              const entityPlatformType = (entity as any)?._platformType || 'opencti';
+              const singlePlatformLogo = entityPlatformType === 'openaev' ? 'openaev' : 'opencti';
+              const singlePlatform = (entity as any)?._platformId 
+                ? availablePlatforms.find(p => p.id === (entity as any)?._platformId)
+                : availablePlatforms[0];
+              
+              return singlePlatform ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
                   <img
                     src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                      ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
-                      : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
+                      ? chrome.runtime.getURL(`assets/logos/logo_${singlePlatformLogo}_${logoSuffix}_embleme_square.svg`)
+                      : `../assets/logos/logo_${singlePlatformLogo}_${logoSuffix}_embleme_square.svg`
                     }
-                    alt="OpenAEV"
+                    alt={entityPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
                     width={18}
                     height={18}
                   />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {platform?.name || 'OpenAEV'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    ({currentPlatformIndex + 1}/{multiPlatformResults.length})
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {singlePlatform.name || (entityPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI')}
                   </Typography>
                 </Box>
-                <IconButton 
-                  size="small" 
-                  onClick={() => {
-                    if (currentPlatformIndex < multiPlatformResults.length - 1) {
-                      const nextIndex = currentPlatformIndex + 1;
-                      setCurrentPlatformIndex(nextIndex);
-                      const nextResult = multiPlatformResults[nextIndex];
-                      const nextPlatform = availablePlatforms.find(p => p.id === nextResult.platformId);
-                      const nextPlatformType = nextPlatform?.type || 'opencti';
-                      setEntity({ 
-                        ...nextResult.entity, 
-                        _platformId: nextResult.platformId,
-                        _platformType: nextPlatformType,
-                        _isNonDefaultPlatform: nextPlatformType !== 'opencti',
-                      });
-                      setSelectedPlatformId(nextResult.platformId);
-                      if (nextPlatform) setPlatformUrl(nextPlatform.url);
-                    }
-                  }} 
-                  disabled={currentPlatformIndex === multiPlatformResults.length - 1}
-                  sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
-                >
-                  <ChevronRightOutlined />
-                </IconButton>
-              </>
-            ) : platform ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
-                <img
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
-                    : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
-                  }
-                  alt="OpenAEV"
-                  width={18}
-                  height={18}
-                />
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {platform.name || 'OpenAEV'}
-                </Typography>
-              </Box>
-            ) : null}
+              ) : null;
+            })()}
           </Box>
         )}
 
@@ -2746,72 +2959,156 @@ const App: React.FC = () => {
 
     const isVulnerability = type.toLowerCase() === 'vulnerability';
 
-    // Platform navigation handlers
-    const handlePrevPlatform = () => {
+    // Platform navigation handlers - fetch full entity data when switching
+    const handlePrevPlatform = async () => {
       if (currentPlatformIndex > 0) {
         const prevIndex = currentPlatformIndex - 1;
         setCurrentPlatformIndex(prevIndex);
         const prevResult = multiPlatformResults[prevIndex];
         const platform = availablePlatforms.find(p => p.id === prevResult.platformId);
         const platformType = platform?.type || 'opencti';
-        setEntity({ 
-          ...prevResult.entity, 
-          _platformId: prevResult.platformId,
-          _platformType: platformType,
-          _isNonDefaultPlatform: platformType !== 'opencti',
-        });
+        
+        // Fetch full entity data when switching platforms
+        setPanelMode('loading');
+        try {
+          const response = await chrome.runtime.sendMessage({
+            type: 'GET_ENTITY',
+            payload: {
+              entityId: prevResult.entity.id || prevResult.entity.entityId,
+              entityType: prevResult.entity.type || prevResult.entity.entity_type,
+              platformId: prevResult.platformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            const fullEntity = {
+              ...response.data,
+              _platformId: prevResult.platformId,
+              _platformType: platformType,
+              _isNonDefaultPlatform: platformType !== 'opencti',
+            };
+            // Update the multiPlatformResults with full data
+            setMultiPlatformResults(prev => prev.map((r, i) => 
+              i === prevIndex ? { ...r, entity: fullEntity } : r
+            ));
+            setEntity(fullEntity);
+          } else {
+            setEntity({ 
+              ...prevResult.entity, 
+              _platformId: prevResult.platformId,
+              _platformType: platformType,
+              _isNonDefaultPlatform: platformType !== 'opencti',
+            });
+          }
+        } catch (error) {
+          setEntity({ 
+            ...prevResult.entity, 
+            _platformId: prevResult.platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: platformType !== 'opencti',
+          });
+        }
+        setPanelMode('entity');
         setSelectedPlatformId(prevResult.platformId);
         if (platform) setPlatformUrl(platform.url);
       }
     };
 
-    const handleNextPlatform = () => {
+    const handleNextPlatform = async () => {
       if (currentPlatformIndex < multiPlatformResults.length - 1) {
         const nextIndex = currentPlatformIndex + 1;
         setCurrentPlatformIndex(nextIndex);
         const nextResult = multiPlatformResults[nextIndex];
         const platform = availablePlatforms.find(p => p.id === nextResult.platformId);
         const platformType = platform?.type || 'opencti';
-        setEntity({ 
-          ...nextResult.entity, 
-          _platformId: nextResult.platformId,
-          _platformType: platformType,
-          _isNonDefaultPlatform: platformType !== 'opencti',
-        });
+        
+        // Fetch full entity data when switching platforms
+        setPanelMode('loading');
+        try {
+          const response = await chrome.runtime.sendMessage({
+            type: 'GET_ENTITY',
+            payload: {
+              entityId: nextResult.entity.id || nextResult.entity.entityId,
+              entityType: nextResult.entity.type || nextResult.entity.entity_type,
+              platformId: nextResult.platformId,
+            },
+          });
+          
+          if (response?.success && response.data) {
+            const fullEntity = {
+              ...response.data,
+              _platformId: nextResult.platformId,
+              _platformType: platformType,
+              _isNonDefaultPlatform: platformType !== 'opencti',
+            };
+            // Update the multiPlatformResults with full data
+            setMultiPlatformResults(prev => prev.map((r, i) => 
+              i === nextIndex ? { ...r, entity: fullEntity } : r
+            ));
+            setEntity(fullEntity);
+          } else {
+            setEntity({ 
+              ...nextResult.entity, 
+              _platformId: nextResult.platformId,
+              _platformType: platformType,
+              _isNonDefaultPlatform: platformType !== 'opencti',
+            });
+          }
+        } catch (error) {
+          setEntity({ 
+            ...nextResult.entity, 
+            _platformId: nextResult.platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: platformType !== 'opencti',
+          });
+        }
+        setPanelMode('entity');
         setSelectedPlatformId(nextResult.platformId);
         if (platform) setPlatformUrl(platform.url);
       }
     };
 
-    // Handle back to search
-    const handleBackToSearch = () => {
-      setEntityFromSearch(false);
-      setMultiPlatformResults([]);
-      setPanelMode('search');
+    // Handle back to search/scan results
+    const handleBackToList = () => {
+      if (entityFromScanResults) {
+        setEntityFromScanResults(false);
+        setMultiPlatformResults([]);
+        setPanelMode('scan-results');
+      } else {
+        setEntityFromSearch(false);
+        setMultiPlatformResults([]);
+        setPanelMode('search');
+      }
     };
 
     return (
       <Box sx={{ p: 2, overflow: 'auto' }}>
-        {/* Back to search button */}
-        {entityFromSearch && (
+        {/* Back to search/scan results button */}
+        {(entityFromSearch || entityFromScanResults) && (
           <Box sx={{ mb: 1.5 }}>
             <Button
               size="small"
               startIcon={<ChevronLeftOutlined />}
-              onClick={handleBackToSearch}
+              onClick={handleBackToList}
               sx={{ 
                 color: 'text.secondary',
                 textTransform: 'none',
                 '&:hover': { bgcolor: 'action.hover' },
               }}
             >
-              Back to search
+              {entityFromScanResults ? 'Back to scan results' : 'Back to search'}
             </Button>
           </Box>
         )}
         
         {/* Platform indicator bar */}
-        {(availablePlatforms.length > 1 || hasMultiplePlatforms) && (
+        {(availablePlatforms.length > 1 || hasMultiplePlatforms) && (() => {
+          // Determine current platform type for logo display
+          const currentPlatformType = currentPlatform?.type || 'opencti';
+          const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
+          const platformAlt = currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI';
+          
+          return (
           <Box 
             sx={{ 
               display: 'flex', 
@@ -2838,15 +3135,15 @@ const App: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <img
                     src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                      ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
-                      : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
+                      ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                      : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
                     }
-                    alt="OpenCTI"
+                    alt={platformAlt}
                     width={18}
                     height={18}
                   />
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {currentPlatform?.name || 'Unknown'}
+                    {currentPlatform?.name || platformAlt}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     ({currentPlatformIndex + 1}/{multiPlatformResults.length})
@@ -2865,20 +3162,21 @@ const App: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
                 <img
                   src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
-                    : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
+                    ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                    : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
                   }
-                  alt="OpenCTI"
+                  alt={platformAlt}
                   width={18}
                   height={18}
                 />
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {currentPlatform?.name || 'OpenCTI'}
+                  {currentPlatform?.name || platformAlt}
                 </Typography>
               </Box>
             )}
           </Box>
-        )}
+          );
+        })()}
 
         {/* Type Badge - More visible */}
         <Box
@@ -3428,6 +3726,27 @@ const App: React.FC = () => {
 
     return (
       <Box sx={{ p: 2 }}>
+        {/* Back to scan results button */}
+        {entityFromScanResults && (
+          <Box sx={{ mb: 1.5 }}>
+            <Button
+              size="small"
+              startIcon={<ChevronLeftOutlined />}
+              onClick={() => {
+                setEntityFromScanResults(false);
+                setPanelMode('scan-results');
+              }}
+              sx={{ 
+                color: 'text.secondary',
+                textTransform: 'none',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+            >
+              Back to scan results
+            </Button>
+          </Box>
+        )}
+        
         <Alert severity="warning" sx={{ mb: 2, borderRadius: 1 }}>
           This entity was not found in OpenCTI
         </Alert>
@@ -3753,7 +4072,7 @@ const App: React.FC = () => {
             variant="contained"
             onClick={() => {
               setImportResults(null);
-              setPanelMode('empty');
+              handleClose();
             }}
             fullWidth
             startIcon={<CheckCircleOutlined />}
@@ -3886,7 +4205,22 @@ const App: React.FC = () => {
         </Button>
         <Button
           variant="outlined"
-          onClick={handleAddEntities}
+          onClick={() => {
+            // For import without container, check if multiple OpenCTI platforms
+            if (openctiPlatforms.length > 1) {
+              // Need platform selection first
+              setContainerWorkflowOrigin('import');
+              setPanelMode('platform-select');
+            } else if (openctiPlatforms.length === 1) {
+              // Auto-select single platform and import
+              setSelectedPlatformId(openctiPlatforms[0].id);
+              setPlatformUrl(openctiPlatforms[0].url);
+              handleAddEntities();
+            } else {
+              // No OpenCTI platform - handleAddEntities will show error
+              handleAddEntities();
+            }
+          }}
           disabled={submitting}
           fullWidth
         >
@@ -3898,19 +4232,22 @@ const App: React.FC = () => {
 
   const renderPlatformSelectView = () => {
     // Determine if back button should be shown
-    // Only show back if coming from preview mode (has entities selected)
-    const showBackButton = containerWorkflowOrigin === 'preview' && entitiesToAdd.length > 0;
+    // Show back if coming from preview mode (has entities selected) or from import workflow
+    const showBackButton = (containerWorkflowOrigin === 'preview' || containerWorkflowOrigin === 'import') && entitiesToAdd.length > 0;
+    const isImportWorkflow = containerWorkflowOrigin === 'import';
     
     return (
     <Box sx={{ p: 2 }}>
-      {/* Stepper */}
-      <Stepper activeStep={0} sx={{ mb: 3 }}>
-        {containerSteps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {/* Stepper - only show for container creation, not import */}
+      {!isImportWorkflow && (
+        <Stepper activeStep={0} sx={{ mb: 3 }}>
+          {containerSteps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         {showBackButton && (
@@ -3922,7 +4259,10 @@ const App: React.FC = () => {
       </Box>
 
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        Choose which OpenCTI platform to create the container in:
+        {isImportWorkflow 
+          ? 'Choose which OpenCTI platform to import entities into:'
+          : 'Choose which OpenCTI platform to create the container in:'
+        }
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -3932,7 +4272,14 @@ const App: React.FC = () => {
             onClick={() => {
               setSelectedPlatformId(platform.id);
               setPlatformUrl(platform.url);
-              setPanelMode('container-type');
+              if (isImportWorkflow) {
+                // Import workflow - proceed with entity creation
+                setContainerWorkflowOrigin(null);
+                handleAddEntities();
+              } else {
+                // Container workflow - go to type selection
+                setPanelMode('container-type');
+              }
             }}
             elevation={0}
             sx={{
@@ -5036,22 +5383,30 @@ const App: React.FC = () => {
           {/* Type filter */}
           {investigationEntityTypes.length > 1 && (
             <Box sx={{ mb: 2 }}>
-              <TextField
-                select
-                size="small"
-                fullWidth
-                value={investigationTypeFilter}
-                onChange={(e) => setInvestigationTypeFilter(e.target.value)}
-                SelectProps={{ native: true }}
-                sx={{ '& .MuiInputBase-input': { py: 1 } }}
-              >
-                <option value="all">All types ({investigationEntities.length})</option>
-                {investigationEntityTypes.map(type => (
-                  <option key={type} value={type}>
-                    {type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')} ({investigationEntities.filter(e => e.type === type).length})
-                  </option>
-                ))}
-              </TextField>
+              <FormControl fullWidth size="small">
+                <InputLabel id="investigation-type-filter-label">Filter by type</InputLabel>
+                <Select
+                  labelId="investigation-type-filter-label"
+                  value={investigationTypeFilter}
+                  label="Filter by type"
+                  onChange={(e) => setInvestigationTypeFilter(e.target.value)}
+                >
+                  <MenuItem value="all">
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <span>All types</span>
+                      <Chip label={investigationEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                    </Box>
+                  </MenuItem>
+                  {investigationEntityTypes.map(type => (
+                    <MenuItem key={type} value={type}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                        <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
+                        <Chip label={investigationEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Box>
           )}
           
@@ -5129,6 +5484,311 @@ const App: React.FC = () => {
         </>
       )}
     </Box>
+    );
+  };
+
+  // Get unique entity types for scan results filter
+  const scanResultsEntityTypes = useMemo(() => {
+    const types = new Set(scanResultsEntities.map(e => e.type));
+    return Array.from(types).sort();
+  }, [scanResultsEntities]);
+
+  // Filter scan results entities by type and found status
+  const filteredScanResultsEntities = useMemo(() => {
+    let filtered = scanResultsEntities;
+    
+    // Filter by type
+    if (scanResultsTypeFilter !== 'all') {
+      filtered = filtered.filter(e => e.type === scanResultsTypeFilter);
+    }
+    
+    // Filter by found status
+    if (scanResultsFoundFilter === 'found') {
+      filtered = filtered.filter(e => e.found);
+    } else if (scanResultsFoundFilter === 'not-found') {
+      filtered = filtered.filter(e => !e.found);
+    }
+    
+    return filtered;
+  }, [scanResultsEntities, scanResultsTypeFilter, scanResultsFoundFilter]);
+
+  // Get counts for scan results
+  const scanResultsFoundCount = scanResultsEntities.filter(e => e.found).length;
+  const scanResultsNotFoundCount = scanResultsEntities.filter(e => !e.found).length;
+
+  // Handle click on scan result entity to show its overview
+  const handleScanResultEntityClick = async (entity: ScanResultEntity) => {
+    if (!entity.found) {
+      // Not found - show not-found view with add option
+      setEntity({
+        type: entity.type,
+        value: entity.value,
+        name: entity.name,
+        existsInPlatform: false,
+        entityData: entity.entityData,
+      });
+      setEntityFromScanResults(true);
+      setPanelMode('not-found');
+      return;
+    }
+    
+    // Found entity - show entity overview
+    const platformType = entity.platformType || (entity.type.startsWith('oaev-') ? 'openaev' : 'opencti');
+    const actualType = entity.type.replace('oaev-', '');
+    
+    setEntityFromScanResults(true);
+    setEntity({
+      id: entity.entityId || entity.id,
+      entityId: entity.entityId || entity.id,
+      type: entity.type,
+      entity_type: entity.type,
+      name: entity.name,
+      value: entity.value,
+      existsInPlatform: true,
+      platformId: entity.platformId,
+      _platformId: entity.platformId,
+      _platformType: platformType,
+      _isNonDefaultPlatform: platformType !== 'opencti',
+      entityData: entity.entityData,
+    });
+    
+    // Fetch full entity details if we have an ID
+    if (entity.entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      setPanelMode('loading');
+      try {
+        const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+        const response = await chrome.runtime.sendMessage({
+          type: messageType,
+          payload: {
+            id: entity.entityId,
+            entityId: entity.entityId,
+            entityType: actualType,
+            platformId: entity.platformId,
+          },
+        });
+        
+        if (response?.success && response.data) {
+          setEntity({
+            ...response.data,
+            id: entity.entityId,
+            entityId: entity.entityId,
+            type: entity.type,
+            entity_type: entity.type,
+            name: entity.name || response.data.name,
+            value: entity.value,
+            existsInPlatform: true,
+            platformId: entity.platformId,
+            _platformId: entity.platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: platformType !== 'opencti',
+            entityData: response.data,
+          });
+        }
+        setPanelMode('entity');
+      } catch (error) {
+        log.error(' Failed to fetch entity details:', error);
+        setPanelMode('entity');
+      }
+    } else {
+      setPanelMode('entity');
+    }
+  };
+
+  const renderScanResultsView = () => {
+    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
+    
+    return (
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <TravelExploreOutlined sx={{ color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
+            Scan Results
+          </Typography>
+          <IconButton 
+            size="small" 
+            onClick={() => {
+              setScanResultsEntities([]);
+              setPanelMode('empty');
+            }}
+          >
+            <CloseOutlined fontSize="small" />
+          </IconButton>
+        </Box>
+        
+        {scanResultsEntities.length === 0 ? (
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            flex: 1,
+            color: 'text.secondary',
+          }}>
+            <SearchOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
+            <Typography variant="body1">No entities detected</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Scan a page to see detected entities here
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Stats - Clickable for filtering */}
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 0, 
+              mb: 2, 
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+              overflow: 'hidden',
+            }}>
+              <Box 
+                onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'found' ? 'all' : 'found')}
+                sx={{ 
+                  flex: 1, 
+                  textAlign: 'center', 
+                  p: 1.5,
+                  cursor: 'pointer',
+                  bgcolor: scanResultsFoundFilter === 'found' ? 'success.main' : 'action.hover',
+                  color: scanResultsFoundFilter === 'found' ? 'white' : 'inherit',
+                  transition: 'all 0.15s',
+                  '&:hover': {
+                    bgcolor: scanResultsFoundFilter === 'found' ? 'success.dark' : 'action.selected',
+                  },
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'found' ? 'inherit' : 'success.main' }}>
+                  {scanResultsFoundCount}
+                </Typography>
+                <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'found' ? 0.9 : 1 }}>
+                  Found
+                </Typography>
+              </Box>
+              <Divider orientation="vertical" flexItem />
+              <Box 
+                onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'not-found' ? 'all' : 'not-found')}
+                sx={{ 
+                  flex: 1, 
+                  textAlign: 'center', 
+                  p: 1.5,
+                  cursor: 'pointer',
+                  bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.main' : 'action.hover',
+                  color: scanResultsFoundFilter === 'not-found' ? 'white' : 'inherit',
+                  transition: 'all 0.15s',
+                  '&:hover': {
+                    bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.dark' : 'action.selected',
+                  },
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'warning.main' }}>
+                  {scanResultsNotFoundCount}
+                </Typography>
+                <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'not-found' ? 0.9 : 1 }}>
+                  Not Found
+                </Typography>
+              </Box>
+            </Box>
+            
+            {/* Type filter */}
+            {scanResultsEntityTypes.length > 1 && (
+              <Box sx={{ mb: 2 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="scan-results-type-filter-label">Filter by type</InputLabel>
+                  <Select
+                    labelId="scan-results-type-filter-label"
+                    value={scanResultsTypeFilter}
+                    label="Filter by type"
+                    onChange={(e) => setScanResultsTypeFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                        <span>All types</span>
+                        <Chip label={scanResultsEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                      </Box>
+                    </MenuItem>
+                    {scanResultsEntityTypes.map(type => (
+                      <MenuItem key={type} value={type}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                          <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
+                          <Chip label={scanResultsEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+            
+            {/* Entity list */}
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {filteredScanResultsEntities.map((entity, index) => {
+                const entityColor = itemColor(entity.type, mode === 'dark');
+                const isOpenAEV = entity.platformType === 'openaev' || entity.type.startsWith('oaev-');
+                const displayType = entity.type.replace('oaev-', '');
+                
+                return (
+                  <Paper
+                    key={entity.id + '-' + index}
+                    elevation={0}
+                    onClick={() => handleScanResultEntityClick(entity)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      mb: 1,
+                      bgcolor: 'background.paper',
+                      border: 1,
+                      borderColor: entity.found ? 'success.main' : 'warning.main',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      borderLeftWidth: 4,
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                        boxShadow: 1,
+                      },
+                    }}
+                  >
+                    <ItemIcon type={entity.type} size="small" color={entityColor} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                        {entity.name || entity.value}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {displayType.replace(/-/g, ' ')}
+                        </Typography>
+                        {isOpenAEV && (
+                          <Chip 
+                            label="OpenAEV" 
+                            size="small" 
+                            sx={{ 
+                              height: 16, 
+                              fontSize: '0.65rem',
+                              bgcolor: hexToRGB('#00bcd4', 0.2),
+                              color: '#00bcd4',
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </Box>
+                    <Chip
+                      label={entity.found ? 'Found' : 'New'}
+                      size="small"
+                      color={entity.found ? 'success' : 'warning'}
+                      variant="outlined"
+                      sx={{ minWidth: 50 }}
+                    />
+                    <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
+                  </Paper>
+                );
+              })}
+            </Box>
+          </>
+        )}
+      </Box>
     );
   };
 
@@ -5968,6 +6628,8 @@ const App: React.FC = () => {
         return renderContainerFormView();
       case 'investigation':
         return renderInvestigationView();
+      case 'scan-results':
+        return renderScanResultsView();
       case 'atomic-testing':
         return renderAtomicTestingView();
       case 'search':

@@ -499,8 +499,82 @@ function extractFirstParagraph(textContent: string, maxLength = 500): string {
 }
 
 /**
- * Generate PDF from article content with selectable text
- * Parses HTML and renders using native jsPDF methods for real text (not images)
+ * Load image and convert to base64 data URL for PDF embedding
+ */
+async function loadImageAsBase64(imgElement: HTMLImageElement): Promise<{ data: string; width: number; height: number } | null> {
+  try {
+    // Get the image source
+    let src = imgElement.src || imgElement.dataset.src || imgElement.getAttribute('data-lazy-src') || '';
+    
+    // Skip if no valid source, placeholder, or data URI that's too small
+    if (!src || src.startsWith('data:image/svg') || src.includes('placeholder') || src.includes('1x1')) {
+      return null;
+    }
+    
+    // For relative URLs, make them absolute
+    if (src.startsWith('/')) {
+      src = window.location.origin + src;
+    } else if (!src.startsWith('http') && !src.startsWith('data:')) {
+      src = new URL(src, window.location.href).href;
+    }
+    
+    // Create a canvas to draw the image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    
+    // Create a new image to load (handles CORS)
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    return new Promise((resolve) => {
+      img.onload = () => {
+        // Limit image size for PDF (max 800px width)
+        const maxWidth = 800;
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        // Skip very small images (likely icons/buttons)
+        if (width < 50 || height < 50) {
+          resolve(null);
+          return;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ data: dataUrl, width, height });
+        } catch {
+          // CORS error - try without crossOrigin
+          resolve(null);
+        }
+      };
+      
+      img.onerror = () => {
+        resolve(null);
+      };
+      
+      // Timeout after 3 seconds
+      setTimeout(() => resolve(null), 3000);
+      
+      img.src = src;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate PDF from article content with selectable text AND images
+ * Parses HTML and renders using native jsPDF methods for real text
  * Returns base64 encoded PDF data
  */
 async function generateArticlePDF(): Promise<{ data: string; filename: string } | null> {
@@ -513,7 +587,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
       return null;
     }
     
-    log.debug(' Starting PDF generation with selectable text, article title:', article.title);
+    log.debug(' Starting PDF generation with selectable text and images, article title:', article.title);
     
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -536,6 +610,45 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
         return true;
       }
       return false;
+    };
+    
+    // Helper to add image to PDF
+    const addImageToPDF = async (imgElement: HTMLImageElement) => {
+      const imageData = await loadImageAsBase64(imgElement);
+      if (!imageData) return;
+      
+      // Convert pixels to mm (assuming 96 DPI)
+      const pxToMm = 0.264583;
+      let imgWidthMm = imageData.width * pxToMm;
+      let imgHeightMm = imageData.height * pxToMm;
+      
+      // Scale to fit content width if needed
+      if (imgWidthMm > contentWidth) {
+        const scale = contentWidth / imgWidthMm;
+        imgWidthMm = contentWidth;
+        imgHeightMm = imgHeightMm * scale;
+      }
+      
+      // Check if we need a new page
+      checkPageBreak(imgHeightMm + 5);
+      
+      try {
+        pdf.addImage(imageData.data, 'JPEG', margin, yPosition, imgWidthMm, imgHeightMm);
+        yPosition += imgHeightMm + 5;
+        
+        // Add caption if available
+        const alt = imgElement.alt || imgElement.title;
+        if (alt && alt.length > 5) {
+          pdf.setFontSize(9);
+          pdf.setTextColor(100, 100, 100);
+          pdf.setFont('helvetica', 'italic');
+          const captionLines = pdf.splitTextToSize(alt, contentWidth);
+          pdf.text(captionLines, margin, yPosition);
+          yPosition += captionLines.length * 4 + 2;
+        }
+      } catch (e) {
+        log.debug(' Failed to add image to PDF:', e);
+      }
     };
     
     // Header - blue line
@@ -585,14 +698,23 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = article.content;
     
-    // Remove unwanted elements
-    const removeSelectors = ['script', 'style', 'nav', 'footer', 'header', 'aside', 'iframe', 'noscript', '.advertisement', '.social-share', '.comments'];
+    // Remove only truly non-content elements (keep most content)
+    const removeSelectors = ['script', 'style', 'iframe', 'noscript', 'button', 'input', 'form'];
     removeSelectors.forEach(sel => {
       tempDiv.querySelectorAll(sel).forEach(el => el.remove());
     });
     
-    // Process content recursively
-    const processNode = (node: Node, isBold = false, isItalic = false, fontSize = 11) => {
+    // Collect all images for processing
+    const images = Array.from(tempDiv.querySelectorAll('img'));
+    const imagePromises: Map<HTMLImageElement, Promise<{ data: string; width: number; height: number } | null>> = new Map();
+    
+    // Pre-load images in parallel
+    for (const img of images) {
+      imagePromises.set(img, loadImageAsBase64(img));
+    }
+    
+    // Process content recursively (now async to handle images)
+    const processNode = async (node: Node, isBold = false, isItalic = false, fontSize = 11) => {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent?.trim();
         if (text) {
@@ -621,13 +743,13 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
           case 'h1':
             checkPageBreak(12);
             yPosition += 4;
-            processChildren(el, true, false, 16);
+            await processChildren(el, true, false, 16);
             yPosition += 4;
             break;
           case 'h2':
             checkPageBreak(10);
             yPosition += 3;
-            processChildren(el, true, false, 14);
+            await processChildren(el, true, false, 14);
             yPosition += 3;
             break;
           case 'h3':
@@ -636,12 +758,12 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
           case 'h6':
             checkPageBreak(8);
             yPosition += 2;
-            processChildren(el, true, false, 12);
+            await processChildren(el, true, false, 12);
             yPosition += 2;
             break;
           case 'p':
             checkPageBreak(lineHeight);
-            processChildren(el, isBold, isItalic, fontSize);
+            await processChildren(el, isBold, isItalic, fontSize);
             yPosition += 3;
             break;
           case 'br':
@@ -649,16 +771,18 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
             break;
           case 'strong':
           case 'b':
-            processChildren(el, true, isItalic, fontSize);
+            await processChildren(el, true, isItalic, fontSize);
             break;
           case 'em':
           case 'i':
-            processChildren(el, isBold, true, fontSize);
+            await processChildren(el, isBold, true, fontSize);
             break;
           case 'ul':
           case 'ol':
             yPosition += 2;
-            el.querySelectorAll(':scope > li').forEach((li, idx) => {
+            const listItems = el.querySelectorAll(':scope > li');
+            for (let idx = 0; idx < listItems.length; idx++) {
+              const li = listItems[idx];
               checkPageBreak(lineHeight);
               const bullet = tagName === 'ul' ? '•' : `${idx + 1}.`;
               pdf.setFont('helvetica', 'normal');
@@ -670,7 +794,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
               const lines = pdf.splitTextToSize(liText, contentWidth - 8);
               pdf.text(lines, margin + 8, yPosition);
               yPosition += lines.length * lineHeight + 1;
-            });
+            }
             yPosition += 2;
             break;
           case 'blockquote':
@@ -679,7 +803,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
             pdf.setDrawColor(0, 27, 218);
             pdf.setLineWidth(0.5);
             const quoteStartY = yPosition;
-            processChildren(el, false, true, 10);
+            await processChildren(el, false, true, 10);
             pdf.line(margin, quoteStartY - 2, margin, yPosition);
             yPosition += 4;
             break;
@@ -699,16 +823,25 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
             }
             break;
           case 'img':
-            // Skip images for now - they would require async loading
-            // Could add: [Image: alt text] placeholder
-            const alt = el.getAttribute('alt');
-            if (alt) {
-              checkPageBreak(lineHeight);
+            // Add image to PDF
+            await addImageToPDF(el as HTMLImageElement);
+            break;
+          case 'figure':
+            // Process figure (typically contains img and figcaption)
+            const figImg = el.querySelector('img');
+            if (figImg) {
+              await addImageToPDF(figImg as HTMLImageElement);
+            }
+            const figCaption = el.querySelector('figcaption');
+            if (figCaption) {
               pdf.setFontSize(9);
               pdf.setTextColor(100, 100, 100);
               pdf.setFont('helvetica', 'italic');
-              pdf.text(`[Image: ${alt}]`, margin, yPosition);
-              yPosition += lineHeight;
+              const captionText = figCaption.textContent?.trim() || '';
+              const captionLines = pdf.splitTextToSize(captionText, contentWidth);
+              checkPageBreak(captionLines.length * 4);
+              pdf.text(captionLines, margin, yPosition);
+              yPosition += captionLines.length * 4 + 2;
             }
             break;
           case 'pre':
@@ -734,21 +867,26 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
           case 'section':
           case 'article':
           case 'span':
-          case 'figure':
           case 'figcaption':
+          case 'picture':
+          case 'source':
           default:
-            processChildren(el, isBold, isItalic, fontSize);
+            await processChildren(el, isBold, isItalic, fontSize);
             break;
         }
       }
     };
     
-    const processChildren = (el: HTMLElement, isBold: boolean, isItalic: boolean, fontSize: number) => {
-      el.childNodes.forEach(child => processNode(child, isBold, isItalic, fontSize));
+    const processChildren = async (el: HTMLElement, isBold: boolean, isItalic: boolean, fontSize: number) => {
+      for (const child of Array.from(el.childNodes)) {
+        await processNode(child, isBold, isItalic, fontSize);
+      }
     };
     
     // Process all content
-    tempDiv.childNodes.forEach(child => processNode(child));
+    for (const child of Array.from(tempDiv.childNodes)) {
+      await processNode(child);
+    }
     
     // Footer
     const footerY = pageHeight - 10;
@@ -765,7 +903,7 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     const pdfOutput = pdf.output('datauristring');
     const base64Data = pdfOutput.split(',')[1];
     
-    log.debug(' PDF generated successfully with selectable text, base64 length:', base64Data.length);
+    log.debug(' PDF generated successfully with selectable text and images, base64 length:', base64Data.length);
     
     return {
       data: base64Data,
@@ -2018,6 +2156,11 @@ async function scanPage(): Promise<void> {
         
         // Show results with scroll button
         updateScanOverlay(message, true);
+        
+        // Send results to panel and open it
+        ensurePanelElements();
+        showPanelElements();
+        sendPanelMessage('SCAN_RESULTS', data);
       }
     } else {
       updateScanOverlay('Scan failed: ' + response.error);
@@ -2083,6 +2226,11 @@ async function scanPageForOAEV(): Promise<void> {
         updateScanOverlay('No OpenAEV assets found on this page', false);
       } else {
         updateScanOverlay(`Found ${totalFound} OpenAEV asset${totalFound !== 1 ? 's' : ''}`, true);
+        
+        // Send results to panel and open it
+        ensurePanelElements();
+        showPanelElements();
+        sendPanelMessage('SCAN_RESULTS', scanResults);
       }
     } else {
       log.error(' SCAN_OAEV failed:', response?.error);
@@ -2148,6 +2296,11 @@ async function scanAllPlatforms(): Promise<void> {
         if (octiFound > 0) parts.push(`${octiFound} in OpenCTI`);
         if (oaevFound > 0) parts.push(`${oaevFound} in OpenAEV`);
         updateScanOverlay(`Found ${totalFound} entit${totalFound !== 1 ? 'ies' : 'y'} (${parts.join(', ')})`, true);
+        
+        // Send results to panel and open it
+        ensurePanelElements();
+        showPanelElements();
+        sendPanelMessage('SCAN_RESULTS', data);
       }
     } else {
       log.error(' SCAN_ALL failed:', response?.error);
@@ -2692,35 +2845,70 @@ function highlightResults(results: ScanResultPayload): void {
     }
   }
   
+  // Helper function to find platform matches including substring/superstring relationships
+  // This handles cases like: IP "68.183.68.83" not found in OpenCTI, but Finding "68.183.68.83:443" exists in OpenAEV
+  const findPlatformMatchesWithSubstrings = (valueLower: string): Array<{
+    platformType: string;
+    type: string;
+    found: boolean;
+    data: any;
+  }> => {
+    const matches: Array<{ platformType: string; type: string; found: boolean; data: any }> = [];
+    
+    // First, check for exact matches
+    const exactMatches = valueToPlatformEntities.get(valueLower);
+    if (exactMatches) {
+      matches.push(...exactMatches.filter(p => p.platformType !== 'opencti' && p.found));
+    }
+    
+    // Then check for platform entities that contain this value (superstrings)
+    // This handles cases like IP being a substring of IP:port
+    for (const [key, entities] of valueToPlatformEntities) {
+      if (key !== valueLower && key.includes(valueLower)) {
+        // This platform entity value contains our value
+        matches.push(...entities.filter(p => p.platformType !== 'opencti' && p.found));
+      }
+    }
+    
+    // Also check for platform entities that are contained in this value (substrings)
+    // Less common but could be useful for partial matches
+    for (const [key, entities] of valueToPlatformEntities) {
+      if (key !== valueLower && valueLower.includes(key) && key.length >= 4) {
+        // Our value contains this platform entity value (only for reasonably long substrings)
+        matches.push(...entities.filter(p => p.platformType !== 'opencti' && p.found));
+      }
+    }
+    
+    return matches;
+  };
+  
   // Find and highlight observables (with multi-platform check)
   for (const obs of results.observables) {
     const valueLower = obs.value.toLowerCase();
-    const allPlatformMatches = valueToPlatformEntities.get(valueLower);
-    // Get other platforms where this entity is found (exclude the current OpenCTI entry)
-    const otherPlatformMatches = allPlatformMatches?.filter(p => p.platformType !== 'opencti' && p.found);
+    // Get other platforms where this entity (or related entity) is found
+    const otherPlatformMatches = findPlatformMatchesWithSubstrings(valueLower);
     
     highlightInText(fullText, obs.value, nodeMap, {
       type: obs.type,
       found: obs.found,
       data: obs,
       // Pass other platforms if entity is found there (whether or not found in OpenCTI)
-      foundInPlatforms: otherPlatformMatches && otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
+      foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     });
   }
   
   // Find and highlight SDOs (with multi-platform check)
   for (const sdo of results.sdos) {
     const valueLower = sdo.name.toLowerCase();
-    const allPlatformMatches = valueToPlatformEntities.get(valueLower);
-    // Get other platforms where this entity is found (exclude the current OpenCTI entry)
-    const otherPlatformMatches = allPlatformMatches?.filter(p => p.platformType !== 'opencti' && p.found);
+    // Get other platforms where this entity (or related entity) is found
+    const otherPlatformMatches = findPlatformMatchesWithSubstrings(valueLower);
     
     highlightInText(fullText, sdo.name, nodeMap, {
       type: sdo.type,
       found: sdo.found,
       data: sdo,
       // Pass other platforms if entity is found there (whether or not found in OpenCTI)
-      foundInPlatforms: otherPlatformMatches && otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
+      foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     });
   }
   
@@ -3050,27 +3238,77 @@ function handleHighlightClick(event: MouseEvent): void {
     const rightAreaStart = rect.right - 45; // Green badge is about 40px wide
     
     if (clickX >= rightAreaStart) {
-      // Click on green badge - open panel for the platform entity
+      // Click on green badge - open panel for the platform entity (e.g., OpenAEV Finding)
       try {
         const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
         if (platformEntities.length > 0) {
           const platformEntity = platformEntities[0];
-          const entity = platformEntity.data;
-          entity.type = platformEntity.type;
+          // platformEntity.data has structure: { platformType, type, name, value, entityId, platformId, entityData, ... }
+          // entityData is the minimal cache data: { id, name, type, platformId }
+          const rawData = platformEntity.data || {};
+          const entityType = rawData.type || platformEntity.type || 'Unknown';
+          const platformType = rawData.platformType || platformEntity.platformType || 'openaev';
+          
+          // Construct a properly formatted entity for the panel
+          // Prefix the type with platform prefix (e.g., 'oaev-Finding')
+          // Don't double-prefix if already has 'oaev-' prefix
+          const prefixedType = entityType.startsWith('oaev-') ? entityType :
+            (platformType === 'openaev' ? `oaev-${entityType}` : entityType);
+          const platformId = rawData.platformId || rawData._platformId || '';
+          
+          // Get entity ID from the entityId field (primary) or from entityData (fallback)
+          const cacheData = rawData.entityData || {};
+          const entityId = rawData.entityId || rawData.id || cacheData.id || '';
+          
+          // Get entity name - use rawData.name (which is already the matched name from cache)
+          const entityName = rawData.name || cacheData.name || value;
+          
+          const entity = {
+            ...rawData,
+            ...cacheData, // Include any additional fields from cache data
+            id: entityId,
+            entityId: entityId,
+            name: entityName,
+            type: prefixedType,
+            entity_type: prefixedType,
+            value: value,
+            existsInPlatform: true,
+            found: true,
+            platformId: platformId,
+            _platformId: platformId,
+            _platformType: platformType,
+            _isNonDefaultPlatform: true,
+            entityData: cacheData, // Pass the minimal cache data for entity details fetch
+          };
+          
           selectedEntity = entity;
+          
+          // Build platformMatches for multi-platform navigation
+          // Include all platform entities for navigation
+          const platformMatches = platformEntities.map((pe: any) => {
+            const peData = pe.data || {};
+            const peCacheData = peData.entityData || {};
+            const peId = peData.entityId || peData.id || peCacheData.id || '';
+            return {
+              platformId: peData.platformId || peCacheData.platformId || '',
+              entityId: peId,
+              entityData: peCacheData,
+            };
+          });
           
           chrome.runtime.sendMessage({
             type: 'SHOW_ENTITY_PANEL',
             payload: {
-              entityType: 'platform',
-              entity,
+              ...entity,
+              platformMatches,
             },
           });
           
-          showPanel(entity);
+          showPanel(entity, platformMatches);
           return;
         }
-      } catch {
+      } catch (e) {
+        log.error(' Failed to parse platform entities for mixed state:', e);
         // Fall through to normal click handling
       }
     }

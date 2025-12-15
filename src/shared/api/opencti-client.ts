@@ -1269,8 +1269,40 @@ export class OpenCTIClient {
     objectMarking?: string[];
     objectLabel?: string[];
   }): Promise<StixCyberObservable> {
-    // Map type to the correct GraphQL input type
-    const typeMapping: Record<string, string> = {
+    // Normalize the input type to STIX format (with hyphens)
+    // Handles: IPv4Addr -> IPv4-Addr, ipv4-addr -> IPv4-Addr, ipv4addr -> IPv4-Addr
+    const normalizeToStixType = (type: string): string => {
+      const typeNormalizationMap: Record<string, string> = {
+        'ipv4addr': 'IPv4-Addr',
+        'ipv4-addr': 'IPv4-Addr',
+        'ipv6addr': 'IPv6-Addr',
+        'ipv6-addr': 'IPv6-Addr',
+        'domainname': 'Domain-Name',
+        'domain-name': 'Domain-Name',
+        'hostname': 'Hostname',
+        'emailaddr': 'Email-Addr',
+        'email-addr': 'Email-Addr',
+        'url': 'Url',
+        'macaddr': 'Mac-Addr',
+        'mac-addr': 'Mac-Addr',
+        'stixfile': 'StixFile',
+        'file': 'StixFile',
+        'autonomoussystem': 'Autonomous-System',
+        'autonomous-system': 'Autonomous-System',
+        'cryptocurrencywallet': 'Cryptocurrency-Wallet',
+        'cryptocurrency-wallet': 'Cryptocurrency-Wallet',
+        'useragent': 'User-Agent',
+        'user-agent': 'User-Agent',
+        'phonenumber': 'Phone-Number',
+        'phone-number': 'Phone-Number',
+        'bankaccount': 'Bank-Account',
+        'bank-account': 'Bank-Account',
+      };
+      return typeNormalizationMap[type.toLowerCase()] || type;
+    };
+
+    // Map STIX type to GraphQL input type (remove hyphens)
+    const stixToGqlType: Record<string, string> = {
       'IPv4-Addr': 'IPv4Addr',
       'IPv6-Addr': 'IPv6Addr',
       'Domain-Name': 'DomainName',
@@ -1281,13 +1313,19 @@ export class OpenCTIClient {
       'StixFile': 'StixFile',
       'Autonomous-System': 'AutonomousSystem',
       'Cryptocurrency-Wallet': 'CryptocurrencyWallet',
+      'User-Agent': 'UserAgent',
+      'Phone-Number': 'PhoneNumber',
+      'Bank-Account': 'BankAccount',
     };
 
-    const gqlType = typeMapping[input.type] || input.type.replace(/-/g, '');
+    // Normalize to STIX format first
+    const stixType = normalizeToStixType(input.type);
+    // Then convert to GraphQL format
+    const gqlType = stixToGqlType[stixType] || stixType.replace(/-/g, '');
     
     let observableInput: Record<string, unknown> = {};
     
-    if (input.hashType && (input.type === 'StixFile' || input.type === 'File')) {
+    if (input.hashType && (stixType === 'StixFile' || input.type.toLowerCase() === 'file' || input.type.toLowerCase() === 'stixfile')) {
       observableInput = {
         hashes: [{ algorithm: input.hashType, hash: input.value }],
       };
@@ -1323,13 +1361,13 @@ export class OpenCTIClient {
     `;
 
     const variables = {
-      type: gqlType,
+      type: stixType,  // API expects STIX format like "IPv4-Addr", not "IPv4Addr"
       x_opencti_score: input.score,
       x_opencti_description: input.description,
       createIndicator: input.createIndicator ?? false,
       objectMarking: input.objectMarking,
       objectLabel: input.objectLabel,
-      [gqlType]: observableInput,
+      [gqlType]: observableInput,  // But the input variable uses GraphQL format
     };
 
     const data = await this.query<{

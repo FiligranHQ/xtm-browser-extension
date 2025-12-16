@@ -14,7 +14,6 @@ export { PlatformNavigation } from '../components/PlatformNavigation';
 
 // Extracted view components
 export { ScanResultsView } from './ScanResultsView';
-export { SearchView } from './SearchView';
 export { UnifiedSearchView } from './UnifiedSearchView';
 export { PreviewView } from './PreviewView';
 export { ImportResultsView } from './ImportResultsView';

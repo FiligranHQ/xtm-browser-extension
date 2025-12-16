@@ -60,7 +60,6 @@ import { EmptyView, LoadingView } from './components';
 import { useScenarioState, useAIState } from './hooks';
 import {
   ScanResultsView,
-  SearchView,
   UnifiedSearchView,
   PreviewView,
   ImportResultsView,
@@ -93,7 +92,6 @@ import type {
   ImportResults,
   EntityData,
   ContainerData,
-  SearchResult,
   PlatformInfo,
   UnifiedSearchResult,
 } from './types';
@@ -104,10 +102,7 @@ const App: React.FC = () => {
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
   const [panelMode, setPanelMode] = useState<PanelMode>('empty');
   const [entity, setEntity] = useState<EntityData | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  // Unified search state (searches both OpenCTI and OpenAEV)
+  // Search state (searches both OpenCTI and OpenAEV)
   const [unifiedSearchQuery, setUnifiedSearchQuery] = useState('');
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
   const [unifiedSearching, setUnifiedSearching] = useState(false);
@@ -160,8 +155,8 @@ const App: React.FC = () => {
   // Track container workflow origin: 'preview' (from bulk selection), 'direct' (from action button), or 'import' (import without container)
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
   // Track which search mode the entity view came from (to show back button and return to correct mode)
-  // null = not from search, 'search' = OpenCTI search, 'unified-search' = unified search
-  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'search' | 'unified-search' | null>(null);
+  // null = not from search, 'unified-search' = from search
+  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'unified-search' | null>(null);
   // Track if entity view came from scan results (to show back button)
   const [entityFromScanResults, setEntityFromScanResults] = useState(false);
   // Scan results entities (from page scan)
@@ -1359,9 +1354,6 @@ const App: React.FC = () => {
         }
         break;
       }
-      case 'SHOW_SEARCH_PANEL':
-        setPanelMode('search');
-        break;
       case 'SHOW_UNIFIED_SEARCH_PANEL': {
         // Support initial query from context menu "Search in OpenCTI"
         const initialQuery = data.payload?.initialQuery || '';
@@ -1609,8 +1601,8 @@ const App: React.FC = () => {
     // Search OpenCTI (all platforms)
     try {
       const octiResponse = await chrome.runtime.sendMessage({
-        type: 'SEARCH_ENTITIES',
-        payload: { searchTerm: searchQuery, limit: 20 },
+        type: 'SEARCH_PLATFORM',
+        payload: { searchTerm: searchQuery, limit: 20, platformType: 'opencti' },
       });
 
       if (octiResponse?.success && octiResponse.data) {
@@ -1636,8 +1628,8 @@ const App: React.FC = () => {
     // Search OpenAEV (all platforms)
     try {
       const oaevResponse = await chrome.runtime.sendMessage({
-        type: 'SEARCH_OAEV',
-        payload: { searchTerm: searchQuery },
+        type: 'SEARCH_PLATFORM',
+        payload: { searchTerm: searchQuery, platformType: 'openaev' },
       });
 
       if (oaevResponse?.success && oaevResponse.data) {
@@ -8520,28 +8512,6 @@ const App: React.FC = () => {
         );
       case 'atomic-testing':
         return renderAtomicTestingView();
-      case 'search':
-      case 'search-results':
-        return (
-          <SearchView
-            mode={mode}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            searchResults={searchResults}
-            setSearchResults={setSearchResults}
-            searching={searching}
-            setSearching={setSearching}
-            setPanelMode={setPanelMode}
-            setEntity={setEntity}
-            setEntityFromSearchMode={setEntityFromSearchMode}
-            setMultiPlatformResults={setMultiPlatformResults}
-            setCurrentPlatformIndex={setCurrentPlatformIndex}
-            currentPlatformIndexRef={currentPlatformIndexRef}
-            multiPlatformResultsRef={multiPlatformResultsRef}
-            openctiPlatforms={openctiPlatforms}
-            availablePlatforms={availablePlatforms}
-          />
-        );
       case 'unified-search':
         return (
           <UnifiedSearchView

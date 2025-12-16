@@ -9,7 +9,6 @@ import type {
   PanelMode,
   EntityData,
   ContainerData,
-  SearchResult,
   PlatformInfo,
   ScanResultEntity,
   ImportResults,
@@ -44,15 +43,7 @@ export interface PanelStateReturn {
   entity: EntityData | null;
   setEntity: (entity: EntityData | null) => void;
   
-  // Search State
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  searchResults: SearchResult[];
-  setSearchResults: (results: SearchResult[]) => void;
-  searching: boolean;
-  setSearching: (searching: boolean) => void;
-  
-  // Unified Search State
+  // Search State (unified - searches both OpenCTI and OpenAEV)
   unifiedSearchQuery: string;
   setUnifiedSearchQuery: (query: string) => void;
   unifiedSearchResults: UnifiedSearchResult[];
@@ -120,8 +111,8 @@ export interface PanelStateReturn {
   setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
   
   // Search Mode Tracking
-  entityFromSearchMode: 'search' | 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
+  entityFromSearchMode: 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   entityFromScanResults: boolean;
   setEntityFromScanResults: (from: boolean) => void;
   
@@ -355,12 +346,7 @@ export function usePanelState(): PanelStateReturn {
   // Entity State
   const [entity, setEntity] = useState<EntityData | null>(null);
   
-  // Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  
-  // Unified Search State
+  // Search State (unified - searches both platforms)
   const [unifiedSearchQuery, setUnifiedSearchQuery] = useState('');
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
   const [unifiedSearching, setUnifiedSearching] = useState(false);
@@ -422,7 +408,7 @@ export function usePanelState(): PanelStateReturn {
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
   
   // Search Mode Tracking
-  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'search' | 'unified-search' | null>(null);
+  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'unified-search' | null>(null);
   const [entityFromScanResults, setEntityFromScanResults] = useState(false);
   
   // Scan Results
@@ -588,14 +574,6 @@ export function usePanelState(): PanelStateReturn {
     setEntity,
     
     // Search State
-    searchQuery,
-    setSearchQuery,
-    searchResults,
-    setSearchResults,
-    searching,
-    setSearching,
-    
-    // Unified Search
     unifiedSearchQuery,
     setUnifiedSearchQuery,
     unifiedSearchResults,

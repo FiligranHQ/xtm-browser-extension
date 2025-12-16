@@ -49,7 +49,7 @@ export interface UnifiedSearchViewProps {
   setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
   setPanelMode: (mode: PanelMode) => void;
   setEntity: (entity: EntityData | null) => void;
-  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   setCurrentPlatformIndex: (index: number) => void;
   currentPlatformIndexRef: React.MutableRefObject<number>;
@@ -125,8 +125,8 @@ export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
         const response = await new Promise<{ success: boolean; data?: any[]; error?: string }>((resolve) => {
           chrome.runtime.sendMessage(
             {
-              type: 'SEARCH_ENTITIES',
-              payload: { query, platformId: platform.id },
+              type: 'SEARCH_PLATFORM',
+              payload: { searchTerm: query, platformId: platform.id, platformType: 'opencti' },
             },
             resolve
           );
@@ -155,8 +155,8 @@ export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
         const response = await new Promise<{ success: boolean; data?: any[]; error?: string }>((resolve) => {
           chrome.runtime.sendMessage(
             {
-              type: 'OAEV_SEARCH',
-              payload: { query, platformId: platform.id },
+              type: 'SEARCH_PLATFORM',
+              payload: { searchTerm: query, platformId: platform.id, platformType: 'openaev' },
             },
             resolve
           );

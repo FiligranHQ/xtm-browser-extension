@@ -219,9 +219,10 @@ const App: React.FC = () => {
     }
 
     const response = await chrome.runtime.sendMessage({ 
-      type: 'TEST_PLATFORM_CONNECTION_TEMP',
+      type: 'TEST_PLATFORM_CONNECTION',
       payload: { 
         platformType: type,
+        temporary: true,
         url: platform.url,
         apiToken: platform.apiToken,
       },
@@ -477,7 +478,7 @@ const App: React.FC = () => {
     
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
 
-    await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
+    await chrome.runtime.sendMessage({ type: 'CLEAR_PLATFORM_CACHE', payload: { platformType: 'opencti' } });
 
     const defaultSettings: ExtensionSettings = {
       openctiPlatforms: [],
@@ -505,7 +506,7 @@ const App: React.FC = () => {
     if (!settings) return;
     
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
+      await chrome.runtime.sendMessage({ type: 'CLEAR_PLATFORM_CACHE', payload: { platformType: 'opencti' } });
     }
     
     const updatedSettings = {
@@ -534,7 +535,7 @@ const App: React.FC = () => {
     if (!settings) return;
     
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_OAEV_CACHE' });
+      await chrome.runtime.sendMessage({ type: 'CLEAR_PLATFORM_CACHE', payload: { platformType: 'openaev' } });
     }
     
     const updatedSettings = {

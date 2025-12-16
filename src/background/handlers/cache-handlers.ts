@@ -287,7 +287,7 @@ export const cacheHandlers: Record<string, MessageHandler> = {
   REFRESH_SDO_CACHE: handleRefreshSDOCache,
   GET_SDO_CACHE_STATS: handleGetSDOCacheStats,
   GET_CACHE_REFRESH_STATUS: handleGetCacheRefreshStatus,
-  CLEAR_SDO_CACHE: handleClearSDOCache,
-  CLEAR_OAEV_CACHE: handleClearOAEVCache,
+  // Note: CLEAR_PLATFORM_CACHE is now a unified handler in background/index.ts
+  // Individual handlers (handleClearSDOCache, handleClearOAEVCache) are kept for potential direct use
 };
 

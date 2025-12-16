@@ -13,7 +13,6 @@ export type {
   PlatformViewProps,
   EntityViewProps,
   ScanResultsViewProps,
-  SearchViewProps,
   UnifiedSearchViewProps,
   ContainerFormViewProps,
   ScenarioViewProps,

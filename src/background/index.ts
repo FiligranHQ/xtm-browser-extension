@@ -28,7 +28,6 @@ const log = loggers.background;
 import {
   getSettings,
   saveSettings,
-  cachePlatformTheme,
   saveSDOCache,
   shouldRefreshSDOCache,
   createEmptySDOCache,
@@ -908,149 +907,16 @@ async function handleMessage(
         break;
       }
       
-      case 'TEST_OPENAEV_CONNECTION': {
-        const { platformId } = (message.payload as { platformId?: string }) || {};
-        
-        // Find the client to test
-        let clientToTest: OpenAEVClient | undefined;
-        
-        if (platformId) {
-          clientToTest = openAEVClients.get(platformId);
-        } else {
-          // Test first available client
-          const firstEntry = openAEVClients.entries().next().value;
-          if (firstEntry) {
-            clientToTest = firstEntry[1];
-          }
-        }
-        
-        if (!clientToTest) {
-          sendResponse(errorResponse('OpenAEV client not configured'));
-          break;
-        }
-        
-        try {
-          const result = await clientToTest.testConnection();
-          if (result.success) {
-            sendResponse({ success: true, data: { user: result.user } });
-          } else {
-            sendResponse(errorResponse('Connection test failed'));
-          }
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Connection failed',
-          });
-        }
-        break;
-      }
-      
-      case 'TEST_CONNECTION': {
-        if (!openCTIClient) {
-          sendResponse(errorResponse('Client not configured'));
-          break;
-        }
-        
-        try {
-          const info = await openCTIClient.testConnection();
-          
-          // Cache the theme
-          if (info.settings?.platform_theme) {
-            await cachePlatformTheme(
-              info.settings.platform_theme === 'dark' ? 'dark' : 'light'
-            );
-          }
-          
-          sendResponse(successResponse(info));
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Connection failed',
-          });
-        }
-        break;
-      }
-      
       case 'TEST_PLATFORM_CONNECTION': {
-        // Multi-platform connection test handler
+        // Unified platform connection test handler
+        // Supports both saved platforms (by platformId) and temporary connections (url + apiToken)
         // To add a new platform: add a case in the switch below
-        const { platformId, platformType } = message.payload as { 
-          platformId: string; 
+        const { platformId, platformType, url, apiToken, temporary } = message.payload as { 
+          platformId?: string; 
           platformType: PlatformType;
-        };
-        
-        try {
-          const currentSettings = await getSettings();
-          const timeoutPromise = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT_MS)
-          );
-          
-          // Platform-specific connection test
-          switch (platformType) {
-            case 'opencti': {
-              let client = openCTIClients.get(platformId);
-              if (!client) {
-                const platformConfig = currentSettings.openctiPlatforms?.find(p => p.id === platformId);
-                if (platformConfig?.url && platformConfig?.apiToken) {
-                  client = new OpenCTIClient({
-                    url: platformConfig.url,
-                    apiToken: platformConfig.apiToken,
-                  });
-                  openCTIClients.set(platformId, client);
-                }
-              }
-              if (!client) {
-                sendResponse(errorResponse('Platform not configured'));
-                break;
-              }
-              const info = await Promise.race([client.testConnection(), timeoutPromise]);
-              sendResponse(successResponse(info));
-              break;
-            }
-            
-            case 'openaev': {
-              let client = openAEVClients.get(platformId);
-              if (!client) {
-                const platformConfig = currentSettings.openaevPlatforms?.find(p => p.id === platformId);
-                if (platformConfig?.url && platformConfig?.apiToken) {
-                  client = new OpenAEVClient(platformConfig);
-                  openAEVClients.set(platformId, client);
-                }
-              }
-              if (!client) {
-                sendResponse(errorResponse('Platform not configured'));
-                break;
-              }
-              const info = await Promise.race([client.testConnection(), timeoutPromise]);
-              sendResponse(successResponse(info));
-              break;
-            }
-            
-            // Add new platform cases here:
-            // case 'opengrc': {
-            //   // Similar pattern for OpenGRC
-            //   break;
-            // }
-            
-            default:
-              sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
-          }
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Connection failed',
-          });
-        }
-        break;
-      }
-      
-      case 'TEST_PLATFORM_CONNECTION_TEMP': {
-        // Test connection without saving - creates a temporary client
-        // To add a new platform: add a case in the switch below
-        const { platformType, url, apiToken } = message.payload as { 
-          platformType: PlatformType;
-          url: string;
-          apiToken: string;
+          url?: string;
+          apiToken?: string;
+          temporary?: boolean;
         };
         
         const timeoutPromise = new Promise<never>((_, reject) => 
@@ -1058,32 +924,78 @@ async function handleMessage(
         );
         
         try {
+          // Platform-specific connection test
           switch (platformType) {
             case 'opencti': {
-              const tempClient = new OpenCTIClient({ url, apiToken });
-              const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-              sendResponse(successResponse(info));
+              if (temporary && url && apiToken) {
+                // Test with temporary credentials
+                const tempClient = new OpenCTIClient({ url, apiToken });
+                const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+                sendResponse(successResponse(info));
+              } else if (platformId) {
+                // Test saved platform
+                const currentSettings = await getSettings();
+                let client = openCTIClients.get(platformId);
+                if (!client) {
+                  const platformConfig = currentSettings.openctiPlatforms?.find(p => p.id === platformId);
+                  if (platformConfig?.url && platformConfig?.apiToken) {
+                    client = new OpenCTIClient({
+                      url: platformConfig.url,
+                      apiToken: platformConfig.apiToken,
+                    });
+                    openCTIClients.set(platformId, client);
+                  }
+                }
+                if (!client) {
+                  sendResponse(errorResponse('Platform not configured'));
+                  break;
+                }
+                const info = await Promise.race([client.testConnection(), timeoutPromise]);
+                sendResponse(successResponse(info));
+              } else {
+                sendResponse(errorResponse('Missing platformId or temporary credentials'));
+              }
               break;
             }
             
             case 'openaev': {
-              const tempClient = new OpenAEVClient({ 
-                id: 'temp', 
-                name: 'temp', 
-                url, 
-                apiToken,
-                enabled: true,
-              });
-              const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-              sendResponse(successResponse(info));
+              if (temporary && url && apiToken) {
+                // Test with temporary credentials
+                const tempClient = new OpenAEVClient({ 
+                  id: 'temp', 
+                  name: 'temp', 
+                  url, 
+                  apiToken,
+                  enabled: true,
+                });
+                const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+                sendResponse(successResponse(info));
+              } else if (platformId) {
+                // Test saved platform
+                const currentSettings = await getSettings();
+                let client = openAEVClients.get(platformId);
+                if (!client) {
+                  const platformConfig = currentSettings.openaevPlatforms?.find(p => p.id === platformId);
+                  if (platformConfig?.url && platformConfig?.apiToken) {
+                    client = new OpenAEVClient(platformConfig);
+                    openAEVClients.set(platformId, client);
+                  }
+                }
+                if (!client) {
+                  sendResponse(errorResponse('Platform not configured'));
+                  break;
+                }
+                const info = await Promise.race([client.testConnection(), timeoutPromise]);
+                sendResponse(successResponse(info));
+              } else {
+                sendResponse(errorResponse('Missing platformId or temporary credentials'));
+              }
               break;
             }
             
             // Add new platform cases here:
             // case 'opengrc': {
-            //   const tempClient = new OpenGRCClient({ ... });
-            //   const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-            //   sendResponse(successResponse(info));
+            //   // Similar pattern for OpenGRC
             //   break;
             // }
             
@@ -1145,10 +1057,11 @@ async function handleMessage(
         break;
       }
       
-      // SCAN_OAEV scans for OpenAEV entities only (assets, teams, players, etc.)
+      // SCAN_PLATFORM scans for platform-specific entities
       // For global scanning across all platforms, use SCAN_ALL instead
       // If includeAttackPatterns is true, also includes attack patterns (for atomic testing)
-      case 'SCAN_OAEV': {
+      // Currently only supports 'openaev' platformType (future: can be extended for other platforms)
+      case 'SCAN_PLATFORM': {
         const payload = message.payload as { content: string; url: string; includeAttackPatterns?: boolean };
         try {
           const { getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } = await import('../shared/utils/storage');
@@ -2128,96 +2041,194 @@ async function handleMessage(
       }
       
       case 'GET_ENTITY_DETAILS': {
-        if (openCTIClients.size === 0) {
-          sendResponse(errorResponse('Not configured'));
-          break;
-        }
-        
-        const { id, entityType, platformId: specificPlatformId } = message.payload as {
+        // Unified entity details handler for all platforms
+        // platformType determines which platform type to query
+        // To add a new platform: add a case in the switch below
+        const { id, entityType, platformId: specificPlatformId, platformType } = message.payload as {
           id: string;
           entityType: string;
           platformId?: string;
+          platformType?: PlatformType;
         };
         
+        const targetPlatformType = platformType || 'opencti';
+        
         try {
-          // If a specific platform is requested, use that
-          // Otherwise, search all platforms in PARALLEL with timeout
-          if (specificPlatformId) {
-            // Single platform request with timeout
-            const client = openCTIClients.get(specificPlatformId);
-            if (!client) {
-              sendResponse(errorResponse('Platform not found'));
+          switch (targetPlatformType) {
+            case 'opencti': {
+              if (openCTIClients.size === 0) {
+                sendResponse(errorResponse('OpenCTI not configured'));
+                break;
+              }
+              
+              // If a specific platform is requested, use that
+              // Otherwise, search all platforms in PARALLEL with timeout
+              if (specificPlatformId) {
+                // Single platform request with timeout
+                const client = openCTIClients.get(specificPlatformId);
+                if (!client) {
+                  sendResponse(errorResponse('Platform not found'));
+                  break;
+                }
+                
+                const timeoutPromise = new Promise<null>((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
+                );
+                
+                try {
+                  let entityPromise;
+                  if (
+                    entityType.includes('Addr') ||
+                    entityType.includes('Domain') ||
+                    entityType.includes('Url') ||
+                    entityType.includes('File') ||
+                    entityType.includes('Email') ||
+                    entityType.includes('Mac') ||
+                    entityType.includes('Observable')
+                  ) {
+                    entityPromise = client.getObservableById(id);
+                  } else {
+                    entityPromise = client.getSDOById(id);
+                  }
+                  
+                  const entity = await Promise.race([entityPromise, timeoutPromise]);
+                  if (entity) {
+                    sendResponse({ success: true, data: { ...entity, _platformId: specificPlatformId, _platformType: 'opencti' } });
+                  } else {
+                    sendResponse(errorResponse('Entity not found'));
+                  }
+                } catch (e) {
+                  sendResponse(errorResponse('Entity not found or timeout'));
+                }
+              } else {
+                // Search all OpenCTI platforms in PARALLEL
+                const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
+                  const timeoutPromise = new Promise<null>((resolve) => 
+                    setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
+                  );
+                  
+                  try {
+                    let entityPromise;
+                    if (
+                      entityType.includes('Addr') ||
+                      entityType.includes('Domain') ||
+                      entityType.includes('Url') ||
+                      entityType.includes('File') ||
+                      entityType.includes('Email') ||
+                      entityType.includes('Mac') ||
+                      entityType.includes('Observable')
+                    ) {
+                      entityPromise = client.getObservableById(id);
+                    } else {
+                      entityPromise = client.getSDOById(id);
+                    }
+                    
+                    const entity = await Promise.race([entityPromise, timeoutPromise]);
+                    return { platformId: pId, entity };
+                  } catch (e) {
+                    return { platformId: pId, entity: null };
+                  }
+                });
+                
+                const results = await Promise.all(fetchPromises);
+                const found = results.find(r => r.entity !== null);
+                
+                if (found && found.entity) {
+                  sendResponse({ success: true, data: { ...found.entity, _platformId: found.platformId, _platformType: 'opencti' } });
+                } else {
+                  sendResponse(errorResponse('Entity not found in any OpenCTI platform'));
+                }
+              }
               break;
             }
             
-            const timeoutPromise = new Promise<null>((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-            );
-            
-            try {
-              let entityPromise;
-              if (
-                entityType.includes('Addr') ||
-                entityType.includes('Domain') ||
-                entityType.includes('Url') ||
-                entityType.includes('File') ||
-                entityType.includes('Email') ||
-                entityType.includes('Mac') ||
-                entityType.includes('Observable')
-              ) {
-                entityPromise = client.getObservableById(id);
-              } else {
-                entityPromise = client.getSDOById(id);
+            case 'openaev': {
+              if (!specificPlatformId) {
+                sendResponse(errorResponse('platformId is required for OpenAEV'));
+                break;
               }
               
-              const entity = await Promise.race([entityPromise, timeoutPromise]);
-              if (entity) {
-                sendResponse({ success: true, data: { ...entity, _platformId: specificPlatformId } });
+              const oaevClient = openAEVClients.get(specificPlatformId);
+              if (!oaevClient) {
+                sendResponse(errorResponse('OpenAEV platform not found'));
+                break;
+              }
+              
+              const oaevTimeoutPromise = new Promise<null>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
+              );
+              
+              // Ensure caches are populated for resolution
+              await oaevClient.ensureTagsCached();
+              
+              // For AttackPattern entities, also cache kill chain phases and attack patterns
+              const normalizedEntityType = entityType.replace(/^oaev-/, '');
+              if (normalizedEntityType === 'AttackPattern') {
+                await Promise.all([
+                  oaevClient.ensureKillChainPhasesCached(),
+                  oaevClient.ensureAttackPatternsCached(),
+                ]);
+              }
+              
+              const oaevEntity = await Promise.race([
+                oaevClient.getEntityById(id, entityType),
+                oaevTimeoutPromise
+              ]);
+              
+              if (oaevEntity) {
+                // Resolve tags if present (convert IDs to labels)
+                if (oaevEntity.asset_tags && Array.isArray(oaevEntity.asset_tags)) {
+                  oaevEntity.asset_tags_resolved = oaevClient.resolveTagIds(oaevEntity.asset_tags);
+                }
+                if (oaevEntity.endpoint_tags && Array.isArray(oaevEntity.endpoint_tags)) {
+                  oaevEntity.endpoint_tags_resolved = oaevClient.resolveTagIds(oaevEntity.endpoint_tags);
+                }
+                if (oaevEntity.team_tags && Array.isArray(oaevEntity.team_tags)) {
+                  oaevEntity.team_tags_resolved = oaevClient.resolveTagIds(oaevEntity.team_tags);
+                }
+                if (oaevEntity.asset_group_tags && Array.isArray(oaevEntity.asset_group_tags)) {
+                  oaevEntity.asset_group_tags_resolved = oaevClient.resolveTagIds(oaevEntity.asset_group_tags);
+                }
+                if (oaevEntity.scenario_tags && Array.isArray(oaevEntity.scenario_tags)) {
+                  oaevEntity.scenario_tags_resolved = oaevClient.resolveTagIds(oaevEntity.scenario_tags);
+                }
+                if (oaevEntity.exercise_tags && Array.isArray(oaevEntity.exercise_tags)) {
+                  oaevEntity.exercise_tags_resolved = oaevClient.resolveTagIds(oaevEntity.exercise_tags);
+                }
+                
+                // For AttackPattern: resolve kill chain phase IDs and parent technique ID
+                if (normalizedEntityType === 'AttackPattern') {
+                  if (oaevEntity.attack_pattern_kill_chain_phases && Array.isArray(oaevEntity.attack_pattern_kill_chain_phases)) {
+                    oaevEntity.attack_pattern_kill_chain_phases_resolved = oaevClient.resolveKillChainPhaseIds(oaevEntity.attack_pattern_kill_chain_phases);
+                  }
+                  if (oaevEntity.attack_pattern_parent) {
+                    oaevEntity.attack_pattern_parent_resolved = oaevClient.resolveAttackPatternId(oaevEntity.attack_pattern_parent);
+                  }
+                }
+                
+                sendResponse({ 
+                  success: true, 
+                  data: {
+                    ...oaevEntity,
+                    _platformId: specificPlatformId,
+                    _platformType: 'openaev',
+                    _entityType: entityType,
+                  }
+                });
               } else {
                 sendResponse(errorResponse('Entity not found'));
               }
-            } catch (e) {
-              log.debug(`Entity ${id} not found/timeout in platform ${specificPlatformId}`);
-              sendResponse(errorResponse('Entity not found or timeout'));
+              break;
             }
-          } else {
-            // Search all platforms in PARALLEL
-            const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-              const timeoutPromise = new Promise<null>((resolve) => 
-                setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
-              );
-              
-              try {
-                let entityPromise;
-                if (
-                  entityType.includes('Addr') ||
-                  entityType.includes('Domain') ||
-                  entityType.includes('Url') ||
-                  entityType.includes('File') ||
-                  entityType.includes('Email') ||
-                  entityType.includes('Mac') ||
-                  entityType.includes('Observable')
-                ) {
-                  entityPromise = client.getObservableById(id);
-                } else {
-                  entityPromise = client.getSDOById(id);
-                }
-                
-                const entity = await Promise.race([entityPromise, timeoutPromise]);
-                return { platformId: pId, entity };
-              } catch (e) {
-                return { platformId: pId, entity: null };
-              }
-            });
             
-            const results = await Promise.all(fetchPromises);
-            const found = results.find(r => r.entity !== null);
+            // Add new platform cases here:
+            // case 'opengrc': {
+            //   // Similar pattern for OpenGRC entity details
+            //   break;
+            // }
             
-            if (found && found.entity) {
-              sendResponse({ success: true, data: { ...found.entity, _platformId: found.platformId } });
-            } else {
-              sendResponse(errorResponse('Entity not found in any platform'));
-            }
+            default:
+              sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
           }
         } catch (error) {
           sendResponse({
@@ -2541,47 +2552,124 @@ async function handleMessage(
         break;
       }
       
-      case 'SEARCH_ENTITIES': {
-        if (openCTIClients.size === 0) {
-          sendResponse(errorResponse('Not configured'));
-          break;
-        }
-        
-        const { searchTerm, types, limit, platformId } = message.payload as {
+      case 'SEARCH_PLATFORM': {
+        // Unified search handler for all platforms
+        // platformType determines which platform(s) to search
+        // To add a new platform: add a case in the switch below
+        const { searchTerm, types, limit, platformId, platformType } = message.payload as {
           searchTerm: string;
           types?: string[];
           limit?: number;
           platformId?: string;
+          platformType?: PlatformType; // If not provided, searches OpenCTI by default
         };
         
+        const targetPlatformType = platformType || 'opencti';
+        
         try {
-          // Refang search term in case user searches for defanged indicator
-          const cleanSearchTerm = refangIndicator(searchTerm);
-          
-          // Search across all OpenCTI platforms in PARALLEL with timeout
-          const clientsToSearch = platformId 
-            ? [[platformId, openCTIClients.get(platformId)] as const].filter(([_, c]) => c)
-            : Array.from(openCTIClients.entries());
-          
-          const searchPromises = clientsToSearch.map(async ([pId, client]) => {
-            if (!client) return { platformId: pId, results: [] };
-            
-            try {
-              const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
-              );
-              const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-              return { platformId: pId, results: results.map((r: any) => ({ ...r, _platformId: pId })) };
-            } catch (e) {
-              log.warn(`Search timeout/error for platform ${pId}:`, e);
-              return { platformId: pId, results: [] };
+          switch (targetPlatformType) {
+            case 'opencti': {
+              if (openCTIClients.size === 0) {
+                sendResponse(errorResponse('OpenCTI not configured'));
+                break;
+              }
+              
+              // Refang search term in case user searches for defanged indicator
+              const cleanSearchTerm = refangIndicator(searchTerm);
+              
+              // Search across all OpenCTI platforms in PARALLEL with timeout
+              const clientsToSearch = platformId 
+                ? [[platformId, openCTIClients.get(platformId)] as const].filter(([_, c]) => c)
+                : Array.from(openCTIClients.entries());
+              
+              const searchPromises = clientsToSearch.map(async ([pId, client]) => {
+                if (!client) return { platformId: pId, results: [] };
+                
+                try {
+                  const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
+                  );
+                  const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
+                  return { platformId: pId, results: results.map((r: any) => ({ ...r, _platformId: pId })) };
+                } catch (e) {
+                  log.warn(`Search timeout/error for platform ${pId}:`, e);
+                  return { platformId: pId, results: [] };
+                }
+              });
+              
+              const searchResults = await Promise.all(searchPromises);
+              const allResults = searchResults.flatMap(r => r.results);
+              sendResponse(successResponse(allResults));
+              break;
             }
-          });
-          
-          const searchResults = await Promise.all(searchPromises);
-          const allResults = searchResults.flatMap(r => r.results);
-          
-          sendResponse(successResponse(allResults));
+            
+            case 'openaev': {
+              if (openAEVClients.size === 0) {
+                sendResponse(errorResponse('OpenAEV not configured'));
+                break;
+              }
+              
+              // Search across all OpenAEV platforms in PARALLEL with timeout
+              const oaevClientsToSearch = platformId 
+                ? [[platformId, openAEVClients.get(platformId)] as const].filter(([_, c]) => c)
+                : Array.from(openAEVClients.entries());
+              
+              const oaevSearchPromises = oaevClientsToSearch.map(async ([pId, client]) => {
+                if (!client) return { platformId: pId, results: [] };
+                
+                try {
+                  const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
+                  );
+                  const searchResult = await Promise.race([
+                    client.fullTextSearch(searchTerm),
+                    timeoutPromise
+                  ]);
+                  
+                  // Transform the result into a list of entities
+                  const results: any[] = [];
+                  const platformInfo = client.getPlatformInfo();
+                  
+                  for (const [className, data] of Object.entries(searchResult)) {
+                    if (data && (data as any).count > 0) {
+                      // Fetch actual results for this class
+                      const classResults = await client.fullTextSearchByClass(className, {
+                        textSearch: searchTerm,
+                        page: 0,
+                        size: 20,
+                      });
+                      
+                      results.push(...classResults.content.map((r: any) => ({
+                        ...r,
+                        _platformId: pId,
+                        _platform: platformInfo,
+                        _entityClass: className,
+                      })));
+                    }
+                  }
+                  
+                  return { platformId: pId, results };
+                } catch (e) {
+                  log.warn(`OAEV Search timeout/error for platform ${pId}:`, e);
+                  return { platformId: pId, results: [] };
+                }
+              });
+              
+              const oaevSearchResults = await Promise.all(oaevSearchPromises);
+              const allOaevResults = oaevSearchResults.flatMap(r => r.results);
+              sendResponse(successResponse(allOaevResults));
+              break;
+            }
+            
+            // Add new platform cases here:
+            // case 'opengrc': {
+            //   // Similar pattern for OpenGRC search
+            //   break;
+            // }
+            
+            default:
+              sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
+          }
         } catch (error) {
           sendResponse({
             success: false,
@@ -2626,166 +2714,6 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Asset search failed',
-          });
-        }
-        break;
-      }
-      
-      case 'SEARCH_OAEV': {
-        if (openAEVClients.size === 0) {
-          sendResponse(errorResponse('Not configured'));
-          break;
-        }
-        
-        const { searchTerm, platformId } = message.payload as {
-          searchTerm: string;
-          platformId?: string;
-        };
-        
-        try {
-          // Search across all OpenAEV platforms in PARALLEL with timeout
-          const clientsToSearch = platformId 
-            ? [[platformId, openAEVClients.get(platformId)] as const].filter(([_, c]) => c)
-            : Array.from(openAEVClients.entries());
-          
-          const searchPromises = clientsToSearch.map(async ([pId, client]) => {
-            if (!client) return { platformId: pId, results: [] };
-            
-            try {
-              const timeoutPromise = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
-              );
-              const searchResult = await Promise.race([
-                client.fullTextSearch(searchTerm),
-                timeoutPromise
-              ]);
-              
-              // Transform the result into a list of entities
-              const results: any[] = [];
-              const platformInfo = client.getPlatformInfo();
-              
-              for (const [className, data] of Object.entries(searchResult)) {
-                if (data && (data as any).count > 0) {
-                  // Fetch actual results for this class
-                  const classResults = await client.fullTextSearchByClass(className, {
-                    textSearch: searchTerm,
-                    page: 0,
-                    size: 20,
-                  });
-                  
-                  results.push(...classResults.content.map((r: any) => ({
-                    ...r,
-                    _platformId: pId,
-                    _platform: platformInfo,
-                    _entityClass: className,
-                  })));
-                }
-              }
-              
-              return { platformId: pId, results };
-            } catch (e) {
-              log.warn(`OAEV Search timeout/error for platform ${pId}:`, e);
-              return { platformId: pId, results: [] };
-            }
-          });
-          
-          const searchResults = await Promise.all(searchPromises);
-          const allResults = searchResults.flatMap(r => r.results);
-          
-          sendResponse(successResponse(allResults));
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'OAEV Search failed',
-          });
-        }
-        break;
-      }
-
-      case 'GET_OAEV_ENTITY_DETAILS': {
-        // Fetch full entity details from OpenAEV by ID and type
-        const { entityId, entityType, platformId: requestedPlatformId } = message.payload as {
-          entityId: string;
-          entityType: string;
-          platformId: string;
-        };
-        
-        const client = openAEVClients.get(requestedPlatformId);
-        if (!client) {
-          sendResponse(errorResponse('OpenAEV platform not found'));
-          break;
-        }
-        
-        try {
-          const timeoutPromise = new Promise<null>((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-          );
-          
-          // Ensure caches are populated for resolution
-          await client.ensureTagsCached();
-          
-          // For AttackPattern entities, also cache kill chain phases and attack patterns
-          const normalizedEntityType = entityType.replace(/^oaev-/, '');
-          if (normalizedEntityType === 'AttackPattern') {
-            await Promise.all([
-              client.ensureKillChainPhasesCached(),
-              client.ensureAttackPatternsCached(),
-            ]);
-          }
-          
-          const entity = await Promise.race([
-            client.getEntityById(entityId, entityType),
-            timeoutPromise
-          ]);
-          
-          if (entity) {
-            // Resolve tags if present (convert IDs to labels)
-            if (entity.asset_tags && Array.isArray(entity.asset_tags)) {
-              entity.asset_tags_resolved = client.resolveTagIds(entity.asset_tags);
-            }
-            if (entity.endpoint_tags && Array.isArray(entity.endpoint_tags)) {
-              entity.endpoint_tags_resolved = client.resolveTagIds(entity.endpoint_tags);
-            }
-            if (entity.team_tags && Array.isArray(entity.team_tags)) {
-              entity.team_tags_resolved = client.resolveTagIds(entity.team_tags);
-            }
-            if (entity.asset_group_tags && Array.isArray(entity.asset_group_tags)) {
-              entity.asset_group_tags_resolved = client.resolveTagIds(entity.asset_group_tags);
-            }
-            if (entity.scenario_tags && Array.isArray(entity.scenario_tags)) {
-              entity.scenario_tags_resolved = client.resolveTagIds(entity.scenario_tags);
-            }
-            if (entity.exercise_tags && Array.isArray(entity.exercise_tags)) {
-              entity.exercise_tags_resolved = client.resolveTagIds(entity.exercise_tags);
-            }
-            
-            // For AttackPattern: resolve kill chain phase IDs and parent technique ID
-            if (normalizedEntityType === 'AttackPattern') {
-              if (entity.attack_pattern_kill_chain_phases && Array.isArray(entity.attack_pattern_kill_chain_phases)) {
-                entity.attack_pattern_kill_chain_phases_resolved = client.resolveKillChainPhaseIds(entity.attack_pattern_kill_chain_phases);
-              }
-              if (entity.attack_pattern_parent) {
-                entity.attack_pattern_parent_resolved = client.resolveAttackPatternId(entity.attack_pattern_parent);
-              }
-            }
-            
-            sendResponse({ 
-              success: true, 
-              data: {
-                ...entity,
-                _platformId: requestedPlatformId,
-                _platformType: 'openaev',
-                _entityType: entityType,
-              }
-            });
-          } else {
-            sendResponse(errorResponse('Entity not found'));
-          }
-        } catch (error) {
-          log.error(`Failed to fetch OpenAEV entity ${entityId}:`, error);
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to fetch entity',
           });
         }
         break;
@@ -3015,17 +2943,44 @@ async function handleMessage(
         break;
       }
       
-      case 'CLEAR_SDO_CACHE': {
-        const { platformId } = (message.payload as { platformId?: string }) || {};
+      case 'CLEAR_PLATFORM_CACHE': {
+        // Unified cache clearing handler for all platforms
+        // To add a new platform: add a case in the switch below
+        const { platformId, platformType } = (message.payload as { 
+          platformId?: string;
+          platformType?: PlatformType;
+        }) || {};
+        
+        const targetPlatformType = platformType || 'opencti';
+        
         try {
-          if (platformId) {
-            await clearSDOCacheForPlatform(platformId);
-            log.debug(`Cleared SDO cache for platform ${platformId}`);
-          } else {
-            await clearAllSDOCaches();
-            log.debug('Cleared all SDO caches');
+          switch (targetPlatformType) {
+            case 'opencti':
+              if (platformId) {
+                await clearSDOCacheForPlatform(platformId);
+              } else {
+                await clearAllSDOCaches();
+              }
+              break;
+            case 'openaev':
+              if (platformId) {
+                await clearOAEVCacheForPlatform(platformId);
+              } else {
+                await clearAllOAEVCaches();
+              }
+              break;
+            // Add new platform cases here:
+            // case 'opengrc': {
+            //   // Clear OpenGRC cache
+            //   break;
+            // }
+            default:
+              sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
+              break;
           }
-          sendResponse(successResponse(null));
+          if (targetPlatformType === 'opencti' || targetPlatformType === 'openaev') {
+            sendResponse(successResponse(null));
+          }
         } catch (error) {
           sendResponse({ 
             success: false, 
@@ -3035,29 +2990,9 @@ async function handleMessage(
         break;
       }
       
-      case 'CLEAR_OAEV_CACHE': {
-        const { platformId } = (message.payload as { platformId?: string }) || {};
-        try {
-          if (platformId) {
-            await clearOAEVCacheForPlatform(platformId);
-            log.debug(`Cleared OpenAEV cache for platform ${platformId}`);
-          } else {
-            await clearAllOAEVCaches();
-            log.debug('Cleared all OpenAEV caches');
-          }
-          sendResponse(successResponse(null));
-        } catch (error) {
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Failed to clear OpenAEV cache' 
-          });
-        }
-        break;
-      }
-      
       // Panel state management - store and forward to side panel
       case 'SHOW_CONTAINER_PANEL':
-      case 'SHOW_SEARCH_PANEL':
+      case 'SHOW_UNIFIED_SEARCH_PANEL':
       case 'SHOW_ENTITY_PANEL':
       case 'SHOW_INVESTIGATION_PANEL':
       case 'SHOW_BULK_IMPORT_PANEL': {

@@ -15,8 +15,6 @@ export type PanelMode =
   | 'container-type'
   | 'container-form'
   | 'investigation'
-  | 'search'
-  | 'search-results'
   | 'existing-containers'
   | 'atomic-testing'
   | 'unified-search'

@@ -13,7 +13,6 @@ import type {
   PlatformInfo,
   ScanResultEntity,
   ImportResults,
-  SearchResult,
   UnifiedSearchResult,
 } from '../types';
 
@@ -47,15 +46,7 @@ export interface AppContextValue {
   multiPlatformResultsRef: React.MutableRefObject<Array<{ platformId: string; platformName: string; entity: EntityData }>>;
   currentPlatformIndexRef: React.MutableRefObject<number>;
   
-  // Search state
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  searchResults: SearchResult[];
-  setSearchResults: (results: SearchResult[]) => void;
-  searching: boolean;
-  setSearching: (searching: boolean) => void;
-  
-  // Unified search
+  // Search state (unified - searches both platforms)
   unifiedSearchQuery: string;
   setUnifiedSearchQuery: (query: string) => void;
   unifiedSearchResults: UnifiedSearchResult[];
@@ -105,8 +96,8 @@ export interface AppContextValue {
   setCurrentPageTitle: (title: string) => void;
   
   // Entity navigation
-  entityFromSearchMode: 'search' | 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
+  entityFromSearchMode: 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   
   // PDF and indicators
   createIndicators: boolean;

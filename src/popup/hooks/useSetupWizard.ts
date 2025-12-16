@@ -85,9 +85,10 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
       
       // Test connection FIRST without saving (using temp test)
       const testResponse = await chrome.runtime.sendMessage({
-        type: 'TEST_PLATFORM_CONNECTION_TEMP',
+        type: 'TEST_PLATFORM_CONNECTION',
         payload: { 
           platformType,
+          temporary: true,
           url: normalizedUrl,
           apiToken: setupToken.trim(),
         },

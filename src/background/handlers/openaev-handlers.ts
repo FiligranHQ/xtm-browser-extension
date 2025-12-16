@@ -847,8 +847,8 @@ export const openaevHandlers: Record<string, MessageHandler> = {
   CREATE_SCENARIO: handleCreateScenario,
   ADD_INJECT_TO_SCENARIO: handleAddInjectToScenario,
   ADD_EMAIL_INJECT_TO_SCENARIO: handleAddEmailInjectToScenario,
-  SEARCH_OAEV: handleSearchOAEV,
-  GET_OAEV_ENTITY_DETAILS: handleGetOAEVEntityDetails,
+  // Note: SEARCH and GET_ENTITY_DETAILS are now unified handlers in background/index.ts
+  // handleSearchOAEV and handleGetOAEVEntityDetails are kept for potential direct use
   SEARCH_ASSETS: handleSearchAssets,
   FETCH_SCENARIO_OVERVIEW: handleFetchScenarioOverview,
   FETCH_INJECTOR_CONTRACTS_FOR_ATTACK_PATTERNS: handleFetchInjectorContractsForAttackPatterns,

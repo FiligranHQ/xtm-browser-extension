@@ -22,7 +22,6 @@ import type {
   ResolvedRelationship,
   MultiPlatformResult,
   UnifiedSearchResult,
-  SearchResult,
 } from '../types';
 
 /**
@@ -118,9 +117,9 @@ export interface EntityViewProps extends BaseViewProps, PlatformViewProps {
   /** Ref for multi-platform results */
   multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
   /** Whether entity view came from search */
-  entityFromSearchMode: 'search' | 'unified-search' | null;
+  entityFromSearchMode: 'unified-search' | null;
   /** Set search mode origin */
-  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   /** Whether entity view came from scan results */
   entityFromScanResults: boolean;
   /** Set scan results origin */
@@ -189,27 +188,31 @@ export interface ScanResultsViewProps extends BaseViewProps, PlatformViewProps {
 }
 
 /**
- * Props for search views
+ * Props for search view (unified - searches both OpenCTI and OpenAEV)
  */
-export interface SearchViewProps extends BaseViewProps, PlatformViewProps {
+export interface UnifiedSearchViewProps extends BaseViewProps, PlatformViewProps {
   /** Search query */
-  searchQuery: string;
+  unifiedSearchQuery: string;
   /** Set search query */
-  setSearchQuery: (query: string) => void;
+  setUnifiedSearchQuery: (query: string) => void;
   /** Search results */
-  searchResults: SearchResult[];
+  unifiedSearchResults: UnifiedSearchResult[];
   /** Set search results */
-  setSearchResults: (results: SearchResult[]) => void;
+  setUnifiedSearchResults: (results: UnifiedSearchResult[]) => void;
   /** Searching state */
-  searching: boolean;
+  unifiedSearching: boolean;
   /** Set searching state */
-  setSearching: (searching: boolean) => void;
+  setUnifiedSearching: (searching: boolean) => void;
+  /** Platform filter for search */
+  unifiedSearchPlatformFilter: 'all' | 'opencti' | 'openaev';
+  /** Set platform filter */
+  setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
   /** Set panel mode */
   setPanelMode: (mode: PanelMode) => void;
   /** Set entity for viewing */
   setEntity: (entity: EntityData | null) => void;
   /** Set entity from search mode */
-  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   /** Set multi-platform results */
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   /** Set current platform index */
@@ -217,28 +220,6 @@ export interface SearchViewProps extends BaseViewProps, PlatformViewProps {
   /** Refs */
   currentPlatformIndexRef: React.MutableRefObject<number>;
   multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
-}
-
-/**
- * Props for unified search view
- */
-export interface UnifiedSearchViewProps extends SearchViewProps {
-  /** Unified search query */
-  unifiedSearchQuery: string;
-  /** Set unified search query */
-  setUnifiedSearchQuery: (query: string) => void;
-  /** Unified search results */
-  unifiedSearchResults: UnifiedSearchResult[];
-  /** Set unified search results */
-  setUnifiedSearchResults: (results: UnifiedSearchResult[]) => void;
-  /** Unified searching state */
-  unifiedSearching: boolean;
-  /** Set unified searching state */
-  setUnifiedSearching: (searching: boolean) => void;
-  /** Platform filter for unified search */
-  unifiedSearchPlatformFilter: 'all' | 'opencti' | 'openaev';
-  /** Set platform filter */
-  setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
 }
 
 /**

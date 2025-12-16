@@ -48,7 +48,6 @@ import {
   showContainerPanel,
   showInvestigationPanel,
   showSearchPanel,
-  showOAEVSearchPanel,
   showUnifiedSearchPanel,
   showAddSelectionPanel,
   getCurrentTheme,
@@ -1365,11 +1364,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'OPEN_SEARCH_PANEL':
       showSearchPanel();
-      sendResponse({ success: true });
-      break;
-    
-    case 'OPEN_OAEV_SEARCH_PANEL':
-      showOAEVSearchPanel();
       sendResponse({ success: true });
       break;
     

@@ -347,31 +347,15 @@ export async function showSearchPanel(): Promise<void> {
 }
 
 /**
- * Show OpenAEV search panel
- */
-export async function showOAEVSearchPanel(): Promise<void> {
-  ensurePanelElements();
-  showPanelElements();
-  
-  const theme = await getCurrentTheme();
-  
-  sendPanelMessage('SHOW_OAEV_SEARCH_PANEL', { theme });
-}
-
-/**
  * Show unified search panel
  */
 export async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
-  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] Called with initialQuery:', initialQuery);
   ensurePanelElements();
-  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] After ensurePanelElements');
   showPanelElements();
-  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] After showPanelElements');
   
   const theme = await getCurrentTheme();
   
   sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme, initialQuery });
-  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] Message sent');
 }
 
 /**

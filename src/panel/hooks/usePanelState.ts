@@ -52,14 +52,6 @@ export interface PanelStateReturn {
   searching: boolean;
   setSearching: (searching: boolean) => void;
   
-  // OpenAEV Search State
-  oaevSearchQuery: string;
-  setOaevSearchQuery: (query: string) => void;
-  oaevSearchResults: unknown[];
-  setOaevSearchResults: (results: unknown[]) => void;
-  oaevSearching: boolean;
-  setOaevSearching: (searching: boolean) => void;
-  
   // Unified Search State
   unifiedSearchQuery: string;
   setUnifiedSearchQuery: (query: string) => void;
@@ -128,8 +120,8 @@ export interface PanelStateReturn {
   setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
   
   // Search Mode Tracking
-  entityFromSearchMode: 'search' | 'oaev-search' | 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  entityFromSearchMode: 'search' | 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   entityFromScanResults: boolean;
   setEntityFromScanResults: (from: boolean) => void;
   
@@ -368,11 +360,6 @@ export function usePanelState(): PanelStateReturn {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   
-  // OpenAEV Search State
-  const [oaevSearchQuery, setOaevSearchQuery] = useState('');
-  const [oaevSearchResults, setOaevSearchResults] = useState<unknown[]>([]);
-  const [oaevSearching, setOaevSearching] = useState(false);
-  
   // Unified Search State
   const [unifiedSearchQuery, setUnifiedSearchQuery] = useState('');
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
@@ -435,7 +422,7 @@ export function usePanelState(): PanelStateReturn {
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
   
   // Search Mode Tracking
-  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'search' | 'oaev-search' | 'unified-search' | null>(null);
+  const [entityFromSearchMode, setEntityFromSearchMode] = useState<'search' | 'unified-search' | null>(null);
   const [entityFromScanResults, setEntityFromScanResults] = useState(false);
   
   // Scan Results
@@ -607,14 +594,6 @@ export function usePanelState(): PanelStateReturn {
     setSearchResults,
     searching,
     setSearching,
-    
-    // OpenAEV Search
-    oaevSearchQuery,
-    setOaevSearchQuery,
-    oaevSearchResults,
-    setOaevSearchResults,
-    oaevSearching,
-    setOaevSearching,
     
     // Unified Search
     unifiedSearchQuery,

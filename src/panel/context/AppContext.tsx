@@ -105,8 +105,8 @@ export interface AppContextValue {
   setCurrentPageTitle: (title: string) => void;
   
   // Entity navigation
-  entityFromSearchMode: 'search' | 'oaev-search' | 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  entityFromSearchMode: 'search' | 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   
   // PDF and indicators
   createIndicators: boolean;

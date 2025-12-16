@@ -8747,18 +8747,6 @@ const App: React.FC = () => {
             availablePlatforms={availablePlatforms}
           />
         );
-      case 'oaev-search':
-        return (
-          <OAEVSearchView
-            availablePlatforms={availablePlatforms}
-            oaevSearchQuery={oaevSearchQuery}
-            setOaevSearchQuery={setOaevSearchQuery}
-            oaevSearching={oaevSearching}
-            oaevSearchResults={oaevSearchResults}
-            handleOaevSearch={handleOaevSearch}
-            handleOaevSearchResultClick={handleOaevSearchResultClick}
-          />
-        );
       case 'unified-search':
         return (
           <UnifiedSearchView

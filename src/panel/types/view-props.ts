@@ -118,9 +118,9 @@ export interface EntityViewProps extends BaseViewProps, PlatformViewProps {
   /** Ref for multi-platform results */
   multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
   /** Whether entity view came from search */
-  entityFromSearchMode: 'search' | 'oaev-search' | 'unified-search' | null;
+  entityFromSearchMode: 'search' | 'unified-search' | null;
   /** Set search mode origin */
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   /** Whether entity view came from scan results */
   entityFromScanResults: boolean;
   /** Set scan results origin */
@@ -209,7 +209,7 @@ export interface SearchViewProps extends BaseViewProps, PlatformViewProps {
   /** Set entity for viewing */
   setEntity: (entity: EntityData | null) => void;
   /** Set entity from search mode */
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   /** Set multi-platform results */
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   /** Set current platform index */

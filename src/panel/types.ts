@@ -19,7 +19,6 @@ export type PanelMode =
   | 'search-results'
   | 'existing-containers'
   | 'atomic-testing'
-  | 'oaev-search'
   | 'unified-search'
   | 'import-results'
   | 'scan-results'

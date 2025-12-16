@@ -41,7 +41,6 @@ export interface MessageHandlerContext {
   showContainerPanel: (pageContent: string, pageUrl: string, pageTitle: string, pageDescription?: string, pageHtmlContent?: string) => void;
   showInvestigationPanel: (pageContent: string, pageUrl: string, pageTitle: string, pageDescription?: string) => void;
   showSearchPanel: (searchText: string, theme?: string) => void;
-  showOAEVSearchPanel: (searchText: string, theme?: string) => void;
   showUnifiedSearchPanel: (searchText: string, theme?: string) => void;
   showAddSelectionPanel: (text: string) => void;
   sendPanelMessage: (type: string, payload?: unknown) => void;

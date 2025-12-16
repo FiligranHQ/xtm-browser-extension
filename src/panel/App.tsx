@@ -70,6 +70,18 @@ import { loggers } from '../shared/utils/logger';
 import { getAiColor, getCvssChipStyle, getSeverityColor, getPlatformIcon, getPlatformColor, getMarkingColor, cleanHtmlContent } from './utils';
 import { EmptyView, LoadingView } from './components';
 import { useScenarioState, useAIState, useContainerState } from './hooks';
+import {
+  ScanResultsView,
+  SearchView,
+  UnifiedSearchView,
+  PreviewView,
+  ImportResultsView,
+  ContainerTypeView,
+  PlatformSelectView,
+  AddView,
+  ScenarioOverviewView,
+} from './views';
+import { generateDescription } from './utils/description-helpers';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -7265,424 +7277,6 @@ const App: React.FC = () => {
     setPanelMode('preview');
   };
 
-  const renderScanResultsView = () => {
-    return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <TravelExploreOutlined sx={{ color: 'primary.main' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
-            Scan Results
-          </Typography>
-        </Box>
-        
-        {scanResultsEntities.length === 0 ? (
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            flex: 1,
-            color: 'text.secondary',
-          }}>
-            <SearchOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-            <Typography variant="body1">No entities detected</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Scan a page to see detected entities here
-            </Typography>
-          </Box>
-        ) : (
-          <>
-            {/* Stats - Clickable for filtering */}
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 0, 
-              mb: 2, 
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'divider',
-              overflow: 'hidden',
-            }}>
-              <Box 
-                onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'found' ? 'all' : 'found')}
-                sx={{ 
-                  flex: 1, 
-                  textAlign: 'center', 
-                  p: 1.5,
-                  cursor: 'pointer',
-                  bgcolor: scanResultsFoundFilter === 'found' ? 'success.main' : 'action.hover',
-                  color: scanResultsFoundFilter === 'found' ? 'white' : 'inherit',
-                  transition: 'all 0.15s',
-                  '&:hover': {
-                    bgcolor: scanResultsFoundFilter === 'found' ? 'success.dark' : 'action.selected',
-                  },
-                }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'found' ? 'inherit' : 'success.main' }}>
-                  {scanResultsFoundCount}
-                </Typography>
-                <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'found' ? 0.9 : 1 }}>
-                  Found
-                </Typography>
-              </Box>
-              <Divider orientation="vertical" flexItem />
-              <Box 
-                onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'not-found' ? 'all' : 'not-found')}
-                sx={{ 
-                  flex: 1, 
-                  textAlign: 'center', 
-                  p: 1.5,
-                  cursor: 'pointer',
-                  bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.main' : 'action.hover',
-                  color: scanResultsFoundFilter === 'not-found' ? 'white' : 'inherit',
-                  transition: 'all 0.15s',
-                  '&:hover': {
-                    bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.dark' : 'action.selected',
-                  },
-                }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'warning.main' }}>
-                  {scanResultsNotFoundCount}
-                </Typography>
-                <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'not-found' ? 0.9 : 1 }}>
-                  Not Found
-                </Typography>
-              </Box>
-              {/* AI Findings filter - only show if there are AI discoveries */}
-              {scanResultsAICount > 0 && (
-                <>
-                  <Divider orientation="vertical" flexItem />
-                  <Box 
-                    onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'ai-discovered' ? 'all' : 'ai-discovered')}
-                    sx={{ 
-                      flex: 1, 
-                      textAlign: 'center', 
-                      p: 1.5,
-                      cursor: 'pointer',
-                      bgcolor: scanResultsFoundFilter === 'ai-discovered' ? getAiColor(mode).main : 'action.hover',
-                      color: scanResultsFoundFilter === 'ai-discovered' ? 'white' : 'inherit',
-                      transition: 'all 0.15s',
-                      '&:hover': {
-                        bgcolor: scanResultsFoundFilter === 'ai-discovered' ? getAiColor(mode).dark : 'action.selected',
-                      },
-                    }}
-                  >
-                    <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : getAiColor(mode).main }}>
-                      {scanResultsAICount}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'ai-discovered' ? 0.9 : 1 }}>
-                      AI Findings
-                    </Typography>
-                  </Box>
-                </>
-              )}
-            </Box>
-            
-            {/* Type filter */}
-            {scanResultsEntityTypes.length > 1 && (
-              <Box sx={{ mb: 2 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel id="scan-results-type-filter-label">Filter by type</InputLabel>
-                  <Select
-                    labelId="scan-results-type-filter-label"
-                    value={scanResultsTypeFilter}
-                    label="Filter by type"
-                    onChange={(e) => setScanResultsTypeFilter(e.target.value)}
-                  >
-                    <MenuItem value="all">
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <span>All types</span>
-                        <Chip label={scanResultsEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                      </Box>
-                    </MenuItem>
-                    {scanResultsEntityTypes.map(type => (
-                      <MenuItem key={type} value={type}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                          <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
-                          <Chip label={scanResultsEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                        </Box>
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-            
-            {/* Discover more with AI button - always visible */}
-            {(() => {
-              const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
-              const isAiButtonDisabled = aiDiscoveringEntities || !aiSettings.available || !hasEnterprisePlatform;
-              const aiColors = getAiColor(mode);
-              
-              // Determine tooltip message based on state
-              let tooltipMessage = 'Use AI to find additional entities that may have been missed by pattern matching';
-              if (aiDiscoveringEntities) {
-                tooltipMessage = 'Analyzing page content...';
-              } else if (!aiSettings.available) {
-                tooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
-              } else if (!hasEnterprisePlatform) {
-                tooltipMessage = 'Requires at least one Enterprise Edition platform';
-              }
-              
-              return (
-                <Box sx={{ mb: 2 }}>
-                  <Tooltip title={tooltipMessage} placement="top">
-                    <span>
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={handleDiscoverEntitiesWithAI}
-                        disabled={isAiButtonDisabled}
-                        startIcon={aiDiscoveringEntities ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
-                        sx={{
-                          textTransform: 'none',
-                          borderColor: aiColors.main,
-                          color: aiColors.main,
-                          '&:hover': {
-                            borderColor: aiColors.dark,
-                            bgcolor: hexToRGB(aiColors.main, 0.08),
-                          },
-                          '&.Mui-disabled': {
-                            borderColor: hexToRGB(aiColors.main, 0.3),
-                            color: hexToRGB(aiColors.main, 0.5),
-                          },
-                        }}
-                      >
-                        {aiDiscoveringEntities ? 'Discovering...' : 'Discover more with AI'}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </Box>
-              );
-            })()}
-            
-            {/* Select All / Deselect All for entities selectable for OpenCTI */}
-            {(() => {
-              // Entities selectable for OpenCTI: not oaev-* type (includes both new and existing entities)
-              const selectableEntities = filteredScanResultsEntities.filter(e => isSelectableForOpenCTI(e));
-              const selectableValues = selectableEntities.map(e => e.value || e.name);
-              const selectedCount = selectableValues.filter(v => selectedScanItems.has(v)).length;
-              const allSelected = selectedCount === selectableEntities.length && selectableEntities.length > 0;
-              
-              // Count new vs existing entities among selected
-              const selectedNewCount = selectableEntities.filter(e => {
-                const entityValue = e.value || e.name;
-                return selectedScanItems.has(entityValue) && !isFoundInOpenCTI(e);
-              }).length;
-              const selectedExistingCount = selectedCount - selectedNewCount;
-              
-              if (selectableEntities.length === 0) return null;
-              
-              return (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {selectedCount > 0 
-                      ? `${selectedCount} selected (${selectedNewCount} new, ${selectedExistingCount} existing)`
-                      : `${selectableEntities.length} entities available for selection`
-                    }
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => {
-                        if (allSelected) {
-                          // Deselect all
-                          window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
-                          setSelectedScanItems(new Set());
-                        } else {
-                          // Select all selectable entities
-                          window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: selectableValues }, '*');
-                          setSelectedScanItems(new Set(selectableValues));
-                        }
-                      }}
-                      startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
-                      sx={{ 
-                        textTransform: 'none', 
-                        fontSize: '0.75rem',
-                        py: 0.25,
-                        minWidth: 'auto',
-                      }}
-                    >
-                      {allSelected ? 'Deselect all' : 'Select all'}
-                    </Button>
-                    {selectedCount > 0 && (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={handleImportSelectedScanResults}
-                        startIcon={<ArrowForwardOutlined />}
-                        sx={{ 
-                          textTransform: 'none', 
-                          fontSize: '0.75rem',
-                          py: 0.25,
-                          minWidth: 'auto',
-                        }}
-                      >
-                        Import ({selectedCount})
-                      </Button>
-                    )}
-                  </Box>
-                </Box>
-              );
-            })()}
-            
-            {/* Entity list */}
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {filteredScanResultsEntities.map((entity, index) => {
-                const aiColors = getAiColor(mode);
-                const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
-                const displayType = entity.type.replace('oaev-', '');
-                
-                // Count platforms by type
-                const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
-                const oaevCount = entity.platformMatches?.filter(pm => pm.platformType === 'openaev').length || 0;
-                const hasMultiplePlatforms = (entity.platformMatches?.length || 0) > 1;
-                
-                const entityValue = entity.value || entity.name;
-                const isSelected = selectedScanItems.has(entityValue);
-                
-                // Determine border color: AI color for AI-discovered, green for found, orange for not found
-                const borderColor = entity.discoveredByAI 
-                  ? aiColors.main 
-                  : (entity.found ? 'success.main' : 'warning.main');
-                
-                return (
-                  <Paper
-                    key={entity.id + '-' + index}
-                    elevation={0}
-                    onClick={() => handleScanResultEntityClick(entity)}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      p: 1.5,
-                      mb: 1,
-                      bgcolor: isSelected 
-                        ? hexToRGB('#1976d2', 0.08) 
-                        : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.05) : 'background.paper'),
-                      border: 1,
-                      borderColor: isSelected ? 'primary.main' : borderColor,
-                      borderRadius: 1,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                      borderLeftWidth: 4,
-                      '&:hover': {
-                        bgcolor: isSelected 
-                          ? hexToRGB('#1976d2', 0.12) 
-                          : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.1) : 'action.hover'),
-                        boxShadow: 1,
-                      },
-                    }}
-                  >
-                    {/* Checkbox for entities selectable for OpenCTI (not oaev-* type, can be new or existing) */}
-                    {isSelectableForOpenCTI(entity) && (
-                      <Checkbox
-                        checked={isSelected}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.parent.postMessage({ type: 'XTM_TOGGLE_SELECTION', value: entityValue }, '*');
-                          setSelectedScanItems(prev => {
-                            const next = new Set(prev);
-                            if (next.has(entityValue)) {
-                              next.delete(entityValue);
-                            } else {
-                              next.add(entityValue);
-                            }
-                            return next;
-                          });
-                        }}
-                        size="small"
-                        sx={{ 
-                          p: 0.5, 
-                          mr: 0.5,
-                          '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : (isFoundInOpenCTI(entity) ? 'success.main' : 'primary.main') },
-                        }}
-                      />
-                    )}
-                    <ItemIcon type={entity.type} size="small" color={entityColor} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                        {entity.name || entity.value}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ color: entity.discoveredByAI ? aiColors.main : 'text.secondary' }}>
-                          {displayType.replace(/-/g, ' ')}
-                        </Typography>
-                        {/* Show AI indicator for AI-discovered entities */}
-                        {entity.discoveredByAI && (
-                          <Tooltip title={entity.aiReason || 'Detected by AI analysis'} placement="top">
-                            <Chip 
-                              icon={<AutoAwesomeOutlined sx={{ fontSize: '0.7rem !important' }} />}
-                              label="AI"
-                              size="small" 
-                              sx={{ 
-                                height: 16, 
-                                fontSize: '0.6rem',
-                                bgcolor: hexToRGB(aiColors.main, 0.2),
-                                color: aiColors.main,
-                                '& .MuiChip-label': { px: 0.5 },
-                                '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
-                              }} 
-                            />
-                          </Tooltip>
-                        )}
-                        {/* Show platform counts */}
-                        {!entity.discoveredByAI && (octiCount > 0 || oaevCount > 0) && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
-                            {octiCount > 0 && (
-                              <Chip 
-                                label={`OCTI${hasMultiplePlatforms ? ` (${octiCount})` : ''}`}
-                                size="small" 
-                                sx={{ 
-                                  height: 16, 
-                                  fontSize: '0.6rem',
-                                  bgcolor: hexToRGB('#ff9800', 0.2),
-                                  color: '#ff9800',
-                                  '& .MuiChip-label': { px: 0.75 },
-                                }} 
-                              />
-                            )}
-                            {oaevCount > 0 && (
-                              <Chip 
-                                label={`OAEV${hasMultiplePlatforms ? ` (${oaevCount})` : ''}`}
-                                size="small" 
-                                sx={{ 
-                                  height: 16, 
-                                  fontSize: '0.6rem',
-                                  bgcolor: hexToRGB('#00bcd4', 0.2),
-                                  color: '#00bcd4',
-                                  '& .MuiChip-label': { px: 0.75 },
-                                }} 
-                              />
-                            )}
-                          </Box>
-                        )}
-                      </Box>
-                    </Box>
-                    {/* Status chip: Found (green), New (orange), or AI (purple) */}
-                    <Chip
-                      label={entity.found ? 'Found' : (entity.discoveredByAI ? 'AI' : 'New')}
-                      size="small"
-                      variant="outlined"
-                      sx={{ 
-                        minWidth: 50,
-                        borderColor: entity.discoveredByAI ? aiColors.main : undefined,
-                        color: entity.discoveredByAI ? aiColors.main : undefined,
-                      }}
-                      color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
-                    />
-                    <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
-                  </Paper>
-                );
-              })}
-            </Box>
-          </>
-        )}
-      </Box>
-    );
-  };
-
   // ============================================================================
   // Atomic Testing Mode (OpenAEV)
   // ============================================================================
@@ -9271,164 +8865,6 @@ const App: React.FC = () => {
     );
   };
 
-  const renderSearchView = () => {
-    const mergedResults = getMergedSearchResults();
-    const hasSearched = searchResults.length > 0 || (searchQuery.trim() && !searching);
-    
-    return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Search OpenCTI</Typography>
-
-        <TextField
-          placeholder="Search entities..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-          fullWidth
-          autoFocus
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={handleSearch} edge="end" disabled={searching}>
-                  {searching ? <CircularProgress size={20} /> : <SearchOutlined />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
-        
-        {/* Results section */}
-        {searching ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
-            <CircularProgress size={32} />
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Searching across {openctiPlatforms.length} platform{openctiPlatforms.length > 1 ? 's' : ''}...
-            </Typography>
-          </Box>
-        ) : hasSearched && mergedResults.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No results found for "{searchQuery}"
-            </Typography>
-          </Box>
-        ) : mergedResults.length > 0 ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {mergedResults.length} result{mergedResults.length !== 1 ? 's' : ''} found
-              </Typography>
-              {searchResults.length !== mergedResults.length && (
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  ({searchResults.length} across platforms)
-                </Typography>
-              )}
-            </Box>
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {mergedResults.map((merged, _i) => {
-                const platformCount = merged.platforms.length;
-                const platformNames = merged.platforms.map(p => p.platformName).join(', ');
-                const entityColor = itemColor(merged.type, mode === 'dark');
-                
-                return (
-                  <Paper
-                    key={merged.representativeKey}
-                    onClick={() => handleSearchResultClick(merged)}
-                    elevation={0}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      p: 1.5,
-                      mb: 1,
-                      cursor: 'pointer',
-                      borderRadius: 1,
-                      border: 1,
-                      borderColor: 'divider',
-                      transition: 'all 0.15s',
-                      '&:hover': { 
-                        bgcolor: hexToRGB(entityColor, 0.08),
-                        borderColor: entityColor,
-                      },
-                    }}
-                  >
-                    {/* Entity type icon with color */}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 36,
-                        height: 36,
-                        borderRadius: 1,
-                        bgcolor: hexToRGB(entityColor, 0.15),
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ItemIcon type={merged.type} size="small" color={entityColor} />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                        {merged.name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            color: entityColor, 
-                            fontWeight: 500,
-                          }}
-                        >
-                          {merged.type.replace(/-/g, ' ')}
-                        </Typography>
-                        {platformCount > 1 ? (
-                          <>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-                            <Chip 
-                              label={`${platformCount} platforms`}
-                              size="small"
-                              sx={{ 
-                                height: 18, 
-                                fontSize: '10px',
-                                bgcolor: 'action.selected',
-                                color: 'text.secondary',
-                                '& .MuiChip-label': { px: 0.75 },
-                              }}
-                            />
-                          </>
-                        ) : openctiPlatforms.length > 1 && (
-                          <>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              {platformNames}
-                            </Typography>
-                          </>
-                        )}
-                      </Box>
-                    </Box>
-                    <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </Paper>
-                );
-              })}
-            </Box>
-          </>
-        ) : (
-          <Box sx={{ textAlign: 'center', py: 4, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-              Search for entities across your OpenCTI platforms
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Enter a search term and press Enter or click the search icon
-            </Typography>
-          </Box>
-        )}
-      </Box>
-    );
-  };
-
-  // Alias for search results view - redirects to unified search view
-  const renderSearchResultsView = () => renderSearchView();
-
   // Helper to get icon and color for OAEV entity type - now uses centralized itemColor
   const getOaevEntityColor = (entityClass: string): string => {
     const simpleName = entityClass.split('.').pop() || entityClass;
@@ -9555,212 +8991,6 @@ const App: React.FC = () => {
                             </Typography>
                           </>
                         )}
-                      </Box>
-                    </Box>
-                    <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </Paper>
-                );
-              })}
-            </Box>
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Enter a search term and press Enter or click the search icon
-            </Typography>
-          </Box>
-        )}
-      </Box>
-    );
-  };
-
-  // Unified search view - searches across both OpenCTI and OpenAEV
-  const renderUnifiedSearchView = () => {
-    const totalPlatforms = availablePlatforms.length;
-    const hasSearched = unifiedSearchResults.length > 0 || (unifiedSearchQuery.trim() && !unifiedSearching);
-    
-    // Group results by source for display
-    const octiResults = unifiedSearchResults.filter(r => r.source === 'opencti');
-    const oaevResults = unifiedSearchResults.filter(r => r.source === 'openaev');
-    
-    // Filter results based on selected platform filter
-    const filteredResults = unifiedSearchPlatformFilter === 'all' 
-      ? unifiedSearchResults 
-      : unifiedSearchResults.filter(r => r.source === unifiedSearchPlatformFilter);
-    
-    // OpenCTI color: cyan, OpenAEV color: purple
-    const octiColor = '#00bcd4';
-    const oaevColor = '#9c27b0';
-    
-    return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Search All Platforms</Typography>
-
-        <TextField
-          placeholder="Search entities across all platforms..."
-          value={unifiedSearchQuery}
-          onChange={(e) => setUnifiedSearchQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleUnifiedSearch()}
-          fullWidth
-          autoFocus
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={() => handleUnifiedSearch()} edge="end" disabled={unifiedSearching}>
-                  {unifiedSearching ? <CircularProgress size={20} /> : <SearchOutlined />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
-        
-        {/* Results section */}
-        {unifiedSearching ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
-            <CircularProgress size={32} />
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Searching across {totalPlatforms} platform{totalPlatforms > 1 ? 's' : ''}...
-            </Typography>
-          </Box>
-        ) : hasSearched && unifiedSearchResults.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No results found for "{unifiedSearchQuery}"
-            </Typography>
-          </Box>
-        ) : unifiedSearchResults.length > 0 ? (
-          <>
-            {/* Platform Filter Buttons */}
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 0, 
-              mb: 2, 
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'divider',
-              overflow: 'hidden',
-            }}>
-              <Box 
-                onClick={() => setUnifiedSearchPlatformFilter(unifiedSearchPlatformFilter === 'opencti' ? 'all' : 'opencti')}
-                sx={{ 
-                  flex: 1, 
-                  textAlign: 'center', 
-                  p: 1.5,
-                  cursor: octiResults.length > 0 ? 'pointer' : 'default',
-                  bgcolor: unifiedSearchPlatformFilter === 'opencti' ? octiColor : 'action.hover',
-                  color: unifiedSearchPlatformFilter === 'opencti' ? 'white' : 'inherit',
-                  opacity: octiResults.length > 0 ? 1 : 0.5,
-                  transition: 'all 0.15s',
-                  '&:hover': octiResults.length > 0 ? {
-                    bgcolor: unifiedSearchPlatformFilter === 'opencti' ? octiColor : 'action.selected',
-                  } : {},
-                }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 700, color: unifiedSearchPlatformFilter === 'opencti' ? 'inherit' : octiColor }}>
-                  {octiResults.length}
-                </Typography>
-                <Typography variant="caption" sx={{ color: unifiedSearchPlatformFilter === 'opencti' ? 'inherit' : 'text.secondary', opacity: unifiedSearchPlatformFilter === 'opencti' ? 0.9 : 1 }}>
-                  OpenCTI
-                </Typography>
-              </Box>
-              <Divider orientation="vertical" flexItem />
-              <Box 
-                onClick={() => setUnifiedSearchPlatformFilter(unifiedSearchPlatformFilter === 'openaev' ? 'all' : 'openaev')}
-                sx={{ 
-                  flex: 1, 
-                  textAlign: 'center', 
-                  p: 1.5,
-                  cursor: oaevResults.length > 0 ? 'pointer' : 'default',
-                  bgcolor: unifiedSearchPlatformFilter === 'openaev' ? oaevColor : 'action.hover',
-                  color: unifiedSearchPlatformFilter === 'openaev' ? 'white' : 'inherit',
-                  opacity: oaevResults.length > 0 ? 1 : 0.5,
-                  transition: 'all 0.15s',
-                  '&:hover': oaevResults.length > 0 ? {
-                    bgcolor: unifiedSearchPlatformFilter === 'openaev' ? oaevColor : 'action.selected',
-                  } : {},
-                }}
-              >
-                <Typography variant="h5" sx={{ fontWeight: 700, color: unifiedSearchPlatformFilter === 'openaev' ? 'inherit' : oaevColor }}>
-                  {oaevResults.length}
-                </Typography>
-                <Typography variant="caption" sx={{ color: unifiedSearchPlatformFilter === 'openaev' ? 'inherit' : 'text.secondary', opacity: unifiedSearchPlatformFilter === 'openaev' ? 0.9 : 1 }}>
-                  OpenAEV
-                </Typography>
-              </Box>
-            </Box>
-            
-            {/* Results count */}
-            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-              {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}{unifiedSearchPlatformFilter !== 'all' ? ` in ${unifiedSearchPlatformFilter === 'opencti' ? 'OpenCTI' : 'OpenAEV'}` : ''}
-            </Typography>
-            
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {filteredResults.map((result) => {
-                // Get the proper type for color/icon lookup
-                const typeForColor = result.source === 'openaev' 
-                  ? `oaev-${result.type}` 
-                  : result.type;
-                const entityColor = itemColor(typeForColor, mode === 'dark');
-                
-                return (
-                  <Paper
-                    key={result.id}
-                    onClick={() => handleUnifiedSearchResultClick(result)}
-                    sx={{
-                      p: 1.5,
-                      mb: 1,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      bgcolor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      transition: 'all 0.15s',
-                      '&:hover': { 
-                        bgcolor: hexToRGB(entityColor, 0.08),
-                        borderColor: entityColor,
-                      },
-                    }}
-                  >
-                    {/* Entity type icon with color */}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 36,
-                        height: 36,
-                        borderRadius: 1,
-                        bgcolor: hexToRGB(entityColor, 0.15),
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ItemIcon 
-                        type={typeForColor} 
-                        size="small" 
-                        color={entityColor}
-                      />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                        {result.name}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            color: entityColor, 
-                            fontWeight: 500,
-                          }}
-                        >
-                          {result.type.replace(/([A-Z])/g, ' $1').trim()}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {result.platformName}
-                        </Typography>
                       </Box>
                     </Box>
                     <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -12390,17 +11620,88 @@ const App: React.FC = () => {
       case 'investigation':
         return renderInvestigationView();
       case 'scan-results':
-        return renderScanResultsView();
+        return (
+          <ScanResultsView
+            mode={mode}
+            scanResultsEntities={scanResultsEntities}
+            setScanResultsEntities={setScanResultsEntities}
+            scanResultsTypeFilter={scanResultsTypeFilter}
+            setScanResultsTypeFilter={setScanResultsTypeFilter}
+            scanResultsFoundFilter={scanResultsFoundFilter}
+            setScanResultsFoundFilter={setScanResultsFoundFilter}
+            selectedScanItems={selectedScanItems}
+            setSelectedScanItems={setSelectedScanItems}
+            setPanelMode={setPanelMode}
+            setEntitiesToAdd={setEntitiesToAdd}
+            setEntity={setEntity}
+            setMultiPlatformResults={setMultiPlatformResults}
+            setCurrentPlatformIndex={setCurrentPlatformIndex}
+            setEntityFromScanResults={setEntityFromScanResults}
+            currentPlatformIndexRef={currentPlatformIndexRef}
+            multiPlatformResultsRef={multiPlatformResultsRef}
+            aiSettings={aiSettings}
+            aiDiscoveringEntities={aiDiscoveringEntities}
+            setAiDiscoveringEntities={setAiDiscoveringEntities}
+            availablePlatforms={availablePlatforms}
+            showToast={showToast}
+            setContainerForm={setContainerForm}
+            currentPageTitle={currentPageTitle}
+            currentPageUrl={currentPageUrl}
+            setCurrentPageUrl={setCurrentPageUrl}
+            setCurrentPageTitle={setCurrentPageTitle}
+            scanPageContent={scanPageContent}
+            logoSuffix={logoSuffix}
+          />
+        );
       case 'atomic-testing':
         return renderAtomicTestingView();
       case 'search':
-        return renderSearchView();
       case 'search-results':
-        return renderSearchResultsView();
+        return (
+          <SearchView
+            mode={mode}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchResults={searchResults}
+            setSearchResults={setSearchResults}
+            searching={searching}
+            setSearching={setSearching}
+            setPanelMode={setPanelMode}
+            setEntity={setEntity}
+            setEntityFromSearchMode={setEntityFromSearchMode}
+            setMultiPlatformResults={setMultiPlatformResults}
+            setCurrentPlatformIndex={setCurrentPlatformIndex}
+            currentPlatformIndexRef={currentPlatformIndexRef}
+            multiPlatformResultsRef={multiPlatformResultsRef}
+            openctiPlatforms={openctiPlatforms}
+            availablePlatforms={availablePlatforms}
+          />
+        );
       case 'oaev-search':
         return renderOAEVSearchView();
       case 'unified-search':
-        return renderUnifiedSearchView();
+        return (
+          <UnifiedSearchView
+            mode={mode}
+            unifiedSearchQuery={unifiedSearchQuery}
+            setUnifiedSearchQuery={setUnifiedSearchQuery}
+            unifiedSearchResults={unifiedSearchResults}
+            setUnifiedSearchResults={setUnifiedSearchResults}
+            unifiedSearching={unifiedSearching}
+            setUnifiedSearching={setUnifiedSearching}
+            unifiedSearchPlatformFilter={unifiedSearchPlatformFilter}
+            setUnifiedSearchPlatformFilter={setUnifiedSearchPlatformFilter}
+            setPanelMode={setPanelMode}
+            setEntity={setEntity}
+            setEntityFromSearchMode={setEntityFromSearchMode}
+            setMultiPlatformResults={setMultiPlatformResults}
+            setCurrentPlatformIndex={setCurrentPlatformIndex}
+            currentPlatformIndexRef={currentPlatformIndexRef}
+            multiPlatformResultsRef={multiPlatformResultsRef}
+            availablePlatforms={availablePlatforms}
+            logoSuffix={logoSuffix}
+          />
+        );
       case 'add-selection':
         return renderAddSelectionView();
       case 'scenario-overview':

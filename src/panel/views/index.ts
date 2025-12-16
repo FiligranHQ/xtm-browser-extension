@@ -12,7 +12,7 @@ export { NotFoundView } from '../components/NotFoundView';
 export { PanelHeader } from '../components/PanelHeader';
 export { PlatformNavigation } from '../components/PlatformNavigation';
 
-// New extracted view components
+// Extracted view components
 export { ScanResultsView } from './ScanResultsView';
 export { SearchView } from './SearchView';
 export { UnifiedSearchView } from './UnifiedSearchView';
@@ -21,3 +21,4 @@ export { ImportResultsView } from './ImportResultsView';
 export { ContainerTypeView } from './ContainerTypeView';
 export { PlatformSelectView } from './PlatformSelectView';
 export { AddView } from './AddView';
+export { ScenarioOverviewView } from './ScenarioOverviewView';

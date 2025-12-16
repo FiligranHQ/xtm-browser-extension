@@ -1,6 +1,6 @@
 # Filigran XTM Browser Extension
 
-A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. Detect threats, observables, and security entities directly from any web page. Features AI-powered content analysis and scenario generation for Enterprise Edition users.
+A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. Detect threats, observables, and security entities directly from any web page. Features AI-powered content analysis, PDF generation, and scenario generation for Enterprise Edition users.
 
 [![OpenCTI Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml)
 [![OpenAEV Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml)
@@ -20,10 +20,12 @@ A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. De
 - 📊 **Entity Details** - View author, creator, confidence/score, labels, markings, and containers
 - 🔄 **Entity Cache** - Fast offline detection with background refresh
 - 🤖 **AI Description Generation** - Generate container descriptions using AI (Enterprise Edition)
+- 📄 **PDF Generation** - Capture web pages as PDF attachments for containers
 
 **Detected Entity Types:**
 - **Threat Entities**: Threat Actor Groups, Intrusion Sets (APT29, Cozy Bear...), Malware, Campaigns
 - **Observables**: IPs, Domains, URLs, Hashes, Emails, CVEs, Crypto Wallets, MAC Addresses
+- **Defanged IOCs**: Automatic detection of defanged indicators (e.g., `example[.]com`, `hxxps://`)
 - **MITRE ATT&CK**: Attack Patterns (T1566, T1059.001...)
 - **Locations**: Countries, Regions, Cities
 - **Identities**: Organizations, Sectors, Individuals
@@ -37,11 +39,19 @@ A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. De
 - 🤖 **AI-Powered Scenarios** - Generate comprehensive attack scenarios using AI (Enterprise Edition)
 - ⚡ **Atomic Testing** - Create on-the-fly atomic tests with AI-generated command lines
 
+### PDF Generation & Content Extraction
+- 📄 **Reader-View PDF** - Clean, formatted PDFs using Mozilla Readability extraction
+- 🖼️ **Image Preservation** - Content images are preserved in generated PDFs
+- 📰 **Smart Extraction** - Automatic hero image detection and lazy-loaded image handling
+- 📋 **Container Attachments** - Optionally attach PDF snapshots to OpenCTI containers
+- 🎨 **Professional Formatting** - Headers, footers, page numbers, and Filigran branding
+
 ### AI Features (Enterprise Edition)
 - 🧠 **Multiple LLM Support** - OpenAI, Anthropic (Claude), and Google Gemini
 - 📝 **Container Description AI** - Generate intelligent descriptions for OpenCTI containers
 - 🎬 **Scenario AI** - Generate full attack scenarios with proper injects and affinities
 - ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests
+- 📊 **Model Selection** - Browse and select from available models for each provider
 - 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
 ### General
@@ -157,9 +167,11 @@ AI features require at least one connected Enterprise Edition platform. Configur
 
 | Provider | Models | API Key Required |
 |----------|--------|------------------|
-| OpenAI | GPT-4, GPT-4 Turbo | Yes |
+| OpenAI | GPT-4o, GPT-4 Turbo, GPT-4 | Yes |
 | Anthropic | Claude 3.5 Sonnet, Claude 3 Opus | Yes |
 | Google | Gemini 1.5 Pro, Gemini 1.5 Flash | Yes |
+
+After entering your API key, click **Test Connection** to validate and fetch available models. Select your preferred model from the dropdown.
 
 > **Note**: If you don't have an Enterprise Edition license, clicking AI buttons will show a dialog to start a free 30-day trial at [filigran.io/enterprise-editions-trial](https://filigran.io/enterprise-editions-trial/)
 
@@ -173,9 +185,15 @@ xtm-browser-extension/
 │   ├── popup/           # Popup UI (quick actions)
 │   ├── panel/           # Side panel (entity details)
 │   ├── options/         # Settings page
-│   └── shared/          # Shared utilities, types, API clients
+│   └── shared/          # Shared utilities and modules
+│       ├── api/         # API clients (OpenCTI, OpenAEV, AI)
+│       ├── detection/   # Pattern detection engine
+│       ├── extraction/  # Content extraction & PDF generation
+│       ├── platform/    # Platform registry
+│       ├── types/       # TypeScript definitions
+│       └── utils/       # Utilities (logger, storage, formatters)
 ├── tests/
-│   ├── unit/            # Unit tests (patterns, logger)
+│   ├── unit/            # Unit tests (patterns, logger, defang)
 │   └── integration/     # Integration tests (OpenCTI, OpenAEV)
 ├── docs/                # Documentation
 ├── scripts/             # Build and test scripts

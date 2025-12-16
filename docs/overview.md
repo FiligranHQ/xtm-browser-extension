@@ -26,16 +26,18 @@ OpenAEV is a platform for attack simulation and exposure validation. The extensi
 Automatically detect and highlight security-relevant content on any web page.
 
 **OpenCTI - Observables (Pattern-based detection):**
-- IP addresses (IPv4, IPv6)
-- Domain names and hostnames
-- URLs
-- Email addresses
+- IP addresses (IPv4, IPv6) - including defanged formats
+- Domain names and hostnames - including defanged formats
+- URLs - including `hxxp://` and `hxxps://` defanged formats
+- Email addresses - including `[@]` defanged formats
 - File hashes (MD5, SHA-1, SHA-256, SHA-512)
 - CVE identifiers
 - Cryptocurrency wallets (Bitcoin, Ethereum)
 - MAC addresses
 - Phone numbers
 - And more...
+
+> **Defanged IOC Support**: The extension automatically detects common defanged formats used in threat reports (e.g., `example[.]com`, `hxxps://`) and refangs them for platform lookups.
 
 **OpenCTI - STIX Domain Objects (Exact match detection):**
 - **Threat Actors**: Groups (GRU, Lazarus Group) and Individuals
@@ -86,8 +88,15 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
 │  │ API Clients │  │  Detection  │  │   Cache & Storage       │ │
 │  │ (GraphQL/   │  │  Engine     │  │   (Chrome Storage)      │ │
-│  │  REST)      │  │  (Patterns) │  │                         │ │
+│  │  REST/AI)   │  │  (Patterns) │  │                         │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                  Content Extraction                          ││
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  ││
+│  │  │ Readability  │  │    PDF       │  │   Image CORS     │  ││
+│  │  │ (Mozilla)    │  │  Generator   │  │   Bypass         │  ││
+│  │  └──────────────┘  └──────────────┘  └──────────────────┘  ││
+│  └─────────────────────────────────────────────────────────────┘│
 ├─────────────────────────────────────────────────────────────────┤
 │                    External Platforms                            │
 │  ┌──────────────────────┐  ┌──────────────────────┐            │
@@ -96,7 +105,12 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 │  │  - Threat Intel      │  │  - Assets            │            │
 │  │  - Observables       │  │  - Teams/Players     │            │
 │  │  - Containers        │  │  - Attack Patterns   │            │
+│  │  - AI (EE)           │  │  - Scenarios (EE)    │            │
 │  └──────────────────────┘  └──────────────────────┘            │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    LLM Providers (AI)                     │  │
+│  │  OpenAI  │  Anthropic  │  Google Gemini  │  XTM One      │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

@@ -6,8 +6,8 @@
 
 1. Click **Scan** from the popup or use the context menu
 2. The extension analyzes the page content
-3. Observables are detected using regex patterns
-4. Entities are matched against the cached OpenCTI data
+3. Observables are detected using regex patterns (including defanged IOCs)
+4. Entities are matched against the cached OpenCTI/OpenAEV data
 5. Results are highlighted directly on the page
 
 ### Highlight Indicators
@@ -18,6 +18,19 @@
 | Amber | ⚠ | Detected but not in OpenCTI |
 | Red | ⚠ | Known threat (Malware, Threat Actor) |
 | Brown | 🔓 | Vulnerability (CVE) |
+
+### Defanged IOC Detection
+
+The extension automatically detects and refangs defanged indicators of compromise:
+
+| Defanged Format | Detected As |
+|-----------------|-------------|
+| `example[.]com` | `example.com` (Domain) |
+| `hxxp://` or `hxxps://` | `http://` or `https://` (URL) |
+| `192[.]168[.]1[.]1` | `192.168.1.1` (IPv4) |
+| `user[@]example.com` | `user@example.com` (Email) |
+
+Defanged values are shown with an indicator badge, and the refanged value is used for platform lookups.
 
 ### Interacting with Highlights
 
@@ -86,7 +99,8 @@ Create OpenCTI containers (Reports, Cases, Groupings) from web pages.
    - Description (pre-filled from page summary)
    - Labels (from OpenCTI)
    - Marking definitions
-5. Review and submit
+5. Optionally enable **Generate PDF** to attach a snapshot
+6. Review and submit
 
 ### What Gets Included
 
@@ -94,6 +108,63 @@ Create OpenCTI containers (Reports, Cases, Groupings) from web pages.
 - Clean HTML content (saved to content field for indexing)
 - All selected/detected entities
 - Selected labels and markings
+- PDF attachment (optional) with the article content
+
+## PDF Generation
+
+Generate professional PDF snapshots of web pages for archiving or attaching to containers.
+
+### How It Works
+
+The extension uses a multi-step process to generate high-quality PDFs:
+
+1. **Content Extraction**: Mozilla Readability extracts the main article content
+2. **Image Processing**: Content images are preserved and embedded
+3. **Reader View**: Clean, formatted HTML is generated
+4. **PDF Rendering**: jsPDF renders the final document with proper formatting
+
+### PDF Features
+
+- **Clean Article Extraction**: Removes ads, navigation, and clutter
+- **Image Preservation**: Content images are embedded (not icons or trackers)
+- **Hero Image Detection**: Featured images are automatically included
+- **Lazy-Load Handling**: Images with lazy loading are properly resolved
+- **Professional Layout**: Headers, footers, page numbers, and branding
+- **Metadata**: Title, byline, publication date, source URL, and reading time
+- **Table Support**: Data tables are formatted cleanly
+- **Code Blocks**: Syntax-highlighted code is preserved
+
+### Paper Sizes
+
+| Size | Dimensions |
+|------|------------|
+| A4 | 210 × 297 mm |
+| Letter | 215.9 × 279.4 mm |
+| Legal | 215.9 × 355.6 mm |
+
+### Content Extraction
+
+The content extractor uses Mozilla Readability with enhancements:
+
+| Feature | Description |
+|---------|-------------|
+| **Smart Selection** | Automatically finds the main article content |
+| **Hero Images** | Detects featured images even outside article containers |
+| **Lazy Loading** | Resolves `data-src`, `data-lazy-src`, and similar attributes |
+| **Srcset Support** | Selects highest quality image from srcset |
+| **Caption Extraction** | Preserves figure captions |
+| **CORS Bypass** | Uses background script to fetch cross-origin images |
+
+### Extracted Metadata
+
+The extractor captures rich metadata from pages:
+
+- **Title**: From article title, `<h1>`, or meta tags
+- **Byline**: Author information
+- **Publication Date**: From `<time>` elements or meta tags
+- **Site Name**: From `og:site_name` or hostname
+- **Reading Time**: Estimated minutes based on word count
+- **Excerpt**: Summary from meta description or first paragraphs
 
 ## Investigations (Workbench)
 
@@ -150,36 +221,57 @@ AI-powered features require at least one Enterprise Edition platform. If not con
 
 ### Supported LLM Providers
 
-| Provider | Description |
-|----------|-------------|
-| **OpenAI** | GPT-4 and GPT-4 Turbo models |
-| **Anthropic** | Claude 3.5 Sonnet and Claude 3 Opus |
-| **Google Gemini** | Gemini 1.5 Pro and Flash |
-| **XTM One** | Filigran Agentic AI Platform (coming soon) |
+| Provider | Description | Model Selection |
+|----------|-------------|-----------------|
+| **OpenAI** | GPT-4, GPT-4 Turbo, GPT-4o models | ✅ Dynamic model list |
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus | ✅ Dynamic model list |
+| **Google Gemini** | Gemini 1.5 Pro and Flash | ✅ Dynamic model list |
+| **XTM One** | Filigran Agentic AI Platform (coming soon) | - |
+
+### Model Selection
+
+After configuring your API key, you can:
+1. Click **Test Connection** to validate the API key
+2. The extension fetches available models from the provider
+3. Select your preferred model from the dropdown
+4. Models are cached for future sessions
 
 ### AI Container Description (OpenCTI)
 When creating containers in OpenCTI, you can use AI to generate intelligent descriptions:
 1. Start creating a container (Report, Case, etc.)
 2. Click the AI generation button next to the description field
 3. AI analyzes the page content and generates a relevant description
+4. The generated description summarizes key threats, observables, and context
 
 ### AI Scenario Generation (OpenAEV)
 Generate comprehensive attack scenarios using AI:
 1. Click **Scenario** in the popup
-2. Configure affinities (type and platform)
+2. Configure affinities:
+   - **Type Affinity**: Attack Scenario, Incident Response, Red Team, Purple Team, etc.
+   - **Platform Affinity**: Windows, Linux, macOS, Network, Cloud, etc.
 3. AI generates a full scenario with:
    - Contextual injects based on page content
    - Attack patterns matched from the page
    - Proper sequencing and dependencies
+   - Kill chain phase ordering
 
 ### AI Atomic Testing (OpenAEV)
 Generate on-the-fly atomic tests with AI:
 1. Click **Atomic Test** in the popup
 2. Select target attack pattern
-3. AI generates:
+3. Choose target platform and execution preferences
+4. AI generates:
    - Custom command lines (PowerShell, Bash, etc.)
    - Test procedures tailored to your environment
    - Cleanup commands
+   - Expected outputs and detection signatures
+
+### AI Entity Discovery
+AI can help identify entities that pattern matching might miss:
+1. During container creation, click **AI Discover Entities**
+2. AI analyzes the full page context
+3. Additional threat actors, campaigns, and techniques are suggested
+4. Review and select entities to include
 
 ## Context Menu
 

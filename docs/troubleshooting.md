@@ -121,6 +121,35 @@ Occurs during extension updates. Reload the extension from `chrome://extensions/
 
 Check your internet connection and ensure your platform instance is accessible.
 
+### PDF Generation Issues
+
+**Symptoms:**
+- PDF is empty or incomplete
+- Images missing from PDF
+- PDF generation fails
+
+**Solutions:**
+1. Some pages have complex layouts that prevent clean extraction
+2. Cross-origin images may fail to load (CORS restrictions)
+3. Try using the native PDF generation if jsPDF fails
+4. Very long pages may timeout - try scanning a shorter article
+
+### AI Feature Issues
+
+**"AI features require Enterprise Edition":**
+- Connect at least one EE-licensed platform (OpenCTI EE or OpenAEV EE)
+- Or start a free trial at [filigran.io/enterprise-editions-trial](https://filigran.io/enterprise-editions-trial/)
+
+**"Invalid API key":**
+- Verify your API key is correct and not expired
+- Ensure you have sufficient credits/quota with the provider
+- Try regenerating the API key from the provider's console
+
+**"Model not available":**
+- Click "Test Connection" to refresh the model list
+- Some models require special access (e.g., GPT-4 requires paid account)
+- Try selecting a different model
+
 ### "OPENCTI_TOKEN not set" (in tests)
 
 For running integration tests locally, set environment variables:

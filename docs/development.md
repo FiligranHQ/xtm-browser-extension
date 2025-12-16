@@ -71,15 +71,26 @@ src/
 ├── shared/              # Shared code
 │   ├── api/             # API clients
 │   │   ├── opencti-client.ts    # OpenCTI GraphQL client
-│   │   └── openaev-client.ts    # OpenAEV REST client
+│   │   ├── openaev-client.ts    # OpenAEV REST client
+│   │   └── ai-client.ts         # AI/LLM provider client
 │   ├── components/      # Shared React components
 │   ├── detection/       # Detection engine
 │   │   ├── detector.ts  # Entity and observable detection
 │   │   └── patterns.ts  # Regex patterns for observables
+│   ├── extraction/      # Content extraction & PDF
+│   │   ├── content-extractor.ts # Mozilla Readability wrapper
+│   │   ├── pdf-generator.ts     # jsPDF-based PDF generation
+│   │   ├── native-pdf.ts        # Chrome Debugger API PDF
+│   │   └── index.ts             # Module exports
+│   ├── platform/        # Platform registry
+│   │   ├── registry.ts  # Platform type definitions
+│   │   └── index.ts     # Registry exports
 │   ├── theme/           # Theme configuration
 │   ├── types/           # TypeScript type definitions
 │   └── utils/           # Utilities
 │       ├── logger.ts    # Structured logging
+│       ├── messaging.ts # Extension message helpers
+│       ├── formatters.ts # Value formatters
 │       └── storage.ts   # Chrome storage helpers
 ├── assets/              # Static assets (icons, logos, CSS)
 └── manifest.*.json      # Browser-specific manifests
@@ -227,14 +238,17 @@ const patterns = await client.getAttackPatterns();
 
 ### Observable Detection
 
-Regex-based detection for observables:
+Regex-based detection for observables, including defanged IOCs:
 
 ```typescript
 import { detectObservables } from './shared/detection/detector';
 
-const text = 'Check this IP: 192.168.1.1 and domain evil.com';
+const text = 'Check this IP: 192.168.1.1 and domain evil[.]com';
 const observables = detectObservables(text);
-// Returns: [{ type: 'IPv4-Addr', value: '192.168.1.1' }, { type: 'Domain-Name', value: 'evil.com' }]
+// Returns: [
+//   { type: 'IPv4-Addr', value: '192.168.1.1' },
+//   { type: 'Domain-Name', value: 'evil[.]com', refangedValue: 'evil.com', isDefanged: true }
+// ]
 ```
 
 ### Entity Detection
@@ -249,6 +263,76 @@ const sdos = detectSDOsFromCache(text, sdoCache);
 
 // OpenAEV entities  
 const oaevEntities = detectOAEVEntitiesFromCache(text, oaevCache);
+```
+
+## Content Extraction
+
+### Extracting Article Content
+
+```typescript
+import { extractContent, generateReaderView } from './shared/extraction';
+
+// Extract clean article from current page
+const content = extractContent();
+// Returns: { title, byline, content, textContent, images, url, ... }
+
+// Generate reader-view HTML
+const readerHtml = generateReaderView(content);
+```
+
+### PDF Generation
+
+```typescript
+import { generatePDF, requestNativePDF } from './shared/extraction';
+
+// Generate PDF from extracted content
+const result = await generatePDF(content, {
+  includeImages: true,
+  paperSize: 'a4',
+  headerText: 'Custom Header',
+});
+// result.data = Base64 PDF, result.filename, result.method
+
+// Request native PDF via background script (higher quality)
+const nativePdf = await requestNativePDF(tabId);
+```
+
+### Image Loading (CORS Bypass)
+
+Images from cross-origin sources are fetched via the background script:
+
+```typescript
+// Content script sends message to background
+chrome.runtime.sendMessage({
+  type: 'FETCH_IMAGE_AS_DATA_URL',
+  payload: { url: imageUrl }
+}, (response) => {
+  if (response.success) {
+    const dataUrl = response.dataUrl;
+    // Use in PDF or canvas
+  }
+});
+```
+
+## AI Client
+
+### Using AI Features
+
+```typescript
+import { AIClient } from './shared/api/ai-client';
+
+const client = new AIClient({
+  provider: 'openai',
+  apiKey: 'sk-...',
+  model: 'gpt-4o',
+});
+
+// Generate description
+const description = await client.generateDescription(pageContent);
+
+// Fetch available models
+const models = await client.fetchModels();
+// Returns: [{ id: 'gpt-4o', name: 'GPT-4o' }, ...]
 ```
 
 ## Message Passing
@@ -279,11 +363,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 | Type | Direction | Description |
 |------|-----------|-------------|
 | `SCAN_PAGE` | Popup → Background | Trigger page scan |
+| `SCAN_ALL` | Popup → Background | Unified scan (all platforms) |
 | `GET_ENTITY` | Panel → Background | Fetch entity details |
 | `REFRESH_CACHE` | Options → Background | Refresh SDO/OAEV cache |
 | `CLEAR_SDO_CACHE` | Options → Background | Clear OpenCTI cache |
 | `CLEAR_OAEV_CACHE` | Options → Background | Clear OpenAEV cache |
 | `HIGHLIGHT_RESULTS` | Background → Content | Apply highlights to page |
+| `GENERATE_NATIVE_PDF` | Content → Background | Generate PDF via Debugger API |
+| `FETCH_IMAGE_AS_DATA_URL` | Content → Background | Fetch image bypassing CORS |
+| `AI_GENERATE_DESCRIPTION` | Panel → Background | Generate AI description |
+| `AI_GENERATE_SCENARIO` | Panel → Background | Generate AI scenario |
+| `AI_TEST_AND_FETCH_MODELS` | Options → Background | Test AI key & fetch models |
 
 ## Contributing
 

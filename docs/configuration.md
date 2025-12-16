@@ -124,12 +124,29 @@ AI features require at least one connected Enterprise Edition (EE) platform. The
 
 ### Supported LLM Providers
 
-| Provider | API Key | Models |
-|----------|---------|--------|
-| **OpenAI** | Required | GPT-4, GPT-4 Turbo |
-| **Anthropic** | Required | Claude 3.5 Sonnet, Claude 3 Opus |
-| **Google Gemini** | Required | Gemini 1.5 Pro, Gemini 1.5 Flash |
+| Provider | API Key | Model Selection |
+|----------|---------|-----------------|
+| **OpenAI** | Required | Dynamic list from API |
+| **Anthropic** | Required | Dynamic list from API |
+| **Google Gemini** | Required | Dynamic list from API |
 | **XTM One** | Coming Soon | Filigran Agentic AI Platform |
+
+### Model Selection
+
+After entering your API key:
+
+1. Click **Test Connection** to validate the key
+2. If successful, available models are fetched automatically
+3. Select your preferred model from the dropdown
+4. Click **Save Settings** to persist your selection
+
+Popular models by provider:
+
+| Provider | Recommended Models |
+|----------|-------------------|
+| OpenAI | `gpt-4o`, `gpt-4-turbo`, `gpt-4` |
+| Anthropic | `claude-3-5-sonnet-latest`, `claude-3-opus-latest` |
+| Google | `gemini-1.5-pro`, `gemini-1.5-flash` |
 
 ### Getting API Keys
 
@@ -146,8 +163,8 @@ AI features require at least one connected Enterprise Edition (EE) platform. The
 4. Copy and paste into the extension settings
 
 #### Google Gemini
-1. Go to [makersuite.google.com](https://makersuite.google.com)
-2. Navigate to **API Keys**
+1. Go to [aistudio.google.com](https://aistudio.google.com)
+2. Navigate to **Get API Key**
 3. Create a new key
 4. Copy and paste into the extension settings
 

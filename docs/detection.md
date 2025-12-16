@@ -2,19 +2,37 @@
 
 ## Observable Detection
 
-Observables are detected using regular expression patterns. Each type can be enabled or disabled individually.
+Observables are detected using regular expression patterns. Each type can be enabled or disabled individually. The extension also supports **defanged IOC detection** for threat intelligence reports.
 
 ### Network Observables
 
-| Type | Pattern Example | Default |
-|------|-----------------|---------|
-| IPv4-Addr | `192.168.1.1` | ✅ Enabled |
-| IPv6-Addr | `2001:db8::1` | ✅ Enabled |
-| Domain-Name | `example.com` | ✅ Enabled |
-| Hostname | `server.example.com` | ✅ Enabled |
-| Url | `https://example.com/path` | ✅ Enabled |
-| Email-Addr | `user@example.com` | ✅ Enabled |
-| Mac-Addr | `00:1A:2B:3C:4D:5E` | ✅ Enabled |
+| Type | Pattern Example | Defanged Support | Default |
+|------|-----------------|------------------|---------|
+| IPv4-Addr | `192.168.1.1` | `192[.]168[.]1[.]1` | ✅ Enabled |
+| IPv6-Addr | `2001:db8::1` | - | ✅ Enabled |
+| Domain-Name | `example.com` | `example[.]com` | ✅ Enabled |
+| Hostname | `server.example.com` | `server[.]example[.]com` | ✅ Enabled |
+| Url | `https://example.com/path` | `hxxps://example[.]com/path` | ✅ Enabled |
+| Email-Addr | `user@example.com` | `user[@]example.com` | ✅ Enabled |
+| Mac-Addr | `00:1A:2B:3C:4D:5E` | - | ✅ Enabled |
+
+### Defanged IOC Detection
+
+The extension automatically detects common defanging patterns used in threat intelligence reports:
+
+| Defanged Format | Original Format | Notes |
+|-----------------|-----------------|-------|
+| `example[.]com` | `example.com` | Square bracket dot |
+| `example(.)com` | `example.com` | Parenthesis dot |
+| `hxxp://` | `http://` | Protocol defanging |
+| `hxxps://` | `https://` | Secure protocol defanging |
+| `user[@]example.com` | `user@example.com` | At-sign defanging |
+| `192[.]168[.]1[.]1` | `192.168.1.1` | IP address defanging |
+
+When a defanged value is detected:
+1. The original defanged text is highlighted
+2. The refanged value is used for platform lookups
+3. A visual indicator shows the value was defanged
 
 ### File Observables
 
@@ -92,6 +110,21 @@ Attack patterns are matched by their MITRE ATT&CK external ID using exact word-b
 - ✅ `T1566` matches "The attack used T1566"
 - ✅ `T1059.001` matches "PowerShell (T1059.001) was used"
 - ❌ `T1566` does NOT match "T156612345" (partial match prevented)
+
+### Findings
+
+| Type | Description | Matching | Default |
+|------|-------------|----------|---------|
+| Finding | Security findings from scans | Exact value match | ✅ Enabled |
+
+Findings are matched by their exact `finding_value` field. Supported finding types include:
+- **text**: Generic text findings
+- **number**: Numeric findings
+- **port**: Port numbers
+- **portscan**: Port scan results
+- **ipv4/ipv6**: IP address findings
+- **credentials**: Credential findings
+- **cve**: CVE-related findings
 
 ### Matching Behavior
 

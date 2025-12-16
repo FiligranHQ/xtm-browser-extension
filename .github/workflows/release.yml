@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: npm run icons
+
+      - name: Build Chrome extension
+        run: npm run build:chrome
+
+      - name: Build Firefox extension
+        run: npm run build:firefox
+
+      - name: Build Edge extension
+        run: npm run build:edge
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create zip files
+        run: |
+          cd dist
+          zip -r ../filigran-xtm-chrome-${{ steps.get_version.outputs.VERSION }}.zip chrome/
+          zip -r ../filigran-xtm-firefox-${{ steps.get_version.outputs.VERSION }}.zip firefox/
+          zip -r ../filigran-xtm-edge-${{ steps.get_version.outputs.VERSION }}.zip edge/
+          cd ..
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## Filigran XTM Browser Extension v${{ steps.get_version.outputs.VERSION }}
+          
+          ### Downloads
+          
+          | Browser | File | Installation |
+          |---------|------|--------------|
+          | Chrome | `filigran-xtm-chrome-${{ steps.get_version.outputs.VERSION }}.zip` | Load unpacked in `chrome://extensions/` |
+          | Firefox | `filigran-xtm-firefox-${{ steps.get_version.outputs.VERSION }}.zip` | Load temporary add-on in `about:debugging` |
+          | Edge | `filigran-xtm-edge-${{ steps.get_version.outputs.VERSION }}.zip` | Load unpacked in `edge://extensions/` |
+          
+          ### Installation Instructions
+          
+          1. Download the appropriate zip file for your browser
+          2. Extract the zip file to a folder
+          3. Open your browser's extension management page
+          4. Enable "Developer mode"
+          5. Click "Load unpacked" and select the extracted folder
+          
+          ### Features
+          
+          - 🔍 Detect threat indicators (IOCs, malware, threat actors, CVEs) on any web page
+          - 🎯 Visual highlighting with color-coded severity
+          - 📋 Create reports, cases, and investigations in OpenCTI
+          - 🎮 Generate attack scenarios in OpenAEV
+          - 🤖 AI-powered content analysis (Enterprise Edition)
+          - 📄 PDF generation for archiving threat reports
+          
+          For full documentation, see the [README](https://github.com/FiligranHQ/xtm-browser-extension#readme).
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.get_version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+          files: |
+            filigran-xtm-chrome-${{ steps.get_version.outputs.VERSION }}.zip
+            filigran-xtm-firefox-${{ steps.get_version.outputs.VERSION }}.zip
+            filigran-xtm-edge-${{ steps.get_version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -41,18 +41,16 @@ export default defineConfig({
           });
         }
 
-        // Copy PNG icons for Chrome/Edge (they require PNG format)
-        if (browser === 'chrome' || browser === 'edge') {
-          const iconsDir = resolve(__dirname, 'src/assets/icons');
-          const destIconsDir = resolve(distDir, 'assets/icons');
-          mkdirSync(destIconsDir, { recursive: true });
+        // Copy icons for all browsers
+        const iconsDir = resolve(__dirname, 'src/assets/icons');
+        const destIconsDir = resolve(distDir, 'assets/icons');
+        mkdirSync(destIconsDir, { recursive: true });
 
-          if (existsSync(iconsDir)) {
-            const icons = readdirSync(iconsDir);
-            icons.forEach((icon) => {
-              copyFileSync(resolve(iconsDir, icon), resolve(destIconsDir, icon));
-            });
-          }
+        if (existsSync(iconsDir)) {
+          const icons = readdirSync(iconsDir);
+          icons.forEach((icon) => {
+            copyFileSync(resolve(iconsDir, icon), resolve(destIconsDir, icon));
+          });
         }
 
         // Copy content.css

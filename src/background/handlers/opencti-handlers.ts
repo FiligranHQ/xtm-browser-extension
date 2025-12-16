@@ -9,18 +9,16 @@
  * - Investigation/Workbench operations
  */
 
-import type { MessageHandler, SendResponseFn, HandlerContext } from './types';
+import type { MessageHandler } from './types';
 import { successResponse, errorResponse } from './types';
 import {
   getOpenCTIClients,
   getPrimaryOpenCTIClient,
-  getOpenCTIClientOrPrimary,
   hasOpenCTIClients,
 } from '../services/client-manager';
 import { addEntityToSDOCache, type CachedEntity } from '../../shared/utils/storage';
-import { refangIndicator } from '../../shared/utils/indicator-utils';
+import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
-import type { ContainerType } from '../../shared/types';
 
 const log = loggers.background;
 

@@ -7,7 +7,6 @@ import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
 import { getTextNodes } from '../shared/detection/detector';
 import {
-  isNonDefaultPlatformEntity,
   createPrefixedType,
   type PlatformType,
 } from '../shared/platform';
@@ -22,6 +21,7 @@ export interface HighlightMeta {
   type: string;
   found: boolean;
   data: DetectedObservable | DetectedSDO;
+  isSDO?: boolean; // Flag to indicate if this is an SDO (not addable when not found)
   foundInPlatforms?: Array<{
     platformType: string;
     type: string;
@@ -29,6 +29,37 @@ export interface HighlightMeta {
     data: unknown;
   }>;
 }
+
+// SDO types - these cannot be added via the extension when not found
+const SDO_TYPES = new Set([
+  'Intrusion-Set',
+  'Malware',
+  'Threat-Actor',
+  'Threat-Actor-Group',
+  'Threat-Actor-Individual',
+  'Attack-Pattern',
+  'Campaign',
+  'Incident',
+  'Vulnerability',
+  'Tool',
+  'Infrastructure',
+  'Sector',
+  'Organization',
+  'Individual',
+  'Event',
+  'Country',
+  'Region',
+  'City',
+  'Administrative-Area',
+  'Position',
+  'Report',
+  'Note',
+  'Grouping',
+  'Case-Incident',
+  'Case-Rfi',
+  'Case-Rft',
+  'Feedback',
+]);
 
 export interface NodeMapEntry {
   node: Text;
@@ -220,7 +251,7 @@ export function highlightResults(
     }, handlers);
   }
   
-  // Highlight SDOs
+  // Highlight SDOs (these are not addable when not found)
   for (const sdo of results.sdos) {
     const textToHighlight = (sdo as { matchedValue?: string }).matchedValue || sdo.name;
     const valueLower = sdo.name.toLowerCase();
@@ -230,11 +261,12 @@ export function highlightResults(
       type: sdo.type,
       found: sdo.found,
       data: sdo,
+      isSDO: true, // SDOs cannot be added via the extension
       foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     }, handlers);
   }
   
-  // Highlight CVEs
+  // Highlight CVEs (these are SDOs, not addable when not found)
   if (results.cves) {
     for (const cve of results.cves) {
       const textToHighlight = (cve as { matchedValue?: string }).matchedValue || cve.name;
@@ -242,6 +274,7 @@ export function highlightResults(
         type: cve.type,
         found: cve.found,
         data: cve,
+        isSDO: true, // CVEs/Vulnerabilities are SDOs, cannot be added via the extension
       }, handlers);
     }
   }
@@ -316,24 +349,17 @@ function highlightInText(
             const highlight = document.createElement('span');
             highlight.className = 'xtm-highlight';
             
-            const isNonDefaultPlatform = isNonDefaultPlatformEntity(meta.type);
-            const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
-            const hasMultiPlatform = meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
+            // Determine if this is an SDO (check flag or type)
+            const isSDO = meta.isSDO || SDO_TYPES.has(meta.type);
             
-            if (hasMixedState) {
-              highlight.classList.add('xtm-mixed');
-              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
-            } else if (isNonDefaultPlatform && meta.found) {
-              highlight.classList.add('xtm-platform-found');
-            } else if (meta.found) {
+            if (meta.found) {
+              // Found in platform = green
               highlight.classList.add('xtm-found');
-              if (hasMultiPlatform) {
-                highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
-                highlight.dataset.multiPlatform = 'true';
-              }
-            } else if (meta.type === 'Vulnerability') {
+            } else if (isSDO) {
+              // SDO not found = gray (not addable)
               highlight.classList.add('xtm-sdo-not-addable');
             } else {
+              // Observable not found = amber (can be added)
               highlight.classList.add('xtm-not-found');
             }
             
@@ -341,6 +367,9 @@ function highlightInText(
             highlight.dataset.value = searchValue;
             highlight.dataset.found = String(meta.found);
             highlight.dataset.entity = JSON.stringify(meta.data);
+            
+            // Check for mixed state: not found in main platform but found in other platforms
+            const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
             if (hasMixedState) {
               highlight.dataset.mixedState = 'true';
             }

@@ -637,6 +637,66 @@ export const HIGHLIGHT_STYLES = `
     margin-top: 6px;
   }
   
+  /* ========================================
+     SCAN OVERLAY
+     ======================================== */
+  .xtm-scan-overlay {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 16px 24px;
+    border-radius: 8px;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    z-index: 2147483647;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .xtm-scan-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(15, 188, 255, 0.3);
+    border-top-color: #0fbcff;
+    border-radius: 50%;
+    animation: xtm-spin 0.8s linear infinite;
+  }
+  
+  @keyframes xtm-spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .xtm-scan-scroll-btn {
+    background: #0fbcff;
+    color: #001e3c;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+    font-family: inherit;
+    margin-left: 8px;
+  }
+  
+  .xtm-scan-scroll-btn:hover {
+    background: #40caff;
+    transform: translateY(-1px);
+  }
+  
+  .xtm-scan-scroll-btn:active {
+    transform: translateY(0);
+  }
+  
   /* Flash animation for scroll-to highlight */
   @keyframes xtm-flash {
     0%, 100% { box-shadow: 0 0 0 0 rgba(15, 188, 255, 0); }
@@ -648,143 +708,6 @@ export const HIGHLIGHT_STYLES = `
     animation: xtm-flash 1.5s ease-out;
   }
   
-  /* ========================================
-     FLOATING TOAST NOTIFICATION
-     ======================================== */
-  @keyframes xtm-toast-slide-in {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
-  
-  @keyframes xtm-toast-slide-out {
-    from {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(-50%) translateY(-20px);
-    }
-  }
-  
-  @keyframes xtm-toast-spinner {
-    to { transform: rotate(360deg); }
-  }
-  
-  .xtm-toast {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2147483647;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 20px;
-    border-radius: 12px;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-    animation: xtm-toast-slide-in 0.3s ease-out;
-    max-width: 90vw;
-  }
-  
-  .xtm-toast.xtm-toast-hiding {
-    animation: xtm-toast-slide-out 0.2s ease-in forwards;
-  }
-  
-  .xtm-toast-info {
-    background: linear-gradient(135deg, rgba(15, 188, 255, 0.15) 0%, rgba(7, 13, 25, 0.95) 100%);
-    border: 1px solid rgba(15, 188, 255, 0.4);
-    color: #fff;
-  }
-  
-  .xtm-toast-success {
-    background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(7, 13, 25, 0.95) 100%);
-    border: 1px solid rgba(76, 175, 80, 0.4);
-    color: #fff;
-  }
-  
-  .xtm-toast-error {
-    background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(7, 13, 25, 0.95) 100%);
-    border: 1px solid rgba(244, 67, 54, 0.4);
-    color: #fff;
-  }
-  
-  .xtm-toast-warning {
-    background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(7, 13, 25, 0.95) 100%);
-    border: 1px solid rgba(255, 152, 0, 0.4);
-    color: #fff;
-  }
-  
-  .xtm-toast-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  
-  .xtm-toast-spinner {
-    width: 18px;
-    height: 18px;
-    border: 2px solid rgba(15, 188, 255, 0.3);
-    border-top-color: #0fbcff;
-    border-radius: 50%;
-    animation: xtm-toast-spinner 0.8s linear infinite;
-  }
-  
-  .xtm-toast-message {
-    flex: 1;
-    line-height: 1.4;
-  }
-  
-  .xtm-toast-action {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: inherit;
-    white-space: nowrap;
-  }
-  
-  .xtm-toast-action:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.5);
-  }
-  
-  .xtm-toast-close {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    padding: 4px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    margin-left: 4px;
-  }
-  
-  .xtm-toast-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
-  }
-
   /* ========================================
      SIDE PANEL FRAME
      ======================================== */
@@ -822,4 +745,3 @@ export const HIGHLIGHT_STYLES = `
   }
 
 `;
-

@@ -1,10 +1,7 @@
 /**
- * Panel Utilities
- * 
- * Helper functions used throughout the panel.
+ * Panel Utils Index
+ * Re-exports all utility functions for easier imports
  */
 
 export * from './platform-helpers';
-export * from './description-helpers';
-export * from './cvss-helpers';
-
+export * from './content-helpers';

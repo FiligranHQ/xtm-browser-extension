@@ -529,7 +529,7 @@ function handleFoundEntityClick(
     type: 'SHOW_ENTITY_PANEL',
     payload: {
       ...entity,
-      entityType: entity.type?.includes('-') && !entity.name ? 'observable' : 'sdo',
+      entityType: entity.type?.includes('-') && !('name' in entity) ? 'observable' : 'sdo',
       existsInPlatform: true,
       platformMatches,
     },

@@ -106,37 +106,6 @@ export function filterBoilerplateFromContent(content: string): string {
 }
 
 // ============================================================================
-// IOC Detection Helpers
-// ============================================================================
-
-/**
- * Check if a value looks like a genuine IOC (hash, IP, CVE, etc.)
- */
-export function looksLikeIOC(value: string): boolean {
-  const trimmed = value.trim();
-  
-  // Hashes (MD5, SHA1, SHA256, SHA512)
-  if (/^[a-fA-F0-9]{32}$/.test(trimmed)) return true;  // MD5
-  if (/^[a-fA-F0-9]{40}$/.test(trimmed)) return true;  // SHA1
-  if (/^[a-fA-F0-9]{64}$/.test(trimmed)) return true;  // SHA256
-  if (/^[a-fA-F0-9]{128}$/.test(trimmed)) return true; // SHA512
-  
-  // IPv4
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(trimmed)) return true;
-  
-  // CVE
-  if (/^CVE-\d{4}-\d+$/i.test(trimmed)) return true;
-  
-  // Skip generic URLs
-  if (/^https?:\/\//i.test(trimmed)) return false;
-  
-  // Skip short generic strings
-  if (trimmed.length < 5) return false;
-  
-  return false;
-}
-
-// ============================================================================
 // Data Attribute Extraction
 // ============================================================================
 
@@ -168,9 +137,7 @@ export function extractDataAttributeContent(): string {
     dataAttributePatterns.forEach(attr => {
       const value = htmlEl.getAttribute(attr);
       if (value && value.length > 5) {
-        if (looksLikeIOC(value)) {
-          values.push(value);
-        }
+        values.push(value);
       }
     });
     

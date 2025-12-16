@@ -1,33 +1,30 @@
 /**
  * Panel Types
- * 
- * Type definitions for the panel component state and data structures.
+ * Centralized type definitions for the panel component
  */
 
-import type { PlatformType } from '../shared/platform';
-
-// Panel Mode Types
-export type PanelMode = 
-  | 'empty' 
-  | 'loading' 
-  | 'entity' 
-  | 'not-found' 
-  | 'add' 
-  | 'preview' 
-  | 'platform-select' 
-  | 'container-type' 
-  | 'container-form' 
-  | 'investigation' 
-  | 'search' 
-  | 'search-results' 
-  | 'existing-containers' 
-  | 'atomic-testing' 
-  | 'oaev-search' 
-  | 'unified-search' 
-  | 'import-results' 
-  | 'scan-results' 
-  | 'scenario-overview' 
-  | 'scenario-form' 
+// Panel modes
+export type PanelMode =
+  | 'empty'
+  | 'loading'
+  | 'entity'
+  | 'not-found'
+  | 'add'
+  | 'preview'
+  | 'platform-select'
+  | 'container-type'
+  | 'container-form'
+  | 'investigation'
+  | 'search'
+  | 'search-results'
+  | 'existing-containers'
+  | 'atomic-testing'
+  | 'oaev-search'
+  | 'unified-search'
+  | 'import-results'
+  | 'scan-results'
+  | 'scenario-overview'
+  | 'scenario-form'
   | 'add-selection';
 
 // Platform match in scan results
@@ -65,7 +62,7 @@ export interface ImportResults {
   platformName: string;
 }
 
-// Entity data structure
+// Entity data from platform
 export interface EntityData {
   id?: string;
   type?: string;
@@ -118,6 +115,8 @@ export interface ContainerData {
   created: string;
   modified: string;
   createdBy?: { id: string; name: string };
+  description?: string;
+  _platformId?: string;
 }
 
 // Search result extends EntityData
@@ -135,43 +134,32 @@ export interface PlatformInfo {
   type?: 'opencti' | 'openaev';
 }
 
-// Multi-platform result
-export interface MultiPlatformResult {
-  platformId: string;
-  platformName: string;
-  entity: EntityData;
-}
-
-// Merged search result
-export interface MergedSearchResult {
-  representativeKey: string;
-  name: string;
-  type: string;
-  platforms: Array<{
-    platformId: string;
-    platformName: string;
-    result: SearchResult;
-  }>;
-}
-
 // Unified search result
 export interface UnifiedSearchResult {
   id: string;
-  name: string;
   type: string;
-  description?: string;
+  name: string;
   source: 'opencti' | 'openaev';
   platformId: string;
   platformName: string;
-  entityId: string;
-  data?: Record<string, unknown>;
+  entityData?: unknown;
 }
 
-// Container form state
-export interface ContainerFormState {
-  name: string;
-  description: string;
-  content: string;
+// AI settings
+export interface AISettings {
+  enabled: boolean;
+  provider?: string;
+  available: boolean;
+}
+
+// Resolved relationship from AI
+export interface ResolvedRelationship {
+  fromIndex: number;
+  toIndex: number;
+  relationshipType: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+  excerpt?: string;
 }
 
 // Container specific fields
@@ -184,11 +172,28 @@ export interface ContainerSpecificFields {
   createdBy: string;
 }
 
-// AI settings state
-export interface AISettingsState {
-  enabled: boolean;
-  provider?: string;
-  available: boolean;
+// Scenario form data
+export interface ScenarioFormData {
+  name: string;
+  description: string;
+  subtitle: string;
+  category: string;
+}
+
+// Selected inject for scenario
+export interface SelectedInject {
+  attackPatternId: string;
+  attackPatternName: string;
+  contractId: string;
+  contractLabel: string;
+  delayMinutes: number;
+}
+
+// Scenario email content
+export interface ScenarioEmail {
+  attackPatternId: string;
+  subject: string;
+  body: string;
 }
 
 // Scenario overview data
@@ -212,20 +217,25 @@ export interface ScenarioOverviewData {
   pageDescription: string;
 }
 
-// Selected inject
-export interface SelectedInject {
-  attackPatternId: string;
-  attackPatternName: string;
-  contractId: string;
-  contractLabel: string;
-  delayMinutes: number;
+// Atomic testing target
+export interface AtomicTestingTarget {
+  type: string;
+  value: string;
+  name: string;
+  entityId?: string;
+  platformId?: string;
+  data?: unknown;
 }
 
-// Scenario email
-export interface ScenarioEmail {
-  attackPatternId: string;
-  subject: string;
-  body: string;
+// AI generated payload for atomic testing
+export interface AIGeneratedPayload {
+  name: string;
+  description: string;
+  executor: string;
+  command: string;
+  cleanupCommand?: string;
+  cleanupExecutor?: string;
+  platform: string;
 }
 
 // AI generated scenario
@@ -246,67 +256,16 @@ export interface AIGeneratedScenario {
   }>;
 }
 
-// Resolved relationship
-export interface ResolvedRelationship {
-  fromIndex: number;
-  toIndex: number;
-  relationshipType: string;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-  excerpt?: string;
-}
-
-// Investigation entity
-export interface InvestigationEntity {
-  id: string;
-  type: string;
+// Container form state
+export interface ContainerFormState {
   name: string;
-  value?: string;
-  platformId?: string;
-  selected: boolean;
+  description: string;
+  content: string;
 }
 
-// Atomic testing target
-export interface AtomicTestingTarget {
-  id?: string;
-  entityId?: string;
-  name: string;
-  type: string;
-  data?: unknown;
+// Multi-platform result for navigation
+export interface MultiPlatformResult {
+  platformId: string;
+  platformName: string;
+  entity: EntityData;
 }
-
-// Label option
-export interface LabelOption {
-  id: string;
-  value: string;
-  color: string;
-}
-
-// Marking option
-export interface MarkingOption {
-  id: string;
-  definition: string;
-}
-
-// Vocabulary option
-export interface VocabularyOption {
-  id: string;
-  name: string;
-}
-
-// Author option
-export interface AuthorOption {
-  id: string;
-  name: string;
-  entity_type: string;
-}
-
-// Toast options
-export interface ToastOptions {
-  type: 'success' | 'info' | 'warning' | 'error';
-  message: string;
-  action?: { label: string; type: 'scroll_to_first' | 'close_panel' | 'custom' };
-  persistent?: boolean;
-  duration?: number;
-}
-

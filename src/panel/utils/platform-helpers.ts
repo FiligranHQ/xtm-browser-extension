@@ -7,7 +7,8 @@
 import React from 'react';
 import { MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import { ComputerOutlined } from '@mui/icons-material';
-import type { PlatformInfo, MultiPlatformResult } from '../types';
+import type { PlatformInfo } from '../types';
+// MultiPlatformResult imported for type reference but not currently used in all functions
 
 /**
  * Get platform icon component based on platform name

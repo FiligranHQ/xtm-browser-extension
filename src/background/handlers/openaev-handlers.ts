@@ -71,7 +71,13 @@ export const handleSearchAttackPatterns: MessageHandler = async (payload, sendRe
       return;
     }
     
-    const attackPatterns = await client.searchAttackPatterns(searchTerm);
+    // Get all attack patterns and filter by search term
+    const allAttackPatterns = await client.getAllAttackPatterns();
+    const searchLower = searchTerm.toLowerCase();
+    const attackPatterns = allAttackPatterns.filter((ap: { attack_pattern_name?: string; attack_pattern_external_id?: string }) => 
+      ap.attack_pattern_name?.toLowerCase().includes(searchLower) ||
+      ap.attack_pattern_external_id?.toLowerCase().includes(searchLower)
+    );
     sendResponse(successResponse(attackPatterns));
   } catch (error) {
     sendResponse({

@@ -3,12 +3,16 @@
  * Utilities for parsing JSON from AI responses with various fallback strategies
  */
 
+import { loggers } from '../../utils/logger';
+
+const log = loggers.ai;
+
 /**
  * Parse JSON from AI response (handles markdown code blocks and various edge cases)
  */
 export function parseAIJsonResponse<T>(content: string): T | null {
   if (!content || typeof content !== 'string') {
-    console.error('[parseAIJsonResponse] Invalid content: null or not a string');
+    log.error('[parseAIJsonResponse] Invalid content: null or not a string');
     return null;
   }
   
@@ -16,7 +20,7 @@ export function parseAIJsonResponse<T>(content: string): T | null {
   let trimmed = content.trim();
   
   if (!trimmed) {
-    console.error('[parseAIJsonResponse] Empty content after trimming');
+    log.error('[parseAIJsonResponse] Empty content after trimming');
     return null;
   }
   
@@ -158,7 +162,7 @@ export function parseAIJsonResponse<T>(content: string): T | null {
     }
   }
   
-  console.error('[parseAIJsonResponse] All parsing strategies failed. Content preview:', 
+  log.error('[parseAIJsonResponse] All parsing strategies failed. Content preview:', 
     trimmed.substring(0, 500) + (trimmed.length > 500 ? '...' : ''));
   
   return null;

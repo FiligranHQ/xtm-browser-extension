@@ -15,6 +15,9 @@ import {
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types';
+import { loggers } from '../shared/utils/logger';
+
+const log = loggers.options;
 
 // Import constants
 import {
@@ -297,7 +300,7 @@ const App: React.FC = () => {
           setSnackbar({ open: true, message: 'Platform connected and saved', severity: 'success' });
         }
       } catch (error) {
-        console.error('Auto-save after test failed:', error);
+        log.error('Auto-save after test failed:', error);
       }
     } else {
       setTestResults({
@@ -595,13 +598,13 @@ const App: React.FC = () => {
     setIsRefreshingCache(true);
     
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_SDO_CACHE' });
+      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_OCTI_CACHE' });
       
       if (response?.success) {
         await loadCacheStats();
       }
     } catch (error) {
-      console.error('Cache refresh error:', error);
+      log.error('Cache refresh error:', error);
     } finally {
       setIsRefreshingCache(false);
     }

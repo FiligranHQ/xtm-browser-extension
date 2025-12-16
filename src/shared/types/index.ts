@@ -23,7 +23,7 @@ export interface PlatformConfig {
  * Platform-agnostic - uses string arrays for entity type configuration
  */
 export interface DetectionSettings {
-  /** OpenCTI SDO entity types to detect */
+  /** OpenCTI entity types to detect */
   entityTypes?: string[];
   /** OpenCTI observable types to detect */
   observableTypes?: string[];
@@ -108,7 +108,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   scanOnLoad: false,
   showNotifications: true,
   detection: {
-    // Entity types match the SDO cache structure (storage.ts SDOCache)
+    // Entity types match the OpenCTI entity cache structure (storage.ts OCTIEntityCache)
     entityTypes: [
       'Administrative-Area', 'Attack-Pattern', 'Campaign', 'City', 'Country', 'Event',
       'Incident', 'Individual', 'Intrusion-Set', 'Malware', 'Organization',
@@ -191,10 +191,10 @@ export interface DetectedObservable {
 }
 
 // ============================================================================
-// SDO Types (STIX Domain Objects)
+// OpenCTI Entity Types
 // ============================================================================
 
-export type SDOType =
+export type OCTIEntityType =
   | 'Intrusion-Set'
   | 'Malware'
   | 'Threat-Actor'
@@ -206,8 +206,8 @@ export type SDOType =
   | 'Infrastructure'
   | 'Indicator';
 
-export interface DetectedSDO {
-  type: SDOType;
+export interface DetectedOCTIEntity {
+  type: OCTIEntityType;
   name: string;
   aliases?: string[];
   startIndex: number;
@@ -221,6 +221,12 @@ export interface DetectedSDO {
   // All platforms where this entity was found (for multi-platform navigation)
   platformMatches?: PlatformMatch[];
 }
+
+// Legacy aliases for backward compatibility
+/** @deprecated Use OCTIEntityType instead */
+export type SDOType = OCTIEntityType;
+/** @deprecated Use DetectedOCTIEntity instead */
+export type DetectedSDO = DetectedOCTIEntity;
 
 // ============================================================================
 // Platform-Specific Entity Types
@@ -650,8 +656,8 @@ export type MessageType =
   | 'GENERATE_SCENARIO'
   | 'GET_PLATFORM_THEME'
   | 'GET_PLATFORM_SETTINGS'
-  | 'REFRESH_SDO_CACHE'
-  | 'GET_SDO_CACHE_STATS'
+  | 'REFRESH_OCTI_CACHE'
+  | 'GET_OCTI_CACHE_STATS'
   | 'SELECTION_CHANGED'
   | 'SHOW_PREVIEW_PANEL'
   | 'PREVIEW_SELECTION'
@@ -735,10 +741,10 @@ export interface ScanPagePayload {
 export interface ScanResultPayload {
   /** OpenCTI observables detected */
   observables: DetectedObservable[];
-  /** OpenCTI SDOs (STIX Domain Objects) detected */
-  sdos: DetectedSDO[];
+  /** OpenCTI entities detected */
+  sdos: DetectedOCTIEntity[];
   /** CVEs (Vulnerabilities) - separate array for special handling */
-  cves?: DetectedSDO[];
+  cves?: DetectedOCTIEntity[];
   /** 
    * Platform entities detected (non-OpenCTI platforms like OpenAEV)
    * Each entity has a type with platform prefix (e.g., 'oaev-Asset')
@@ -751,11 +757,11 @@ export interface ScanResultPayload {
 export interface ShowEntityPanelPayload {
   /** 
    * Entity source type
-   * 'observable' and 'sdo' are for OpenCTI
+   * 'observable' and 'octi' are for OpenCTI
    * 'platform' is for any non-default platform (identified by entity type prefix)
    */
-  entityType: 'observable' | 'sdo' | 'platform';
-  entity: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
+  entityType: 'observable' | 'octi' | 'platform';
+  entity: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
 }
 
 export interface AddObservablePayload {
@@ -789,7 +795,7 @@ export interface ScanState {
 
 export interface PanelState {
   isOpen: boolean;
-  entity?: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
+  entity?: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
   entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
   loading: boolean;
 }

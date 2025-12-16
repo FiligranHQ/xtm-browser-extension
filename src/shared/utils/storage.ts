@@ -57,7 +57,7 @@ interface ScanCache {
   timestamp: number;
   results: {
     observables: unknown[];
-    sdos: unknown[];
+    octiEntities: unknown[];
     cves: unknown[];
   };
 }
@@ -133,7 +133,7 @@ export async function cacheEntityNames(names: string[]): Promise<void> {
 }
 
 // ============================================================================
-// SDO Cache - Structured Entity Cache (Per-Platform)
+// OpenCTI Entity Cache - Structured Entity Cache (Per-Platform)
 // ============================================================================
 
 export interface CachedEntity {
@@ -165,7 +165,7 @@ const EXCLUDED_TERMS = new Set([
   'false',
 ]);
 
-export interface SDOCache {
+export interface OCTIEntityCache {
   timestamp: number;
   lastRefresh: number;
   platformId: string;
@@ -192,31 +192,51 @@ export interface SDOCache {
 }
 
 // Multi-platform cache structure
-export interface MultiPlatformSDOCache {
-  platforms: Record<string, SDOCache>;
+export interface MultiPlatformOCTICache {
+  platforms: Record<string, OCTIEntityCache>;
 }
 
-const SDO_CACHE_KEY = 'sdoCacheMulti';
-const SDO_CACHE_DURATION = 60 * 60 * 1000; // 1 hour default
-const SDO_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+// Legacy aliases for backward compatibility
+/** @deprecated Use OCTIEntityCache instead */
+export type SDOCache = OCTIEntityCache;
+/** @deprecated Use MultiPlatformOCTICache instead */
+export type MultiPlatformSDOCache = MultiPlatformOCTICache;
+
+const OCTI_CACHE_KEY = 'octiCacheMulti';
+const OCTI_CACHE_DURATION = 60 * 60 * 1000; // 1 hour default
+const OCTI_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+// Legacy key for migration
+const LEGACY_SDO_CACHE_KEY = 'sdoCacheMulti';
 
 /**
- * Get the full multi-platform SDO cache
+ * Get the full multi-platform OpenCTI entity cache
  */
-export async function getMultiPlatformSDOCache(): Promise<MultiPlatformSDOCache> {
-  const result = await chrome.storage.local.get(SDO_CACHE_KEY);
-  const cache = result[SDO_CACHE_KEY] as MultiPlatformSDOCache | undefined;
+export async function getMultiPlatformOCTICache(): Promise<MultiPlatformOCTICache> {
+  // Try new key first, fall back to legacy key for migration
+  let result = await chrome.storage.local.get(OCTI_CACHE_KEY);
+  let cache = result[OCTI_CACHE_KEY] as MultiPlatformOCTICache | undefined;
+  
+  if (!cache) {
+    // Try legacy key
+    result = await chrome.storage.local.get(LEGACY_SDO_CACHE_KEY);
+    cache = result[LEGACY_SDO_CACHE_KEY] as MultiPlatformOCTICache | undefined;
+  }
   
   if (!cache) return { platforms: {} };
   
   return cache;
 }
 
+// Legacy alias
+/** @deprecated Use getMultiPlatformOCTICache instead */
+export const getMultiPlatformSDOCache = getMultiPlatformOCTICache;
+
 /**
- * Get SDO cache for a specific platform
+ * Get OpenCTI entity cache for a specific platform
  */
-export async function getSDOCache(platformId?: string): Promise<SDOCache | null> {
-  const multiCache = await getMultiPlatformSDOCache();
+export async function getOCTICache(platformId?: string): Promise<OCTIEntityCache | null> {
+  const multiCache = await getMultiPlatformOCTICache();
   
   if (!platformId) {
     // Return first available cache when no specific platform is requested
@@ -228,72 +248,92 @@ export async function getSDOCache(platformId?: string): Promise<SDOCache | null>
   return multiCache.platforms[platformId] || null;
 }
 
-/**
- * Check if SDO cache is expired for a platform
- */
-export async function isSDOCacheExpired(platformId?: string): Promise<boolean> {
-  const cache = await getSDOCache(platformId);
-  if (!cache) return true;
-  
-  return Date.now() - cache.timestamp > SDO_CACHE_DURATION;
-}
+// Legacy alias
+/** @deprecated Use getOCTICache instead */
+export const getSDOCache = getOCTICache;
 
 /**
- * Check if SDO cache needs refresh for a platform
+ * Check if OpenCTI entity cache is expired for a platform
  */
-export async function shouldRefreshSDOCache(platformId?: string): Promise<boolean> {
-  const cache = await getSDOCache(platformId);
+export async function isOCTICacheExpired(platformId?: string): Promise<boolean> {
+  const cache = await getOCTICache(platformId);
   if (!cache) return true;
   
-  return Date.now() - cache.lastRefresh > SDO_REFRESH_INTERVAL;
+  return Date.now() - cache.timestamp > OCTI_CACHE_DURATION;
 }
 
+// Legacy alias
+/** @deprecated Use isOCTICacheExpired instead */
+export const isSDOCacheExpired = isOCTICacheExpired;
+
 /**
- * Save SDO cache for a specific platform
+ * Check if OpenCTI entity cache needs refresh for a platform
  */
-export async function saveSDOCache(cache: SDOCache, platformId: string): Promise<void> {
-  const multiCache = await getMultiPlatformSDOCache();
+export async function shouldRefreshOCTICache(platformId?: string): Promise<boolean> {
+  const cache = await getOCTICache(platformId);
+  if (!cache) return true;
+  
+  return Date.now() - cache.lastRefresh > OCTI_REFRESH_INTERVAL;
+}
+
+// Legacy alias
+/** @deprecated Use shouldRefreshOCTICache instead */
+export const shouldRefreshSDOCache = shouldRefreshOCTICache;
+
+/**
+ * Save OpenCTI entity cache for a specific platform
+ */
+export async function saveOCTICache(cache: OCTIEntityCache, platformId: string): Promise<void> {
+  const multiCache = await getMultiPlatformOCTICache();
   cache.platformId = platformId;
   multiCache.platforms[platformId] = cache;
-  await chrome.storage.local.set({ [SDO_CACHE_KEY]: multiCache });
+  await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
 }
 
+// Legacy alias
+/** @deprecated Use saveOCTICache instead */
+export const saveSDOCache = saveOCTICache;
+
 /**
- * Update SDO cache for a specific entity type on a platform
+ * Update OpenCTI entity cache for a specific entity type on a platform
  */
-export async function updateSDOCacheForType(
-  entityType: keyof SDOCache['entities'],
+export async function updateOCTICacheForType(
+  entityType: keyof OCTIEntityCache['entities'],
   entities: CachedEntity[],
   platformId: string
 ): Promise<void> {
-  let cache = await getSDOCache(platformId);
+  let cache = await getOCTICache(platformId);
   
   if (!cache) {
-    cache = createEmptySDOCache(platformId);
+    cache = createEmptyOCTICache(platformId);
   }
   
   cache.entities[entityType] = entities;
   cache.lastRefresh = Date.now();
   
-  await saveSDOCache(cache, platformId);
+  await saveOCTICache(cache, platformId);
 }
 
+// Legacy alias
+/** @deprecated Use updateOCTICacheForType instead */
+export const updateSDOCacheForType = updateOCTICacheForType;
+
 /**
- * Add a single entity to the SDO cache for a specific platform
+ * Add a single entity to the OpenCTI entity cache for a specific platform
  * This is used when creating new entities to avoid needing a full cache refresh
  */
-export async function addEntityToSDOCache(
+export async function addEntityToOCTICache(
   entity: CachedEntity,
   platformId: string
 ): Promise<void> {
-  let cache = await getSDOCache(platformId);
+  let cache = await getOCTICache(platformId);
   
   if (!cache) {
-    cache = createEmptySDOCache(platformId);
+    cache = createEmptyOCTICache(platformId);
   }
   
   // Determine the entity type key for the cache
-  const entityType = entity.type as keyof SDOCache['entities'];
+  const entityType = entity.type as keyof OCTIEntityCache['entities'];
   
   // Check if this entity type exists in the cache structure
   if (!cache.entities[entityType]) {
@@ -311,13 +351,17 @@ export async function addEntityToSDOCache(
     cache.entities[entityType][existingIndex] = entity;
   }
   
-  await saveSDOCache(cache, platformId);
+  await saveOCTICache(cache, platformId);
 }
 
+// Legacy alias
+/** @deprecated Use addEntityToOCTICache instead */
+export const addEntityToSDOCache = addEntityToOCTICache;
+
 /**
- * Create empty SDO cache structure
+ * Create empty OpenCTI entity cache structure
  */
-export function createEmptySDOCache(platformId: string = 'default'): SDOCache {
+export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntityCache {
   return {
     timestamp: Date.now(),
     lastRefresh: Date.now(),
@@ -343,17 +387,21 @@ export function createEmptySDOCache(platformId: string = 'default'): SDOCache {
   };
 }
 
+// Legacy alias
+/** @deprecated Use createEmptyOCTICache instead */
+export const createEmptySDOCache = createEmptyOCTICache;
+
 /**
  * Get all entity names and aliases for matching from ALL platforms (merged)
  * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
  */
 export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, CachedEntity>> {
-  const multiCache = await getMultiPlatformSDOCache();
+  const multiCache = await getMultiPlatformOCTICache();
   const nameMap = new Map<string, CachedEntity>();
   
   // Merge entities from all platforms
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
-    for (const entityType of Object.keys(cache.entities) as Array<keyof SDOCache['entities']>) {
+    for (const entityType of Object.keys(cache.entities) as Array<keyof OCTIEntityCache['entities']>) {
       for (const entity of cache.entities[entityType]) {
         // Add main name with platform info (only if long enough and not excluded)
         const entityWithPlatform = { ...entity, platformId };
@@ -387,7 +435,7 @@ export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, 
 /**
  * Get cache statistics (combined from all platforms)
  */
-export async function getSDOCacheStats(platformId?: string): Promise<{
+export async function getOCTICacheStats(platformId?: string): Promise<{
   total: number;
   byType: Record<string, number>;
   age: number;
@@ -396,7 +444,7 @@ export async function getSDOCacheStats(platformId?: string): Promise<{
 } | null> {
   if (platformId) {
     // Stats for specific platform
-    const cache = await getSDOCache(platformId);
+    const cache = await getOCTICache(platformId);
     if (!cache) return null;
     
     const byType: Record<string, number> = {};
@@ -411,12 +459,12 @@ export async function getSDOCacheStats(platformId?: string): Promise<{
       total,
       byType,
       age: Date.now() - cache.timestamp,
-      isExpired: Date.now() - cache.timestamp > SDO_CACHE_DURATION,
+      isExpired: Date.now() - cache.timestamp > OCTI_CACHE_DURATION,
     };
   }
   
   // Combined stats from all platforms
-  const multiCache = await getMultiPlatformSDOCache();
+  const multiCache = await getMultiPlatformOCTICache();
   const platformIds = Object.keys(multiCache.platforms);
   
   if (platformIds.length === 0) return null;
@@ -439,32 +487,44 @@ export async function getSDOCacheStats(platformId?: string): Promise<{
     total,
     byType,
     age: Date.now() - oldestTimestamp,
-    isExpired: Date.now() - oldestTimestamp > SDO_CACHE_DURATION,
+    isExpired: Date.now() - oldestTimestamp > OCTI_CACHE_DURATION,
     platformCount: platformIds.length,
   };
 }
 
+// Legacy alias
+/** @deprecated Use getOCTICacheStats instead */
+export const getSDOCacheStats = getOCTICacheStats;
+
 /**
- * Clear SDO cache for a specific platform
+ * Clear OpenCTI entity cache for a specific platform
  */
-export async function clearSDOCacheForPlatform(platformId: string): Promise<void> {
-  const multiCache = await getMultiPlatformSDOCache();
+export async function clearOCTICacheForPlatform(platformId: string): Promise<void> {
+  const multiCache = await getMultiPlatformOCTICache();
   delete multiCache.platforms[platformId];
-  await chrome.storage.local.set({ [SDO_CACHE_KEY]: multiCache });
+  await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
 }
 
-/**
- * Clear all SDO caches
- */
-export async function clearAllSDOCaches(): Promise<void> {
-  await chrome.storage.local.set({ [SDO_CACHE_KEY]: { platforms: {} } });
-}
+// Legacy alias
+/** @deprecated Use clearOCTICacheForPlatform instead */
+export const clearSDOCacheForPlatform = clearOCTICacheForPlatform;
 
 /**
- * Clean up SDO caches for platforms that no longer exist in settings
+ * Clear all OpenCTI entity caches
  */
-export async function cleanupOrphanedCaches(validPlatformIds: string[]): Promise<void> {
-  const multiCache = await getMultiPlatformSDOCache();
+export async function clearAllOCTICaches(): Promise<void> {
+  await chrome.storage.local.set({ [OCTI_CACHE_KEY]: { platforms: {} } });
+}
+
+// Legacy alias
+/** @deprecated Use clearAllOCTICaches instead */
+export const clearAllSDOCaches = clearAllOCTICaches;
+
+/**
+ * Clean up OpenCTI entity caches for platforms that no longer exist in settings
+ */
+export async function cleanupOrphanedOCTICaches(validPlatformIds: string[]): Promise<void> {
+  const multiCache = await getMultiPlatformOCTICache();
   const existingPlatformIds = Object.keys(multiCache.platforms);
   
   let modified = false;
@@ -476,9 +536,13 @@ export async function cleanupOrphanedCaches(validPlatformIds: string[]): Promise
   }
   
   if (modified) {
-    await chrome.storage.local.set({ [SDO_CACHE_KEY]: multiCache });
+    await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
   }
 }
+
+// Legacy alias
+/** @deprecated Use cleanupOrphanedOCTICaches instead */
+export const cleanupOrphanedCaches = cleanupOrphanedOCTICaches;
 
 // ============================================================================
 // OpenAEV Cache - Structured Entity Cache (Per-Platform)

@@ -25,3 +25,7 @@ export { ExistingContainersView } from './ExistingContainersView';
 export { InvestigationView } from './InvestigationView';
 export { ContainerFormView } from './ContainerFormView';
 export { AddSelectionView } from './AddSelectionView';
+
+// Entity views
+export { EntityView } from './EntityView';
+export { OAEVEntityView } from './OAEVEntityView';

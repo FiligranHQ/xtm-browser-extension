@@ -4,7 +4,7 @@
  * Types for extension communication between background, content script, and UI.
  */
 
-import type { DetectedObservable, DetectedSDO, DetectedPlatformEntity } from './detection';
+import type { DetectedObservable, DetectedOCTIEntity, DetectedPlatformEntity } from './detection';
 import type { ObservableType, HashType, ContainerType } from './index';
 
 // ============================================================================
@@ -32,8 +32,8 @@ export type MessageType =
   | 'GENERATE_SCENARIO'
   | 'GET_PLATFORM_THEME'
   | 'GET_PLATFORM_SETTINGS'
-  | 'REFRESH_SDO_CACHE'
-  | 'GET_SDO_CACHE_STATS'
+  | 'REFRESH_OCTI_CACHE'
+  | 'GET_OCTI_CACHE_STATS'
   | 'SELECTION_CHANGED'
   | 'SHOW_PREVIEW_PANEL'
   | 'PREVIEW_SELECTION'
@@ -121,10 +121,10 @@ export interface ScanPagePayload {
 export interface ScanResultPayload {
   /** OpenCTI observables detected */
   observables: DetectedObservable[];
-  /** OpenCTI SDOs (STIX Domain Objects) detected */
-  sdos: DetectedSDO[];
+  /** OpenCTI entities detected (alias: sdos for backward compatibility) */
+  sdos: DetectedOCTIEntity[];
   /** CVEs (Vulnerabilities) - separate array for special handling */
-  cves?: DetectedSDO[];
+  cves?: DetectedOCTIEntity[];
   /** 
    * Platform entities detected (non-OpenCTI platforms like OpenAEV)
    * Each entity has a type with platform prefix (e.g., 'oaev-Asset')
@@ -137,11 +137,11 @@ export interface ScanResultPayload {
 export interface ShowEntityPanelPayload {
   /** 
    * Entity source type
-   * 'observable' and 'sdo' are for OpenCTI
+   * 'observable' and 'octi' are for OpenCTI
    * 'platform' is for any non-default platform (identified by entity type prefix)
    */
-  entityType: 'observable' | 'sdo' | 'platform';
-  entity: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
+  entityType: 'observable' | 'octi' | 'platform';
+  entity: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
 }
 
 export interface AddObservablePayload {

@@ -28,15 +28,16 @@ const log = loggers.background;
 import {
   getSettings,
   saveSettings,
-  saveSDOCache,
-  shouldRefreshSDOCache,
-  createEmptySDOCache,
-  getSDOCacheStats,
-  getMultiPlatformSDOCache,
-  clearSDOCacheForPlatform,
-  clearAllSDOCaches,
-  cleanupOrphanedCaches,
-  addEntityToSDOCache,
+  // OpenCTI entity cache (new names with legacy aliases)
+  saveOCTICache as saveSDOCache,
+  shouldRefreshOCTICache as shouldRefreshSDOCache,
+  createEmptyOCTICache as createEmptySDOCache,
+  getOCTICacheStats as getSDOCacheStats,
+  getMultiPlatformOCTICache,
+  clearOCTICacheForPlatform as clearSDOCacheForPlatform,
+  clearAllOCTICaches as clearAllSDOCaches,
+  cleanupOrphanedOCTICaches as cleanupOrphanedCaches,
+  addEntityToOCTICache as addEntityToSDOCache,
   // OpenAEV cache
   saveOAEVCache,
   shouldRefreshOAEVCache,
@@ -45,7 +46,7 @@ import {
   clearOAEVCacheForPlatform,
   clearAllOAEVCaches,
   cleanupOrphanedOAEVCaches,
-  type SDOCache,
+  type OCTIEntityCache as SDOCache,
   type CachedEntity,
   type OAEVCache,
 } from '../shared/utils/storage';
@@ -2764,7 +2765,7 @@ async function handleMessage(
         break;
       }
       
-      case 'REFRESH_SDO_CACHE': {
+      case 'REFRESH_OCTI_CACHE': {
         if (openCTIClients.size === 0 && openAEVClients.size === 0) {
           sendResponse(errorResponse('Not configured'));
           break;
@@ -2792,9 +2793,9 @@ async function handleMessage(
         break;
       }
       
-      case 'GET_SDO_CACHE_STATS': {
+      case 'GET_OCTI_CACHE_STATS': {
         try {
-          const multiCache = await getMultiPlatformSDOCache();
+          const multiCache = await getMultiPlatformOCTICache();
           const oaevMultiCache = await getMultiPlatformOAEVCache();
           
           // Build per-platform stats for OpenCTI

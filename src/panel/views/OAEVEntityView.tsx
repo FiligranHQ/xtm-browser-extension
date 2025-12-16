@@ -1,0 +1,640 @@
+/**
+ * OAEVEntityView - Displays entity details for OpenAEV entities
+ * 
+ * Handles rendering of OpenAEV-specific entities like:
+ * - Asset (Endpoint)
+ * - AssetGroup
+ * - Player/User
+ * - Team
+ * - Organization
+ * - AttackPattern
+ * - Finding
+ * - Scenario
+ * - Exercise
+ */
+
+import React from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  Chip,
+} from '@mui/material';
+import {
+  ChevronLeftOutlined,
+  ChevronRightOutlined,
+  ContentCopyOutlined,
+  ComputerOutlined,
+  LanOutlined,
+  PersonOutlined,
+  GroupsOutlined,
+  MovieFilterOutlined,
+  TravelExploreOutlined,
+  DomainOutlined,
+} from '@mui/icons-material';
+import { LockPattern, Kayaking } from 'mdi-material-ui';
+
+import { hexToRGB } from '../../shared/theme/colors';
+import { formatDateTime } from '../../shared/utils/formatters';
+import {
+  getOAEVEntityName,
+  getOAEVEntityId,
+  getOAEVEntityUrl,
+  getOAEVEntityColor,
+} from '../../shared/utils/entity';
+import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
+import type { EntityData, PlatformInfo, MultiPlatformResult, PanelMode } from '../types';
+
+export interface OAEVEntityViewProps {
+  mode: 'dark' | 'light';
+  entity: EntityData | null;
+  setEntity: (entity: EntityData | null) => void;
+  availablePlatforms: PlatformInfo[];
+  multiPlatformResults: MultiPlatformResult[];
+  setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
+  currentPlatformIndex: number;
+  setCurrentPlatformIndex: (index: number) => void;
+  currentPlatformIndexRef: React.MutableRefObject<number>;
+  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  setPlatformUrl: (url: string) => void;
+  setSelectedPlatformId: (id: string) => void;
+  entityFromSearchMode: 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
+  entityFromScanResults: boolean;
+  setEntityFromScanResults: (fromScan: boolean) => void;
+  setPanelMode: (mode: PanelMode) => void;
+  handleCopyValue: (value: string) => void;
+}
+
+export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
+  mode,
+  entity,
+  setEntity,
+  availablePlatforms,
+  multiPlatformResults,
+  setMultiPlatformResults,
+  currentPlatformIndex,
+  setCurrentPlatformIndex,
+  currentPlatformIndexRef,
+  multiPlatformResultsRef,
+  setPlatformUrl,
+  setSelectedPlatformId,
+  entityFromSearchMode,
+  setEntityFromSearchMode,
+  entityFromScanResults,
+  setEntityFromScanResults,
+  setPanelMode,
+  handleCopyValue,
+}) => {
+  const logoSuffix = useLogoSuffix(mode);
+  const contentTextStyle = useContentTextStyle(mode);
+
+  if (!entity) return null;
+  
+  const entityData = (entity as any).entityData || entity || {};
+  const rawType = (entity as any).type || '';
+  const oaevType = rawType.replace('oaev-', '');
+  const entityPlatformId = (entity as any)._platformId || (entity as any).platformId;
+  
+  // Find the platform
+  const platform = entityPlatformId 
+    ? availablePlatforms.find(p => p.id === entityPlatformId)
+    : availablePlatforms.find(p => p.type === 'openaev');
+  const platformUrl = platform?.url || '';
+  
+  // Color based on entity type
+  const color = getOAEVEntityColor(oaevType);
+  
+  // Get entity properties using shared utilities
+  const name = getOAEVEntityName(entityData, oaevType);
+  const entityId = getOAEVEntityId(entityData, oaevType);
+  const entityUrl = getOAEVEntityUrl(platformUrl, oaevType, entityId);
+  const mitreId = entityData.attack_pattern_external_id || '';
+  
+  // Extract description based on entity type
+  const getDescription = (): string => {
+    switch (oaevType) {
+      case 'Asset': return entityData.endpoint_description || entityData.asset_description || '';
+      case 'AssetGroup': return entityData.asset_group_description || '';
+      case 'Player':
+      case 'User': return entityData.user_organization || entityData.description || '';
+      case 'Team': return entityData.team_description || '';
+      case 'Organization': return entityData.organization_description || entityData.description || '';
+      case 'AttackPattern': return entityData.attack_pattern_description || '';
+      case 'Finding': return entityData.finding_description || `Type: ${entityData.finding_type || 'Unknown'}`;
+      case 'Scenario': return entityData.scenario_description || entityData.description || '';
+      case 'Exercise': return entityData.exercise_description || entityData.description || '';
+      default: return entityData.description || '';
+    }
+  };
+  const description = getDescription();
+  
+  // Get OpenAEV icon based on type
+  const getOAEVIcon = () => {
+    switch (oaevType) {
+      case 'Asset': return <ComputerOutlined sx={{ fontSize: 20, color }} />;
+      case 'AssetGroup': return <LanOutlined sx={{ fontSize: 20, color }} />;
+      case 'Player':
+      case 'User': return <PersonOutlined sx={{ fontSize: 20, color }} />;
+      case 'Team': return <GroupsOutlined sx={{ fontSize: 20, color }} />;
+      case 'Organization': return <DomainOutlined sx={{ fontSize: 20, color }} />;
+      case 'Scenario': return <MovieFilterOutlined sx={{ fontSize: 20, color }} />;
+      case 'Exercise': return <Kayaking sx={{ fontSize: 20, color }} />;
+      case 'AttackPattern': return <LockPattern sx={{ fontSize: 20, color }} />;
+      case 'Finding': return <TravelExploreOutlined sx={{ fontSize: 20, color }} />;
+      default: return <ComputerOutlined sx={{ fontSize: 20, color }} />;
+    }
+  };
+
+  // Helper to check if entity needs full data fetched
+  const needsEntityFetch = (entityObj: EntityData | undefined): boolean => {
+    if (!entityObj) return true;
+    const ed = (entityObj.entityData || entityObj) as any;
+    return !(ed.finding_type || ed.finding_created_at || ed.endpoint_name || 
+             ed.asset_group_name || ed.team_name || ed.attack_pattern_name || 
+             ed.attack_pattern_description || ed.scenario_name || ed.exercise_name || 
+             ed.user_email || ed.asset_description);
+  };
+  
+  // Fire-and-forget fetch for entity details
+  const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
+    const entityIdToFetch = targetEntity.entityId || targetEntity.id;
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace('oaev-', '');
+    
+    if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    chrome.runtime.sendMessage({
+      type: 'GET_OAEV_ENTITY_DETAILS',
+      payload: { id: entityIdToFetch, entityId: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId },
+    }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (currentPlatformIndexRef.current !== targetIdx) return;
+      
+      if (response?.success && response.data) {
+        const fullEntity = {
+          ...targetEntity,
+          ...response.data,
+          entityData: response.data,
+          existsInPlatform: true,
+          _platformId: targetPlatformId,
+          _platformType: 'openaev',
+          _isNonDefaultPlatform: true,
+        };
+        setEntity(fullEntity);
+        multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
+          i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
+        );
+      }
+    });
+  };
+
+  // Platform navigation handlers
+  const handlePrevPlatform = () => {
+    const idx = currentPlatformIndexRef.current;
+    const results = multiPlatformResultsRef.current;
+    if (idx > 0 && results.length > 1) {
+      const newIdx = idx - 1;
+      const target = results[newIdx];
+      const plat = availablePlatforms.find(p => p.id === target.platformId);
+      currentPlatformIndexRef.current = newIdx;
+      setCurrentPlatformIndex(newIdx);
+      setEntity(target.entity);
+      setSelectedPlatformId(target.platformId);
+      if (plat) setPlatformUrl(plat.url);
+      if (needsEntityFetch(target.entity)) {
+        fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
+      }
+    }
+  };
+
+  const handleNextPlatform = () => {
+    const idx = currentPlatformIndexRef.current;
+    const results = multiPlatformResultsRef.current;
+    if (idx < results.length - 1) {
+      const newIdx = idx + 1;
+      const target = results[newIdx];
+      const plat = availablePlatforms.find(p => p.id === target.platformId);
+      currentPlatformIndexRef.current = newIdx;
+      setCurrentPlatformIndex(newIdx);
+      setEntity(target.entity);
+      setSelectedPlatformId(target.platformId);
+      if (plat) setPlatformUrl(plat.url);
+      if (needsEntityFetch(target.entity)) {
+        fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
+      }
+    }
+  };
+
+  // Determine display
+  const currentResult = multiPlatformResults[currentPlatformIndex];
+  const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
+  const currentPlatformType = currentResult?.entity?._platformType || currentPlatform?.type || 'openaev';
+  const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
+  
+  return (
+    <Box sx={{ p: 2, overflow: 'auto' }}>
+      {/* Back to search/scan results button */}
+      {(entityFromSearchMode || entityFromScanResults) && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => {
+              if (entityFromScanResults) {
+                setEntityFromScanResults(false);
+                setMultiPlatformResults([]);
+                setPanelMode('scan-results');
+              } else if (entityFromSearchMode) {
+                setMultiPlatformResults([]);
+                setPanelMode(entityFromSearchMode);
+                setEntityFromSearchMode(null);
+              }
+            }}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            {entityFromScanResults ? 'Back to scan results' : 'Back to search'}
+          </Button>
+        </Box>
+      )}
+      
+      {/* Platform indicator bar with navigation */}
+      {(availablePlatforms.length > 1 || multiPlatformResults.length > 1) && (
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            mb: 2, 
+            p: 1, 
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider',
+          }}
+        >
+          {multiPlatformResults.length > 1 ? (
+            <>
+              <IconButton 
+                size="small" 
+                onClick={handlePrevPlatform}
+                disabled={currentPlatformIndex === 0}
+                sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
+              >
+                <ChevronLeftOutlined />
+              </IconButton>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <img
+                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                    ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                    : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
+                  }
+                  alt={currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
+                  width={18}
+                  height={18}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {currentPlatform?.name || (currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI')}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  ({currentPlatformIndex + 1}/{multiPlatformResults.length})
+                </Typography>
+              </Box>
+              <IconButton 
+                size="small" 
+                onClick={handleNextPlatform}
+                disabled={currentPlatformIndex === multiPlatformResults.length - 1}
+                sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
+              >
+                <ChevronRightOutlined />
+              </IconButton>
+            </>
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
+              <img
+                src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                  ? chrome.runtime.getURL(`assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`)
+                  : `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`
+                }
+                alt="OpenAEV"
+                width={18}
+                height={18}
+              />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                {platform?.name || 'OpenAEV'}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Type Badge */}
+      <Box
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 1,
+          px: 2,
+          py: 1,
+          mb: 2,
+          borderRadius: 1,
+          bgcolor: hexToRGB(color, 0.2),
+          border: `2px solid ${color}`,
+        }}
+      >
+        {getOAEVIcon()}
+        <Typography variant="body2" sx={{ fontWeight: 700, color, letterSpacing: '0.5px' }}>
+          {oaevType.replace(/([A-Z])/g, ' $1').trim()}
+        </Typography>
+      </Box>
+
+      {/* Name */}
+      <Typography variant="h6" sx={{ mb: 1.5, wordBreak: 'break-word', fontWeight: 600 }}>
+        {name}
+      </Typography>
+
+      {/* Attack Pattern: MITRE ID */}
+      {oaevType === 'AttackPattern' && mitreId && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" sx={sectionTitleStyle}>
+            Technique ID
+          </Typography>
+          <Chip 
+            label={mitreId} 
+            size="small" 
+            sx={{ 
+              bgcolor: hexToRGB(color, 0.2), 
+              color,
+              fontWeight: 600,
+              borderRadius: 1,
+            }} 
+          />
+        </Box>
+      )}
+
+      {/* Entity-specific details */}
+      {oaevType === 'Asset' && (
+        <>
+          {/* Hostname */}
+          {(entityData.endpoint_hostname || entityData.asset_hostname) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Hostname
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {entityData.endpoint_hostname || entityData.asset_hostname}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* IPs */}
+          {((entityData.endpoint_ips || entityData.asset_ips) && (entityData.endpoint_ips || entityData.asset_ips).length > 0) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                IP Addresses
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {(entityData.endpoint_ips || entityData.asset_ips).map((ip: string, i: number) => (
+                  <Chip key={i} label={ip} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                ))}
+              </Box>
+            </Box>
+          )}
+          
+          {/* Platform */}
+          {(entityData.endpoint_platform || entityData.asset_platform) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Platform
+              </Typography>
+              <Chip 
+                label={entityData.endpoint_platform || entityData.asset_platform} 
+                size="small" 
+                sx={{ bgcolor: 'action.selected', borderRadius: 1 }}
+              />
+            </Box>
+          )}
+          
+          {/* Architecture */}
+          {entityData.endpoint_arch && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Architecture
+              </Typography>
+              <Chip label={entityData.endpoint_arch} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+            </Box>
+          )}
+          
+          {/* Asset Type */}
+          {(entityData.asset_type || entityData.endpoint_type) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Asset Type
+              </Typography>
+              <Chip label={entityData.asset_type || entityData.endpoint_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+            </Box>
+          )}
+          
+          {/* Last Seen */}
+          {(entityData.asset_last_seen || entityData.endpoint_last_seen) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Last Seen
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {formatDateTime(entityData.asset_last_seen || entityData.endpoint_last_seen)}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* MACs */}
+          {((entityData.endpoint_mac_addresses || entityData.asset_mac_addresses) && (entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).length > 0) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                MAC Addresses
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                {(entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).map((mac: string, i: number) => (
+                  <Chip key={i} label={mac} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                ))}
+              </Box>
+            </Box>
+          )}
+          
+          {/* Tags */}
+          {((entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags) && 
+            (entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).length > 0) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Tags
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxWidth: '100%' }}>
+                {(entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).map((tag: string, i: number) => (
+                  <Chip 
+                    key={i} 
+                    label={tag} 
+                    size="small" 
+                    sx={{ 
+                      bgcolor: 'action.selected', 
+                      borderRadius: 1,
+                      maxWidth: '100%',
+                      '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+                    }} 
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* AssetGroup specific */}
+      {oaevType === 'AssetGroup' && (
+        <>
+          {(entityData.asset_group_assets?.length > 0 || entityData.assets?.length > 0) && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Assets Count
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {entityData.asset_group_assets?.length || entityData.assets?.length || 0} assets
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Player/User specific */}
+      {(oaevType === 'Player' || oaevType === 'User') && (
+        <>
+          {entityData.user_email && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Email
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {entityData.user_email}
+              </Typography>
+            </Box>
+          )}
+          {entityData.user_phone && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Phone
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {entityData.user_phone}
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Team specific */}
+      {oaevType === 'Team' && (
+        <>
+          {entityData.team_users?.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Members
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {entityData.team_users.length} members
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Finding specific */}
+      {oaevType === 'Finding' && (
+        <>
+          {entityData.finding_type && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Finding Type
+              </Typography>
+              <Chip label={entityData.finding_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+            </Box>
+          )}
+          {entityData.finding_created_at && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Found At
+              </Typography>
+              <Typography variant="body2" sx={contentTextStyle}>
+                {formatDateTime(entityData.finding_created_at)}
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Scenario/Exercise specific */}
+      {(oaevType === 'Scenario' || oaevType === 'Exercise') && (
+        <>
+          {entityData.scenario_category && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Category
+              </Typography>
+              <Chip label={entityData.scenario_category} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Description */}
+      {description && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" sx={sectionTitleStyle}>
+            Description
+          </Typography>
+          <Typography variant="body2" sx={{ ...contentTextStyle, whiteSpace: 'pre-wrap' }}>
+            {description}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Actions */}
+      <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+        {entityUrl && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={
+              <img 
+                src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                  ? chrome.runtime.getURL(`assets/logos/logo_openaev_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`)
+                  : `../assets/logos/logo_openaev_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`
+                } 
+                alt="" 
+                style={{ width: 18, height: 18 }} 
+              />
+            }
+            onClick={() => window.open(entityUrl, '_blank')}
+            fullWidth
+          >
+            Open in OpenAEV
+          </Button>
+        )}
+        {name && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ContentCopyOutlined />}
+            onClick={() => handleCopyValue(name)}
+          >
+            Copy
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
+export default OAEVEntityView;

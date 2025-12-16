@@ -137,7 +137,10 @@ export const loggers = {
   storage: createLogger('Storage'),
   popup: createLogger('Popup'),
   panel: createLogger('Panel'),
+  options: createLogger('Options'),
   api: createLogger('API'),
+  extraction: createLogger('Extraction'),
+  ai: createLogger('AI'),
 };
 
 export default logger;

@@ -9,6 +9,9 @@
 
 import { jsPDF } from 'jspdf';
 import type { ExtractedContent, ExtractedImage } from './content-extractor';
+import { loggers } from '../utils/logger';
+
+const log = loggers.extraction;
 
 export interface PDFGenerationResult {
   data: string; // Base64 encoded PDF
@@ -60,7 +63,7 @@ export async function generatePDF(
     return jspdfResult;
   }
   
-  console.error('[PDFGenerator] All PDF generation methods failed');
+  log.error('[PDFGenerator] All PDF generation methods failed');
   return null;
 }
 
@@ -76,7 +79,7 @@ export async function requestNativePDF(tabId: number): Promise<string | null> {
         if (response?.success && response.data) {
           resolve(response.data);
         } else {
-          console.debug('[PDFGenerator] Native PDF generation failed:', response?.error);
+          log.debug('[PDFGenerator] Native PDF generation failed:', response?.error);
           resolve(null);
         }
       }
@@ -148,10 +151,10 @@ async function generateWithJsPDF(
     // Helper: Add image to PDF
     const addImage = async (img: ExtractedImage): Promise<void> => {
       try {
-        console.debug('[PDFGenerator] Adding image to PDF:', img.src);
+        log.debug('[PDFGenerator] Adding image to PDF:', img.src);
         const imageData = await loadImageAsDataUrl(img.src);
         if (!imageData) {
-          console.warn('[PDFGenerator] Could not load image:', img.src);
+          log.warn('[PDFGenerator] Could not load image:', img.src);
           return;
         }
         
@@ -164,18 +167,18 @@ async function generateWithJsPDF(
         } else if (imageData.includes('data:image/webp')) {
           imageFormat = 'WEBP';
         }
-        console.debug('[PDFGenerator] Detected image format:', imageFormat);
+        log.debug('[PDFGenerator] Detected image format:', imageFormat);
         
         // Get actual dimensions from the data URL
         const actualDims = await getImageDimensions(imageData);
         if (!actualDims) {
-          console.warn('[PDFGenerator] Could not get image dimensions:', img.src);
+          log.warn('[PDFGenerator] Could not get image dimensions:', img.src);
           return;
         }
         
         let imgWidth = actualDims.width;
         let imgHeight = actualDims.height;
-        console.debug('[PDFGenerator] Image dimensions:', imgWidth, 'x', imgHeight);
+        log.debug('[PDFGenerator] Image dimensions:', imgWidth, 'x', imgHeight);
         
         // Scale to fit content width (170mm max = ~642px at 3.78 px/mm)
         const maxWidthPx = contentWidth * 3.78;
@@ -199,7 +202,7 @@ async function generateWithJsPDF(
         
         // Ensure minimum size (sometimes images come through too small)
         if (imgWidthMm < 10 || imgHeightMm < 10) {
-          console.warn('[PDFGenerator] Image too small, skipping:', imgWidthMm, 'x', imgHeightMm);
+          log.warn('[PDFGenerator] Image too small, skipping:', imgWidthMm, 'x', imgHeightMm);
           return;
         }
         
@@ -209,22 +212,22 @@ async function generateWithJsPDF(
         // Center the image
         const imgX = margin + (contentWidth - imgWidthMm) / 2;
         
-        console.debug('[PDFGenerator] Rendering image at:', imgX, yPosition, 'size:', imgWidthMm, 'x', imgHeightMm, 'format:', imageFormat);
+        log.debug('[PDFGenerator] Rendering image at:', imgX, yPosition, 'size:', imgWidthMm, 'x', imgHeightMm, 'format:', imageFormat);
         
         try {
           // Use addImage with explicit format
           pdf.addImage(imageData, imageFormat, imgX, yPosition, imgWidthMm, imgHeightMm);
           yPosition += imgHeightMm + 3;
-          console.debug('[PDFGenerator] Image added successfully, new yPosition:', yPosition);
+          log.debug('[PDFGenerator] Image added successfully, new yPosition:', yPosition);
         } catch (imgError) {
-          console.error('[PDFGenerator] jsPDF addImage error:', imgError);
+          log.error('[PDFGenerator] jsPDF addImage error:', imgError);
           // Try with auto-detect (passing data URL without format)
           try {
             pdf.addImage(imageData, imgX, yPosition, imgWidthMm, imgHeightMm);
             yPosition += imgHeightMm + 3;
-            console.debug('[PDFGenerator] Image added with auto-detect, new yPosition:', yPosition);
+            log.debug('[PDFGenerator] Image added with auto-detect, new yPosition:', yPosition);
           } catch (autoError) {
-            console.error('[PDFGenerator] jsPDF addImage auto-detect also failed:', autoError);
+            log.error('[PDFGenerator] jsPDF addImage auto-detect also failed:', autoError);
             return;
           }
         }
@@ -242,7 +245,7 @@ async function generateWithJsPDF(
         
         yPosition += 5;
       } catch (e) {
-        console.error('[PDFGenerator] Failed to add image:', img.src, e);
+        log.error('[PDFGenerator] Failed to add image:', img.src, e);
       }
     };
     
@@ -585,13 +588,13 @@ async function generateWithJsPDF(
     
     // Pre-collect ALL images from the HTML content that may have been missed
     const allImagesInHtml = tempDiv.querySelectorAll('img');
-    console.debug('[PDFGenerator] Total images found in HTML:', allImagesInHtml.length);
+    log.debug('[PDFGenerator] Total images found in HTML:', allImagesInHtml.length);
     
     for (const imgEl of allImagesInHtml) {
       const imgElement = imgEl as HTMLImageElement;
       const src = imgElement.src || imgElement.getAttribute('data-src') || '';
       if (src && !addedImageSrcs.has(src) && !src.includes('data:image/svg')) {
-        console.debug('[PDFGenerator] Adding missed image from HTML:', src);
+        log.debug('[PDFGenerator] Adding missed image from HTML:', src);
         const img: ExtractedImage = {
           src: src,
           alt: imgElement.alt || '',
@@ -608,14 +611,14 @@ async function generateWithJsPDF(
     if (options.includeImages && content.images.length > 0) {
       for (const img of content.images) {
         if (!addedImageSrcs.has(img.src)) {
-          console.debug('[PDFGenerator] Adding remaining image from extraction:', img.src);
+          log.debug('[PDFGenerator] Adding remaining image from extraction:', img.src);
           await addImage(img);
           addedImageSrcs.add(img.src);
         }
       }
     }
     
-    console.debug('[PDFGenerator] Total images added to PDF:', addedImageSrcs.size);
+    log.debug('[PDFGenerator] Total images added to PDF:', addedImageSrcs.size);
     
     // Final footer
     addFooter();
@@ -627,7 +630,7 @@ async function generateWithJsPDF(
     const pdfOutput = pdf.output('datauristring');
     const base64Data = pdfOutput.split(',')[1];
     
-    console.debug('[PDFGenerator] jsPDF generation complete, size:', base64Data.length);
+    log.debug('[PDFGenerator] jsPDF generation complete, size:', base64Data.length);
     
     return {
       data: base64Data,
@@ -635,7 +638,7 @@ async function generateWithJsPDF(
       method: 'jspdf',
     };
   } catch (error) {
-    console.error('[PDFGenerator] jsPDF generation failed:', error);
+    log.error('[PDFGenerator] jsPDF generation failed:', error);
     return null;
   }
 }
@@ -647,17 +650,17 @@ async function generateWithJsPDF(
 async function loadImageAsDataUrl(src: string): Promise<string | null> {
   if (!src) return null;
   
-  console.debug('[PDFGenerator] Loading image:', src);
+  log.debug('[PDFGenerator] Loading image:', src);
   
   // Method 1: Try via background script (bypasses CORS completely)
   try {
     const dataUrl = await fetchImageViaBackground(src);
     if (dataUrl) {
-      console.debug('[PDFGenerator] Loaded via background script:', src);
+      log.debug('[PDFGenerator] Loaded via background script:', src);
       return await resizeImageDataUrl(dataUrl);
     }
   } catch (e) {
-    console.debug('[PDFGenerator] Background fetch failed:', src, e);
+    log.debug('[PDFGenerator] Background fetch failed:', src, e);
   }
   
   // Method 2: Try using fetch directly (works for same-origin or CORS-enabled)
@@ -671,37 +674,37 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
       const blob = await response.blob();
       const dataUrl = await blobToDataUrl(blob);
       if (dataUrl) {
-        console.debug('[PDFGenerator] Loaded via direct fetch:', src);
+        log.debug('[PDFGenerator] Loaded via direct fetch:', src);
         return await resizeImageDataUrl(dataUrl);
       }
     }
   } catch (e) {
-    console.debug('[PDFGenerator] Direct fetch failed:', src, e);
+    log.debug('[PDFGenerator] Direct fetch failed:', src, e);
   }
   
   // Method 3: Try loading as Image without CORS (may work for same-origin)
   try {
     const dataUrl = await loadImageViaCanvas(src, false);
     if (dataUrl) {
-      console.debug('[PDFGenerator] Loaded via canvas (no CORS):', src);
+      log.debug('[PDFGenerator] Loaded via canvas (no CORS):', src);
       return dataUrl;
     }
   } catch (e) {
-    console.debug('[PDFGenerator] Canvas (no CORS) failed:', src, e);
+    log.debug('[PDFGenerator] Canvas (no CORS) failed:', src, e);
   }
   
   // Method 4: Try with CORS attribute
   try {
     const dataUrl = await loadImageViaCanvas(src, true);
     if (dataUrl) {
-      console.debug('[PDFGenerator] Loaded via canvas (CORS):', src);
+      log.debug('[PDFGenerator] Loaded via canvas (CORS):', src);
       return dataUrl;
     }
   } catch (e) {
-    console.debug('[PDFGenerator] Canvas (CORS) failed:', src, e);
+    log.debug('[PDFGenerator] Canvas (CORS) failed:', src, e);
   }
   
-  console.warn('[PDFGenerator] All methods failed for image:', src);
+  log.warn('[PDFGenerator] All methods failed for image:', src);
   return null;
 }
 
@@ -712,7 +715,7 @@ async function fetchImageViaBackground(src: string): Promise<string | null> {
   return new Promise((resolve) => {
     // Set timeout in case background script doesn't respond
     const timeoutId = setTimeout(() => {
-      console.debug('[PDFGenerator] Background fetch timeout:', src);
+      log.debug('[PDFGenerator] Background fetch timeout:', src);
       resolve(null);
     }, 15000);
     
@@ -723,7 +726,7 @@ async function fetchImageViaBackground(src: string): Promise<string | null> {
           clearTimeout(timeoutId);
           
           if (chrome.runtime.lastError) {
-            console.debug('[PDFGenerator] Background message error:', chrome.runtime.lastError);
+            log.debug('[PDFGenerator] Background message error:', chrome.runtime.lastError);
             resolve(null);
             return;
           }
@@ -731,14 +734,14 @@ async function fetchImageViaBackground(src: string): Promise<string | null> {
           if (response?.success && response?.dataUrl) {
             resolve(response.dataUrl);
           } else {
-            console.debug('[PDFGenerator] Background fetch failed:', response?.error);
+            log.debug('[PDFGenerator] Background fetch failed:', response?.error);
             resolve(null);
           }
         }
       );
     } catch (e) {
       clearTimeout(timeoutId);
-      console.debug('[PDFGenerator] Background message exception:', e);
+      log.debug('[PDFGenerator] Background message exception:', e);
       resolve(null);
     }
   });
@@ -799,7 +802,7 @@ async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
         
         resolve(canvas.toDataURL('image/jpeg', 0.8));
       } catch (e) {
-        console.debug('[PDFGenerator] Resize failed, using original');
+        log.debug('[PDFGenerator] Resize failed, using original');
         resolve(dataUrl);
       }
     };
@@ -819,7 +822,7 @@ function loadImageViaCanvas(src: string, useCors: boolean): Promise<string | nul
     }
     
     const timeoutId = setTimeout(() => {
-      console.debug('[PDFGenerator] Image load timeout:', src);
+      log.debug('[PDFGenerator] Image load timeout:', src);
       resolve(null);
     }, 10000); // 10 second timeout
     
@@ -855,14 +858,14 @@ function loadImageViaCanvas(src: string, useCors: boolean): Promise<string | nul
         resolve(dataUrl);
       } catch (e) {
         // Canvas tainted - CORS issue
-        console.debug('[PDFGenerator] Canvas tainted:', src, e);
+        log.debug('[PDFGenerator] Canvas tainted:', src, e);
         resolve(null);
       }
     };
     
     img.onerror = () => {
       clearTimeout(timeoutId);
-      console.debug('[PDFGenerator] Image load error:', src);
+      log.debug('[PDFGenerator] Image load error:', src);
       resolve(null);
     };
     

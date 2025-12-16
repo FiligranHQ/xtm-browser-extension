@@ -10,6 +10,9 @@
 
 import { Readability } from '@mozilla/readability';
 import { escapeHtml } from '../utils/formatters';
+import { loggers } from '../utils/logger';
+
+const log = loggers.extraction;
 
 export interface ExtractedContent {
   title: string;
@@ -81,14 +84,14 @@ const CONTENT_SELECTORS = [
  * Extract clean article content from the current page
  */
 export function extractContent(): ExtractedContent {
-  console.debug('[ContentExtractor] Starting extraction for:', window.location.href);
+  log.debug('[ContentExtractor] Starting extraction for:', window.location.href);
   
   // Try Readability first (it's quite good at finding content)
   let result = extractWithReadability();
   
   // If Readability fails or returns too little content, try fallback
   if (!result || result.textContent.length < 200) {
-    console.debug('[ContentExtractor] Readability insufficient, trying fallback');
+    log.debug('[ContentExtractor] Readability insufficient, trying fallback');
     const fallback = extractFallback();
     // Use fallback if it has more content
     if (!result || fallback.textContent.length > result.textContent.length) {
@@ -96,7 +99,7 @@ export function extractContent(): ExtractedContent {
     }
   }
   
-  console.debug('[ContentExtractor] Final extraction:', result.title, 'text length:', result.textContent.length);
+  log.debug('[ContentExtractor] Final extraction:', result.title, 'text length:', result.textContent.length);
   return result;
 }
 
@@ -131,18 +134,18 @@ function extractWithReadability(): ExtractedContent | null {
     const article = reader.parse();
     
     if (!article || !article.content) {
-      console.debug('[ContentExtractor] Readability returned no content');
+      log.debug('[ContentExtractor] Readability returned no content');
       return null;
     }
     
     // Check minimum content threshold
     const textLength = article.textContent?.length || 0;
     if (textLength < 100) {
-      console.debug('[ContentExtractor] Readability content too short:', textLength);
+      log.debug('[ContentExtractor] Readability content too short:', textLength);
       return null;
     }
     
-    console.debug('[ContentExtractor] Readability extracted:', article.title, 'length:', textLength);
+    log.debug('[ContentExtractor] Readability extracted:', article.title, 'length:', textLength);
     
     // Post-process the extracted HTML
     const processedContent = postProcessContent(article.content);
@@ -153,7 +156,7 @@ function extractWithReadability(): ExtractedContent | null {
       const contentHasHero = processedContent.element.querySelector(`img[src="${heroImage.src}"]`) ||
                             processedContent.html.includes(heroImage.src);
       if (!contentHasHero) {
-        console.debug('[ContentExtractor] Adding hero image:', heroImage.src);
+        log.debug('[ContentExtractor] Adding hero image:', heroImage.src);
         const heroHtml = createHeroImageHtml(heroImage);
         finalHtml = heroHtml + finalHtml;
         // Re-create element with hero for image extraction
@@ -176,7 +179,7 @@ function extractWithReadability(): ExtractedContent | null {
       readingTime: estimateReadingTime(article.textContent || ''),
     };
   } catch (error) {
-    console.error('[ContentExtractor] Readability failed:', error);
+    log.error('[ContentExtractor] Readability failed:', error);
     return null;
   }
 }
@@ -231,7 +234,7 @@ function findHeroImage(): ExtractedImage | null {
       // Validate: skip logos, icons, and tracking images
       if (!isContentImage(src, img)) continue;
       
-      console.debug('[ContentExtractor] Found hero image via selector:', selector, src);
+      log.debug('[ContentExtractor] Found hero image via selector:', selector, src);
       return {
         src: makeAbsoluteUrl(src),
         alt: img.alt || '',
@@ -249,7 +252,7 @@ function findHeroImage(): ExtractedImage | null {
     for (const img of images) {
       const src = getImageSrc(img as HTMLImageElement);
       if (src && isContentImage(src, img as HTMLImageElement)) {
-        console.debug('[ContentExtractor] Found hero via main content scan:', src);
+        log.debug('[ContentExtractor] Found hero via main content scan:', src);
         return {
           src: makeAbsoluteUrl(src),
           alt: (img as HTMLImageElement).alt || '',
@@ -261,7 +264,7 @@ function findHeroImage(): ExtractedImage | null {
     }
   }
   
-  console.debug('[ContentExtractor] No hero image found');
+  log.debug('[ContentExtractor] No hero image found');
   return null;
 }
 
@@ -382,7 +385,7 @@ function escapeHtmlAttr(str: string): string {
  * Fallback extraction using content container detection
  */
 function extractFallback(): ExtractedContent {
-  console.debug('[ContentExtractor] Using fallback extraction');
+  log.debug('[ContentExtractor] Using fallback extraction');
   
   const title = extractTitle();
   const byline = extractByline();
@@ -395,7 +398,7 @@ function extractFallback(): ExtractedContent {
   const contentElement = findContentElement();
   
   if (!contentElement) {
-    console.debug('[ContentExtractor] No content container found, using body');
+    log.debug('[ContentExtractor] No content container found, using body');
     return createEmptyResult(title);
   }
   
@@ -415,7 +418,7 @@ function extractFallback(): ExtractedContent {
     const contentHasHero = clone.querySelector(`img[src="${heroImage.src}"]`) ||
                           clone.innerHTML.includes(heroImage.src);
     if (!contentHasHero) {
-      console.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
+      log.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
       const heroHtml = createHeroImageHtml(heroImage);
       finalHtml = heroHtml + finalHtml;
       clone.insertAdjacentHTML('afterbegin', heroHtml);
@@ -425,7 +428,7 @@ function extractFallback(): ExtractedContent {
   const textContent = cleanText(clone.textContent || '');
   const images = extractImages(clone);
   
-  console.debug('[ContentExtractor] Fallback extracted:', textContent.length, 'chars', images.length, 'images');
+  log.debug('[ContentExtractor] Fallback extracted:', textContent.length, 'chars', images.length, 'images');
   
   return {
     title,
@@ -644,7 +647,7 @@ function findContentElement(): HTMLElement | null {
     try {
       const element = document.querySelector(selector) as HTMLElement;
       if (element && hasSubstantialContent(element)) {
-        console.debug('[ContentExtractor] Found content via selector:', selector);
+        log.debug('[ContentExtractor] Found content via selector:', selector);
         return element;
       }
     } catch { /* Skip invalid selectors */ }
@@ -665,7 +668,7 @@ function findContentElement(): HTMLElement | null {
   }
   
   if (bestElement && bestScore > 50) {
-    console.debug('[ContentExtractor] Found content via scoring, score:', bestScore);
+    log.debug('[ContentExtractor] Found content via scoring, score:', bestScore);
     return bestElement;
   }
   
@@ -819,7 +822,7 @@ function extractImages(element: HTMLElement): ExtractedImage[] {
     });
   });
   
-  console.debug('[ContentExtractor] Extracted', images.length, 'images');
+  log.debug('[ContentExtractor] Extracted', images.length, 'images');
   return images;
 }
 

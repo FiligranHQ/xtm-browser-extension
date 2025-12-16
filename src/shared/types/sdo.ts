@@ -1,16 +1,16 @@
 /**
- * SDO Types (STIX Domain Objects)
+ * OpenCTI Entity Types
  * 
- * Types for STIX Domain Objects and detection
+ * Types for OpenCTI entities (STIX Domain Objects) and detection
  */
 
 import type { StixDomainObject } from './stix';
 import type { PlatformMatch } from './observable';
 
 /**
- * SDO type enum
+ * OpenCTI entity type enum
  */
-export type SDOType =
+export type OCTIEntityType =
   | 'Intrusion-Set'
   | 'Malware'
   | 'Threat-Actor'
@@ -40,10 +40,10 @@ export type SDOType =
   | 'Feedback';
 
 /**
- * Detected SDO from page scanning
+ * Detected OpenCTI entity from page scanning
  */
-export interface DetectedSDO {
-  type: SDOType;
+export interface DetectedOCTIEntity {
+  type: OCTIEntityType;
   name: string;
   value: string;
   startIndex: number;
@@ -60,10 +60,10 @@ export interface DetectedSDO {
 }
 
 /**
- * SDO match for detection
+ * OpenCTI entity match for detection
  */
-export interface SDOMatch {
-  type: SDOType;
+export interface OCTIEntityMatch {
+  type: OCTIEntityType;
   name: string;
   aliases?: string[];
   x_mitre_id?: string;
@@ -71,4 +71,12 @@ export interface SDOMatch {
   entityData?: StixDomainObject;
   platformId: string;
 }
+
+// Legacy aliases for backward compatibility during migration
+/** @deprecated Use OCTIEntityType instead */
+export type SDOType = OCTIEntityType;
+/** @deprecated Use DetectedOCTIEntity instead */
+export type DetectedSDO = DetectedOCTIEntity;
+/** @deprecated Use OCTIEntityMatch instead */
+export type SDOMatch = OCTIEntityMatch;
 

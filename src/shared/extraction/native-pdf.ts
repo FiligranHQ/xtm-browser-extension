@@ -7,6 +7,10 @@
  * Note: Requires "debugger" permission in manifest.json
  */
 
+import { loggers } from '../utils/logger';
+
+const log = loggers.extraction;
+
 export interface NativePDFOptions {
   /** Display header and footer (default: false) */
   displayHeaderFooter?: boolean;
@@ -77,7 +81,7 @@ export async function generateNativePDF(
   try {
     // Attach debugger to the tab
     await attachDebugger(target);
-    console.debug('[NativePDF] Debugger attached to tab:', tabId);
+    log.debug('[NativePDF] Debugger attached to tab:', tabId);
     
     // Wait a moment for any dynamic content to settle
     await sleep(100);
@@ -100,28 +104,28 @@ export async function generateNativePDF(
       transferMode: 'ReturnAsBase64',
     };
     
-    console.debug('[NativePDF] Generating PDF with params:', pdfParams);
+    log.debug('[NativePDF] Generating PDF with params:', pdfParams);
     
     const result = await sendDebuggerCommand(target, 'Page.printToPDF', pdfParams) as { data?: string } | undefined;
     
     if (!result || !result.data) {
-      console.error('[NativePDF] No PDF data returned');
+      log.error('[NativePDF] No PDF data returned');
       return null;
     }
     
-    console.debug('[NativePDF] PDF generated successfully, size:', result.data.length);
+    log.debug('[NativePDF] PDF generated successfully, size:', result.data.length);
     return result.data;
   } catch (error) {
-    console.error('[NativePDF] Failed to generate PDF:', error);
+    log.error('[NativePDF] Failed to generate PDF:', error);
     return null;
   } finally {
     // Always detach debugger
     try {
       await detachDebugger(target);
-      console.debug('[NativePDF] Debugger detached');
+      log.debug('[NativePDF] Debugger detached');
     } catch (detachError) {
       // Ignore detach errors (tab might be closed)
-      console.debug('[NativePDF] Debugger detach failed (expected if tab closed):', detachError);
+      log.debug('[NativePDF] Debugger detach failed (expected if tab closed):', detachError);
     }
   }
 }
@@ -148,7 +152,7 @@ export async function generatePDFFromHtml(
     });
     
     if (!tab.id) {
-      console.error('[NativePDF] Failed to create tab');
+      log.error('[NativePDF] Failed to create tab');
       return null;
     }
     
@@ -171,7 +175,7 @@ export async function generatePDFFromHtml(
     
     return pdfData;
   } catch (error) {
-    console.error('[NativePDF] Failed to generate PDF from HTML:', error);
+    log.error('[NativePDF] Failed to generate PDF from HTML:', error);
     return null;
   } finally {
     // Close the temporary tab

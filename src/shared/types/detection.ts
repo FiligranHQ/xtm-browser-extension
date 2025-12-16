@@ -69,10 +69,10 @@ export interface DetectedObservable {
 }
 
 // ============================================================================
-// SDO Detection Types
+// OpenCTI Entity Detection Types
 // ============================================================================
 
-export type SDOType =
+export type OCTIEntityType =
   | 'Intrusion-Set'
   | 'Malware'
   | 'Threat-Actor'
@@ -84,8 +84,8 @@ export type SDOType =
   | 'Infrastructure'
   | 'Indicator';
 
-export interface DetectedSDO {
-  type: SDOType;
+export interface DetectedOCTIEntity {
+  type: OCTIEntityType;
   name: string;
   aliases?: string[];
   startIndex: number;
@@ -99,6 +99,12 @@ export interface DetectedSDO {
   // All platforms where this entity was found (for multi-platform navigation)
   platformMatches?: PlatformMatch[];
 }
+
+// Legacy aliases for backward compatibility
+/** @deprecated Use OCTIEntityType instead */
+export type SDOType = OCTIEntityType;
+/** @deprecated Use DetectedOCTIEntity instead */
+export type DetectedSDO = DetectedOCTIEntity;
 
 // ============================================================================
 // Platform Entity Detection Types

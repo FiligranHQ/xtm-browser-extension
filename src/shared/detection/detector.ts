@@ -723,37 +723,77 @@ export function extractTextFromHTML(html: string): string {
 
 /**
  * Get text nodes from a DOM element for highlighting
+ * Enhanced to traverse Shadow DOM for SPAs like VirusTotal
  */
 export function getTextNodes(element: Node): Text[] {
   const textNodes: Text[] = [];
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode: (node) => {
-        // Skip empty nodes and nodes in scripts/styles
-        if (!node.textContent?.trim()) {
-          return NodeFilter.FILTER_REJECT;
-        }
-        const parent = node.parentElement;
-        if (
-          parent &&
-          ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(
-            parent.tagName
-          )
-        ) {
-          return NodeFilter.FILTER_REJECT;
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      },
+  
+  // Helper to check if a text node should be included
+  const shouldIncludeNode = (node: Node): boolean => {
+    if (!node.textContent?.trim()) {
+      return false;
     }
-  );
+    const parent = node.parentElement;
+    if (
+      parent &&
+      ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(
+        parent.tagName
+      )
+    ) {
+      return false;
+    }
+    return true;
+  };
+  
+  // Recursive function to traverse DOM including Shadow DOM
+  const traverseNode = (root: Node) => {
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_ALL, // Show all nodes to catch elements with shadow roots
+      {
+        acceptNode: (node) => {
+          // Accept text nodes that pass our filter
+          if (node.nodeType === Node.TEXT_NODE) {
+            return shouldIncludeNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          }
+          // Accept element nodes to traverse their children
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tagName = (node as Element).tagName;
+            // Skip script/style elements entirely
+            if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(tagName)) {
+              return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_SKIP; // Skip element itself but traverse children
+          }
+          return NodeFilter.FILTER_SKIP;
+        },
+      }
+    );
 
-  let node;
-  while ((node = walker.nextNode())) {
-    textNodes.push(node as Text);
-  }
-
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        textNodes.push(node as Text);
+      }
+    }
+    
+    // Now traverse shadow DOMs
+    // We need to check all elements for shadow roots
+    const elements = (root as Element).querySelectorAll?.('*') || [];
+    elements.forEach((el) => {
+      if (el.shadowRoot) {
+        traverseNode(el.shadowRoot);
+      }
+    });
+    
+    // Also check the root element itself for shadow root (if it's an element)
+    if ((root as Element).shadowRoot) {
+      traverseNode((root as Element).shadowRoot!);
+    }
+  };
+  
+  traverseNode(element);
+  
   return textNodes;
 }
 

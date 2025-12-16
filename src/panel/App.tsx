@@ -27,6 +27,7 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
+  Snackbar,
 } from '@mui/material';
 import {
   CloseOutlined,
@@ -438,6 +439,12 @@ const App: React.FC = () => {
   const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
   // Store page content for AI discovery (set when scan completes)
   const [scanPageContent, setScanPageContent] = useState<string>('');
+  // Snackbar notification state
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'warning' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
   
   // AI Relationship resolution state
   const [aiResolvingRelationships, setAiResolvingRelationships] = useState(false);
@@ -1654,12 +1661,21 @@ const App: React.FC = () => {
         setOaevSearchResults([]);
         setPanelMode('oaev-search');
         break;
-      case 'SHOW_UNIFIED_SEARCH_PANEL':
+      case 'SHOW_UNIFIED_SEARCH_PANEL': {
         // Support initial query from context menu "Search in OpenCTI"
-        setUnifiedSearchQuery(data.payload?.initialQuery || '');
+        const initialQuery = data.payload?.initialQuery || '';
+        setUnifiedSearchQuery(initialQuery);
         setUnifiedSearchResults([]);
         setPanelMode('unified-search');
+        // Auto-trigger search if there's an initial query (from context menu)
+        if (initialQuery.trim()) {
+          // Small delay to ensure state is set and panel is visible
+          setTimeout(() => {
+            handleUnifiedSearch(initialQuery);
+          }, 100);
+        }
         break;
+      }
       case 'SHOW_ADD_SELECTION':
         // Context menu "Add to OpenCTI" - show entity creation for selected text
         if (data.payload?.selectedText) {
@@ -2019,8 +2035,10 @@ const App: React.FC = () => {
   };
 
   // Unified search handler - searches BOTH OpenCTI and OpenAEV
-  const handleUnifiedSearch = async () => {
-    if (!unifiedSearchQuery.trim()) return;
+  // Can optionally pass a query directly (used when auto-searching from context menu)
+  const handleUnifiedSearch = async (queryOverride?: string) => {
+    const searchQuery = queryOverride ?? unifiedSearchQuery;
+    if (!searchQuery.trim()) return;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setUnifiedSearching(true);
@@ -2030,7 +2048,7 @@ const App: React.FC = () => {
     try {
       const octiResponse = await chrome.runtime.sendMessage({
         type: 'SEARCH_ENTITIES',
-        payload: { searchTerm: unifiedSearchQuery, limit: 20 },
+        payload: { searchTerm: searchQuery, limit: 20 },
       });
 
       if (octiResponse?.success && octiResponse.data) {
@@ -2057,7 +2075,7 @@ const App: React.FC = () => {
     try {
       const oaevResponse = await chrome.runtime.sendMessage({
         type: 'SEARCH_OAEV',
-        payload: { searchTerm: unifiedSearchQuery },
+        payload: { searchTerm: searchQuery },
       });
 
       if (oaevResponse?.success && oaevResponse.data) {
@@ -2714,17 +2732,22 @@ const App: React.FC = () => {
             }
             
             log.info(`Added ${uniqueNewEntities.length} AI-discovered entities to scan results`);
+            setSnackbar({ open: true, message: `AI discovered ${uniqueNewEntities.length} new entit${uniqueNewEntities.length === 1 ? 'y' : 'ies'}`, severity: 'success' });
           } else {
             log.info('All AI-discovered entities were already in the list');
+            setSnackbar({ open: true, message: 'AI found no new entities (all already detected)', severity: 'info' });
           }
         } else {
           log.info('AI did not discover any additional entities');
+          setSnackbar({ open: true, message: 'AI found no additional entities on this page', severity: 'info' });
         }
       } else {
         log.error('AI entity discovery failed:', response?.error);
+        setSnackbar({ open: true, message: 'AI discovery failed', severity: 'error' });
       }
     } catch (error) {
       log.error('AI entity discovery error:', error);
+      setSnackbar({ open: true, message: 'AI discovery error', severity: 'error' });
     } finally {
       setAiDiscoveringEntities(false);
     }
@@ -5607,7 +5630,7 @@ const App: React.FC = () => {
                             if (contentResponse?.success) {
                               pageContent = contentResponse.data?.content || '';
                               pageTitle = contentResponse.data?.title || pageTitle;
-                              pageUrl = tab.url || pageUrl;
+                              pageUrl = contentResponse.data?.url || tab.url || pageUrl;
                             }
                           }
                         } catch (error) {
@@ -7474,6 +7497,7 @@ const App: React.FC = () => {
     
     // Get page content for container form
     let pageTitle = currentPageTitle || document.title;
+    let pageUrl = currentPageUrl || '';
     let pageContent = '';
     let pageHtmlContent = '';
     
@@ -7486,6 +7510,7 @@ const App: React.FC = () => {
             pageContent = contentResponse.data?.content || '';
             pageHtmlContent = contentResponse.data?.htmlContent || pageContent;
             pageTitle = contentResponse.data?.title || pageTitle;
+            pageUrl = contentResponse.data?.url || pageUrl;
           }
         }
       } catch (error) {
@@ -7505,7 +7530,7 @@ const App: React.FC = () => {
     
     // Set entities and go to preview view
     setEntitiesToAdd(entitiesToImport);
-    setCurrentPageUrl(currentPageUrl || window.location.href);
+    setCurrentPageUrl(pageUrl);
     setCurrentPageTitle(pageTitle);
     setPanelMode('preview');
   };
@@ -12707,6 +12732,23 @@ const App: React.FC = () => {
         {renderHeader()}
         <Box sx={{ flex: 1, overflow: 'auto' }}>{renderContent()}</Box>
       </Box>
+      
+      {/* Notification Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%', borderRadius: 1, fontSize: 12 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </ThemeProvider>
   );
 };

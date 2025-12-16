@@ -523,25 +523,22 @@ const App: React.FC = () => {
     const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.sendMessage;
     
     if (!isExtension) {
-      // Running outside extension context - use defaults
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setMode(isDark ? 'dark' : 'light');
+      // Outside extension context - use default dark theme
+      setMode('dark');
       return;
     }
 
-    // Get theme setting - quick, from local storage
+    // Get theme setting - strictly from configuration
     chrome.runtime.sendMessage({ type: 'GET_PLATFORM_THEME' }, (response) => {
       if (chrome.runtime.lastError) {
         log.debug(' GET_PLATFORM_THEME error:', chrome.runtime.lastError);
         return;
       }
       if (response?.success) {
-        let themeMode = response.data;
+        const themeMode = response.data;
         log.debug(' Theme from GET_PLATFORM_THEME:', themeMode);
-        if (themeMode === 'auto') {
-          themeMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        setMode(themeMode);
+        // Theme is strictly configuration-based - no auto detection
+        setMode(themeMode === 'light' ? 'light' : 'dark');
       }
     });
 
@@ -551,12 +548,10 @@ const App: React.FC = () => {
       if (response?.success) {
         // Also set theme from settings to ensure consistency
         if (response.data?.theme) {
-          let themeMode = response.data.theme;
+          const themeMode = response.data.theme;
           log.debug(' Theme from GET_SETTINGS:', themeMode);
-          if (themeMode === 'auto') {
-            themeMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          }
-          setMode(themeMode);
+          // Theme is strictly from settings - default to dark
+          setMode(themeMode === 'light' ? 'light' : 'dark');
         }
         
         // Get all enabled platforms - include isEnterprise from saved settings
@@ -922,10 +917,8 @@ const App: React.FC = () => {
         chrome.runtime.sendMessage({ type: 'GET_PLATFORM_THEME' }, (response) => {
           if (chrome.runtime.lastError) return;
           if (response?.success) {
-            let themeMode = response.data;
-            if (themeMode === 'auto') {
-              themeMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            }
+            // Theme is strictly configuration-based - no auto detection
+            const themeMode = response.data === 'light' ? 'light' : 'dark';
             if (themeMode !== mode) {
               log.debug(' Theme updated on panel state change:', themeMode);
               setMode(themeMode);
@@ -1386,15 +1379,21 @@ const App: React.FC = () => {
         // This allows us to track the same entity found in multiple platforms
         const entityMap = new Map<string, ScanResultEntity>();
         
-        // Helper to normalize key for grouping (use lowercase name/value only)
-        const getGroupKey = (name: string, value?: string): string => {
-          return (value || name || '').toLowerCase();
+        // Helper to normalize key for grouping (lowercase, trimmed, normalized whitespace)
+        // This ensures entities with the same NAME from different platforms are merged
+        // IMPORTANT: Always use the canonical entity NAME for grouping, not the matched value
+        // This way "T1098.001" (matched) and "Additional Cloud Credentials" (name) merge correctly
+        const getGroupKey = (name: string): string => {
+          return (name || '')
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, ' '); // Normalize multiple spaces to single space
         };
         
         // Helper to add entity or merge with existing entry
         // IMPORTANT: platformMatches should ONLY contain platforms where entity was FOUND
         const addOrMergeEntity = (entity: ScanResultEntity) => {
-          const groupKey = getGroupKey(entity.name, entity.value);
+          const groupKey = getGroupKey(entity.name);
           
           // Only create a platform match if the entity was FOUND on this platform
           const platformMatch: ScanResultPlatformMatch | null = entity.found ? {
@@ -1408,19 +1407,25 @@ const App: React.FC = () => {
           const existing = entityMap.get(groupKey);
           if (existing) {
             // Merge: add this platform to existing entry ONLY if found
+            log.debug(` Merging entity "${entity.name}" (${entity.platformType}) with existing (${existing.platformType}), groupKey: "${groupKey}"`);
             if (entity.found && platformMatch) {
               if (!existing.platformMatches) {
                 existing.platformMatches = [];
               }
-              // Only add if not already present (same platformId)
-              if (!existing.platformMatches.some(pm => pm.platformId === platformMatch.platformId)) {
+              // Only add if not already present (same platformId AND same platformType)
+              const isDuplicate = existing.platformMatches.some(pm => 
+                pm.platformId === platformMatch.platformId && pm.platformType === platformMatch.platformType
+              );
+              if (!isDuplicate) {
                 existing.platformMatches.push(platformMatch);
+                log.debug(` Added platformMatch for ${entity.platformType}, total matches: ${existing.platformMatches.length}`);
               }
               // Mark the entity as found since at least one platform found it
               existing.found = true;
             }
           } else {
             // New entry - only add platformMatches if found
+            log.debug(` Adding new entity "${entity.name}" (${entity.platformType}), groupKey: "${groupKey}"`);
             entityMap.set(groupKey, {
               ...entity,
               platformMatches: platformMatch ? [platformMatch] : [],
@@ -2490,12 +2495,25 @@ const App: React.FC = () => {
       }
       
       // Build list of already detected entities (both found and not found)
-      const alreadyDetected = scanResultsEntities.map(e => ({
-        type: e.type,
-        name: e.name,
-        value: e.value,
-        found: e.found,
-      }));
+      // Include external IDs for attack patterns to prevent AI from re-detecting technique IDs
+      const alreadyDetected = scanResultsEntities.map(e => {
+        // Extract external ID from entity data (x_mitre_id for OpenCTI, attack_pattern_external_id for OpenAEV)
+        const entityData = e.entityData || {};
+        const externalId = entityData.x_mitre_id 
+          || entityData.attack_pattern_external_id 
+          || (entityData.entityData?.x_mitre_id)
+          || (entityData.entityData?.attack_pattern_external_id)
+          // Also check matchedValue for cases where entity was matched via x_mitre_id
+          || (entityData.matchedValue && /^t[as]?\d{4}(\.\d{3})?$/i.test(entityData.matchedValue) ? entityData.matchedValue : undefined);
+        
+        return {
+          type: e.type,
+          name: e.name,
+          value: e.value,
+          found: e.found,
+          externalId,
+        };
+      });
       
       log.debug('AI discovery request:', {
         alreadyDetectedCount: alreadyDetected.length,
@@ -3856,6 +3874,10 @@ const App: React.FC = () => {
     const name = entityData.representative?.main || entityData.name || entity.value || entity.name || 'Unknown';
     const description = entityData.description || entity.description;
     const aliases = entityData.aliases || entity.aliases;
+    
+    // Attack Pattern specific: x_mitre_id (e.g., T1059, T1059.001)
+    const xMitreId = entityData.x_mitre_id || entity.x_mitre_id;
+    const isAttackPattern = type.toLowerCase() === 'attack-pattern';
     const objectLabel = entityData.objectLabel || entity.objectLabel;
     const objectMarking = entityData.objectMarking || entity.objectMarking;
     const created = entityData.created || entity.created;
@@ -4137,6 +4159,25 @@ const App: React.FC = () => {
         <Typography variant="h6" sx={{ mb: 1, wordBreak: 'break-word', fontWeight: 600 }}>
           {name}
         </Typography>
+
+        {isAttackPattern && xMitreId && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={sectionTitleStyle}>
+              Technique ID
+            </Typography>
+            <Chip 
+              label={xMitreId} 
+              size="small" 
+              sx={{ 
+                bgcolor: hexToRGB(color, 0.2), 
+                color,
+                fontWeight: 600,
+                borderRadius: 1,
+                fontSize: '0.875rem',
+              }} 
+            />
+          </Box>
+        )}
 
         {/* Vulnerability-specific: CVSS Scores */}
         {isVulnerability && (cvssScore != null || cvssSeverity) && (
@@ -6890,7 +6931,7 @@ const App: React.FC = () => {
                         fullWidth
                         onClick={handleDiscoverEntitiesWithAI}
                         disabled={isAiButtonDisabled}
-                        startIcon={aiDiscoveringEntities ? <CircularProgress size={16} /> : <AutoAwesomeOutlined />}
+                        startIcon={aiDiscoveringEntities ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
                         sx={{
                           textTransform: 'none',
                           borderColor: aiColors.main,
@@ -7487,6 +7528,8 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setAtomicTestingAIGenerating(true);
+    // Clear any previous generated payload on new generation attempt
+    setAtomicTestingAIGeneratedPayload(null);
     
     try {
       // Get page content for context
@@ -7504,6 +7547,19 @@ const App: React.FC = () => {
         }
       }
       
+      // Safeguard: Limit context size to prevent issues with large pages
+      const MAX_PAGE_CONTENT = 6000;
+      let contextContent = pageContent;
+      if (contextContent.length > MAX_PAGE_CONTENT) {
+        log.debug(` Page content too large (${contextContent.length} chars), truncating to ${MAX_PAGE_CONTENT}`);
+        contextContent = contextContent.substring(0, MAX_PAGE_CONTENT) + '\n\n[Page content truncated]';
+      }
+      
+      // Build the context with page content and optional user context
+      const fullContext = contextContent + (atomicTestingAIContext ? `\n\nAdditional context from user: ${atomicTestingAIContext}` : '');
+      
+      log.debug(` Generating AI payload, context length: ${fullContext.length} chars`);
+      
       // Call AI to generate atomic test payload
       const response = await chrome.runtime.sendMessage({
         type: 'AI_GENERATE_ATOMIC_TEST',
@@ -7513,17 +7569,24 @@ const App: React.FC = () => {
             description: atomicTestingAIContext || 'Generate a security simulation payload based on the page content',
           },
           targetPlatform: atomicTestingAIPlatform.toLowerCase(),
-          context: pageContent.substring(0, 3000) + (atomicTestingAIContext ? `\n\nAdditional context: ${atomicTestingAIContext}` : ''),
+          context: fullContext,
         },
       });
       
       if (response?.success && response.data) {
         const generatedTest = response.data;
+        
+        // Validate the generated test has the required fields
+        if (!generatedTest.command) {
+          log.error(' AI generated test is missing required "command" field:', generatedTest);
+          // Still try to use it if we have a name at least
+        }
+        
         setAtomicTestingAIGeneratedPayload({
           name: generatedTest.name || `AI Payload - ${atomicTestingAIPlatform}`,
           description: generatedTest.description || 'AI-generated security simulation payload',
           executor: atomicTestingAIExecutor,
-          command: generatedTest.command || '',
+          command: generatedTest.command || '# AI failed to generate a command - please try again',
           cleanupCommand: generatedTest.cleanupCommand,
           cleanupExecutor: atomicTestingAIExecutor,
           platform: atomicTestingAIPlatform,
@@ -7531,10 +7594,32 @@ const App: React.FC = () => {
         setAtomicTestingTitle(`Atomic Test - ${generatedTest.name || 'AI Generated'}`);
         log.debug(' AI generated payload:', generatedTest);
       } else {
-        log.error(' AI payload generation failed:', response?.error);
+        const errorMessage = response?.error || 'Unknown error - AI did not return a response';
+        log.error(' AI payload generation failed:', errorMessage);
+        // Set a placeholder payload with the error so user sees something
+        setAtomicTestingAIGeneratedPayload({
+          name: 'AI Generation Failed',
+          description: `Error: ${errorMessage}. Please try again or provide more specific context.`,
+          executor: atomicTestingAIExecutor,
+          command: `# AI generation failed: ${errorMessage}\n# Please try again with different context or check AI settings`,
+          cleanupCommand: undefined,
+          cleanupExecutor: atomicTestingAIExecutor,
+          platform: atomicTestingAIPlatform,
+        });
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unexpected error';
       log.error(' AI payload generation error:', error);
+      // Set a placeholder payload with the error so user sees something
+      setAtomicTestingAIGeneratedPayload({
+        name: 'AI Generation Failed',
+        description: `Error: ${errorMessage}. Please check your AI settings and try again.`,
+        executor: atomicTestingAIExecutor,
+        command: `# AI generation error: ${errorMessage}`,
+        cleanupCommand: undefined,
+        cleanupExecutor: atomicTestingAIExecutor,
+        platform: atomicTestingAIPlatform,
+      });
     } finally {
       setAtomicTestingAIGenerating(false);
     }
@@ -9167,13 +9252,14 @@ const App: React.FC = () => {
       log.info(' Scenario created:', scenario.scenario_id);
       
       // Add selected injects to the scenario
-      let previousInjectId: string | null = null;
       const isTableTop = scenarioTypeAffinity === 'TABLE-TOP';
       
       for (let i = 0; i < selectedInjects.length; i++) {
         const inject = selectedInjects[i];
         
         // Build inject payload based on scenario type
+        // inject_depends_duration is the relative time from scenario start in seconds
+        // No inject_depends_on - injects are independent and only timed by duration
         const injectPayload: any = {
           inject_title: isTableTop 
             ? `Email - ${inject.attackPatternName}`
@@ -9184,7 +9270,7 @@ const App: React.FC = () => {
           inject_injector_contract: isTableTop 
             ? EMAIL_INJECTOR_CONTRACT_ID  // Use email contract for TABLE-TOP
             : inject.contractId,          // Use selected contract for technical
-          inject_depends_duration: i * scenarioInjectSpacing * 60, // Convert to seconds, sequential timing
+          inject_depends_duration: i * scenarioInjectSpacing * 60, // Relative time from start in seconds
         };
         
         // Add target based on scenario type
@@ -9214,11 +9300,6 @@ const App: React.FC = () => {
           }
         }
         
-        // Chain injects if there's a previous one
-        if (previousInjectId) {
-          injectPayload.inject_depends_on = previousInjectId;
-        }
-        
         log.debug(` Adding inject ${i + 1}/${selectedInjects.length}:`, injectPayload);
         
         const injectResponse = await chrome.runtime.sendMessage({
@@ -9231,7 +9312,6 @@ const App: React.FC = () => {
         });
         
         if (injectResponse?.success && injectResponse.data?.inject_id) {
-          previousInjectId = injectResponse.data.inject_id;
           log.debug(` Inject created:`, injectResponse.data.inject_id);
         } else {
           log.error(` Failed to create inject:`, injectResponse?.error);

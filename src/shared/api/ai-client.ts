@@ -115,6 +115,8 @@ export interface EntityDiscoveryRequest {
     name: string;
     value?: string;
     found: boolean;
+    /** External ID for attack patterns (e.g., T1562.001) */
+    externalId?: string;
   }>;
 }
 
@@ -436,17 +438,31 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
    * Generate on-the-fly atomic test
    */
   async generateAtomicTest(request: AtomicTestRequest): Promise<AIGenerationResponse> {
-    const systemPrompt = `You are an expert in adversary simulation and atomic testing (like Atomic Red Team). Generate safe, reversible test commands that simulate specific attack techniques. Always include cleanup commands. Output in JSON format.`;
+    const systemPrompt = `You are an expert in adversary simulation and atomic testing (like Atomic Red Team). Generate safe, reversible test commands that simulate specific attack techniques. Always include cleanup commands. Output in JSON format only - no markdown, no explanations, just valid JSON.`;
+
+    // Truncate context to reasonable size to prevent token limits
+    const MAX_CONTEXT_LENGTH = 4000;
+    const truncatedContext = request.context 
+      ? (request.context.length > MAX_CONTEXT_LENGTH 
+          ? request.context.substring(0, MAX_CONTEXT_LENGTH) + '...[truncated]' 
+          : request.context)
+      : '';
+    
+    const truncatedDescription = request.attackPattern.description
+      ? (request.attackPattern.description.length > 1000
+          ? request.attackPattern.description.substring(0, 1000) + '...[truncated]'
+          : request.attackPattern.description)
+      : '';
 
     const prompt = `Generate an atomic test for the following attack technique:
 
 Attack Pattern: ${request.attackPattern.name}
 ${request.attackPattern.id ? `MITRE ID: ${request.attackPattern.id}` : ''}
-${request.attackPattern.description ? `Description: ${request.attackPattern.description.substring(0, 500)}` : ''}
+${truncatedDescription ? `Description: ${truncatedDescription}` : ''}
 Target Platform: ${request.targetPlatform}
 ${request.attackPattern.mitrePlatforms?.length ? `Supported Platforms: ${request.attackPattern.mitrePlatforms.join(', ')}` : ''}
 
-${request.context ? `Additional Context:\n${request.context.substring(0, 500)}` : ''}
+${truncatedContext ? `Additional Context:\n${truncatedContext}` : ''}
 
 Generate a JSON response with this structure:
 {
@@ -462,7 +478,8 @@ Important:
 - Commands must be SAFE and NON-DESTRUCTIVE
 - Must be reversible with cleanup
 - Should produce observable artifacts for detection testing
-- Use appropriate executor for ${request.targetPlatform}`;
+- Use appropriate executor for ${request.targetPlatform}
+- Return ONLY valid JSON, no markdown code blocks or additional text`;
 
     return this.generate({ prompt, systemPrompt, maxTokens: 1000, temperature: 0.5 });
   }
@@ -555,8 +572,16 @@ ENTITY TYPES YOU CAN DETECT:
 Output ONLY valid JSON, no additional text.`;
 
     // Build a summary of already detected entities
+    // Include external IDs for attack patterns (e.g., T1562.001) to prevent AI from re-detecting them
     const alreadyDetectedSummary = request.alreadyDetected.length > 0
-      ? request.alreadyDetected.map(e => `- ${e.type}: ${e.value || e.name}`).join('\n')
+      ? request.alreadyDetected.map(e => {
+          const parts = [`- ${e.type}: ${e.value || e.name}`];
+          // Add external ID if available (for attack patterns like T1562.001)
+          if (e.externalId && e.externalId !== e.value && e.externalId !== e.name) {
+            parts.push(` (also known as: ${e.externalId})`);
+          }
+          return parts.join('');
+        }).join('\n')
       : 'None detected yet';
 
     const prompt = `Analyze the following page content and extract any cybersecurity entities that are NOT already in the detected list.
@@ -710,22 +735,54 @@ export function isAIAvailable(settings?: AISettings): boolean {
 }
 
 /**
- * Parse JSON from AI response (handles markdown code blocks)
+ * Parse JSON from AI response (handles markdown code blocks and various edge cases)
  */
 export function parseAIJsonResponse<T>(content: string): T | null {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+  
+  // Trim whitespace
+  const trimmed = content.trim();
+  
+  if (!trimmed) {
+    return null;
+  }
+  
   try {
     // Try direct JSON parse first
-    return JSON.parse(content);
+    return JSON.parse(trimmed);
   } catch {
-    // Try to extract JSON from markdown code block
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
+    // Try to extract JSON from markdown code block (```json ... ``` or ``` ... ```)
+    const jsonMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch && jsonMatch[1]) {
       try {
         return JSON.parse(jsonMatch[1].trim());
       } catch {
-        return null;
+        // Continue to other methods
       }
     }
+    
+    // Try to find JSON object in the response (starts with { and ends with })
+    const jsonObjectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (jsonObjectMatch) {
+      try {
+        return JSON.parse(jsonObjectMatch[0]);
+      } catch {
+        // Continue to other methods
+      }
+    }
+    
+    // Try to find JSON array in the response (starts with [ and ends with ])
+    const jsonArrayMatch = trimmed.match(/\[[\s\S]*\]/);
+    if (jsonArrayMatch) {
+      try {
+        return JSON.parse(jsonArrayMatch[0]);
+      } catch {
+        // Fall through to return null
+      }
+    }
+    
     return null;
   }
 }

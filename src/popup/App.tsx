@@ -180,20 +180,17 @@ const App: React.FC = () => {
   useEffect(() => {
     // Check if we're running in an extension context
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setMode(isDark ? 'dark' : 'light');
+      // Outside extension context - use default dark theme
+      setMode('dark');
       return;
     }
 
-    // Get theme setting
+    // Get theme setting - strictly from configuration
     chrome.runtime.sendMessage({ type: 'GET_PLATFORM_THEME' }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success) {
-        let themeMode = response.data;
-        if (themeMode === 'auto') {
-          themeMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        setMode(themeMode);
+        // Theme is strictly configuration-based - no auto detection
+        setMode(response.data === 'light' ? 'light' : 'dark');
       }
     });
 

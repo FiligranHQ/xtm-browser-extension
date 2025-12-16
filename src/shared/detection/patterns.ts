@@ -284,8 +284,9 @@ export const OBSERVABLE_PATTERNS: PatternConfig[] = [
     hashType: 'MD5',
     priority: 87,
     validate: (match) => {
-      // Exclude common false positives like UUIDs
-      return !/^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i.test(match);
+      // Exclude UUIDs with dashes (e.g., d41d8cd9-8f00-b204-e980-0998ecf8427e)
+      // Note: Do NOT exclude pure 32-char hex strings - those are valid MD5 hashes
+      return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match);
     },
   },
   {

@@ -16,7 +16,8 @@
     "storage",
     "activeTab",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"

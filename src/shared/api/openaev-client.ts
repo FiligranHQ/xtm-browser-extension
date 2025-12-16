@@ -758,8 +758,7 @@ export class OpenAEVClient {
     inject_description?: string;
     inject_injector_contract: string;
     inject_content?: Record<string, any>;
-    inject_depends_duration?: number;
-    inject_depends_on?: string;
+    inject_depends_duration?: number; // Relative time from scenario start in seconds
     inject_teams?: string[];
     inject_assets?: string[];
     inject_asset_groups?: string[];

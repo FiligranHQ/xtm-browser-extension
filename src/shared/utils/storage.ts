@@ -140,12 +140,30 @@ export interface CachedEntity {
   id: string;
   name: string;
   aliases?: string[];
+  x_mitre_id?: string; // MITRE ATT&CK ID for attack patterns (e.g., T1059, T1059.001)
   type: string;
   platformId?: string; // Track which platform this came from
 }
 
 // Minimum length for names/aliases to avoid false positives
 const MIN_NAME_LENGTH = 4;
+
+// Common terms that should be excluded from entity name matching
+// These are generic words that may appear as aliases but cause false positives
+const EXCLUDED_TERMS = new Set([
+  'page',
+  'test',
+  'demo',
+  'example',
+  'sample',
+  'default',
+  'unknown',
+  'none',
+  'null',
+  'undefined',
+  'true',
+  'false',
+]);
 
 export interface SDOCache {
   timestamp: number;
@@ -291,7 +309,7 @@ export function createEmptySDOCache(platformId: string = 'default'): SDOCache {
 
 /**
  * Get all entity names and aliases for matching from ALL platforms (merged)
- * Filters out names/aliases shorter than MIN_NAME_LENGTH to avoid false positives
+ * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
  */
 export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, CachedEntity>> {
   const multiCache = await getMultiPlatformSDOCache();
@@ -301,19 +319,27 @@ export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, 
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
     for (const entityType of Object.keys(cache.entities) as Array<keyof SDOCache['entities']>) {
       for (const entity of cache.entities[entityType]) {
-        // Add main name with platform info (only if long enough)
+        // Add main name with platform info (only if long enough and not excluded)
         const entityWithPlatform = { ...entity, platformId };
-        if (entity.name.length >= MIN_NAME_LENGTH) {
-          nameMap.set(entity.name.toLowerCase(), entityWithPlatform);
+        const nameLower = entity.name.toLowerCase();
+        if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
+          nameMap.set(nameLower, entityWithPlatform);
         }
         
-        // Add aliases (only if long enough)
+        // Add aliases (only if long enough and not excluded)
         if (entity.aliases) {
           for (const alias of entity.aliases) {
-            if (alias.length >= MIN_NAME_LENGTH) {
-              nameMap.set(alias.toLowerCase(), entityWithPlatform);
+            const aliasLower = alias.toLowerCase();
+            if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
+              nameMap.set(aliasLower, entityWithPlatform);
             }
           }
+        }
+        
+        // Add x_mitre_id for attack patterns (e.g., T1059, T1059.001)
+        // These are short but specific identifiers, so we include them regardless of length
+        if (entity.x_mitre_id) {
+          nameMap.set(entity.x_mitre_id.toLowerCase(), entityWithPlatform);
         }
       }
     }
@@ -522,7 +548,7 @@ export function createEmptyOAEVCache(platformId: string = 'default'): OAEVCache 
 
 /**
  * Get all OpenAEV entity names for matching from ALL platforms (merged)
- * Filters out names/aliases shorter than MIN_NAME_LENGTH to avoid false positives
+ * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
  */
 export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<string, CachedOAEVEntity>> {
   const multiCache = await getMultiPlatformOAEVCache();
@@ -532,16 +558,18 @@ export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<stri
     for (const entityType of Object.keys(cache.entities) as Array<keyof OAEVCache['entities']>) {
       for (const entity of cache.entities[entityType]) {
         const entityWithPlatform = { ...entity, platformId };
-        // Add main name (only if long enough)
-        if (entity.name.length >= MIN_NAME_LENGTH) {
-          nameMap.set(entity.name.toLowerCase(), entityWithPlatform);
+        // Add main name (only if long enough and not excluded)
+        const nameLower = entity.name.toLowerCase();
+        if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
+          nameMap.set(nameLower, entityWithPlatform);
         }
         
-        // Add aliases (hostnames, IPs)
+        // Add aliases (hostnames, IPs) - only if long enough and not excluded
         if (entity.aliases) {
           for (const alias of entity.aliases) {
-            if (alias.length >= MIN_NAME_LENGTH) {
-              nameMap.set(alias.toLowerCase(), entityWithPlatform);
+            const aliasLower = alias.toLowerCase();
+            if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
+              nameMap.set(aliasLower, entityWithPlatform);
             }
           }
         }

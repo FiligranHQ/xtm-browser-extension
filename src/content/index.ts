@@ -23,68 +23,38 @@ import {
   PLATFORM_REGISTRY,
   type PlatformType,
 } from '../shared/platform';
-import { Readability } from '@mozilla/readability';
 import { jsPDF } from 'jspdf';
+import { 
+  extractContent, 
+  generateReaderView,
+  generatePDF as generateEnhancedPDF,
+  type ExtractedContent 
+} from '../shared/extraction';
 
 // ============================================================================
 // Article Extraction & PDF Generation Utilities
 // ============================================================================
 
 /**
- * Extract clean article content using Mozilla Readability
+ * Extract clean article content using the enhanced extraction module
  * This extracts just the main article content, removing menus, sidebars, etc.
+ * Uses print-mode optimization and multiple heuristics for best results.
  */
 function extractArticleContent(): { title: string; content: string; textContent: string; excerpt: string; byline: string } {
   try {
-    // Clone the document to avoid modifying the original
-    const documentClone = document.cloneNode(true) as Document;
+    const extracted = extractContent();
     
-    // Pre-clean: remove obvious non-content elements from the clone
-    const selectorsToRemove = [
-      // Paywall/subscription elements (common class names)
-      '[class*="paywall"]', '[class*="subscribe"]', '[class*="subscription"]',
-      '[class*="premium"]', '[class*="teaser"]', '[class*="restricted"]',
-      '[class*="locked"]', '[class*="meter"]', '[class*="regwall"]',
-      '[id*="paywall"]', '[id*="subscribe"]', '[id*="subscription"]',
-      // Le Monde specific
-      '[class*="article__status"]', '[class*="article__wrapper--premium"]',
-      '.article__content-paywall', '.paywall', '.subscriber-only',
-      // Generic ads and promotions
-      '[class*="promo"]', '[class*="newsletter"]', '[class*="signup"]',
-      '[class*="cta-"]', '[class*="call-to-action"]',
-    ];
+    log.debug(' Enhanced extraction complete:', extracted.title, 'text length:', extracted.textContent.length, 'images:', extracted.images.length);
     
-    selectorsToRemove.forEach(selector => {
-      try {
-        documentClone.querySelectorAll(selector).forEach(el => el.remove());
-      } catch { /* Skip invalid selectors */ }
-    });
-    
-    // Create a Readability instance and parse the article
-    const reader = new Readability(documentClone, {
-      debug: false,
-      charThreshold: 100,
-    });
-    
-    const article = reader.parse();
-    
-    if (article) {
-      // Apply additional text cleaning to remove paywall messages
-      const cleanedTextContent = cleanArticleText(article.textContent || '');
-      // Also clean the HTML content to remove any remaining overlays/modals
-      const cleanedHtmlContent = cleanArticleHtml(article.content || '');
-      
-      log.debug(' Readability extracted article:', article.title, 'raw length:', article.textContent?.length, 'cleaned length:', cleanedTextContent.length);
-      return {
-        title: article.title || document.title,
-        content: cleanedHtmlContent,
-        textContent: cleanedTextContent,
-        excerpt: cleanArticleText(article.excerpt || ''),
-        byline: article.byline || '',
-      };
-    }
+    return {
+      title: extracted.title || document.title,
+      content: extracted.content,
+      textContent: extracted.textContent,
+      excerpt: extracted.excerpt,
+      byline: extracted.byline,
+    };
   } catch (error) {
-    log.warn(' Failed to extract article with Readability:', error);
+    log.warn(' Failed to extract article with enhanced extractor:', error);
   }
   
   // Fallback: return basic cleaned content
@@ -96,6 +66,13 @@ function extractArticleContent(): { title: string; content: string; textContent:
     excerpt: '',
     byline: '',
   };
+}
+
+/**
+ * Get full extracted content with all metadata (for PDF generation)
+ */
+function getFullExtractedContent(): ExtractedContent {
+  return extractContent();
 }
 
 /**
@@ -580,21 +557,52 @@ async function loadImageAsBase64(imgElement: HTMLImageElement): Promise<{ data: 
 }
 
 /**
- * Generate PDF from article content with selectable text AND images
- * Parses HTML and renders using native jsPDF methods for real text
+ * Generate PDF from article content using enhanced extraction
+ * Uses the new extraction module for cleaner content and better image handling
  * Returns base64 encoded PDF data
  */
 async function generateArticlePDF(): Promise<{ data: string; filename: string } | null> {
   try {
-    // Extract article content
-    const article = extractArticleContent();
+    // Use the enhanced extractor for better content
+    const extractedContent = getFullExtractedContent();
     
-    if (!article.content && !article.textContent) {
+    if (!extractedContent.content && !extractedContent.textContent) {
       log.warn(' No article content to generate PDF');
       return null;
     }
     
-    log.debug(' Starting PDF generation with selectable text and images, article title:', article.title);
+    log.debug(' Starting enhanced PDF generation, title:', extractedContent.title, 'images:', extractedContent.images.length);
+    
+    // Use the enhanced PDF generator
+    const result = await generateEnhancedPDF(extractedContent, {
+      includeImages: true,
+      paperSize: 'a4',
+      headerText: 'Filigran XTM Browser Extension',
+    });
+    
+    if (result) {
+      log.debug(' Enhanced PDF generated successfully, method:', result.method, 'size:', result.data.length);
+      return {
+        data: result.data,
+        filename: result.filename,
+      };
+    }
+    
+    // Fallback to legacy generation if enhanced fails
+    log.warn(' Enhanced PDF generation failed, falling back to legacy method');
+    return generateLegacyPDF(extractedContent);
+  } catch (error) {
+    log.error(' Failed to generate PDF:', error);
+    return generateSimpleTextPDF();
+  }
+}
+
+/**
+ * Legacy PDF generation for fallback (preserved from original implementation)
+ */
+async function generateLegacyPDF(article: { title: string; content: string; textContent: string }): Promise<{ data: string; filename: string } | null> {
+  try {
+    log.debug(' Starting legacy PDF generation, article title:', article.title);
     
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -910,16 +918,15 @@ async function generateArticlePDF(): Promise<{ data: string; filename: string } 
     const pdfOutput = pdf.output('datauristring');
     const base64Data = pdfOutput.split(',')[1];
     
-    log.debug(' PDF generated successfully with selectable text and images, base64 length:', base64Data.length);
+    log.debug(' Legacy PDF generated successfully, base64 length:', base64Data.length);
     
     return {
       data: base64Data,
       filename: filename,
     };
   } catch (error) {
-    log.error(' Failed to generate PDF:', error);
-    // Fallback to simple text-based PDF
-    return generateSimpleTextPDF();
+    log.error(' Failed to generate legacy PDF:', error);
+    return null;
   }
 }
 
@@ -937,7 +944,8 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
       textContent = temp.textContent || temp.innerText || '';
     }
     
-    textContent = cleanArticleText(textContent)
+    // Clean the text content
+    textContent = textContent
       .replace(/[\t\r]/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ ]{2,}/g, ' ')
@@ -3525,11 +3533,15 @@ function highlightResults(results: ScanResultPayload): void {
   
   // Find and highlight SDOs (with multi-platform check)
   for (const sdo of results.sdos) {
+    // Use matchedValue (the actual matched text) if available, otherwise use name
+    // This is important when entities are matched via x_mitre_id or aliases
+    // e.g., "T1098.001" matched -> name is "Additional Cloud Credentials", matchedValue is "T1098.001"
+    const textToHighlight = (sdo as any).matchedValue || sdo.name;
     const valueLower = sdo.name.toLowerCase();
     // Get other platforms where this entity (or related entity) is found
     const otherPlatformMatches = findPlatformMatchesWithSubstrings(valueLower);
     
-    highlightInText(fullText, sdo.name, nodeMap, {
+    highlightInText(fullText, textToHighlight, nodeMap, {
       type: sdo.type,
       found: sdo.found,
       data: sdo,
@@ -3554,7 +3566,10 @@ function highlightResults(results: ScanResultPayload): void {
     for (const entity of results.platformEntities) {
       const entityPlatformType = (entity.platformType || 'openaev') as PlatformType;
       const prefixedType = createPrefixedType(entity.type, entityPlatformType);
-      highlightInText(fullText, entity.name, nodeMap, {
+      // Use entity.value (the actual matched text) if available, otherwise use entity.name
+      // This is important when entities are matched via x_mitre_id or aliases (e.g., "T1098.001" -> "Additional Cloud Credentials")
+      const textToHighlight = entity.value || entity.name;
+      highlightInText(fullText, textToHighlight, nodeMap, {
         type: prefixedType,
         found: entity.found,
         data: entity as unknown as DetectedSDO,
@@ -4283,7 +4298,7 @@ function showAddPanel(entity: DetectedObservable | DetectedSDO): void {
   sendPanelMessage('SHOW_ADD_ENTITY', entity);
 }
 
-// Helper to get current theme from background
+// Helper to get current theme from background - strictly from configuration
 async function getCurrentTheme(): Promise<'dark' | 'light'> {
   return new Promise((resolve) => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -4292,11 +4307,8 @@ async function getCurrentTheme(): Promise<'dark' | 'light'> {
           resolve('dark'); // Default to dark
           return;
         }
-        let theme = response.data;
-        if (theme === 'auto') {
-          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        resolve(theme);
+        // Theme is strictly configuration-based - no auto detection
+        resolve(response.data === 'light' ? 'light' : 'dark');
       });
     } else {
       resolve('dark');

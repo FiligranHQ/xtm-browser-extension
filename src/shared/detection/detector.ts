@@ -421,12 +421,17 @@ export class DetectionEngine {
       // Escape special regex characters in the name
       const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       
-      // Use word boundary \b for simple alphanumeric names
-      // For names with special chars, do a simple case-insensitive substring search
+      // Determine matching strategy based on content type
       const hasSpecialChars = /[.\-_]/.test(nameLower);
+      // Check if this is a MITRE ATT&CK ID (T1059, T1059.001, TA0001, etc.)
+      const isMitreId = /^t[as]?\d{4}(\.\d{3})?$/i.test(nameLower);
       
       let regex: RegExp;
-      if (hasSpecialChars) {
+      if (isMitreId) {
+        // MITRE IDs (T1059, T1059.001): use word boundaries for exact match
+        // The \b works well here because MITRE IDs are alphanumeric with dots
+        regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
+      } else if (hasSpecialChars) {
         // For names with special characters, use lookahead/lookbehind or simple indexOf
         // We'll use a simpler approach: match the exact string, then verify boundaries manually
         regex = new RegExp(escapedName, 'gi');
@@ -443,8 +448,20 @@ export class DetectionEngine {
         const startIndex = match.index;
         const endIndex = startIndex + matchedText.length;
         
-        // For names with special chars, verify boundaries manually
-        if (hasSpecialChars) {
+        // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
+        // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
+        const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
+        if (isParentMitreId) {
+          const charAfter = endIndex < text.length ? text[endIndex] : '';
+          if (charAfter === '.') {
+            // This parent technique is followed by a dot, likely part of a sub-technique
+            // Skip this match to avoid duplicate detection
+            continue;
+          }
+        }
+        
+        // For names with special chars (but not MITRE IDs which use word boundaries), verify boundaries manually
+        if (hasSpecialChars && !isMitreId) {
           const charBefore = startIndex > 0 ? text[startIndex - 1] : ' ';
           const charAfter = endIndex < text.length ? text[endIndex] : ' ';
           
@@ -469,6 +486,8 @@ export class DetectionEngine {
         detected.push({
           type: entity.type as DetectedSDO['type'],
           name: entity.name, // Use canonical name from cache
+          // Store the actual matched text (may differ from name if matched via alias or x_mitre_id)
+          matchedValue: matchedText !== entity.name ? matchedText : undefined,
           startIndex,
           endIndex,
           found: true, // Already know it's in the cache
@@ -552,6 +571,17 @@ export class DetectionEngine {
         
         const startIndex = match.index;
         const endIndex = startIndex + matchedText.length;
+        
+        // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
+        // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
+        const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
+        if (isParentMitreId) {
+          const charAfter = endIndex < text.length ? text[endIndex] : '';
+          if (charAfter === '.') {
+            // This parent technique is followed by a dot, likely part of a sub-technique
+            continue;
+          }
+        }
         
         // For names with special chars (but not IPs/MACs/MITRE IDs), verify boundaries manually
         if (hasSpecialChars && !isIpAddress && !isMacAddress && !isMitreId) {

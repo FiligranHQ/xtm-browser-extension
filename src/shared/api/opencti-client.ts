@@ -863,7 +863,7 @@ export class OpenCTIClient {
       }
     `;
 
-    const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];
+    const allResults: Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
     let pageCount = 0;
@@ -874,19 +874,20 @@ export class OpenCTIClient {
       const pageResults = data.stixDomainObjects.edges
         .map((edge) => {
           const node = edge.node;
-          // Merge aliases, x_opencti_aliases, and x_mitre_id (for attack patterns)
+          // Merge aliases and x_opencti_aliases (x_mitre_id is kept separate for explicit matching)
           const allAliases = [
             ...(node.aliases || []), 
             ...(node.x_opencti_aliases || []),
-            ...(node.x_mitre_id ? [node.x_mitre_id] : []),
           ];
           return {
             id: node.id,
             name: node.name || '',
             aliases: allAliases.length > 0 ? allAliases : undefined,
+            // Keep x_mitre_id as separate field for attack patterns
+            x_mitre_id: node.x_mitre_id || undefined,
           };
         })
-        .filter(node => node.name) as Array<{ id: string; name: string; aliases?: string[] }>;
+        .filter(node => node.name) as Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>;
 
       allResults.push(...pageResults);
       hasNextPage = data.stixDomainObjects.pageInfo.hasNextPage;
@@ -1028,9 +1029,9 @@ export class OpenCTIClient {
   }
 
   /**
-   * Fetch all attack patterns for caching with full pagination (includes x_mitre_id as alias)
+   * Fetch all attack patterns for caching with full pagination (includes x_mitre_id as separate field)
    */
-  async fetchAttackPatterns(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+  async fetchAttackPatterns(): Promise<Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>> {
     return this.fetchSDOsForCache('Attack-Pattern');
   }
 

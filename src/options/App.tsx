@@ -39,7 +39,6 @@ import {
   InfoOutlined,
   LightModeOutlined,
   DarkModeOutlined,
-  ContrastOutlined,
   DescriptionOutlined,
   PublicOutlined,
   DeleteOutlined,
@@ -180,13 +179,12 @@ const App: React.FC = () => {
   useEffect(() => {
     // Check if we're running in an extension context
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-      // Running outside extension context - use defaults
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setMode(isDark ? 'dark' : 'light');
+      // Outside extension context - use default dark theme
+      setMode('dark');
       setSettings({
         openctiPlatforms: [{ id: '1', name: 'OpenCTI', url: '', apiToken: '', enabled: true }],
         openaevPlatforms: [],
-        theme: 'auto',
+        theme: 'dark',
         autoScan: false,
         scanOnLoad: false,
         showNotifications: true,
@@ -264,10 +262,8 @@ const App: React.FC = () => {
       setTestedPlatforms(existingTested);
       
       let themeMode = loadedSettings.theme;
-      if (themeMode === 'auto') {
-        themeMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      setMode(themeMode);
+      // Theme is strictly configuration-based - no auto detection
+      setMode(themeMode === 'light' ? 'light' : 'dark');
     }
   };
 
@@ -687,10 +683,8 @@ const App: React.FC = () => {
     const updatedSettings = { ...settings, theme: newTheme };
     setSettings(updatedSettings);
     
-    const effectiveMode = newTheme === 'auto'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : newTheme;
-    setMode(effectiveMode);
+    // Theme is strictly from settings - default to dark
+    setMode(newTheme === 'light' ? 'light' : 'dark');
     
     // Save immediately for theme changes
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -1856,13 +1850,12 @@ const App: React.FC = () => {
                   
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     {[
-                      { value: 'auto', label: 'Auto', icon: <ContrastOutlined /> },
                       { value: 'dark', label: 'Dark', icon: <DarkModeOutlined /> },
                       { value: 'light', label: 'Light', icon: <LightModeOutlined /> },
                     ].map((item) => (
                       <Paper
                         key={item.value}
-                        onClick={() => setTheme(item.value as 'auto' | 'dark' | 'light')}
+                        onClick={() => setTheme(item.value as 'dark' | 'light')}
                         sx={{
                           display: 'flex',
                           flexDirection: 'column',
@@ -1886,14 +1879,7 @@ const App: React.FC = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: item.value === 'auto'
-                              ? 'linear-gradient(135deg, #1a1a2e 50%, #e8e8e8 50%)'
-                              : item.value === 'dark'
-                              ? '#1a1a2e'
-                              : '#e8e8e8',
-                            background: item.value === 'auto'
-                              ? 'linear-gradient(135deg, #1a1a2e 50%, #e8e8e8 50%)'
-                              : undefined,
+                            bgcolor: item.value === 'dark' ? '#1a1a2e' : '#e8e8e8',
                           }}
                         >
                           {item.icon}
@@ -1906,7 +1892,7 @@ const App: React.FC = () => {
                   </Box>
                   
                   <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
-                    Auto mode follows your browser's color scheme preference.
+                    Choose your preferred color theme for the extension panel.
                   </Typography>
                 </Paper>
               </Box>

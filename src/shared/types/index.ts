@@ -90,7 +90,7 @@ export interface ExtensionSettings {
   openctiPlatforms: PlatformConfig[];
   openaevPlatforms: PlatformConfig[];
   opengrcPlatforms?: PlatformConfig[]; // Future platform
-  theme: 'auto' | 'light' | 'dark';
+  theme: 'light' | 'dark';
   autoScan: boolean;
   highlightColor?: string;
   scanOnLoad: boolean;
@@ -103,7 +103,7 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   openctiPlatforms: [],
   openaevPlatforms: [],
-  theme: 'auto',
+  theme: 'dark',
   autoScan: false,
   scanOnLoad: false,
   showNotifications: true,
@@ -216,6 +216,8 @@ export interface DetectedSDO {
   entityId?: string;
   entityData?: StixDomainObject;
   platformId?: string;
+  // The actual text that was matched (may differ from name if matched via alias or x_mitre_id)
+  matchedValue?: string;
   // All platforms where this entity was found (for multi-platform navigation)
   platformMatches?: PlatformMatch[];
 }
@@ -600,8 +602,7 @@ export interface OAEVInjectInput {
   inject_description?: string;
   inject_injector_contract: string;
   inject_content?: Record<string, any>;
-  inject_depends_duration?: number; // Duration in seconds from scenario start
-  inject_depends_on?: string; // ID of the inject this depends on
+  inject_depends_duration?: number; // Relative time from scenario start in seconds
 }
 
 export interface ScenarioOverviewAttackPattern {
@@ -714,7 +715,9 @@ export type MessageType =
   // Unified scan
   | 'SCAN_ALL'
   // AI model management
-  | 'AI_TEST_AND_FETCH_MODELS';
+  | 'AI_TEST_AND_FETCH_MODELS'
+  // PDF Generation
+  | 'GENERATE_NATIVE_PDF';
 
 export interface ExtensionMessage {
   type: MessageType;

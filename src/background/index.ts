@@ -27,6 +27,7 @@ import {
   RETRY_DELAY_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/utils/messaging';
+import { generateNativePDF, isNativePDFAvailable } from '../shared/extraction';
 
 const log = loggers.background;
 import {
@@ -341,14 +342,15 @@ async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTICli
       fetchWithLog('Position', () => client.fetchPositions()),
     ]);
     
-    // Map to CachedEntity format (minimal data: id, name, aliases, type)
+    // Map to CachedEntity format (minimal data: id, name, aliases, x_mitre_id, type)
     const mapToCachedEntity = (
-      entities: Array<{ id: string; name: string; aliases?: string[] }>,
+      entities: Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>,
       type: string
     ): CachedEntity[] => entities.map(e => ({
       id: e.id,
       name: e.name,
       aliases: e.aliases,
+      x_mitre_id: e.x_mitre_id, // MITRE ATT&CK ID for attack patterns
       type,
       platformId,
     }));
@@ -1173,6 +1175,17 @@ async function handleMessage(
               const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
               
               if (beforeOk && afterOk) {
+                // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
+                // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
+                const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
+                if (isParentMitreId && charAfter === '.') {
+                  // This parent technique is followed by a dot, likely part of a sub-technique
+                  // Skip to next occurrence
+                  searchStart = matchIndex + 1;
+                  matchIndex = textLower.indexOf(nameLower, searchStart);
+                  continue;
+                }
+                
                 // Check for overlapping ranges (longer matches win)
                 const rangeKey = `${matchIndex}-${endIndex}`;
                 let hasOverlap = false;
@@ -1304,6 +1317,16 @@ async function handleMessage(
                   const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
                   
                   if (beforeOk && afterOk) {
+                    // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
+                    // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
+                    const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
+                    if (isParentMitreId && charAfter === '.') {
+                      // This parent technique is followed by a dot, likely part of a sub-technique
+                      searchStart = matchIndex + 1;
+                      matchIndex = textLower.indexOf(nameLower, searchStart);
+                      continue;
+                    }
+                    
                     const rangeKey = `${matchIndex}-${endIndex}`;
                     let hasOverlap = false;
                     for (const existingRange of seenRanges) {
@@ -1876,8 +1899,7 @@ async function handleMessage(
             inject_description?: string;
             inject_injector_contract: string;
             inject_content?: Record<string, any>;
-            inject_depends_duration?: number;
-            inject_depends_on?: string;
+            inject_depends_duration?: number; // Relative time from scenario start in seconds
             inject_teams?: string[];
             inject_assets?: string[];
             inject_asset_groups?: string[];
@@ -2184,21 +2206,10 @@ async function handleMessage(
       }
       
       case 'GET_PLATFORM_THEME': {
-        // Get user's theme setting
+        // Get user's theme setting - strictly from configuration
         const themeSettings = await getSettings();
-        let themeMode: 'dark' | 'light';
-        
-        if (themeSettings.theme === 'auto') {
-          // Use browser/system preference - we can't detect this in service worker
-          // so we'll return 'auto' and let the content/panel handle it
-          sendResponse({ success: true, data: 'auto' });
-          break;
-        } else if (themeSettings.theme === 'light' || themeSettings.theme === 'dark') {
-          themeMode = themeSettings.theme;
-        } else {
-          themeMode = 'dark'; // Default
-        }
-        
+        // Theme is strictly from settings - default to dark
+        const themeMode: 'dark' | 'light' = themeSettings.theme === 'light' ? 'light' : 'dark';
         sendResponse(successResponse(themeMode));
         break;
       }
@@ -3302,18 +3313,45 @@ async function handleMessage(
         try {
           const aiClient = new AIClient(settings.ai!);
           const request = message.payload as AtomicTestRequest;
+          
+          // Log context size for debugging
+          const contextLength = request.context?.length || 0;
+          log.debug('[AI_GENERATE_ATOMIC_TEST] Context length:', contextLength);
+          
+          // Safeguard: Truncate very large contexts to prevent AI failures
+          const MAX_CONTEXT_LENGTH = 8000;
+          if (request.context && request.context.length > MAX_CONTEXT_LENGTH) {
+            log.warn(`[AI_GENERATE_ATOMIC_TEST] Context too large (${request.context.length} chars), truncating to ${MAX_CONTEXT_LENGTH}`);
+            request.context = request.context.substring(0, MAX_CONTEXT_LENGTH) + '\n\n[Content truncated due to size]';
+          }
+          
           const response = await aiClient.generateAtomicTest(request);
+          
+          log.debug('[AI_GENERATE_ATOMIC_TEST] AI response success:', response.success, 'content length:', response.content?.length || 0);
           
           if (response.success && response.content) {
             const atomicTest = parseAIJsonResponse(response.content);
-            sendResponse({ success: true, data: atomicTest });
+            
+            // Safeguard: Check if parsing was successful
+            if (!atomicTest) {
+              log.error('[AI_GENERATE_ATOMIC_TEST] Failed to parse AI response as JSON. Raw content (first 500 chars):', response.content.substring(0, 500));
+              sendResponse({ 
+                success: false, 
+                error: 'Failed to parse AI response - the AI returned invalid JSON. Please try again.' 
+              });
+            } else {
+              log.debug('[AI_GENERATE_ATOMIC_TEST] Parsed atomic test:', atomicTest);
+              sendResponse({ success: true, data: atomicTest });
+            }
           } else {
-            sendResponse({ success: false, error: response.error || 'Failed to parse atomic test' });
+            log.error('[AI_GENERATE_ATOMIC_TEST] AI generation failed:', response.error);
+            sendResponse({ success: false, error: response.error || 'AI failed to generate content' });
           }
         } catch (error) {
+          log.error('[AI_GENERATE_ATOMIC_TEST] Exception:', error);
           sendResponse({ 
             success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed' 
+            error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
           });
         }
         break;
@@ -3437,6 +3475,46 @@ async function handleMessage(
           sendResponse({ 
             success: false, 
             error: error instanceof Error ? error.message : 'AI discovery failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'GENERATE_NATIVE_PDF': {
+        // Generate PDF using Chrome's native print-to-PDF via Debugger API
+        const { tabId } = message.payload as { tabId: number };
+        
+        if (!isNativePDFAvailable()) {
+          log.warn('Native PDF generation not available (debugger API not present)');
+          sendResponse({ success: false, error: 'Native PDF generation not available' });
+          break;
+        }
+        
+        try {
+          log.debug(`Generating native PDF for tab ${tabId}`);
+          const pdfData = await generateNativePDF(tabId, {
+            displayHeaderFooter: true,
+            printBackground: true,
+            paperWidth: 8.27, // A4
+            paperHeight: 11.69,
+            marginTop: 0.5,
+            marginBottom: 0.5,
+            marginLeft: 0.5,
+            marginRight: 0.5,
+          });
+          
+          if (pdfData) {
+            log.debug('Native PDF generated successfully, size:', pdfData.length);
+            sendResponse({ success: true, data: pdfData });
+          } else {
+            log.warn('Native PDF generation returned no data');
+            sendResponse({ success: false, error: 'PDF generation failed' });
+          }
+        } catch (error) {
+          log.error('Native PDF generation error:', error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'PDF generation failed' 
           });
         }
         break;

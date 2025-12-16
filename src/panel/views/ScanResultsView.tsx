@@ -31,19 +31,12 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
-import { THEME_DARK_AI } from '../../shared/theme/ThemeDark';
-import { THEME_LIGHT_AI } from '../../shared/theme/ThemeLight';
 import type { ScanResultsViewProps } from '../types/view-props';
 import type { ScanResultEntity, EntityData, MultiPlatformResult } from '../types';
 import { loggers } from '../../shared/utils/logger';
-import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
+import { generateDescription, cleanHtmlContent, getAiColor } from '../utils';
 
 const log = loggers.panel;
-
-// Helper function to get AI colors based on theme mode
-const getAiColor = (mode: 'dark' | 'light') => {
-  return mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
-};
 
 // Check if entity is selectable for OpenCTI import (not oaev-* type)
 const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {

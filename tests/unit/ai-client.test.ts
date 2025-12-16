@@ -91,6 +91,7 @@ describe('isAIAvailable', () => {
       enabled: true,
       provider: 'openai',
       apiKey: 'sk-test-key',
+      model: 'gpt-4',
     };
     
     expect(isAIAvailable(settings)).toBe(true);

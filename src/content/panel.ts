@@ -114,6 +114,27 @@ export function ensurePanelElements(): void {
     panelFrame = document.createElement('iframe');
     panelFrame.className = 'xtm-panel-frame hidden';
     panelFrame.src = chrome.runtime.getURL('panel/index.html');
+    
+    // Apply critical inline styles as backup to prevent host page CSS interference
+    // These ensure the panel stays positioned correctly even if CSS classes are overridden
+    panelFrame.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      right: 0 !important;
+      left: auto !important;
+      bottom: auto !important;
+      width: 560px !important;
+      height: 100vh !important;
+      z-index: 2147483646 !important;
+      border: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      translate: none !important;
+      rotate: none !important;
+      scale: none !important;
+      inset: auto 0 auto auto !important;
+    `;
+    
     document.body.appendChild(panelFrame);
   }
   

@@ -282,8 +282,45 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
   async generateFullScenario(request: FullScenarioGenerationRequest): Promise<AIGenerationResponse> {
     const isTableTop = request.typeAffinity === 'TABLE-TOP';
     
+    // Theme-specific configurations for table-top exercises
+    const themeConfigs: Record<string, { systemPromptSuffix: string; promptContext: string; exampleTopics: string }> = {
+      'cybersecurity': {
+        systemPromptSuffix: 'Focus on cyber attacks, data breaches, ransomware, phishing, and IT security incidents.',
+        promptContext: 'Cybersecurity & Technology',
+        exampleTopics: 'cyber attacks, malware outbreaks, data breaches, phishing campaigns, ransomware incidents, system compromises, insider threats, vulnerability exploitation',
+      },
+      'physical-security': {
+        systemPromptSuffix: 'Focus on physical security threats including facility breaches, unauthorized access, workplace violence, theft, and physical infrastructure incidents.',
+        promptContext: 'Physical Security & Safety',
+        exampleTopics: 'facility intrusions, access control breaches, theft incidents, workplace violence, surveillance failures, perimeter security, visitor management issues, physical asset protection',
+      },
+      'business-continuity': {
+        systemPromptSuffix: 'Focus on business disruption scenarios including natural disasters, supply chain failures, key personnel loss, system outages, and operational resilience.',
+        promptContext: 'Business Continuity',
+        exampleTopics: 'natural disasters, power outages, supply chain disruptions, key personnel unavailability, facility damage, system failures, vendor failures, operational disruptions',
+      },
+      'crisis-communication': {
+        systemPromptSuffix: 'Focus on crisis communication scenarios including media incidents, reputation management, public relations crises, stakeholder communication, and brand impact events.',
+        promptContext: 'Crisis Communication',
+        exampleTopics: 'media leaks, social media crises, negative press coverage, stakeholder concerns, public relations incidents, brand reputation threats, executive communications, customer notification requirements',
+      },
+      'health-safety': {
+        systemPromptSuffix: 'Focus on health and safety incidents including workplace accidents, pandemic response, environmental hazards, employee safety, and regulatory compliance.',
+        promptContext: 'Health & Safety',
+        exampleTopics: 'workplace injuries, pandemic outbreaks, environmental contamination, occupational hazards, emergency evacuations, regulatory violations, employee wellness incidents, safety equipment failures',
+      },
+      'geopolitical': {
+        systemPromptSuffix: 'Focus on geopolitical and economic scenarios including sanctions, trade restrictions, political instability, economic crises, regulatory changes, and international incidents.',
+        promptContext: 'Geopolitical & Economic',
+        exampleTopics: 'sanctions compliance, trade restrictions, political instability, economic downturns, currency crises, regulatory changes, international incidents, cross-border issues, export control violations',
+      },
+    };
+    
+    const selectedTheme = request.scenarioTheme || 'cybersecurity';
+    const themeConfig = themeConfigs[selectedTheme] || themeConfigs['cybersecurity'];
+    
     const systemPrompt = isTableTop
-      ? `You are a cybersecurity simulation expert creating table-top exercises. Generate realistic incident simulation scenarios with email notifications that simulate real-world security scenarios for training purposes. Each inject should be an email notification that advances the scenario narrative. Output in JSON format only.`
+      ? `You are a simulation expert creating table-top exercises. Generate realistic incident simulation scenarios with email notifications that simulate real-world scenarios for training purposes. ${themeConfig.systemPromptSuffix} Each inject should be an email notification that advances the scenario narrative. Output in JSON format only.`
       : `You are a cybersecurity adversary simulation expert. Generate realistic attack scenarios with executable payloads that simulate specific attack techniques. Commands must be SAFE, NON-DESTRUCTIVE, and reversible. Output in JSON format only.`;
 
     const hasAttackPatterns = request.detectedAttackPatterns && request.detectedAttackPatterns.length > 0;
@@ -298,19 +335,26 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
     let prompt: string;
     
     if (isTableTop) {
-      prompt = `Generate a table-top security exercise scenario based on the following:
+      const themeInstruction = selectedTheme !== 'cybersecurity'
+        ? `\nSCENARIO THEME: ${themeConfig.promptContext}
+The scenario MUST focus on ${themeConfig.promptContext.toLowerCase()} themes. Examples include: ${themeConfig.exampleTopics}.
+Even if the page content mentions cyber-related topics, reframe the scenario to fit the ${themeConfig.promptContext.toLowerCase()} theme.\n`
+        : '';
+      
+      prompt = `Generate a table-top exercise scenario based on the following:
 
 Scenario Name: ${request.scenarioName}
 Type: Table-Top Exercise
+Theme: ${themeConfig.promptContext}
 Duration: ${request.tableTopDuration || 60} minutes
 Number of Email Notifications: ${request.numberOfInjects}
 EMAIL LANGUAGE: ${emailLanguage.toUpperCase()} - All email subjects and bodies MUST be written in ${emailLanguage}.
-
+${themeInstruction}
 Source Intelligence:
 - Page: ${request.pageTitle}
 - URL: ${request.pageUrl}
 
-${hasAttackPatterns ? `Detected Attack Patterns/TTPs:\n${attackPatternsInfo}` : `No specific attack patterns were detected on the page. Analyze the page content below to identify relevant threats, attack techniques, vulnerabilities, or security topics mentioned, and create a realistic scenario based on that content.`}
+${hasAttackPatterns ? `Detected Topics/Patterns:\n${attackPatternsInfo}` : `No specific patterns were detected on the page. Analyze the page content below to identify relevant ${themeConfig.promptContext.toLowerCase()} topics, and create a realistic scenario based on that content.`}
 
 ${truncatedContext ? `Additional Context:\n${truncatedContext}\n` : ''}
 Page Content:
@@ -328,19 +372,20 @@ Generate a JSON response with this structure:
       "description": "brief description of this notification",
       "type": "email",
       "subject": "[SIMULATION] realistic email subject line in ${emailLanguage}",
-      "body": "Professional email body in ${emailLanguage} describing the simulated security event (2-4 sentences)",
+      "body": "Professional email body in ${emailLanguage} describing the simulated ${themeConfig.promptContext.toLowerCase()} event (2-4 sentences)",
       "delayMinutes": minutes from scenario start (0 for first, then spaced based on duration)
     }
   ]
 }
 
 Create exactly ${request.numberOfInjects} email notification injects that:
-1. Build a coherent narrative progressing through the attack/incident
+1. Build a coherent ${themeConfig.promptContext.toLowerCase()} narrative progressing through the incident
 2. Are spaced appropriately across the ${request.tableTopDuration || 60} minute duration
-3. ${hasAttackPatterns ? 'Reference the detected attack patterns where relevant' : 'Create realistic attack scenarios based on threats or techniques mentioned in the page content'}
+3. ${hasAttackPatterns ? 'Reference the detected topics where relevant, adapting them to the ' + themeConfig.promptContext + ' theme' : 'Create realistic scenarios based on ' + themeConfig.promptContext.toLowerCase() + ' topics derived from the page content'}
 4. Include realistic subject lines marked as [SIMULATION]
 5. Have professional, contextual email bodies suitable for training
-6. ALL EMAIL SUBJECTS AND BODIES MUST BE IN ${emailLanguage.toUpperCase()}`;
+6. ALL EMAIL SUBJECTS AND BODIES MUST BE IN ${emailLanguage.toUpperCase()}
+7. Focus specifically on ${themeConfig.promptContext.toLowerCase()} scenarios (${themeConfig.exampleTopics})`;
     } else {
       prompt = `Generate a technical adversary simulation scenario based on the following:
 

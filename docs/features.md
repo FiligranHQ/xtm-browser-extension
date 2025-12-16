@@ -253,14 +253,35 @@ Generate complete attack scenarios using AI directly from page content:
 4. Configure generation parameters:
    - **Number of Injects**: How many injects to generate (1-20, default 5)
    - **For Technical Scenarios**: Choose payload executor (PowerShell, CMD, Bash, Sh)
-   - **For Table-top Scenarios**: Set exercise duration in minutes and email language
-   - **Email Language**: Choose from 13 supported languages for email content
+   - **For Table-top Scenarios**: 
+     - Set exercise duration in minutes
+     - Select scenario theme
+     - Choose email language
    - **Additional Context**: Provide any extra context for the AI
 5. AI generates a complete scenario with:
    - **Technical Scenarios**: Executable command payloads that are safe and non-destructive
    - **Table-top Scenarios**: Realistic email notifications with subjects and bodies in the selected language
    - Proper sequencing based on attack phases
    - Context derived from page content (works even without detected attack patterns)
+
+### Scenario Themes (Table-Top Exercises)
+
+When generating table-top scenarios, you can select a theme that customizes the AI-generated content. Each theme focuses on domain-specific incidents:
+
+| Theme | Focus Areas | Example Topics |
+|-------|-------------|----------------|
+| 🔐 **Cybersecurity & Technology** | Cyber attacks, IT security incidents | Data breaches, ransomware, phishing campaigns, malware outbreaks, insider threats, vulnerability exploitation |
+| 🏢 **Physical Security & Safety** | Physical threats and facility security | Facility intrusions, access control breaches, theft incidents, workplace violence, surveillance failures |
+| 🔄 **Business Continuity** | Business disruption and operational resilience | Natural disasters, power outages, supply chain disruptions, system failures, vendor failures |
+| 📢 **Crisis Communication** | Media and reputation management | Media leaks, social media crises, negative press, stakeholder concerns, brand reputation threats |
+| ⚕️ **Health & Safety** | Occupational health and safety | Workplace injuries, pandemic outbreaks, environmental contamination, safety equipment failures |
+| 🌍 **Geopolitical & Economic** | International and economic scenarios | Sanctions compliance, trade restrictions, political instability, currency crises, regulatory changes |
+
+**How Themes Work:**
+- Each theme modifies the AI system prompt with domain-specific instructions
+- The AI generates scenarios relevant to the selected theme's focus areas
+- Email content (subjects and bodies) reflects realistic situations for that domain
+- Proper escalation patterns and response procedures are included
 
 ### AI Email Content Generation (OpenAEV)
 For table-top scenarios, AI can generate realistic email content:
@@ -291,6 +312,14 @@ AI can help identify entities that pattern matching might miss:
 3. Additional threat actors, campaigns, and techniques are suggested
 4. Review and select entities to include
 
+### AI Relationship Resolution
+AI can identify relationships between detected entities:
+1. Select entities for import
+2. Click **Resolve Relationships with AI**
+3. AI analyzes page context to find relationships
+4. Relationships are displayed with confidence levels and explanations
+5. Select which relationships to include in import
+
 ## Context Menu
 
 Right-click on any page to access:
@@ -303,12 +332,42 @@ Right-click on any page to access:
 
 ## Search
 
+### OpenCTI Search
 Use the search feature to query your OpenCTI instance:
-
 1. Click **Search** in the popup
 2. Enter your search term
 3. Results show entities matching your query
 4. Click a result to view full details in the side panel
+
+### OpenAEV Search
+Search for OpenAEV entities:
+1. Click **Search OpenAEV** in the popup
+2. Enter your search term
+3. Results show assets, attack patterns, and other entities
+4. Click a result to view details
+
+### Unified Search
+Search across all connected platforms simultaneously:
+1. Click **Unified Search** in the popup
+2. Enter your search term
+3. Results are grouped by platform
+4. Platform tabs show the source of each result
+
+## Multi-Platform Support
+
+The extension supports multiple instances of each platform type:
+
+### Configuration
+1. Go to Settings → OpenCTI or OpenAEV tab
+2. Click **Add Platform** to add additional instances
+3. Each platform has its own URL, API token, and name
+4. Enterprise Edition status is automatically detected
+
+### How It Works
+- **Scanning**: All platforms are scanned in parallel
+- **Entity Details**: Results show which platforms contain the entity
+- **Container Creation**: Select target platform for new containers
+- **Cache**: Each platform maintains its own entity cache
 
 ## Clear Highlights
 

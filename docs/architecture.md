@@ -8,8 +8,10 @@ This document describes the technical architecture of the Filigran XTM Browser E
 - [Component Architecture](#component-architecture)
 - [State Management](#state-management)
 - [Message Passing](#message-passing)
+- [Panel State Machine](#panel-state-machine)
 - [Technical Workflows](#technical-workflows)
 - [Module Structure](#module-structure)
+- [AI Integration](#ai-integration)
 
 ## Overview
 
@@ -141,38 +143,16 @@ src/panel/
 │   ├── usePanelState.ts  # Centralized panel state management
 │   ├── usePlatforms.ts   # Platform data hooks
 │   └── useToast.ts       # Toast notification hook
-├── utils/                # Panel utilities
-│   ├── content-helpers.ts
-│   ├── cvss-helpers.ts
-│   ├── description-helpers.ts
-│   └── platform-helpers.tsx
+├── utils/                # Panel utilities (consolidated)
+│   ├── index.ts          # Barrel export for all utilities
+│   ├── platform-helpers.tsx  # Platform icons, colors, AI theme, filtering
+│   ├── cvss-helpers.ts       # CVSS score formatting and styling
+│   ├── description-helpers.ts # HTML content processing
+│   └── marking-helpers.ts    # TLP/PAP marking colors
 └── types/                # Type definitions
     ├── index.ts          # Type exports
     └── view-props.ts     # View component prop types
 ```
-
-**Panel Modes:**
-| Mode | Description |
-|------|-------------|
-| `empty` | Initial state, no entity selected |
-| `loading` | Loading entity data |
-| `entity` | Displaying entity details |
-| `not-found` | Entity not found in any platform |
-| `add` | Manual entity creation form |
-| `preview` | Import selection preview |
-| `platform-select` | Platform selection for multi-platform |
-| `container-type` | Container type selection |
-| `container-form` | Container creation form |
-| `investigation` | Investigation workbench creation |
-| `search` | OpenCTI search |
-| `oaev-search` | OpenAEV search |
-| `unified-search` | Multi-platform search |
-| `scan-results` | Scan results display |
-| `atomic-testing` | Atomic testing creation |
-| `scenario-overview` | Scenario overview |
-| `scenario-form` | Scenario creation form |
-| `import-results` | Import operation results |
-| `add-selection` | Add selected text from context menu |
 
 ### 4. Options Page (`src/options/`)
 
@@ -208,19 +188,20 @@ src/shared/
 ├── api/                  # API clients
 │   ├── opencti-client.ts # OpenCTI GraphQL client
 │   ├── openaev-client.ts # OpenAEV REST client
-│   └── ai/               # AI provider clients
+│   ├── ai-client.ts      # AI provider client (unified interface)
+│   └── ai/               # AI provider modules
 │       ├── index.ts
-│       ├── openai.ts
-│       ├── anthropic.ts
-│       ├── gemini.ts
-│       └── json-parser.ts
+│       ├── types.ts      # AI request/response types
+│       └── json-parser.ts # AI response parsing utilities
 ├── detection/            # Detection engine
 │   ├── detector.ts       # Main detection orchestrator
 │   ├── patterns.ts       # Regex patterns for entity types
-│   └── defang.ts         # Defanged IOC handling
+│   ├── matching.ts       # Entity matching logic
+│   └── text-utils.ts     # Text processing utilities
 ├── extraction/           # Content extraction
 │   ├── content-extractor.ts # Main extractor
-│   └── pdf-generator.ts     # PDF generation
+│   ├── pdf-generator.ts     # PDF generation
+│   └── native-pdf.ts        # Native PDF support
 ├── platform/             # Platform abstractions
 │   ├── registry.ts       # Platform type registry
 │   └── index.ts
@@ -231,7 +212,8 @@ src/shared/
 │   ├── detection.ts      # Detection types
 │   ├── observable.ts     # Observable types
 │   ├── sdo.ts            # SDO types
-│   └── ai.ts             # AI types
+│   ├── ai.ts             # AI types
+│   └── platform.ts       # Platform types
 ├── theme/                # Theme definitions
 │   ├── ThemeDark.ts
 │   ├── ThemeLight.ts
@@ -242,7 +224,8 @@ src/shared/
     ├── logger.ts         # Logging utility
     ├── storage.ts        # Chrome storage wrapper
     ├── formatters.ts     # Data formatters
-    └── entity.ts         # Entity helpers
+    ├── entity.ts         # Entity helpers
+    └── messaging.ts      # Message utilities
 ```
 
 ## State Management
@@ -256,8 +239,7 @@ const platformClients: {
   openaev: Map<string, OpenAEVClient>
 }
 
-// SDO Cache (for fast detection)
-// Stored in chrome.storage.local per platform
+// SDO Cache (for fast detection) - stored in chrome.storage.local per platform
 interface SDOCache {
   [platformId: string]: {
     lastRefresh: number;
@@ -292,47 +274,198 @@ let panelFrame: HTMLIFrameElement | null = null;
 let isPanelReady: boolean = false;
 ```
 
-### Panel State (via `usePanelState` hook)
+### Panel State
 
-The panel uses a centralized state hook that manages:
+The panel manages complex state for multiple workflows. Here's a comprehensive view:
 
 ```typescript
 interface PanelState {
+  // ═══════════════════════════════════════════════════════════════
   // UI State
-  mode: 'dark' | 'light';
-  panelMode: PanelMode;
+  // ═══════════════════════════════════════════════════════════════
+  mode: 'dark' | 'light';              // Theme mode
+  panelMode: PanelMode;                // Current view mode
   
+  // ═══════════════════════════════════════════════════════════════
   // Entity State
-  entity: EntityData | null;
-  multiPlatformResults: MultiPlatformResult[];
-  currentPlatformIndex: number;
+  // ═══════════════════════════════════════════════════════════════
+  entity: EntityData | null;           // Current entity being viewed
+  multiPlatformResults: MultiPlatformResult[];  // Results from all platforms
+  currentPlatformIndex: number;        // Selected platform tab
   
+  // ═══════════════════════════════════════════════════════════════
   // Search State
-  searchQuery: string;
-  searchResults: SearchResult[];
-  searching: boolean;
+  // ═══════════════════════════════════════════════════════════════
+  searchQuery: string;                 // Current search query
+  searchResults: SearchResult[];       // Search results
+  searching: boolean;                  // Search in progress
   
-  // Container State
-  containerType: string;
-  containerForm: ContainerFormState;
-  entitiesToAdd: EntityData[];
+  // ═══════════════════════════════════════════════════════════════
+  // Container Creation State
+  // ═══════════════════════════════════════════════════════════════
+  containerType: string;               // Report, Case-Incident, etc.
+  containerForm: {
+    name: string;
+    description: string;
+    labels: string[];
+    markings: string[];
+  };
+  entitiesToAdd: EntityData[];         // Entities to include
+  generatePdf: boolean;                // Attach PDF snapshot
+  createIndicators: boolean;           // Create indicators from observables
   
+  // ═══════════════════════════════════════════════════════════════
   // Scan Results State
-  scanResultsEntities: ScanResultEntity[];
-  selectedScanItems: Set<string>;
+  // ═══════════════════════════════════════════════════════════════
+  scanResultsEntities: ScanResultEntity[];  // All scanned entities
+  selectedScanItems: Set<string>;           // Selected for import
   
+  // ═══════════════════════════════════════════════════════════════
   // AI State
-  aiSettings: AISettings;
-  aiDiscoveringEntities: boolean;
-  resolvedRelationships: ResolvedRelationship[];
+  // ═══════════════════════════════════════════════════════════════
+  aiSettings: AISettings;              // AI configuration
+  aiGenerating: boolean;               // AI generation in progress
+  aiDiscoveringEntities: boolean;      // AI entity discovery in progress
+  resolvedRelationships: ResolvedRelationship[];  // AI-resolved relationships
   
+  // ═══════════════════════════════════════════════════════════════
+  // Scenario State (OpenAEV)
+  // ═══════════════════════════════════════════════════════════════
+  scenarioTypeAffinity: string;        // ENDPOINT, CLOUD, WEB, TABLE-TOP
+  scenarioPlatformsAffinity: string[]; // windows, linux, macos
+  scenarioAIMode: boolean;             // AI generation active
+  scenarioAITheme: string;             // cybersecurity, physical-security, etc.
+  scenarioAINumberOfInjects: number;   // 1-20
+  scenarioAITableTopDuration: number;  // Minutes
+  scenarioAIEmailLanguage: string;     // english, french, etc.
+  scenarioAIGeneratedScenario: GeneratedScenario | null;
+  
+  // ═══════════════════════════════════════════════════════════════
   // Platform State
-  availablePlatforms: PlatformInfo[];
-  selectedPlatformId: string;
-  
-  // ... and more
+  // ═══════════════════════════════════════════════════════════════
+  availablePlatforms: PlatformInfo[];  // Configured platforms
+  selectedPlatformId: string;          // Current platform
 }
 ```
+
+## Panel State Machine
+
+The panel operates as a state machine with the following modes and transitions:
+
+```
+                                    ┌─────────────────────────────────────────────┐
+                                    │              PANEL MODES                     │
+                                    └─────────────────────────────────────────────┘
+
+┌─────────────┐                                                    ┌─────────────┐
+│   empty     │◄───────────────── Initial State ──────────────────►│   loading   │
+└──────┬──────┘                                                    └──────┬──────┘
+       │                                                                  │
+       │ Scan Page                                                        │ Entity Found
+       ▼                                                                  ▼
+┌─────────────┐     Select Entity      ┌─────────────┐     Not Found    ┌─────────────┐
+│scan-results │────────────────────────►│   entity    │─────────────────►│  not-found  │
+└──────┬──────┘                        └──────┬──────┘                   └─────────────┘
+       │                                      │
+       │ Create Container                     │ Back
+       ▼                                      ▼
+┌─────────────┐                        ┌─────────────┐
+│   preview   │◄───────────────────────│    add      │
+└──────┬──────┘                        └─────────────┘
+       │
+       │ Multiple Platforms?
+       ▼
+┌─────────────────┐    No     ┌─────────────────┐
+│platform-select  │──────────►│ Check Existing  │
+└────────┬────────┘           └────────┬────────┘
+         │ Select                      │
+         ▼                             ▼
+┌─────────────────┐           ┌─────────────────────┐
+│existing-containers│◄────────│ URL Found?          │
+└────────┬────────┘   Yes     └────────┬────────────┘
+         │                             │ No
+         │ Create New                  ▼
+         ▼                    ┌─────────────────┐
+┌─────────────────┐           │ container-type  │
+│  Update/Add     │           └────────┬────────┘
+└─────────────────┘                    │
+                                       ▼
+                              ┌─────────────────┐
+                              │ container-form  │
+                              └────────┬────────┘
+                                       │ Submit
+                                       ▼
+                              ┌─────────────────┐
+                              │ import-results  │
+                              └─────────────────┘
+
+
+                    ═══════════════════════════════════════════════════
+                              SEARCH & INVESTIGATION MODES
+                    ═══════════════════════════════════════════════════
+
+┌──────────────┐              ┌──────────────┐              ┌────────────────┐
+│    search    │              │  oaev-search │              │ unified-search │
+│  (OpenCTI)   │              │  (OpenAEV)   │              │ (All Platforms)│
+└──────────────┘              └──────────────┘              └────────────────┘
+       │                             │                             │
+       └─────────────────────────────┼─────────────────────────────┘
+                                     │
+                                     ▼
+                              Click Result
+                                     │
+                                     ▼
+                              ┌─────────────┐
+                              │   entity    │
+                              └─────────────┘
+
+
+                    ═══════════════════════════════════════════════════
+                                  OPENAEV MODES
+                    ═══════════════════════════════════════════════════
+
+┌─────────────────┐           ┌─────────────────┐
+│ atomic-testing  │           │ scenario-overview│
+│                 │           │                  │
+│ • Select ATT&CK │           │ • Attack patterns│
+│ • Generate test │           │ • Type affinity  │
+│ • AI payloads   │           │ • Platform       │
+└─────────────────┘           └────────┬─────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────┐
+                              │  scenario-form  │
+                              │                 │
+                              │ • AI generation │
+                              │ • Theme select  │
+                              │ • Inject config │
+                              └─────────────────┘
+```
+
+### Panel Mode Descriptions
+
+| Mode | Description | Entry Points |
+|------|-------------|--------------|
+| `empty` | Initial state, no entity selected | Default, Clear, Close entity |
+| `loading` | Loading entity data | Entity lookup started |
+| `entity` | Displaying entity details | Entity found, Search result click |
+| `not-found` | Entity not found in any platform | Lookup returned no results |
+| `add` | Manual entity creation form | Add button, Context menu |
+| `preview` | Import selection preview | Scan results → Create container |
+| `platform-select` | Platform selection for multi-platform | Multiple platforms available |
+| `container-type` | Container type selection | After platform or existing check |
+| `container-form` | Container creation form | After type selection |
+| `existing-containers` | Show containers for URL | URL found in platform |
+| `investigation` | Investigation workbench creation | Investigate button |
+| `search` | OpenCTI search | Search button (OpenCTI) |
+| `oaev-search` | OpenAEV search | Search button (OpenAEV) |
+| `unified-search` | Multi-platform search | Unified search button |
+| `scan-results` | Scan results display | Page scan complete |
+| `atomic-testing` | Atomic testing creation | Atomic test button |
+| `scenario-overview` | Scenario overview | Scenario button |
+| `scenario-form` | Scenario creation form | From overview |
+| `import-results` | Import operation results | After import/create |
+| `add-selection` | Add selected text from context menu | Context menu action |
 
 ## Message Passing
 
@@ -357,50 +490,62 @@ interface PanelState {
 └─────────────┘                                          │
 ```
 
-### Message Types
+### Message Categories
 
-**Content Script ↔ Background:**
+**Settings & Configuration:**
 | Message Type | Direction | Description |
 |--------------|-----------|-------------|
-| `SCAN_PAGE` | Content → BG | Request page scan |
-| `SCAN_RESULTS` | BG → Content | Return scan results |
-| `GET_ENTITY_DETAILS` | Content → BG | Fetch entity details |
 | `GET_SETTINGS` | Any → BG | Get extension settings |
 | `SAVE_SETTINGS` | Options → BG | Save settings |
+| `TEST_CONNECTION` | Options → BG | Test platform connection |
+| `TEST_PLATFORM_CONNECTION` | Options → BG | Test specific platform |
 
-**Panel ↔ Background:**
+**Scanning & Detection:**
 | Message Type | Direction | Description |
 |--------------|-----------|-------------|
-| `SEARCH_ENTITIES` | Panel → BG | Search entities |
-| `CREATE_CONTAINER` | Panel → BG | Create container |
-| `IMPORT_ENTITIES` | Panel → BG | Import entities |
-| `AI_GENERATE_DESCRIPTION` | Panel → BG | Generate AI description |
-| `AI_RESOLVE_RELATIONSHIPS` | Panel → BG | Resolve entity relationships |
+| `SCAN_PAGE` | Content → BG | Request full page scan |
+| `SCAN_OAEV` | Content → BG | Request OpenAEV scan |
+| `SCAN_ALL` | Content → BG | Scan all platforms |
+| `SCAN_RESULTS` | BG → Content | Return scan results |
 
-**Content Script ↔ Panel:**
+**Entity Operations:**
+| Message Type | Direction | Description |
+|--------------|-----------|-------------|
+| `GET_ENTITY_DETAILS` | Panel → BG | Fetch entity details |
+| `SEARCH_ENTITIES` | Panel → BG | Search entities |
+| `CREATE_ENTITY` | Panel → BG | Create new entity |
+| `CREATE_OBSERVABLES_BULK` | Panel → BG | Bulk create observables |
+
+**Container Operations:**
+| Message Type | Direction | Description |
+|--------------|-----------|-------------|
+| `CREATE_CONTAINER` | Panel → BG | Create container |
+| `FIND_CONTAINERS_BY_URL` | Panel → BG | Find existing containers |
+| `FETCH_ENTITY_CONTAINERS` | Panel → BG | Get entity's containers |
+
+**AI Operations:**
+| Message Type | Direction | Description |
+|--------------|-----------|-------------|
+| `AI_CHECK_STATUS` | Any → BG | Check AI availability |
+| `AI_GENERATE_DESCRIPTION` | Panel → BG | Generate description |
+| `AI_GENERATE_FULL_SCENARIO` | Panel → BG | Generate scenario |
+| `AI_DISCOVER_ENTITIES` | Panel → BG | Discover entities |
+| `AI_RESOLVE_RELATIONSHIPS` | Panel → BG | Resolve relationships |
+
+**Cache Operations:**
+| Message Type | Direction | Description |
+|--------------|-----------|-------------|
+| `REFRESH_SDO_CACHE` | Any → BG | Refresh entity cache |
+| `GET_SDO_CACHE_STATS` | Any → BG | Get cache statistics |
+| `CLEAR_SDO_CACHE` | Options → BG | Clear platform cache |
+
+**Panel Communication:**
 | Message Type | Direction | Description |
 |--------------|-----------|-------------|
 | `SHOW_ENTITY` | Content → Panel | Show entity details |
 | `SCAN_RESULTS_UPDATE` | Content → Panel | Update scan results |
 | `XTM_TOGGLE_SELECTION` | Panel → Content | Toggle entity selection |
 | `XTM_SCROLL_TO_FIRST` | Panel → Content | Scroll to first highlight |
-
-### Handler Registry
-
-Background handlers are organized by domain:
-
-```typescript
-// Handler registration
-const handlerRegistry = new Map<string, MessageHandler>();
-
-// Domain handlers
-openctiHandlers: GET_ENTITY_DETAILS, SEARCH_ENTITIES, CREATE_ENTITY, ...
-openaevHandlers: OAEV_SEARCH, GET_OAEV_ENTITY_DETAILS, CREATE_SCENARIO, ...
-aiHandlers: AI_GENERATE_DESCRIPTION, AI_GENERATE_SCENARIO, AI_DISCOVER_ENTITIES, ...
-settingsHandlers: GET_SETTINGS, SAVE_SETTINGS, TEST_CONNECTION, ...
-scanHandlers: SCAN_PAGE, SCAN_OAEV, ...
-cacheHandlers: REFRESH_SDO_CACHE, GET_CACHE_STATS, CLEAR_CACHE, ...
-```
 
 ## Technical Workflows
 
@@ -537,7 +682,76 @@ User selects entities and clicks "Create Container"
                    └─────────────┘
 ```
 
-### 4. AI Entity Discovery Workflow
+### 4. AI Scenario Generation Workflow
+
+```
+User clicks "Generate with AI" for scenario
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Panel: Collect Parameters       │
+│ - Type affinity (ENDPOINT, etc.)│
+│ - Platform affinity             │
+│ - Number of injects             │
+│ - Theme (for table-top)         │
+│ - Duration (for table-top)      │
+│ - Email language                │
+│ - Additional context            │
+└────────┬────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Panel: Get Page Content         │
+│ - Request from content script   │
+│ - Extract clean text            │
+│ - Get detected attack patterns  │
+└────────┬────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────┐
+│ Background: AI_GENERATE_FULL_SCENARIO│
+│                                     │
+│ 1. Select theme-specific prompt:    │
+│    ├─ cybersecurity                 │
+│    ├─ physical-security             │
+│    ├─ business-continuity           │
+│    ├─ crisis-communication          │
+│    ├─ health-safety                 │
+│    └─ geopolitical                  │
+│                                     │
+│ 2. Build prompt with:               │
+│    - Page title & URL               │
+│    - Page content (truncated)       │
+│    - Detected attack patterns       │
+│    - Type & platform affinity       │
+│    - Inject count & duration        │
+│    - Additional context             │
+│                                     │
+│ 3. Call AI provider                 │
+│                                     │
+│ 4. Parse JSON response              │
+└────────┬────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Panel: Show Generated Scenario  │
+│ - Scenario name & description   │
+│ - List of injects with details  │
+│ - Edit name if desired          │
+│ - Create scenario button        │
+└────────┬────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Background: CREATE_SCENARIO     │
+│ - Create scenario               │
+│ - Add all injects sequentially  │
+│ - Technical: Add payloads       │
+│ - Table-top: Add email injects  │
+└─────────────────────────────────┘
+```
+
+### 5. AI Entity Discovery Workflow
 
 ```
 User clicks "Discover more with AI"
@@ -570,7 +784,7 @@ User clicks "Discover more with AI"
 └─────────────────────────────┘
 ```
 
-### 5. SDO Cache Refresh Workflow
+### 6. SDO Cache Refresh Workflow
 
 ```
 ┌─────────────────────────────────┐
@@ -596,76 +810,94 @@ User clicks "Discover more with AI"
 └─────────────────────────────────┘
 ```
 
-## Module Structure
+## AI Integration
 
-### API Client Architecture
+### Supported Providers
 
-```typescript
-// OpenCTI Client (GraphQL)
-class OpenCTIClient {
-  // Connection
-  testConnection(): Promise<ConnectionInfo>
-  
-  // Queries
-  searchEntities(query: string): Promise<Entity[]>
-  searchObservables(query: string): Promise<Observable[]>
-  fetchSDOsForCache(): Promise<SDO[]>
-  
-  // Mutations
-  createObservable(input): Promise<Observable>
-  createContainer(input): Promise<Container>
-  addEntitiesToContainer(containerId, entityIds): Promise<void>
-}
+| Provider | Client Class | Models |
+|----------|--------------|--------|
+| OpenAI | `AIClient` | GPT-4o, GPT-4 Turbo, GPT-4 |
+| Anthropic | `AIClient` | Claude 3.5 Sonnet, Claude 3 Opus |
+| Google | `AIClient` | Gemini 1.5 Pro, Gemini 1.5 Flash |
 
-// OpenAEV Client (REST)
-class OpenAEVClient {
-  // Connection
-  testConnection(): Promise<ConnectionInfo>
-  
-  // Queries
-  searchAssets(query: string): Promise<Asset[]>
-  searchAttackPatterns(query: string): Promise<AttackPattern[]>
-  getAllAttackPatterns(): Promise<AttackPattern[]>
-  
-  // Mutations
-  createScenario(input): Promise<Scenario>
-  createAtomicTesting(input): Promise<AtomicTesting>
-  createPayload(input): Promise<Payload>
-}
+### AI Features
 
-// AI Client (Provider-agnostic)
-class AIClient {
-  generateDescription(context): Promise<string>
-  generateScenario(context): Promise<Scenario>
-  discoverEntities(context): Promise<Entity[]>
-  resolveRelationships(entities, context): Promise<Relationship[]>
-}
-```
+| Feature | Message Type | Description |
+|---------|--------------|-------------|
+| Container Description | `AI_GENERATE_DESCRIPTION` | Generate intelligent descriptions from page context |
+| Full Scenario Generation | `AI_GENERATE_FULL_SCENARIO` | Generate complete scenarios with injects |
+| Atomic Test Generation | `AI_GENERATE_ATOMIC_TEST` | Generate test commands for attack patterns |
+| Email Generation | `AI_GENERATE_EMAILS` | Generate email content for table-top exercises |
+| Entity Discovery | `AI_DISCOVER_ENTITIES` | Discover entities pattern matching missed |
+| Relationship Resolution | `AI_RESOLVE_RELATIONSHIPS` | Identify relationships between entities |
 
-### Detection Engine
+### Scenario Themes
+
+For table-top scenario generation, themes customize the AI prompt:
 
 ```typescript
-// Detection flow
-detectEntities(textNodes: Text[]): DetectedEntity[] {
-  1. buildNodeMap(textNodes)     // Build searchable text index
-  2. detectObservables(text)      // IPs, domains, hashes, etc.
-  3. detectSDOs(text, sdoCache)   // Match against cached entities
-  4. detectOAEVEntities(text)     // OpenAEV-specific entities
-  5. mergeResults()               // Deduplicate and combine
-}
-
-// Pattern types
-patterns = {
-  ipv4: /\b(?:\d{1,3}\.){3}\d{1,3}\b/,
-  ipv6: /\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/,
-  domain: /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/,
-  md5: /\b[a-fA-F0-9]{32}\b/,
-  sha256: /\b[a-fA-F0-9]{64}\b/,
-  cve: /\bCVE-\d{4}-\d{4,}\b/,
-  mitre: /\bT\d{4}(?:\.\d{3})?\b/,
-  // ... and more
-}
+const themeConfigs = {
+  'cybersecurity': {
+    systemPromptSuffix: 'Focus on cyber attacks, data breaches, ransomware...',
+    exampleTopics: 'cyber attacks, malware outbreaks, data breaches...',
+  },
+  'physical-security': {
+    systemPromptSuffix: 'Focus on physical security threats...',
+    exampleTopics: 'facility intrusions, access control breaches...',
+  },
+  'business-continuity': {
+    systemPromptSuffix: 'Focus on business disruption scenarios...',
+    exampleTopics: 'natural disasters, power outages, supply chain...',
+  },
+  'crisis-communication': {
+    systemPromptSuffix: 'Focus on crisis communication scenarios...',
+    exampleTopics: 'media leaks, social media crises, PR incidents...',
+  },
+  'health-safety': {
+    systemPromptSuffix: 'Focus on health and safety incidents...',
+    exampleTopics: 'workplace injuries, pandemic outbreaks...',
+  },
+  'geopolitical': {
+    systemPromptSuffix: 'Focus on geopolitical and economic scenarios...',
+    exampleTopics: 'sanctions compliance, trade restrictions...',
+  },
+};
 ```
+
+## Panel Utilities
+
+The panel utilities are consolidated in `src/panel/utils/` with a barrel export:
+
+```typescript
+// Import from utils index
+import { 
+  getAiColor, 
+  getPlatformIcon,
+  getPlatformColor,
+  getCvssChipStyle, 
+  getSeverityColor 
+} from './utils';
+```
+
+### Available Utilities
+
+| Module | Functions | Description |
+|--------|-----------|-------------|
+| `platform-helpers.tsx` | `getAiColor`, `getPlatformIcon`, `getPlatformColor`, `getPlatformTypeColor`, `sortPlatformResults`, `filterPlatformsByType`, `hasEnterprisePlatform` | Platform icons, colors, AI theme, filtering |
+| `cvss-helpers.ts` | `getCvssColor`, `getCvssChipStyle`, `getSeverityColor`, `getSeverityFromScore`, `formatCvssScore`, `formatEpssScore` | CVSS/severity score formatting and styling |
+| `description-helpers.ts` | `generateDescription`, `cleanHtmlContent`, `escapeHtml` | HTML content processing for descriptions |
+| `marking-helpers.ts` | `getMarkingColor`, `getMarkingChipStyle` | TLP/PAP marking colors |
+
+## Panel Positioning
+
+The side panel iframe uses multiple defensive CSS strategies to prevent host page interference:
+
+1. **Fixed Positioning**: `position: fixed` with explicit `top`, `right`, `left`, `bottom`
+2. **Transform Reset**: `translate: none`, `rotate: none`, `scale: none` prevent centering transforms
+3. **Inset Override**: Explicit `inset` property to prevent modal centering
+4. **Inline Styles**: Critical positioning applied as inline styles as backup
+5. **Animation Reset**: `animation: none` prevents host page animations
+6. **Z-Index**: Maximum safe z-index (2147483646) ensures visibility
 
 ## Performance Considerations
 
@@ -682,7 +914,16 @@ patterns = {
 3. **CSP Compliance**: All scripts bundled, no eval or inline scripts
 4. **Message Validation**: All messages validated before processing
 
+## Known Issues & Mitigations
+
+### Panel Positioning on Complex Websites
+
+Some websites with aggressive CSS (modal frameworks, centering utilities) may attempt to reposition the panel. Mitigations include:
+- Multiple `!important` declarations on all positioning properties
+- Inline styles on the iframe element as backup
+- Explicit `inset` property to override CSS reset stylesheets
+- Transform reset properties to prevent centering transforms
+
 ---
 
 For more information, see the [Development Guide](./development.md) and [Troubleshooting](./troubleshooting.md).
-

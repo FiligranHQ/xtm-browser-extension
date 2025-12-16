@@ -27,17 +27,12 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
-import { THEME_DARK_AI, THEME_LIGHT_AI } from '../../shared/theme/ThemeDark';
 import type { PreviewViewProps } from '../types/view-props';
 import type { PlatformInfo, ResolvedRelationship } from '../types';
 import { loggers } from '../../shared/utils/logger';
+import { getAiColor } from '../utils';
 
 const log = loggers.panel;
-
-// Helper function to get AI colors based on theme mode
-const getAiColor = (mode: 'dark' | 'light') => {
-  return mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
-};
 
 interface ExtendedPreviewViewProps extends Omit<PreviewViewProps, 'showToast'> {
   showToast: (options: {

@@ -193,8 +193,12 @@ export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
 
     const platform = availablePlatforms.find(p => p.id === result.platformId);
     
+    const baseEntityData = typeof result.entityData === 'object' && result.entityData !== null 
+      ? result.entityData as Record<string, unknown>
+      : {};
+    
     const entityData: EntityData = {
-      ...result.entityData,
+      ...baseEntityData,
       id: result.id,
       type: result.type,
       name: result.name,

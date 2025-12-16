@@ -1,48 +1,61 @@
 /**
  * Platform Helpers
- * Utility functions for platform-related operations in the panel
+ * Consolidated utility functions for platform-related operations in the panel.
+ * 
+ * Includes:
+ * - AI theme colors
+ * - Platform icons and colors
+ * - Platform sorting and filtering
  */
 
 import React from 'react';
-import {
-  ComputerOutlined,
-} from '@mui/icons-material';
+import { ComputerOutlined } from '@mui/icons-material';
 import { MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import { THEME_DARK_AI } from '../../shared/theme/ThemeDark';
 import { THEME_LIGHT_AI } from '../../shared/theme/ThemeLight';
-import type { MultiPlatformResult } from '../types';
+import type { MultiPlatformResult, PlatformInfo } from '../types';
+
+// ============================================================================
+// AI Theme Colors
+// ============================================================================
 
 /**
- * Get AI color based on theme mode
+ * Get AI color palette based on theme mode.
+ * Returns the AI accent colors (purple theme) for consistent AI-related UI elements.
  */
 export const getAiColor = (mode: 'dark' | 'light') => {
   return mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
 };
 
+// ============================================================================
+// Platform Icons & Colors
+// ============================================================================
+
 /**
- * Get platform icon component
+ * Get platform icon component (Windows, Linux, macOS, Android, etc.)
  */
-export const getPlatformIcon = (platform: string, size: 'small' | 'medium' = 'small') => {
+export const getPlatformIcon = (platform: string, size: 'small' | 'medium' = 'small'): React.ReactElement => {
   const iconSize = size === 'small' ? 14 : 18;
   const platformLower = platform.toLowerCase();
+  const iconProps = { sx: { fontSize: iconSize } };
   
   switch (platformLower) {
     case 'windows':
-      return <MicrosoftWindows sx={{ fontSize: iconSize }} />;
+      return React.createElement(MicrosoftWindows, iconProps);
     case 'linux':
-      return <Linux sx={{ fontSize: iconSize }} />;
+      return React.createElement(Linux, iconProps);
     case 'macos':
     case 'darwin':
-      return <Apple sx={{ fontSize: iconSize }} />;
+      return React.createElement(Apple, iconProps);
     case 'android':
-      return <Android sx={{ fontSize: iconSize }} />;
+      return React.createElement(Android, iconProps);
     default:
-      return <ComputerOutlined sx={{ fontSize: iconSize }} />;
+      return React.createElement(ComputerOutlined, iconProps);
   }
 };
 
 /**
- * Get platform color
+ * Get platform color for OS-specific styling
  */
 export const getPlatformColor = (platform: string): string => {
   const platformLower = platform.toLowerCase();
@@ -66,20 +79,7 @@ export const getPlatformColor = (platform: string): string => {
 };
 
 /**
- * Sort platform results - OpenCTI platforms first (knowledge base reference)
- */
-export const sortPlatformResults = (results: MultiPlatformResult[]): MultiPlatformResult[] => {
-  return [...results].sort((a, b) => {
-    const aIsOpenCTI = a.entity._platformType === 'opencti' || !a.entity._platformType;
-    const bIsOpenCTI = b.entity._platformType === 'opencti' || !b.entity._platformType;
-    if (aIsOpenCTI && !bIsOpenCTI) return -1;
-    if (!aIsOpenCTI && bIsOpenCTI) return 1;
-    return 0;
-  });
-};
-
-/**
- * Get platform type color for chips/badges
+ * Get platform type color for OpenCTI/OpenAEV chips and badges
  */
 export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | string): string => {
   switch (platformType) {
@@ -92,8 +92,54 @@ export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | strin
   }
 };
 
+// ============================================================================
+// Platform Sorting & Filtering
+// ============================================================================
+
 /**
- * Format platform name for display
+ * Sort multi-platform results with OpenCTI platforms first.
+ * OpenCTI is the knowledge base reference, so it should always be displayed first.
+ */
+export const sortPlatformResults = (results: MultiPlatformResult[]): MultiPlatformResult[] => {
+  return [...results].sort((a, b) => {
+    const aIsOpenCTI = a.entity._platformType === 'opencti' || !a.entity._platformType;
+    const bIsOpenCTI = b.entity._platformType === 'opencti' || !b.entity._platformType;
+    if (aIsOpenCTI && !bIsOpenCTI) return -1;
+    if (!aIsOpenCTI && bIsOpenCTI) return 1;
+    return 0;
+  });
+};
+
+/**
+ * Filter platforms by type
+ */
+export const filterPlatformsByType = (
+  platforms: PlatformInfo[],
+  type: 'opencti' | 'openaev'
+): PlatformInfo[] => {
+  return platforms.filter(p => p.type === type);
+};
+
+/**
+ * Check if any platform has Enterprise Edition
+ */
+export const hasEnterprisePlatform = (platforms: PlatformInfo[]): boolean => {
+  return platforms.some(p => p.isEnterprise);
+};
+
+// ============================================================================
+// Platform Display
+// ============================================================================
+
+/**
+ * Get platform display name
+ */
+export const getPlatformDisplayName = (platformType: 'opencti' | 'openaev'): string => {
+  return platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI';
+};
+
+/**
+ * Format platform name for display (alias for getPlatformDisplayName)
  */
 export const formatPlatformName = (platformType: 'opencti' | 'openaev' | string): string => {
   switch (platformType) {
@@ -104,5 +150,15 @@ export const formatPlatformName = (platformType: 'opencti' | 'openaev' | string)
     default:
       return platformType;
   }
+};
+
+/**
+ * Get platform logo path based on platform type
+ */
+export const getPlatformLogoPath = (
+  platformType: 'opencti' | 'openaev',
+  logoSuffix: string
+): string => {
+  return `../assets/logos/logo_${platformType}_${logoSuffix}_embleme_square.svg`;
 };
 

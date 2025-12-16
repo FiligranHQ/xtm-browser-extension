@@ -12,6 +12,7 @@ OpenCTI is an open-source platform for managing cyber threat intelligence (CTI).
 - Detect cyber observables (IPs, domains, hashes, CVEs, etc.)
 - Create reports, cases, and investigations
 - Enrich threat intelligence workflows
+- Generate AI-powered descriptions and entity discovery (Enterprise Edition)
 
 ### OpenAEV (Attack & Exposure Validation)
 OpenAEV is a platform for attack simulation and exposure validation. The extension integrates with OpenAEV to:
@@ -19,6 +20,7 @@ OpenAEV is a platform for attack simulation and exposure validation. The extensi
 - Detect teams and players
 - Match MITRE ATT&CK patterns
 - Create scenarios from web page content
+- Generate AI-powered attack scenarios and atomic tests (Enterprise Edition)
 
 ## Key Capabilities
 
@@ -56,12 +58,14 @@ Automatically detect and highlight security-relevant content on any web page.
 - **Players**: People in the organization
 - **Teams**: Security teams (Red Team, Blue Team)
 - **Attack Patterns**: MITRE ATT&CK patterns (T1566, T1059)
+- **Findings**: Security findings by value
 
 ### 🎯 Visual Highlighting
 - **Green highlight** with ✓ icon: Found in platform
 - **Amber highlight** with ⚠ icon: Detected but not in platform
 - **Red highlight**: Known threat (Malware, Threat Actor)
 - **Brown highlight** with 🔓 icon: Vulnerability (CVE)
+- **Purple highlight**: AI-discovered entity
 - Click to select items for bulk operations
 
 ### 📋 Quick Actions
@@ -71,9 +75,18 @@ Automatically detect and highlight security-relevant content on any web page.
 - **Bulk Import**: Add multiple observables at once
 - **Search Assets**: Find matching assets (OpenAEV)
 - **Create Scenario**: Generate attack scenarios (OpenAEV)
+- **Atomic Testing**: Create atomic tests (OpenAEV)
+
+### 🧠 AI Features (Enterprise Edition)
+- **Container Descriptions**: AI-generated summaries for OpenCTI containers
+- **Scenario Generation**: Complete attack scenarios with AI-generated payloads or emails
+- **Themed Table-Top Exercises**: 6 scenario themes for diverse training exercises
+- **Atomic Test Generation**: Custom command lines tailored to page context
+- **Entity Discovery**: Find entities that pattern matching might miss
+- **Relationship Resolution**: Identify connections between detected entities
 
 ### 🎨 Theme Integration
-The extension automatically adapts to your preferred theme settings (dark/light mode).
+The extension automatically adapts to your preferred theme settings (auto/dark/light).
 
 ## Architecture
 
@@ -119,10 +132,10 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 | Component | Responsibility |
 |-----------|---------------|
 | **Popup** | Quick actions, scan trigger, platform selection |
-| **Options** | Platform configuration, detection settings, cache management |
-| **Panel** | Entity details, metadata, labels, markings, containers |
-| **Content** | Page scanning, DOM manipulation, highlighting |
-| **Background** | API clients, cache management, message routing |
+| **Options** | Platform configuration, detection settings, AI setup, cache management |
+| **Panel** | Entity details, container creation, scenario generation, search |
+| **Content** | Page scanning, DOM manipulation, highlighting, panel management |
+| **Background** | API clients, cache management, message routing, AI coordination |
 
 ### Data Flow
 
@@ -135,6 +148,27 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 5. **Content** script highlights matches on page
 6. User clicks highlight → **Panel** shows entity details
 
+### AI Data Flow (Enterprise Edition)
+
+1. User triggers AI action (description, scenario, etc.)
+2. **Panel** collects context (page content, detected entities)
+3. **Background** builds prompt with context and theme-specific instructions
+4. Request sent to configured LLM provider
+5. Response parsed and validated
+6. Result displayed in **Panel** for review and action
+
+## Multi-Platform Support
+
+The extension supports connecting to multiple instances of each platform type:
+
+| Feature | Description |
+|---------|-------------|
+| **Parallel Scanning** | All platforms are scanned simultaneously |
+| **Platform Tabs** | Entity details show which platforms contain the entity |
+| **Platform Selection** | Choose target platform for new containers/scenarios |
+| **Independent Caches** | Each platform maintains its own entity cache |
+| **Enterprise Detection** | EE status is detected per-platform for AI features |
+
 ## Browser Support
 
 | Browser | Manifest Version | Status |
@@ -143,6 +177,19 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 | Edge    | V3 | ✅ Full Support |
 | Firefox | V3 | ✅ Full Support |
 | Safari  | V3 | ⚠️ Requires wrapper app |
+
+## Scenario Themes (Table-Top Exercises)
+
+For AI-generated table-top scenarios, choose from 6 specialized themes:
+
+| Theme | Focus |
+|-------|-------|
+| 🔐 **Cybersecurity & Technology** | Cyber attacks, data breaches, ransomware, IT incidents |
+| 🏢 **Physical Security & Safety** | Facility security, access control, workplace safety |
+| 🔄 **Business Continuity** | Disasters, supply chain, operational resilience |
+| 📢 **Crisis Communication** | Media, PR, reputation management |
+| ⚕️ **Health & Safety** | Occupational health, pandemic, environmental hazards |
+| 🌍 **Geopolitical & Economic** | Sanctions, trade, political instability |
 
 ## Entity Type Clarifications
 
@@ -159,3 +206,10 @@ The extension automatically adapts to your preferred theme settings (dark/light 
 | **Vulnerability** | Security weakness | CVE-2021-44228 (Log4Shell) |
 
 > **Important**: APT names like "APT29" are typically **Intrusion Sets** (representing adversary behavior), not Threat Actor Groups. The actual organization (like GRU or SVR) is the Threat Actor Group.
+
+## Next Steps
+
+- [Installation Guide](./installation.md) - Get started with installation
+- [Configuration](./configuration.md) - Set up your platforms
+- [Features](./features.md) - Detailed feature documentation
+- [Architecture](./architecture.md) - Technical architecture and workflows

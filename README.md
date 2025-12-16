@@ -49,7 +49,21 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 - 🔍 **Findings Detection** - Match security findings by value with exact matching
 - 🎮 **Scenario Generation** - Create attack scenarios from web page content
 - 🤖 **Full AI Scenario Generation** - Generate complete scenarios with AI-created payloads (technical) or email content (table-top) based on page context (Enterprise Edition)
+- 🎭 **Themed Scenarios** - Choose from 6 scenario themes for diverse table-top exercises
 - ⚡ **Atomic Testing** - Create on-the-fly atomic tests with AI-generated command lines
+
+### Scenario Themes (Table-Top Exercises)
+
+Generate AI-powered table-top exercises across diverse domains:
+
+| Theme | Description |
+|-------|-------------|
+| 🔐 **Cybersecurity & Technology** | Cyber attacks, data breaches, ransomware, phishing, IT security incidents |
+| 🏢 **Physical Security & Safety** | Facility breaches, unauthorized access, workplace violence, theft |
+| 🔄 **Business Continuity** | Natural disasters, supply chain failures, system outages, operational resilience |
+| 📢 **Crisis Communication** | Media incidents, reputation management, public relations crises |
+| ⚕️ **Health & Safety** | Workplace accidents, pandemic response, environmental hazards |
+| 🌍 **Geopolitical & Economic** | Sanctions, trade restrictions, political instability, regulatory changes |
 
 ### PDF Generation & Content Extraction
 - 📄 **Reader-View PDF** - Clean, formatted PDFs using Mozilla Readability extraction
@@ -62,9 +76,11 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 - 🧠 **Multiple LLM Support** - OpenAI, Anthropic (Claude), and Google Gemini
 - 📝 **Container Description AI** - Generate intelligent descriptions for OpenCTI containers
 - 🎬 **Full Scenario Generation** - Generate complete attack scenarios with AI-created injects, payloads, or email content based on page context
-- ✉️ **Email Content Generation** - Generate realistic email subjects and bodies for table-top exercises
+- 🎭 **Theme-Aware Generation** - AI adapts to selected scenario theme with domain-specific knowledge
+- ✉️ **Multi-Language Emails** - Generate realistic email content in 13 languages for table-top exercises
 - ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests with cleanup commands
 - 🔍 **Smart Entity Discovery** - Discover additional entities that regex patterns might miss
+- 🔗 **Relationship Resolution** - AI identifies relationships between detected entities
 - 📊 **Model Selection** - Browse and select from available models for each provider
 - 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
@@ -147,6 +163,7 @@ See `.github/workflows/ci-test-opencti.yml` and `.github/workflows/ci-test-opena
 Full documentation is available in the [docs](./docs) folder:
 
 - [Overview](./docs/overview.md) - Architecture and concepts
+- [Architecture](./docs/architecture.md) - Technical architecture, state management, and workflows
 - [Installation](./docs/installation.md) - Browser-specific installation guides
 - [Configuration](./docs/configuration.md) - Platform setup and settings
 - [Features](./docs/features.md) - Detailed feature documentation
@@ -194,24 +211,120 @@ After entering your API key, click **Test Connection** to validate and fetch ava
 ```
 xtm-browser-extension/
 ├── src/
-│   ├── background/      # Service worker (API clients, cache, messaging)
-│   ├── content/         # Content script (page scanning, highlighting)
-│   ├── popup/           # Popup UI (quick actions)
-│   ├── panel/           # Side panel (entity details)
-│   ├── options/         # Settings page
-│   └── shared/          # Shared utilities and modules
-│       ├── api/         # API clients (OpenCTI, OpenAEV, AI)
-│       ├── detection/   # Pattern detection engine
-│       ├── extraction/  # Content extraction & PDF generation
-│       ├── platform/    # Platform registry
-│       ├── types/       # TypeScript definitions
-│       └── utils/       # Utilities (logger, storage, formatters)
+│   ├── background/              # Service worker (API clients, cache, messaging)
+│   │   ├── index.ts             # Main entry, client init, message handling
+│   │   ├── handlers/            # Message handlers split by domain
+│   │   │   ├── ai-handlers.ts       # AI generation requests
+│   │   │   ├── cache-handlers.ts    # Cache management
+│   │   │   ├── openaev-handlers.ts  # OpenAEV API operations
+│   │   │   ├── opencti-handlers.ts  # OpenCTI API operations
+│   │   │   ├── scan-handlers.ts     # Page scanning logic
+│   │   │   └── settings-handlers.ts # Settings management
+│   │   └── services/            # Background services
+│   │       ├── client-manager.ts    # API client lifecycle
+│   │       └── message-dispatcher.ts # Message routing
+│   │
+│   ├── content/                 # Content script (injected into pages)
+│   │   ├── index.ts             # Main entry, event coordination
+│   │   ├── styles.ts            # CSS for highlights, tooltips, panel
+│   │   ├── highlighting.ts      # Entity highlighting engine
+│   │   ├── extraction.ts        # Content extraction for PDFs
+│   │   ├── page-content.ts      # Page content utilities
+│   │   ├── panel.ts             # Side panel iframe management
+│   │   ├── toast.ts             # Toast notifications
+│   │   └── message-handlers.ts  # Message handling
+│   │
+│   ├── panel/                   # Side panel (entity details, forms)
+│   │   ├── App.tsx              # Main orchestrator component
+│   │   ├── views/               # Panel mode view components
+│   │   │   ├── ScanResultsView.tsx     # Scan results display
+│   │   │   ├── SearchView.tsx          # OpenCTI search
+│   │   │   ├── UnifiedSearchView.tsx   # Multi-platform search
+│   │   │   ├── PreviewView.tsx         # Import preview
+│   │   │   ├── ImportResultsView.tsx   # Import results
+│   │   │   ├── ContainerTypeView.tsx   # Container type selection
+│   │   │   ├── PlatformSelectView.tsx  # Platform selection
+│   │   │   └── AddView.tsx             # Manual entity addition
+│   │   ├── components/          # Reusable UI components
+│   │   │   ├── EmptyView.tsx
+│   │   │   ├── LoadingView.tsx
+│   │   │   ├── NotFoundView.tsx
+│   │   │   ├── PanelHeader.tsx
+│   │   │   └── PlatformNavigation.tsx
+│   │   ├── hooks/               # React hooks
+│   │   │   ├── usePanelState.ts     # Centralized state management
+│   │   │   ├── usePlatforms.ts      # Platform data
+│   │   │   └── useToast.ts          # Toast notifications
+│   │   ├── utils/               # Panel utilities
+│   │   │   ├── platform-helpers.tsx # Platform icons, colors, AI theme
+│   │   │   ├── cvss-helpers.ts      # CVSS score formatting
+│   │   │   ├── marking-helpers.ts   # TLP/PAP colors
+│   │   │   └── description-helpers.ts
+│   │   └── types/               # TypeScript definitions
+│   │       └── view-props.ts        # View component props
+│   │
+│   ├── options/                 # Settings page
+│   │   ├── App.tsx              # Settings orchestrator
+│   │   └── components/          # Settings tabs
+│   │       ├── OpenCTITab.tsx       # OpenCTI configuration
+│   │       ├── OpenAEVTab.tsx       # OpenAEV configuration
+│   │       ├── AITab.tsx            # AI provider settings
+│   │       ├── DetectionTab.tsx     # Detection settings
+│   │       └── AppearanceTab.tsx    # Theme settings
+│   │
+│   ├── popup/                   # Quick action popup
+│   │   └── App.tsx              # Popup UI
+│   │
+│   └── shared/                  # Shared modules
+│       ├── api/                 # API clients
+│       │   ├── opencti-client.ts    # OpenCTI GraphQL client
+│       │   ├── openaev-client.ts    # OpenAEV REST client
+│       │   ├── ai-client.ts         # AI provider client
+│       │   └── ai/                  # AI provider modules
+│       │       ├── types.ts         # AI type definitions
+│       │       └── json-parser.ts   # AI response parsing
+│       ├── detection/           # Detection engine
+│       │   ├── detector.ts          # Main detection orchestrator
+│       │   ├── patterns.ts          # Regex patterns
+│       │   └── matching.ts          # Entity matching
+│       ├── extraction/          # Content extraction
+│       │   ├── content-extractor.ts # Content extraction
+│       │   └── pdf-generator.ts     # PDF generation
+│       ├── platform/            # Platform abstractions
+│       │   └── registry.ts          # Platform type registry
+│       ├── theme/               # Theme definitions
+│       │   ├── ThemeDark.ts
+│       │   ├── ThemeLight.ts
+│       │   └── colors.ts
+│       ├── components/          # Shared React components
+│       │   └── ItemIcon.tsx
+│       ├── types/               # TypeScript definitions
+│       │   ├── index.ts             # Main exports
+│       │   ├── messages.ts          # Message types
+│       │   ├── detection.ts         # Detection types
+│       │   └── ai.ts                # AI types
+│       └── utils/               # Utilities
+│           ├── logger.ts            # Logging
+│           ├── storage.ts           # Chrome storage wrapper
+│           ├── formatters.ts        # Data formatters
+│           └── entity.ts            # Entity helpers
+│
 ├── tests/
-│   ├── unit/            # Unit tests (patterns, logger, defang)
-│   └── integration/     # Integration tests (OpenCTI, OpenAEV)
-├── docs/                # Documentation
-├── scripts/             # Build and test scripts
-└── dist/                # Built extensions (chrome, firefox, edge)
+│   ├── unit/                    # Unit tests
+│   │   ├── patterns.test.ts
+│   │   ├── defang.test.ts
+│   │   ├── ai-client.test.ts
+│   │   └── logger.test.ts
+│   └── integration/             # Integration tests
+│       ├── opencti/
+│       └── openaev/
+│
+├── docs/                        # Documentation
+├── scripts/                     # Build and test scripts
+└── dist/                        # Built extensions
+    ├── chrome/
+    ├── firefox/
+    └── edge/
 ```
 
 ## License

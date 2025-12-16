@@ -590,36 +590,70 @@ export const HIGHLIGHT_STYLES = `
   
   /* ========================================
      SIDE PANEL FRAME
-     All properties use !important to prevent host page CSS overrides
+     All properties use !important to prevent host page CSS overrides.
+     Additional resets added to prevent modal centering issues.
      ======================================== */
   .xtm-panel-frame {
+    /* Position: Force fixed to right edge */
     position: fixed !important;
     top: 0 !important;
     right: 0 !important;
     left: auto !important;
     bottom: auto !important;
+    
+    /* Dimensions: Fixed panel width */
     width: 560px !important;
     height: 100vh !important;
     max-width: 560px !important;
     max-height: 100vh !important;
     min-width: 560px !important;
     min-height: 100vh !important;
+    
+    /* Reset all spacing */
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
+    
+    /* Stacking: Highest z-index for panel */
     z-index: 2147483646 !important;
+    
+    /* Visual styling */
     box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4) !important;
     transition: transform 0.3s ease !important;
     background: #070d19 !important;
+    
+    /* Show state: No transform */
     transform: translateX(0) !important;
-    /* Prevent centering transforms from host page */
+    
+    /* CRITICAL: Prevent host page CSS from centering/repositioning the panel */
     translate: none !important;
-    inset: auto !important;
+    rotate: none !important;
+    scale: none !important;
+    inset: auto 0 auto auto !important; /* Explicit: top auto, right 0, bottom auto, left auto */
+    
+    /* Reset flex/grid positioning that might affect iframe */
+    align-self: auto !important;
+    justify-self: auto !important;
+    place-self: auto !important;
+    
+    /* Reset any filter/clip effects */
+    filter: none !important;
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
+    
+    /* Ensure visibility */
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+    
+    /* Reset animation that might interfere */
+    animation: none !important;
   }
   
   .xtm-panel-frame.hidden {
     transform: translateX(100%) !important;
     pointer-events: none !important;
+    visibility: hidden !important;
   }
   
   /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */
@@ -638,10 +672,12 @@ export const HIGHLIGHT_STYLES = `
     pointer-events: none !important; /* CRITICAL: Allow clicks to pass through to highlights */
     transform: none !important;
     translate: none !important;
+    inset: 0 560px 0 0 !important; /* Explicit inset to prevent override */
   }
   
   .xtm-panel-overlay.hidden {
     display: none !important;
+    visibility: hidden !important;
   }
 
   /* ========================================

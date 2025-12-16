@@ -81,6 +81,7 @@ export interface FullScenarioGenerationRequest {
   numberOfInjects: number; // Number of injects to generate
   payloadAffinity?: string; // For technical: powershell, bash, sh, cmd
   tableTopDuration?: number; // For table-top: duration in minutes
+  scenarioTheme?: string; // For table-top: theme category (cybersecurity, physical-security, etc.)
   emailLanguage?: string; // For table-top: language for email content
   additionalContext?: string; // Additional context from user
   detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;

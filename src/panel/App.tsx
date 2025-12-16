@@ -61,18 +61,13 @@ import {
   CheckBoxOutlineBlankOutlined,
   DeleteOutlined,
 } from '@mui/icons-material';
-import { LockPattern, Target, MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
-import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
-import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
+import { LockPattern, Target } from 'mdi-material-ui';
+import ThemeDark from '../shared/theme/ThemeDark';
+import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../shared/theme/colors';
-
-// Helper function to get AI colors based on theme mode
-const getAiColor = (mode: 'dark' | 'light') => {
-  return mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
-};
-
 import { loggers } from '../shared/utils/logger';
+import { getAiColor, getCvssChipStyle, getSeverityColor, getPlatformIcon, getPlatformColor } from './utils';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -89,47 +84,6 @@ import {
 import { formatDate, formatDateTime } from '../shared/utils/formatters';
 
 const log = loggers.panel;
-
-// Helper function to get platform icon and color
-const getPlatformIcon = (platform: string, size: 'small' | 'medium' = 'small') => {
-  const iconSize = size === 'small' ? 14 : 18;
-  const platformLower = platform.toLowerCase();
-  
-  switch (platformLower) {
-    case 'windows':
-      return <MicrosoftWindows sx={{ fontSize: iconSize }} />;
-    case 'linux':
-      return <Linux sx={{ fontSize: iconSize }} />;
-    case 'macos':
-    case 'darwin':
-      return <Apple sx={{ fontSize: iconSize }} />;
-    case 'android':
-      return <Android sx={{ fontSize: iconSize }} />;
-    default:
-      return <ComputerOutlined sx={{ fontSize: iconSize }} />;
-  }
-};
-
-const getPlatformColor = (platform: string): string => {
-  const platformLower = platform.toLowerCase();
-  switch (platformLower) {
-    case 'windows':
-      return '#0078d4';
-    case 'linux':
-      return '#f57c00';
-    case 'macos':
-    case 'darwin':
-      return '#7b1fa2';
-    case 'android':
-      return '#3ddc84';
-    case 'ios':
-      return '#a2aaad';
-    case 'browser':
-      return '#4285f4';
-    default:
-      return '#757575';
-  }
-};
 
 type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form' | 'add-selection';
 
@@ -531,6 +485,7 @@ const App: React.FC = () => {
   const [scenarioAIPayloadAffinity, setScenarioAIPayloadAffinity] = useState<string>('powershell'); // powershell, bash, sh, cmd
   const [scenarioAITableTopDuration, setScenarioAITableTopDuration] = useState<number>(60); // Duration in minutes for table-top
   const [scenarioAIEmailLanguage, setScenarioAIEmailLanguage] = useState<string>('english'); // Language for email generation
+  const [scenarioAITheme, setScenarioAITheme] = useState<string>('cybersecurity'); // Theme for AI scenario generation
   const [scenarioAIContext, setScenarioAIContext] = useState<string>(''); // Additional context from user
   const [scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario] = useState<{
     name: string;
@@ -2956,41 +2911,6 @@ const App: React.FC = () => {
     </Box>
   );
 
-  // Helper for CVSS score color - optimized for visibility in both modes
-  const getCvssColor = (score: number | undefined) => {
-    if (score === undefined || score === null) return '#607d8b';
-    if (score === 0) return '#607d8b';
-    if (score <= 3.9) return '#4caf50'; // Green - Low
-    if (score <= 6.9) return '#ffb74d'; // Amber - Medium (lighter for dark mode)
-    if (score <= 8.9) return '#ff7043'; // Orange - High
-    return '#ef5350'; // Red - Critical
-  };
-  
-  // Helper for CVSS chip styling - high visibility
-  const getCvssChipStyle = (score: number | undefined) => {
-    const color = getCvssColor(score);
-    return {
-      fontWeight: 700,
-      fontSize: 14,
-      height: 34,
-      bgcolor: color,
-      color: '#ffffff',
-      border: 'none',
-      '& .MuiChip-icon': { color: '#ffffff' },
-    };
-  };
-
-  // Helper for severity color - high visibility
-  const getSeverityColor = (severity: string | undefined) => {
-    switch (severity?.toLowerCase()) {
-      case 'low': return { bgcolor: '#4caf50', color: '#ffffff' };
-      case 'medium': return { bgcolor: '#5c7bf5', color: '#ffffff' };
-      case 'high': return { bgcolor: '#ff9800', color: '#ffffff' };
-      case 'critical': return { bgcolor: '#f44336', color: '#ffffff' };
-      default: return { bgcolor: '#607d8b', color: '#ffffff' };
-    }
-  };
-  
   // Helper for marking definition colors (fallback when x_opencti_color is not present)
   const getMarkingColor = (definition: string | undefined): string => {
     if (!definition) return '#ffffff';
@@ -6577,6 +6497,7 @@ const App: React.FC = () => {
             const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
             const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
             const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+            const aiColors = getAiColor(mode);
             
             let tooltipMessage = '';
             if (!aiSettings.available) {
@@ -6600,6 +6521,12 @@ const App: React.FC = () => {
                       alignSelf: 'flex-start',
                       textTransform: 'none',
                       opacity: !isAIAvailable ? 0.5 : 1,
+                      color: isAIAvailable ? aiColors.main : undefined,
+                      borderColor: isAIAvailable ? aiColors.main : undefined,
+                      '&:hover': {
+                        borderColor: isAIAvailable ? aiColors.dark : undefined,
+                        bgcolor: isAIAvailable ? hexToRGB(aiColors.main, 0.08) : undefined,
+                      },
                     }}
                   >
                     {aiGeneratingDescription ? 'Generating...' : 'Generate with AI'}
@@ -10353,6 +10280,7 @@ const App: React.FC = () => {
             numberOfInjects: scenarioAINumberOfInjects,
             payloadAffinity: scenarioTypeAffinity !== 'TABLE-TOP' ? scenarioAIPayloadAffinity : undefined,
             tableTopDuration: scenarioTypeAffinity === 'TABLE-TOP' ? scenarioAITableTopDuration : undefined,
+            scenarioTheme: scenarioTypeAffinity === 'TABLE-TOP' ? scenarioAITheme : undefined,
             emailLanguage: scenarioTypeAffinity === 'TABLE-TOP' ? scenarioAIEmailLanguage : undefined,
             additionalContext: scenarioAIContext,
             detectedAttackPatterns: scenarioOverviewData?.attackPatterns?.map(ap => ({
@@ -10599,6 +10527,9 @@ const App: React.FC = () => {
           </Box>
         ) : scenarioAIMode ? (
           /* AI Scenario Generation Form */
+          (() => {
+            const aiColors = getAiColor(mode);
+            return (
           <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
             {/* Back button */}
             <Box sx={{ mb: 1.5, flexShrink: 0 }}>
@@ -10626,14 +10557,14 @@ const App: React.FC = () => {
                 p: 2, 
                 mb: 2, 
                 border: 1, 
-                borderColor: 'primary.main', 
+                borderColor: aiColors.main, 
                 borderRadius: 1, 
-                bgcolor: 'rgba(100, 181, 246, 0.08)', 
+                bgcolor: hexToRGB(aiColors.main, 0.08), 
                 flexShrink: 0 
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <AutoAwesomeOutlined sx={{ color: 'primary.main' }} />
+                <AutoAwesomeOutlined sx={{ color: aiColors.main }} />
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>AI-Generated Scenario</Typography>
               </Box>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -10809,6 +10740,21 @@ const App: React.FC = () => {
                       inputProps={{ min: 15, step: 15 }}
                       helperText="Total duration of the table-top exercise"
                     />
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Scenario Theme</InputLabel>
+                      <Select
+                        value={scenarioAITheme}
+                        label="Scenario Theme"
+                        onChange={(e) => setScenarioAITheme(e.target.value)}
+                      >
+                        <MenuItem value="cybersecurity">Cybersecurity & Technology</MenuItem>
+                        <MenuItem value="physical-security">Physical Security & Safety</MenuItem>
+                        <MenuItem value="business-continuity">Business Continuity</MenuItem>
+                        <MenuItem value="crisis-communication">Crisis Communication</MenuItem>
+                        <MenuItem value="health-safety">Health & Safety</MenuItem>
+                        <MenuItem value="geopolitical">Geopolitical & Economic</MenuItem>
+                      </Select>
+                    </FormControl>
                     <FormControl fullWidth size="small">
                       <InputLabel>Email Language</InputLabel>
                       <Select
@@ -11081,6 +11027,8 @@ const App: React.FC = () => {
               </Box>
             )}
           </Box>
+            );
+          })()
         ) : scenarioStep === 0 ? (
           /* Step 0: Affinity Selection */
           <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>

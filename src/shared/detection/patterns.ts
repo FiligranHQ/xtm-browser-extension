@@ -1,10 +1,10 @@
 /**
  * Observable Detection Patterns
- * 
+ *
  * Comprehensive regex patterns for detecting various types of observables
  * in text content. These patterns are designed to be accurate while
  * minimizing false positives.
- * 
+ *
  * Also supports defanged indicators (e.g., example[.]com, hxxp://, 192[.]168[.]1[.]1)
  */
 
@@ -17,7 +17,7 @@ import type { ObservableType, HashType } from '../types';
 /**
  * Refang a defanged indicator - convert it back to normal format
  * Used to convert detected defanged indicators to their real form for OpenCTI lookup
- * 
+ *
  * Common defanging patterns:
  * - [.] or (.) or {.} → .
  * - [@] or (@) or {@} → @
@@ -27,29 +27,29 @@ import type { ObservableType, HashType } from '../types';
  * - [/] → /
  */
 export function refangIndicator(value: string): string {
-  return value
-    // Replace bracketed/parenthesized/braced dots: [.] (.) {.}
-    .replace(/\[\.\]|\(\.\)|\{\.\}/g, '.')
-    // Replace bracketed/parenthesized/braced at signs: [@] (@) {@}
-    .replace(/\[@\]|\(@\)|\{@\}/g, '@')
-    // Replace hxxp/hXXp variants with http
-    .replace(/hxxps?:\/\//gi, (match) => match.toLowerCase().replace('xx', 'tt'))
-    .replace(/h\[xx\]ps?:\/\//gi, (match) => match.toLowerCase().replace('[xx]', 'tt'))
-    // Replace [://] or (:/) with ://
-    .replace(/\[:\/\/\]|\(:\/\)/g, '://')
-    // Replace [/] or (/) with /
-    .replace(/\[\/\]|\(\/\)/g, '/')
-    // Replace meow with http (another common defang)
-    .replace(/^meow:\/\//gi, 'http://')
-    // Remove any remaining square brackets that might wrap parts
-    .replace(/\[([^\]]+)\]/g, '$1');
+    return value
+        // Replace bracketed/parenthesized/braced dots: [.] (.) {.}
+        .replace(/\[\.\]|\(\.\)|\{\.\}/g, '.')
+        // Replace bracketed/parenthesized/braced at signs: [@] (@) {@}
+        .replace(/\[@\]|\(@\)|\{@\}/g, '@')
+        // Replace hxxp/hXXp variants with http
+        .replace(/hxxps?:\/\//gi, (match) => match.toLowerCase().replace('xx', 'tt'))
+        .replace(/h\[xx\]ps?:\/\//gi, (match) => match.toLowerCase().replace('[xx]', 'tt'))
+        // Replace [://] or (:/) with ://
+        .replace(/\[:\/\/\]|\(:\/\)/g, '://')
+        // Replace [/] or (/) with /
+        .replace(/\[\/\]|\(\/\)/g, '/')
+        // Replace meow with http (another common defang)
+        .replace(/^meow:\/\//gi, 'http://')
+        // Remove any remaining square brackets that might wrap parts
+        .replace(/\[([^\]]+)\]/g, '$1');
 }
 
 /**
  * Check if a value appears to be defanged
  */
 export function isDefanged(value: string): boolean {
-  return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]/i.test(value);
+    return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]/i.test(value);
 }
 
 // ============================================================================
@@ -78,14 +78,14 @@ const TLD_LIST = 'com|net|org|edu|gov|mil|int|co|io|ai|app|dev|cloud|tech|info|b
 // Defanged: example[.]com, sub[.]domain[.]co[.]uk, example(.)com
 // Excludes: Common file paths and partial matches
 export const DOMAIN_PATTERN = new RegExp(
-  `(?<![.\\w@/\\]])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.|\\[\\.\\]|\\(\\.\\)|\\{\\.\\}))+(?:${TLD_LIST})(?![.\\w\\]])`,
-  'gi'
+    `(?<![.\\w@/\\]])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.|\\[\\.\\]|\\(\\.\\)|\\{\\.\\}))+(?:${TLD_LIST})(?![.\\w\\]])`,
+    'gi'
 );
 
 // URL: Full URL with protocol AND defanged versions
 // Matches: https://example.com/path?query=value
 // Defanged: hxxps://example[.]com/path, hxxp://evil[.]com
-export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=[\]]*)/gi;
+export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=\[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()\[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=\[\]]*)/gi;
 
 // ============================================================================
 // Email Pattern
@@ -149,7 +149,7 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // Matches: CVE-2021-44228, CVE-2022-0001
 // Also handles non-breaking hyphens (‑), en dashes (–), and other dash-like characters
 // that may appear in web content due to typography or copy-paste
-export const CVE_PATTERN = /CVE[-\u2010\u2011\u2012\u2013]\d{4}[-\u2010\u2011\u2012\u2013]\d{4,}/gi;
+export const CVE_PATTERN = /CVE[\-\u2010\u2011\u2012\u2013]\d{4}[\-\u2010\u2011\u2012\u2013]\d{4,}/gi;
 
 // ============================================================================
 // ASN Pattern
@@ -227,11 +227,11 @@ export const JA3_PATTERN = /\bja3[s]?[:\s=]+[a-f0-9]{32}\b/gi;
 // ============================================================================
 
 export interface PatternConfig {
-  pattern: RegExp;
-  type: ObservableType;
-  hashType?: HashType;
-  priority: number;
-  validate?: (match: string) => boolean;
+    pattern: RegExp;
+    type: ObservableType;
+    hashType?: HashType;
+    priority: number;
+    validate?: (match: string) => boolean;
 }
 
 /**
@@ -239,189 +239,189 @@ export interface PatternConfig {
  * Priority determines the order of detection (higher = first)
  */
 export const OBSERVABLE_PATTERNS: PatternConfig[] = [
-  // URLs first (most specific)
-  {
-    pattern: URL_PATTERN,
-    type: 'Url',
-    priority: 100,
-    validate: (match) => {
-      try {
-        new URL(match);
-        return true;
-      } catch {
-        return false;
-      }
+    // URLs first (most specific)
+    {
+        pattern: URL_PATTERN,
+        type: 'Url',
+        priority: 100,
+        validate: (match) => {
+            try {
+                new URL(match);
+                return true;
+            } catch {
+                return false;
+            }
+        },
     },
-  },
-  
-  // Email addresses
-  {
-    pattern: EMAIL_PATTERN,
-    type: 'Email-Addr',
-    priority: 95,
-  },
-  
-  // Hashes (ordered by length to avoid overlap)
-  {
-    pattern: SHA512_PATTERN,
-    type: 'StixFile',
-    hashType: 'SHA-512',
-    priority: 90,
-  },
-  {
-    pattern: SHA256_PATTERN,
-    type: 'StixFile',
-    hashType: 'SHA-256',
-    priority: 89,
-  },
-  {
-    pattern: SHA1_PATTERN,
-    type: 'StixFile',
-    hashType: 'SHA-1',
-    priority: 88,
-  },
-  {
-    pattern: MD5_PATTERN,
-    type: 'StixFile',
-    hashType: 'MD5',
-    priority: 87,
-    validate: (match) => {
-      // Exclude UUIDs with dashes (e.g., d41d8cd9-8f00-b204-e980-0998ecf8427e)
-      // Note: Do NOT exclude pure 32-char hex strings - those are valid MD5 hashes
-      return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match);
+
+    // Email addresses
+    {
+        pattern: EMAIL_PATTERN,
+        type: 'Email-Addr',
+        priority: 95,
     },
-  },
-  {
-    pattern: SSDEEP_PATTERN,
-    type: 'StixFile',
-    hashType: 'SSDEEP',
-    priority: 86,
-  },
-  
-  // IP addresses
-  {
-    pattern: IPV6_PATTERN,
-    type: 'IPv6-Addr',
-    priority: 80,
-  },
-  {
-    pattern: IPV4_PATTERN,
-    type: 'IPv4-Addr',
-    priority: 79,
-    validate: (match) => {
-      // Exclude private/reserved ranges if needed
-      const parts = match.split('.').map(Number);
-      // Exclude 0.0.0.0 and 255.255.255.255
-      if (parts.every(p => p === 0) || parts.every(p => p === 255)) {
-        return false;
-      }
-      return true;
+
+    // Hashes (ordered by length to avoid overlap)
+    {
+        pattern: SHA512_PATTERN,
+        type: 'StixFile',
+        hashType: 'SHA-512',
+        priority: 90,
     },
-  },
-  
-  // Domain names
-  {
-    pattern: DOMAIN_PATTERN,
-    type: 'Domain-Name',
-    priority: 70,
-    validate: (match) => {
-      // Must have at least one dot and valid TLD
-      const parts = match.split('.');
-      if (parts.length < 2) return false;
-      // Exclude common file extensions misdetected as domains
-      const lastPart = parts[parts.length - 1].toLowerCase();
-      const excludedExtensions = ['js', 'css', 'html', 'php', 'asp', 'json', 'xml', 'txt'];
-      return !excludedExtensions.includes(lastPart);
+    {
+        pattern: SHA256_PATTERN,
+        type: 'StixFile',
+        hashType: 'SHA-256',
+        priority: 89,
     },
-  },
-  
-  // MAC addresses
-  {
-    pattern: MAC_PATTERN,
-    type: 'Mac-Addr',
-    priority: 65,
-  },
-  
-  // Cryptocurrency
-  {
-    pattern: BITCOIN_PATTERN,
-    type: 'Cryptocurrency-Wallet',
-    priority: 60,
-  },
-  {
-    pattern: ETHEREUM_PATTERN,
-    type: 'Cryptocurrency-Wallet',
-    priority: 59,
-  },
-  
-  // ASN
-  {
-    pattern: ASN_PATTERN,
-    type: 'Autonomous-System',
-    priority: 50,
-  },
-  
-  // Bank Account (IBAN)
-  {
-    pattern: IBAN_PATTERN,
-    type: 'Bank-Account',
-    priority: 45,
-    validate: (match) => {
-      // Basic IBAN validation (length check by country would be more accurate)
-      return match.length >= 15 && match.length <= 34;
+    {
+        pattern: SHA1_PATTERN,
+        type: 'StixFile',
+        hashType: 'SHA-1',
+        priority: 88,
     },
-  },
-  
-  // Credit/Payment Card
-  {
-    pattern: CREDIT_CARD_PATTERN,
-    type: 'Payment-Card',
-    priority: 44,
-    validate: (match) => {
-      // Luhn algorithm check for credit card validation
-      const digits = match.replace(/[-\s]/g, '');
-      let sum = 0;
-      let isEven = false;
-      for (let i = digits.length - 1; i >= 0; i--) {
-        let digit = parseInt(digits[i], 10);
-        if (isEven) {
-          digit *= 2;
-          if (digit > 9) digit -= 9;
-        }
-        sum += digit;
-        isEven = !isEven;
-      }
-      return sum % 10 === 0;
+    {
+        pattern: MD5_PATTERN,
+        type: 'StixFile',
+        hashType: 'MD5',
+        priority: 87,
+        validate: (match) => {
+            // Exclude UUIDs with dashes (e.g., d41d8cd9-8f00-b204-e980-0998ecf8427e)
+            // Note: Do NOT exclude pure 32-char hex strings - those are valid MD5 hashes
+            return !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match);
+        },
     },
-  },
-  
-  // User Agent
-  {
-    pattern: USER_AGENT_PATTERN,
-    type: 'User-Agent',
-    priority: 40,
-  },
-  
-  // Windows Registry Key
-  {
-    pattern: REGISTRY_PATTERN,
-    type: 'Windows-Registry-Key',
-    priority: 35,
-  },
-  
-  // X.509 Certificate Fingerprint
-  {
-    pattern: CERT_FINGERPRINT_PATTERN,
-    type: 'X509-Certificate',
-    priority: 30,
-  },
+    {
+        pattern: SSDEEP_PATTERN,
+        type: 'StixFile',
+        hashType: 'SSDEEP',
+        priority: 86,
+    },
+
+    // IP addresses
+    {
+        pattern: IPV6_PATTERN,
+        type: 'IPv6-Addr',
+        priority: 80,
+    },
+    {
+        pattern: IPV4_PATTERN,
+        type: 'IPv4-Addr',
+        priority: 79,
+        validate: (match) => {
+            // Exclude private/reserved ranges if needed
+            const parts = match.split('.').map(Number);
+            // Exclude 0.0.0.0 and 255.255.255.255
+            if (parts.every(p => p === 0) || parts.every(p => p === 255)) {
+                return false;
+            }
+            return true;
+        },
+    },
+
+    // Domain names
+    {
+        pattern: DOMAIN_PATTERN,
+        type: 'Domain-Name',
+        priority: 70,
+        validate: (match) => {
+            // Must have at least one dot and valid TLD
+            const parts = match.split('.');
+            if (parts.length < 2) return false;
+            // Exclude common file extensions misdetected as domains
+            const lastPart = parts[parts.length - 1].toLowerCase();
+            const excludedExtensions = ['js', 'css', 'html', 'php', 'asp', 'json', 'xml', 'txt'];
+            return !excludedExtensions.includes(lastPart);
+        },
+    },
+
+    // MAC addresses
+    {
+        pattern: MAC_PATTERN,
+        type: 'Mac-Addr',
+        priority: 65,
+    },
+
+    // Cryptocurrency
+    {
+        pattern: BITCOIN_PATTERN,
+        type: 'Cryptocurrency-Wallet',
+        priority: 60,
+    },
+    {
+        pattern: ETHEREUM_PATTERN,
+        type: 'Cryptocurrency-Wallet',
+        priority: 59,
+    },
+
+    // ASN
+    {
+        pattern: ASN_PATTERN,
+        type: 'Autonomous-System',
+        priority: 50,
+    },
+
+    // Bank Account (IBAN)
+    {
+        pattern: IBAN_PATTERN,
+        type: 'Bank-Account',
+        priority: 45,
+        validate: (match) => {
+            // Basic IBAN validation (length check by country would be more accurate)
+            return match.length >= 15 && match.length <= 34;
+        },
+    },
+
+    // Credit/Payment Card
+    {
+        pattern: CREDIT_CARD_PATTERN,
+        type: 'Payment-Card',
+        priority: 44,
+        validate: (match) => {
+            // Luhn algorithm check for credit card validation
+            const digits = match.replace(/[-\s]/g, '');
+            let sum = 0;
+            let isEven = false;
+            for (let i = digits.length - 1; i >= 0; i--) {
+                let digit = parseInt(digits[i], 10);
+                if (isEven) {
+                    digit *= 2;
+                    if (digit > 9) digit -= 9;
+                }
+                sum += digit;
+                isEven = !isEven;
+            }
+            return sum % 10 === 0;
+        },
+    },
+
+    // User Agent
+    {
+        pattern: USER_AGENT_PATTERN,
+        type: 'User-Agent',
+        priority: 40,
+    },
+
+    // Windows Registry Key
+    {
+        pattern: REGISTRY_PATTERN,
+        type: 'Windows-Registry-Key',
+        priority: 35,
+    },
+
+    // X.509 Certificate Fingerprint
+    {
+        pattern: CERT_FINGERPRINT_PATTERN,
+        type: 'X509-Certificate',
+        priority: 30,
+    },
 ];
 
 // CVE is special - it maps to Vulnerability SDO, not SCO
 export const CVE_CONFIG = {
-  pattern: CVE_PATTERN,
-  type: 'Vulnerability' as const,
-  priority: 100,
+    pattern: CVE_PATTERN,
+    type: 'Vulnerability' as const,
+    priority: 100,
 };
 
 // ============================================================================
@@ -432,21 +432,21 @@ export const CVE_CONFIG = {
  * SDO types that should be searched by name/alias match
  */
 export const SDO_SEARCH_TYPES = [
-  'Intrusion-Set',
-  'Malware',
-  'Threat-Actor',
-  'Campaign',
-  'Tool',
-  'Attack-Pattern',
+    'Intrusion-Set',
+    'Malware',
+    'Threat-Actor',
+    'Campaign',
+    'Tool',
+    'Attack-Pattern',
 ] as const;
 
 /**
  * Generate a regex pattern for exact word matching
  */
 export function createNamePattern(name: string): RegExp {
-  // Escape special regex characters
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Match whole word only (case insensitive)
-  return new RegExp(`\\b${escaped}\\b`, 'gi');
+    // Escape special regex characters
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Match whole word only (case insensitive)
+    return new RegExp(`\\b${escaped}\\b`, 'gi');
 }
 

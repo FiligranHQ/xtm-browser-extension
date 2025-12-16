@@ -269,3 +269,66 @@ export interface MultiPlatformResult {
   platformName: string;
   entity: EntityData;
 }
+
+// AI settings state
+export interface AISettingsState {
+  enabled: boolean;
+  provider?: string;
+  available: boolean;
+}
+
+// Label option for autocomplete
+export interface LabelOption {
+  id: string;
+  value: string;
+  color: string;
+}
+
+// Marking option for autocomplete
+export interface MarkingOption {
+  id: string;
+  definition: string;
+}
+
+// Vocabulary option for dropdowns
+export interface VocabularyOption {
+  id: string;
+  name: string;
+}
+
+// Author option for autocomplete
+export interface AuthorOption {
+  id: string;
+  name: string;
+  entity_type: string;
+}
+
+// Investigation entity
+export interface InvestigationEntity {
+  id: string;
+  type: string;
+  value: string;
+  name?: string;
+  standard_id?: string;
+}
+
+// OpenAEV search result
+export interface OAEVSearchResult {
+  id: string;
+  type: string;
+  name: string;
+  description?: string;
+  platformId?: string;
+  entityData?: unknown;
+}
+
+// Raw attack pattern from scan
+export interface RawAttackPattern {
+  id: string;
+  entityId: string;
+  name: string;
+  externalId?: string;
+  description?: string;
+  killChainPhases?: string[];
+  platformId?: string;
+}

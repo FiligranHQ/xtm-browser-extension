@@ -1,22 +1,20 @@
 /**
- * ActionButton Component
- * 
- * Reusable action button for popup menu items
+ * ActionButton component - A stylized button for popup actions
  */
 
 import React from 'react';
-import { Paper, Box, Typography, Tooltip } from '@mui/material';
+import { Box, Paper, Typography, Tooltip } from '@mui/material';
 import type { ActionButtonProps } from '../types';
 
-export const ActionButton: React.FC<ActionButtonProps> = ({
-  icon,
-  label,
-  subtitle,
-  tooltip,
-  onClick,
-  color,
-  disabled,
-  compact = false,
+export const ActionButton: React.FC<ActionButtonProps> = ({ 
+  icon, 
+  label, 
+  subtitle, 
+  tooltip, 
+  onClick, 
+  color, 
+  disabled, 
+  compact = false 
 }) => (
   <Tooltip title={tooltip} arrow>
     <Paper
@@ -36,31 +34,18 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
         border: `1px solid ${color}50`,
         borderRadius: 1,
         transition: 'all 0.2s ease',
-        '&:hover': disabled
-          ? {}
-          : {
-              transform: 'translateY(-2px)',
-              boxShadow: `0 4px 12px ${color}30`,
-              borderColor: color,
-            },
+        '&:hover': disabled ? {} : {
+          transform: 'translateY(-2px)',
+          boxShadow: `0 4px 12px ${color}30`,
+          borderColor: color,
+        },
       }}
     >
       <Box sx={{ color, display: 'flex' }}>{icon}</Box>
-      <Typography
-        variant="body2"
-        sx={{ fontWeight: 600, fontSize: compact ? 14 : 15, lineHeight: 1.2 }}
-      >
+      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: compact ? 14 : 15, lineHeight: 1.2 }}>
         {label}
       </Typography>
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          fontSize: compact ? 11 : 12,
-          textAlign: 'center',
-          lineHeight: 1.2,
-        }}
-      >
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: compact ? 11 : 12, textAlign: 'center', lineHeight: 1.2 }}>
         {subtitle}
       </Typography>
     </Paper>
@@ -68,4 +53,3 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
 );
 
 export default ActionButton;
-

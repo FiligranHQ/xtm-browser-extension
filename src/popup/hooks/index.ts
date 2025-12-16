@@ -1,8 +1,7 @@
 /**
- * Popup Hooks
- * 
- * Central export for all popup hooks
+ * Popup hooks barrel export
  */
 
-export { usePopupState, type PopupState } from './usePopupState';
-
+export { usePlatformStatus } from './usePlatformStatus';
+export { useSetupWizard } from './useSetupWizard';
+export { usePopupActions } from './usePopupActions';

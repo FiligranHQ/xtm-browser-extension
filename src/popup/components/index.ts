@@ -1,12 +1,10 @@
 /**
- * Popup Components
- * 
- * Central export for all popup components
+ * Popup components barrel export
  */
 
 export { ActionButton } from './ActionButton';
-export { WelcomeView } from './WelcomeView';
-export { SetupForm } from './SetupForm';
-export { PopupHeader } from './PopupHeader';
-export { PopupFooter } from './PopupFooter';
-
+export { PlatformSetupForm } from './PlatformSetupForm';
+export { WelcomeScreen } from './WelcomeScreen';
+export { EETrialDialog } from './EETrialDialog';
+export { PlatformCard } from './PlatformCard';
+export { PlatformDetailsPopover } from './PlatformDetailsPopover';

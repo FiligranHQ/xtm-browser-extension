@@ -1,41 +1,138 @@
 /**
  * Message Types
  * 
- * Types for extension messaging between background, content, and panel scripts.
+ * Types for extension communication between background, content script, and UI.
  */
 
-import type { DetectedObservable, DetectedSDO, DetectedPlatformEntity } from './observable';
-import type { ObservableType, HashType, ContainerType, GraphQLResponse } from './stix';
-import type { StixCyberObservable, StixDomainObject } from './stix';
-import type { OAEVAsset } from './platform';
+import type { DetectedObservable, DetectedSDO, DetectedPlatformEntity } from './detection';
+import type { ObservableType, HashType, ContainerType } from './index';
 
-/**
- * Extension message format
- */
+// ============================================================================
+// Message Type Definitions
+// ============================================================================
+
+export type MessageType =
+  | 'SCAN_PAGE'
+  | 'SCAN_RESULT'
+  | 'HIGHLIGHT_OBSERVABLE'
+  | 'SHOW_ENTITY_PANEL'
+  | 'HIDE_PANEL'
+  | 'ADD_OBSERVABLE'
+  | 'ADD_OBSERVABLES_BULK'
+  | 'CREATE_ENTITY'
+  | 'CREATE_CONTAINER'
+  | 'CREATE_INVESTIGATION'
+  | 'ADD_TO_INVESTIGATION'
+  | 'GET_SETTINGS'
+  | 'SAVE_SETTINGS'
+  | 'TEST_CONNECTION'
+  | 'TEST_OPENAEV_CONNECTION'
+  | 'TEST_PLATFORM_CONNECTION'
+  | 'TEST_PLATFORM_CONNECTION_TEMP'
+  | 'GET_ENTITY_DETAILS'
+  | 'SEARCH_ENTITIES'
+  | 'SEARCH_ASSETS'
+  | 'GENERATE_SCENARIO'
+  | 'GET_PLATFORM_THEME'
+  | 'GET_PLATFORM_SETTINGS'
+  | 'REFRESH_SDO_CACHE'
+  | 'GET_SDO_CACHE_STATS'
+  | 'SELECTION_CHANGED'
+  | 'SHOW_PREVIEW_PANEL'
+  | 'PREVIEW_SELECTION'
+  | 'SHOW_BULK_IMPORT_PANEL'
+  | 'OPEN_SEARCH_PANEL'
+  | 'OPEN_OAEV_SEARCH_PANEL'
+  | 'SHOW_SEARCH_PANEL'
+  | 'SHOW_OAEV_SEARCH_PANEL'
+  | 'SEARCH_OAEV'
+  | 'SHOW_CONTAINER_PANEL'
+  | 'SHOW_INVESTIGATION_PANEL'
+  | 'GET_PANEL_STATE'
+  | 'FETCH_LABELS'
+  | 'FETCH_MARKINGS'
+  | 'CREATE_OBSERVABLES_BULK'
+  | 'CREATE_INVESTIGATION_WITH_ENTITIES'
+  | 'GET_LABELS_AND_MARKINGS'
+  | 'FETCH_ENTITY_CONTAINERS'
+  | 'FIND_CONTAINERS_BY_URL'
+  | 'FETCH_VOCABULARY'
+  | 'FETCH_IDENTITIES'
+  | 'GET_CACHE_REFRESH_STATUS'
+  | 'CLEAR_SDO_CACHE'
+  | 'CLEAR_OAEV_CACHE'
+  | 'CREATE_WORKBENCH'
+  | 'SCAN_OAEV'
+  | 'GET_OAEV_ENTITY_DETAILS'
+  // Atomic Testing
+  | 'SCAN_ATOMIC_TESTING'
+  | 'SHOW_ATOMIC_TESTING_PANEL'
+  | 'ATOMIC_TESTING_SCAN_RESULTS'
+  | 'ATOMIC_TESTING_SELECT'
+  | 'FETCH_INJECTOR_CONTRACTS'
+  | 'FETCH_OAEV_ASSETS'
+  | 'FETCH_OAEV_ASSET_GROUPS'
+  | 'FETCH_OAEV_TEAMS'
+  | 'CREATE_OAEV_PAYLOAD'
+  | 'FETCH_OAEV_PAYLOAD'
+  | 'FIND_DNS_RESOLUTION_PAYLOAD'
+  | 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD'
+  | 'CREATE_ATOMIC_TESTING'
+  // Content Script Injection
+  | 'INJECT_CONTENT_SCRIPT'
+  | 'INJECT_ALL_TABS'
+  | 'PING'
+  // AI Features
+  | 'AI_GENERATE_DESCRIPTION'
+  | 'AI_GENERATE_SCENARIO'
+  | 'AI_GENERATE_FULL_SCENARIO'
+  | 'AI_GENERATE_ATOMIC_TEST'
+  | 'AI_GENERATE_EMAILS'
+  | 'AI_DISCOVER_ENTITIES'
+  | 'AI_RESOLVE_RELATIONSHIPS'
+  | 'AI_CHECK_STATUS'
+  // AI Scenario Creation
+  | 'ADD_EMAIL_INJECT_TO_SCENARIO'
+  | 'ADD_TECHNICAL_INJECT_TO_SCENARIO'
+  // Scenario Generation
+  | 'OPEN_SCENARIO_PANEL'
+  | 'SHOW_SCENARIO_PANEL'
+  | 'CREATE_SCENARIO'
+  | 'FETCH_SCENARIO_OVERVIEW'
+  | 'FETCH_KILL_CHAIN_PHASES'
+  | 'FETCH_INJECTOR_CONTRACTS_FOR_ATTACK_PATTERNS'
+  | 'ADD_INJECT_TO_SCENARIO'
+  | 'CREATE_SCENARIO_FROM_PAGE'
+  // Unified scan
+  | 'SCAN_ALL'
+  // AI model management
+  | 'AI_TEST_AND_FETCH_MODELS'
+  // PDF Generation
+  | 'GENERATE_NATIVE_PDF'
+  // Image fetching (for CORS bypass)
+  | 'FETCH_IMAGE_AS_DATA_URL';
+
+// ============================================================================
+// Message Payload Types
+// ============================================================================
+
 export interface ExtensionMessage {
-  type: string;
+  type: MessageType;
   payload?: unknown;
 }
 
-/**
- * Message response format
- */
-export interface MessageResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
+export interface ScanPagePayload {
+  url: string;
+  title: string;
+  content: string;
 }
 
-// ============================================================================
-// Scan Payloads
-// ============================================================================
-
-/**
- * Scan result payload
- */
 export interface ScanResultPayload {
-  observables?: DetectedObservable[];
-  sdos?: DetectedSDO[];
+  /** OpenCTI observables detected */
+  observables: DetectedObservable[];
+  /** OpenCTI SDOs (STIX Domain Objects) detected */
+  sdos: DetectedSDO[];
+  /** CVEs (Vulnerabilities) - separate array for special handling */
   cves?: DetectedSDO[];
   /** 
    * Platform entities detected (non-OpenCTI platforms like OpenAEV)
@@ -46,9 +143,6 @@ export interface ScanResultPayload {
   url: string;
 }
 
-/**
- * Show entity panel payload
- */
 export interface ShowEntityPanelPayload {
   /** 
    * Entity source type
@@ -59,9 +153,6 @@ export interface ShowEntityPanelPayload {
   entity: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
 }
 
-/**
- * Add observable payload
- */
 export interface AddObservablePayload {
   type: ObservableType;
   value: string;
@@ -69,9 +160,6 @@ export interface AddObservablePayload {
   createIndicator?: boolean;
 }
 
-/**
- * Create container payload
- */
 export interface CreateContainerPayload {
   type: ContainerType;
   name: string;
@@ -82,31 +170,3 @@ export interface CreateContainerPayload {
   observableIds?: string[];
   generatePdf?: boolean;
 }
-
-// ============================================================================
-// UI State Types
-// ============================================================================
-
-/**
- * Scan state
- */
-export interface ScanState {
-  isScanning: boolean;
-  lastScanTime?: string;
-  results?: ScanResultPayload;
-  error?: string;
-}
-
-/**
- * Panel state
- */
-export interface PanelState {
-  isOpen: boolean;
-  entity?: DetectedObservable | DetectedSDO | DetectedPlatformEntity;
-  entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
-  loading: boolean;
-}
-
-// Re-export for convenience
-export type { GraphQLResponse };
-

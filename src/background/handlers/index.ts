@@ -11,6 +11,7 @@ export { aiHandlers } from './ai-handlers';
 export { cacheHandlers, initializeCacheHandlers } from './cache-handlers';
 export { scanHandlers, scanForOAEVEntities, mergeScanResults } from './scan-handlers';
 export { settingsHandlers, type SettingsHandlerDependencies } from './settings-handlers';
+export { miscHandlers } from './misc-handlers';
 
 // Re-export individual handlers for direct use
 export { 
@@ -78,6 +79,7 @@ import { openctiHandlers } from './opencti-handlers';
 import { openaevHandlers } from './openaev-handlers';
 import { aiHandlers } from './ai-handlers';
 import { cacheHandlers } from './cache-handlers';
+import { miscHandlers } from './misc-handlers';
 import type { MessageHandler } from './types';
 
 export function createHandlerRegistry(): Map<string, MessageHandler> {
@@ -94,6 +96,9 @@ export function createHandlerRegistry(): Map<string, MessageHandler> {
     registry.set(type, handler);
   }
   for (const [type, handler] of Object.entries(cacheHandlers)) {
+    registry.set(type, handler);
+  }
+  for (const [type, handler] of Object.entries(miscHandlers)) {
     registry.set(type, handler);
   }
   

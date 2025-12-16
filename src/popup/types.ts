@@ -1,13 +1,11 @@
 /**
- * Popup Types
- * 
- * Type definitions for the popup component
+ * Types for the popup UI
  */
 
 import type { PlatformType } from '../shared/platform';
 
 /**
- * Platform status for connection display
+ * Connection status for a single platform instance
  */
 export interface PlatformStatus {
   id: string;
@@ -33,12 +31,7 @@ export interface ConnectionStatus {
 }
 
 /**
- * Setup wizard step types
- */
-export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'complete';
-
-/**
- * Action button props
+ * Props for the ActionButton component
  */
 export interface ActionButtonProps {
   icon: React.ReactNode;
@@ -51,3 +44,71 @@ export interface ActionButtonProps {
   compact?: boolean;
 }
 
+/**
+ * Setup wizard step
+ */
+export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'complete';
+
+/**
+ * Setup wizard state
+ */
+export interface SetupWizardState {
+  step: SetupStep;
+  isInWizard: boolean;
+  url: string;
+  token: string;
+  name: string;
+  showToken: boolean;
+  testing: boolean;
+  error: string | null;
+  success: boolean;
+}
+
+/**
+ * Props for platform setup form
+ */
+export interface PlatformSetupFormProps {
+  platformType: 'opencti' | 'openaev';
+  logoSuffix: string;
+  url: string;
+  token: string;
+  showToken: boolean;
+  testing: boolean;
+  error: string | null;
+  success: boolean;
+  onUrlChange: (url: string) => void;
+  onTokenChange: (token: string) => void;
+  onToggleShowToken: () => void;
+  onConnect: () => void;
+  onSkip: () => void;
+}
+
+/**
+ * Props for platform details in the popover
+ */
+export interface PlatformDetailsProps {
+  platforms: PlatformStatus[];
+  logoSuffix: string;
+  platformLabel: string;
+  mode: 'dark' | 'light';
+  onOpenPlatform: (url: string) => void;
+}
+
+/**
+ * Props for the welcome screen
+ */
+export interface WelcomeScreenProps {
+  logoSuffix: string;
+  onGetStarted: () => void;
+  onOpenSettings: () => void;
+}
+
+/**
+ * Props for the EE trial dialog
+ */
+export interface EETrialDialogProps {
+  open: boolean;
+  mode: 'dark' | 'light';
+  onClose: () => void;
+  onStartTrial: () => void;
+}

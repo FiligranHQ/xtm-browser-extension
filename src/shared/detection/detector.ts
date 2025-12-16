@@ -126,48 +126,51 @@ export class DetectionEngine {
     return detected.sort((a, b) => a.startIndex - b.startIndex);
   }
 
-  /**
-   * Find all matches for a pattern
-   */
-  private findMatches(text: string, config: PatternConfig): DetectedObservable[] {
-    const matches: DetectedObservable[] = [];
-    
-    // Reset regex state
-    const pattern = new RegExp(config.pattern.source, config.pattern.flags);
-    
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const value = match[0];
-      
-      // Check if the value is defanged and get the refanged version
-      const defanged = isDefanged(value);
-      const refangedValue = defanged ? refangIndicator(value) : value;
-      
-      // Validate using the refanged value (the "real" indicator)
-      if (config.validate && !config.validate(refangedValue)) {
-        continue;
-      }
+    /**
+     * Find all matches for a pattern
+     */
+    private findMatches(
+        text: string,
+        config: PatternConfig
+    ): DetectedObservable[] {
+        const matches: DetectedObservable[] = [];
 
-      // Get surrounding context (up to 50 chars each side)
-      const contextStart = Math.max(0, match.index - 50);
-      const contextEnd = Math.min(text.length, match.index + value.length + 50);
-      const context = text.slice(contextStart, contextEnd);
+        // Reset regex state
+        const pattern = new RegExp(config.pattern.source, config.pattern.flags);
 
-      matches.push({
-        type: config.type,
-        value, // Original value as found in text (may be defanged)
-        refangedValue, // Clean value for cache/API lookups
-        isDefanged: defanged,
-        hashType: config.hashType,
-        startIndex: match.index,
-        endIndex: match.index + value.length,
-        context,
-        found: false, // Will be updated after API check
-      });
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const value = match[0];
+
+            // Check if the value is defanged and get the refanged version
+            const defanged = isDefanged(value);
+            const refangedValue = defanged ? refangIndicator(value) : value;
+
+            // Validate using the refanged value (the "real" indicator)
+            if (config.validate && !config.validate(refangedValue)) {
+                continue;
+            }
+
+            // Get surrounding context (up to 50 chars each side)
+            const contextStart = Math.max(0, match.index - 50);
+            const contextEnd = Math.min(text.length, match.index + value.length + 50);
+            const context = text.slice(contextStart, contextEnd);
+
+            matches.push({
+                type: config.type,
+                value, // Original value as found in text (may be defanged)
+                refangedValue, // Clean value for cache/API lookups
+                isDefanged: defanged,
+                hashType: config.hashType,
+                startIndex: match.index,
+                endIndex: match.index + value.length,
+                context,
+                found: false, // Will be updated after API check
+            });
+        }
+
+        return matches;
     }
-
-    return matches;
-  }
 
   /**
    * Detect CVE references

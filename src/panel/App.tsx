@@ -253,6 +253,7 @@ const App: React.FC = () => {
   const [unifiedSearchQuery, setUnifiedSearchQuery] = useState('');
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
   const [unifiedSearching, setUnifiedSearching] = useState(false);
+  const [unifiedSearchPlatformFilter, setUnifiedSearchPlatformFilter] = useState<'all' | 'opencti' | 'openaev'>('all');
   const [containerType, setContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState({
     name: '',
@@ -9130,6 +9131,15 @@ const App: React.FC = () => {
     const octiResults = unifiedSearchResults.filter(r => r.source === 'opencti');
     const oaevResults = unifiedSearchResults.filter(r => r.source === 'openaev');
     
+    // Filter results based on selected platform filter
+    const filteredResults = unifiedSearchPlatformFilter === 'all' 
+      ? unifiedSearchResults 
+      : unifiedSearchResults.filter(r => r.source === unifiedSearchPlatformFilter);
+    
+    // OpenCTI color: cyan, OpenAEV color: purple
+    const octiColor = '#00bcd4';
+    const oaevColor = '#9c27b0';
+    
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Typography variant="h6" sx={{ mb: 2 }}>Search All Platforms</Typography>
@@ -9169,25 +9179,72 @@ const App: React.FC = () => {
           </Box>
         ) : unifiedSearchResults.length > 0 ? (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {unifiedSearchResults.length} result{unifiedSearchResults.length !== 1 ? 's' : ''} found
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {octiResults.length > 0 && (
-                  <Typography variant="caption" sx={{ color: '#00bcd4', fontWeight: 500 }}>
-                    {octiResults.length} in OpenCTI
-                  </Typography>
-                )}
-                {oaevResults.length > 0 && (
-                  <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 500 }}>
-                    {oaevResults.length} in OpenAEV
-                  </Typography>
-                )}
+            {/* Platform Filter Buttons */}
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 0, 
+              mb: 2, 
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+              overflow: 'hidden',
+            }}>
+              <Box 
+                onClick={() => setUnifiedSearchPlatformFilter(unifiedSearchPlatformFilter === 'opencti' ? 'all' : 'opencti')}
+                sx={{ 
+                  flex: 1, 
+                  textAlign: 'center', 
+                  p: 1.5,
+                  cursor: octiResults.length > 0 ? 'pointer' : 'default',
+                  bgcolor: unifiedSearchPlatformFilter === 'opencti' ? octiColor : 'action.hover',
+                  color: unifiedSearchPlatformFilter === 'opencti' ? 'white' : 'inherit',
+                  opacity: octiResults.length > 0 ? 1 : 0.5,
+                  transition: 'all 0.15s',
+                  '&:hover': octiResults.length > 0 ? {
+                    bgcolor: unifiedSearchPlatformFilter === 'opencti' ? octiColor : 'action.selected',
+                  } : {},
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, color: unifiedSearchPlatformFilter === 'opencti' ? 'inherit' : octiColor }}>
+                  {octiResults.length}
+                </Typography>
+                <Typography variant="caption" sx={{ color: unifiedSearchPlatformFilter === 'opencti' ? 'inherit' : 'text.secondary', opacity: unifiedSearchPlatformFilter === 'opencti' ? 0.9 : 1 }}>
+                  OpenCTI
+                </Typography>
+              </Box>
+              <Divider orientation="vertical" flexItem />
+              <Box 
+                onClick={() => setUnifiedSearchPlatformFilter(unifiedSearchPlatformFilter === 'openaev' ? 'all' : 'openaev')}
+                sx={{ 
+                  flex: 1, 
+                  textAlign: 'center', 
+                  p: 1.5,
+                  cursor: oaevResults.length > 0 ? 'pointer' : 'default',
+                  bgcolor: unifiedSearchPlatformFilter === 'openaev' ? oaevColor : 'action.hover',
+                  color: unifiedSearchPlatformFilter === 'openaev' ? 'white' : 'inherit',
+                  opacity: oaevResults.length > 0 ? 1 : 0.5,
+                  transition: 'all 0.15s',
+                  '&:hover': oaevResults.length > 0 ? {
+                    bgcolor: unifiedSearchPlatformFilter === 'openaev' ? oaevColor : 'action.selected',
+                  } : {},
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, color: unifiedSearchPlatformFilter === 'openaev' ? 'inherit' : oaevColor }}>
+                  {oaevResults.length}
+                </Typography>
+                <Typography variant="caption" sx={{ color: unifiedSearchPlatformFilter === 'openaev' ? 'inherit' : 'text.secondary', opacity: unifiedSearchPlatformFilter === 'openaev' ? 0.9 : 1 }}>
+                  OpenAEV
+                </Typography>
               </Box>
             </Box>
+            
+            {/* Results count */}
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+              {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}{unifiedSearchPlatformFilter !== 'all' ? ` in ${unifiedSearchPlatformFilter === 'opencti' ? 'OpenCTI' : 'OpenAEV'}` : ''}
+            </Typography>
+            
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {unifiedSearchResults.map((result) => {
+              {filteredResults.map((result) => {
                 // Get the proper type for color/icon lookup
                 const typeForColor = result.source === 'openaev' 
                   ? `oaev-${result.type}` 

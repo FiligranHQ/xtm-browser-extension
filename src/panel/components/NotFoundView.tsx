@@ -1,143 +1,113 @@
 /**
  * Not Found View Component
- * 
+ *
  * Displays when an entity is not found in the platform.
  */
 
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
-import { InfoOutlined, AddOutlined, CloseOutlined } from '@mui/icons-material';
+import {
+  Box,
+  Typography,
+  Button,
+  Alert,
+} from '@mui/material';
+import {
+  AddOutlined,
+  ChevronLeftOutlined,
+} from '@mui/icons-material';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { EntityData } from '../types';
+import type { EntityData, PanelMode } from '../types';
 
-interface NotFoundViewProps {
+export interface NotFoundViewProps {
   entity: EntityData | null;
   mode: 'dark' | 'light';
-  onAddEntity?: () => void;
-  onClose?: () => void;
+  entityFromScanResults: boolean;
+  setEntityFromScanResults: (value: boolean) => void;
+  setPanelMode: (mode: PanelMode) => void;
+  setEntitiesToAdd: (entities: EntityData[]) => void;
 }
 
 /**
  * View displayed when entity is not found in platform
  */
-export const NotFoundView: React.FC<NotFoundViewProps> = ({ 
-  entity, 
+export const NotFoundView: React.FC<NotFoundViewProps> = ({
+  entity,
   mode,
-  onAddEntity,
-  onClose,
+  entityFromScanResults,
+  setEntityFromScanResults,
+  setPanelMode,
+  setEntitiesToAdd,
 }) => {
   if (!entity) return null;
-  
-  const type = entity.type || entity.entity_type || 'unknown';
+
+  const type = entity.type || 'unknown';
   const color = itemColor(type, mode === 'dark');
-  const name = entity.name || entity.value || 'Unknown';
-  
-  // Determine if this entity type can be added (observables can, SDOs generally can't)
-  const isAddable = ![
-    'Vulnerability', 'Threat-Actor', 'Threat-Actor-Group', 'Threat-Actor-Individual',
-    'Intrusion-Set', 'Malware', 'Attack-Pattern', 'Tool', 'Campaign',
-  ].includes(type);
+  const value = entity.value || entity.name || 'Unknown';
 
   return (
     <Box sx={{ p: 2 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          py: 4,
-        }}
-      >
-        {/* Type Badge */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 2,
-            py: 1,
-            mb: 2,
-            borderRadius: 1,
-            bgcolor: hexToRGB(color, 0.2),
-            border: `2px solid ${color}`,
-          }}
-        >
-          <ItemIcon type={type} size="small" color={color} />
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              fontWeight: 700, 
-              color, 
-              textTransform: 'capitalize',
-              letterSpacing: '0.5px',
+      {/* Back to scan results button */}
+      {entityFromScanResults && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => {
+              setEntityFromScanResults(false);
+              setPanelMode('scan-results');
+            }}
+            sx={{
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            {type.replace(/-/g, ' ')}
-          </Typography>
+            Back to scan results
+          </Button>
         </Box>
+      )}
 
-        {/* Value */}
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            mb: 2, 
-            wordBreak: 'break-word',
-            maxWidth: '100%',
-          }}
-        >
-          {name}
+      <Alert severity="warning" sx={{ mb: 2, borderRadius: 1 }}>
+        This entity was not found in OpenCTI
+      </Alert>
+
+      <Box
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.75,
+          px: 1.5,
+          py: 0.5,
+          mb: 2,
+          borderRadius: 1,
+          bgcolor: hexToRGB(color, 0.15),
+          border: `1px solid ${hexToRGB(color, 0.3)}`,
+        }}
+      >
+        <ItemIcon type={type} size="small" color={color} />
+        <Typography variant="caption" sx={{ fontWeight: 600, color, textTransform: 'capitalize' }}>
+          {type.replace(/-/g, ' ')}
         </Typography>
-
-        {/* Not Found Message */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 2,
-            py: 1.5,
-            mb: 3,
-            borderRadius: 1,
-            bgcolor: mode === 'dark' ? 'rgba(255, 167, 38, 0.1)' : 'rgba(255, 167, 38, 0.08)',
-            border: '1px solid',
-            borderColor: mode === 'dark' ? 'rgba(255, 167, 38, 0.3)' : 'rgba(255, 167, 38, 0.2)',
-          }}
-        >
-          <InfoOutlined sx={{ color: '#ffa726', fontSize: 20 }} />
-          <Typography variant="body2" sx={{ color: '#ffa726' }}>
-            Not found in the platform
-          </Typography>
-        </Box>
-
-        {/* Actions */}
-        <Box sx={{ display: 'flex', gap: 1, width: '100%', maxWidth: 280 }}>
-          {isAddable && onAddEntity && (
-            <Button
-              variant="contained"
-              startIcon={<AddOutlined />}
-              onClick={onAddEntity}
-              fullWidth
-            >
-              Add to Platform
-            </Button>
-          )}
-          {onClose && (
-            <Button
-              variant="outlined"
-              startIcon={<CloseOutlined />}
-              onClick={onClose}
-              fullWidth={!isAddable}
-            >
-              Close
-            </Button>
-          )}
-        </Box>
       </Box>
+
+      <Typography variant="h6" sx={{ mb: 2, wordBreak: 'break-word' }}>
+        {value}
+      </Typography>
+
+      <Button
+        variant="contained"
+        startIcon={<AddOutlined />}
+        onClick={() => {
+          setEntitiesToAdd([entity]);
+          setPanelMode('add');
+        }}
+        fullWidth
+      >
+        Add to OpenCTI
+      </Button>
     </Box>
   );
 };
 
 export default NotFoundView;
-

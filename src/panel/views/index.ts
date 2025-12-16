@@ -22,3 +22,5 @@ export { ContainerTypeView } from './ContainerTypeView';
 export { PlatformSelectView } from './PlatformSelectView';
 export { AddView } from './AddView';
 export { ScenarioOverviewView } from './ScenarioOverviewView';
+export { ExistingContainersView } from './ExistingContainersView';
+export { InvestigationView } from './InvestigationView';

@@ -1,6 +1,6 @@
 /**
  * Container Type View Component
- * 
+ *
  * Allows user to select container type for entity import.
  */
 
@@ -9,57 +9,23 @@ import {
   Box,
   Typography,
   Paper,
-  Button,
+  IconButton,
+  Alert,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
-import {
-  ChevronLeftOutlined,
-  ChevronRightOutlined,
-  DescriptionOutlined,
-  ArticleOutlined,
-  BugReportOutlined,
-  AssessmentOutlined,
-  GroupWorkOutlined,
-} from '@mui/icons-material';
+import { ChevronLeftOutlined } from '@mui/icons-material';
 import { hexToRGB } from '../../shared/theme/colors';
-import type { PanelMode } from '../types';
+import ItemIcon from '../../shared/components/ItemIcon';
+import type { PanelMode, EntityData } from '../types';
 
 // Container type definitions
 const CONTAINER_TYPES = [
-  {
-    id: 'report',
-    name: 'Report',
-    description: 'A threat intelligence report',
-    icon: DescriptionOutlined,
-    color: '#4caf50',
-  },
-  {
-    id: 'note',
-    name: 'Note',
-    description: 'A simple analyst note',
-    icon: ArticleOutlined,
-    color: '#2196f3',
-  },
-  {
-    id: 'case-incident',
-    name: 'Incident Response',
-    description: 'An incident response case',
-    icon: BugReportOutlined,
-    color: '#f44336',
-  },
-  {
-    id: 'case-rfi',
-    name: 'Request for Information',
-    description: 'A request for information case',
-    icon: AssessmentOutlined,
-    color: '#ff9800',
-  },
-  {
-    id: 'grouping',
-    name: 'Grouping',
-    description: 'A logical grouping of entities',
-    icon: GroupWorkOutlined,
-    color: '#9c27b0',
-  },
+  { type: 'Report', color: '#4a148c', description: 'Threat intelligence report' },
+  { type: 'Grouping', color: '#689f38', description: 'Group related objects' },
+  { type: 'Case-Incident', color: '#ad1457', description: 'Security incident' },
+  { type: 'Case-Rfi', color: '#0c5c98', description: 'Request for information' },
 ];
 
 export interface ContainerTypeViewProps {
@@ -67,7 +33,9 @@ export interface ContainerTypeViewProps {
   setPanelMode: (mode: PanelMode) => void;
   setContainerType: (type: string) => void;
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
-  availablePlatformsCount: number;
+  openctiPlatformsCount: number;
+  containerSteps: string[];
+  entitiesToAdd: EntityData[];
 }
 
 export const ContainerTypeView: React.FC<ContainerTypeViewProps> = ({
@@ -75,109 +43,89 @@ export const ContainerTypeView: React.FC<ContainerTypeViewProps> = ({
   setPanelMode,
   setContainerType,
   containerWorkflowOrigin,
-  availablePlatformsCount,
+  openctiPlatformsCount,
+  containerSteps,
+  entitiesToAdd,
 }) => {
-  const handleBack = () => {
-    // Determine where to go back based on workflow origin
-    if (containerWorkflowOrigin === 'preview') {
-      setPanelMode('preview');
-    } else if (availablePlatformsCount > 1) {
-      setPanelMode('platform-select');
-    } else {
-      setPanelMode('scan-results');
-    }
-  };
+  // Determine if we should show back button
+  // Show back if: coming from preview, or if multi-platform (can go back to platform select)
+  const canGoBack = containerWorkflowOrigin === 'preview' || openctiPlatformsCount > 1;
 
-  const handleSelectType = (typeId: string) => {
-    setContainerType(typeId);
-    setPanelMode('container-form');
+  const handleBack = () => {
+    if (openctiPlatformsCount > 1) {
+      setPanelMode('platform-select' as PanelMode);
+    } else if (containerWorkflowOrigin === 'preview') {
+      setPanelMode('preview');
+    }
+    // If direct workflow with single platform, don't navigate (button won't be shown anyway)
   };
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Back button */}
-      <Box sx={{ mb: 1.5 }}>
-        <Button
-          size="small"
-          startIcon={<ChevronLeftOutlined />}
-          onClick={handleBack}
-          sx={{
-            color: 'text.secondary',
-            textTransform: 'none',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          Back
-        </Button>
+      {/* Stepper */}
+      <Stepper activeStep={openctiPlatformsCount > 1 ? 1 : 0} sx={{ mb: 3 }}>
+        {containerSteps.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        {canGoBack && (
+          <IconButton size="small" onClick={handleBack}>
+            <ChevronLeftOutlined />
+          </IconButton>
+        )}
+        <Typography variant="h6" sx={{ fontSize: 16 }}>Select Container Type</Typography>
       </Box>
 
-      <Typography variant="h6" sx={{ mb: 0.5 }}>
-        Select Container Type
-      </Typography>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        Choose the type of container to create for your entities
-      </Typography>
-
-      {/* Container type options */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {CONTAINER_TYPES.map((containerType) => {
-          const Icon = containerType.icon;
-          
-          return (
-            <Paper
-              key={containerType.id}
-              elevation={0}
-              onClick={() => handleSelectType(containerType.id)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                p: 2,
-                cursor: 'pointer',
-                borderRadius: 1,
-                border: 1,
-                borderColor: 'divider',
-                transition: 'all 0.15s',
-                '&:hover': {
-                  bgcolor: hexToRGB(containerType.color, 0.08),
-                  borderColor: containerType.color,
-                },
-              }}
-            >
-              {/* Icon */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 44,
-                  height: 44,
-                  borderRadius: 1,
-                  bgcolor: hexToRGB(containerType.color, 0.15),
-                  flexShrink: 0,
-                }}
-              >
-                <Icon sx={{ color: containerType.color, fontSize: 24 }} />
-              </Box>
-              
-              {/* Content */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                  {containerType.name}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {containerType.description}
-                </Typography>
-              </Box>
-              
-              <ChevronRightOutlined sx={{ color: 'text.secondary' }} />
-            </Paper>
-          );
-        })}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
+        {CONTAINER_TYPES.map((item) => (
+          <Paper
+            key={item.type}
+            onClick={() => {
+              setContainerType(item.type);
+              setPanelMode('container-form');
+            }}
+            elevation={0}
+            sx={{
+              p: 2,
+              cursor: 'pointer',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              transition: 'all 0.2s',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              '&:hover': {
+                borderColor: item.color,
+                bgcolor: hexToRGB(item.color, 0.08),
+              },
+            }}
+          >
+            <Box sx={{ mb: 1 }}>
+              <ItemIcon type={item.type} color={item.color} size="medium" />
+            </Box>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              {item.type.replace(/-/g, ' ')}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
+              {item.description}
+            </Typography>
+          </Paper>
+        ))}
       </Box>
+
+      {entitiesToAdd.length > 0 && (
+        <Alert severity="success" sx={{ mt: 2, borderRadius: 1 }}>
+          {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} will be added to this container
+        </Alert>
+      )}
     </Box>
   );
 };
 
 export default ContainerTypeView;
-

@@ -80,6 +80,11 @@ import {
   PlatformSelectView,
   AddView,
   ScenarioOverviewView,
+  ExistingContainersView,
+  InvestigationView,
+  ImportResultsView,
+  NotFoundView,
+  ContainerTypeView,
 } from './views';
 import { generateDescription } from './utils/description-helpers';
 import Markdown from 'react-markdown';
@@ -4627,77 +4632,6 @@ const App: React.FC = () => {
     );
   };
 
-  const renderNotFoundView = () => {
-    if (!entity) return null;
-    const type = entity.type || 'unknown';
-    const color = itemColor(type, mode === 'dark');
-    const value = entity.value || entity.name || 'Unknown';
-
-    return (
-      <Box sx={{ p: 2 }}>
-        {/* Back to scan results button */}
-        {entityFromScanResults && (
-          <Box sx={{ mb: 1.5 }}>
-            <Button
-              size="small"
-              startIcon={<ChevronLeftOutlined />}
-              onClick={() => {
-                setEntityFromScanResults(false);
-                setPanelMode('scan-results');
-              }}
-              sx={{ 
-                color: 'text.secondary',
-                textTransform: 'none',
-                '&:hover': { bgcolor: 'action.hover' },
-              }}
-            >
-              Back to scan results
-            </Button>
-          </Box>
-        )}
-        
-        <Alert severity="warning" sx={{ mb: 2, borderRadius: 1 }}>
-          This entity was not found in OpenCTI
-        </Alert>
-
-        <Box
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.75,
-            px: 1.5,
-            py: 0.5,
-            mb: 2,
-            borderRadius: 1,
-            bgcolor: hexToRGB(color, 0.15),
-            border: `1px solid ${hexToRGB(color, 0.3)}`,
-          }}
-        >
-          <ItemIcon type={type} size="small" color={color} />
-          <Typography variant="caption" sx={{ fontWeight: 600, color, textTransform: 'capitalize' }}>
-            {type.replace(/-/g, ' ')}
-          </Typography>
-        </Box>
-
-        <Typography variant="h6" sx={{ mb: 2, wordBreak: 'break-word' }}>
-          {value}
-        </Typography>
-
-        <Button
-          variant="contained"
-          startIcon={<AddOutlined />}
-          onClick={() => {
-            setEntitiesToAdd([entity]);
-            setPanelMode('add');
-          }}
-          fullWidth
-        >
-          Add to OpenCTI
-        </Button>
-      </Box>
-    );
-  };
-
   const renderAddView = () => (
     <Box sx={{ p: 2 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>Add to OpenCTI</Typography>
@@ -4943,250 +4877,6 @@ const App: React.FC = () => {
       </Box>
     </Box>
   );
-
-  const renderImportResultsView = () => {
-    if (!importResults) return null;
-    
-    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
-    
-    // Group created entities by type for statistics
-    const typeStats = importResults.created.reduce((acc, entity) => {
-      const type = entity.type || 'unknown';
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-      acc[type].push(entity);
-      return acc;
-    }, {} as Record<string, typeof importResults.created>);
-    
-    const sortedTypes = Object.entries(typeStats).sort((a, b) => b[1].length - a[1].length);
-    
-    return (
-      <Box sx={{ p: 2 }}>
-        {/* Success/Error header */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column',
-            alignItems: 'center', 
-            textAlign: 'center',
-            mb: 3,
-            p: 3,
-            bgcolor: importResults.success ? 'success.main' : 'error.main',
-            borderRadius: 2,
-            color: 'white',
-          }}
-        >
-          {importResults.success ? (
-            <CheckCircleOutlined sx={{ fontSize: 48, mb: 1 }} />
-          ) : (
-            <ErrorOutline sx={{ fontSize: 48, mb: 1 }} />
-          )}
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-            {importResults.success ? 'Import Successful!' : 'Import Failed'}
-          </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.9 }}>
-            {importResults.success 
-              ? `${importResults.created.length} entit${importResults.created.length === 1 ? 'y' : 'ies'} created in ${importResults.platformName}`
-              : `Failed to create ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'}`
-            }
-          </Typography>
-        </Box>
-        
-        {/* Platform indicator */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            gap: 1, 
-            mb: 2.5,
-            p: 1.5,
-            bgcolor: 'action.hover',
-            borderRadius: 1,
-            border: 1,
-            borderColor: 'divider',
-          }}
-        >
-          <img
-            src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-              ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
-              : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
-            }
-            alt="OpenCTI"
-            width={20}
-            height={20}
-          />
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {importResults.platformName}
-          </Typography>
-        </Box>
-        
-        {/* Statistics breakdown by type */}
-        {importResults.success && sortedTypes.length > 0 && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary', fontWeight: 600 }}>
-              BREAKDOWN BY TYPE
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {sortedTypes.map(([type, entities]) => {
-                const color = itemColor(type, mode === 'dark');
-                return (
-                  <Box
-                    key={type}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      p: 1.5,
-                      bgcolor: hexToRGB(color, 0.08),
-                      border: 1,
-                      borderColor: hexToRGB(color, 0.2),
-                      borderRadius: 1.5,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 36,
-                        height: 36,
-                        borderRadius: 1,
-                        bgcolor: hexToRGB(color, 0.15),
-                      }}
-                    >
-                      <ItemIcon type={type} size="small" color={color} />
-                    </Box>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
-                        {type.replace(/-/g, ' ')}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        bgcolor: color,
-                        color: mode === 'dark' ? '#1a1a2e' : 'white', // Dark text on light bg in dark mode
-                        fontWeight: 700,
-                        fontSize: 14,
-                      }}
-                    >
-                      {entities.length}
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-          </Box>
-        )}
-        
-        {/* Created entities list (collapsible) */}
-        {importResults.success && importResults.created.length > 0 && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'text.secondary', fontWeight: 600 }}>
-              CREATED ENTITIES ({importResults.created.length})
-            </Typography>
-            <Box sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-              {importResults.created.map((entity, idx) => {
-                const color = itemColor(entity.type, mode === 'dark');
-                return (
-                  <Box
-                    key={entity.id || idx}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      p: 1.5,
-                      borderBottom: idx < importResults.created.length - 1 ? 1 : 0,
-                      borderColor: 'divider',
-                    }}
-                  >
-                    <ItemIcon type={entity.type} size="small" color={color} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontWeight: 500, 
-                          wordBreak: 'break-word',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {entity.value}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
-                        {entity.type.replace(/-/g, ' ')}
-                      </Typography>
-                    </Box>
-                    <CheckCircleOutlined sx={{ fontSize: 18, color: 'success.main' }} />
-                  </Box>
-                );
-              })}
-            </Box>
-          </Box>
-        )}
-        
-        {/* Failed entities list */}
-        {importResults.failed.length > 0 && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'error.main', fontWeight: 600 }}>
-              FAILED ({importResults.failed.length})
-            </Typography>
-            <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.1 }}>
-              {importResults.failed.map((entity, idx) => (
-                <Box
-                  key={idx}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    p: 1.5,
-                    borderBottom: idx < importResults.failed.length - 1 ? 1 : 0,
-                    borderColor: 'divider',
-                  }}
-                >
-                  <ItemIcon type={entity.type} size="small" />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                      {entity.value}
-                    </Typography>
-                    {entity.error && (
-                      <Typography variant="caption" sx={{ color: 'error.main' }}>
-                        {entity.error}
-                      </Typography>
-                    )}
-                  </Box>
-                  <ErrorOutline sx={{ fontSize: 18, color: 'error.main' }} />
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
-        
-        {/* Action buttons */}
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setImportResults(null);
-              handleClose();
-            }}
-            fullWidth
-            startIcon={<CheckCircleOutlined />}
-          >
-            Done
-          </Button>
-        </Box>
-      </Box>
-    );
-  };
 
   const renderPreviewView = () => {
     // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
@@ -5822,311 +5512,6 @@ const App: React.FC = () => {
   );
   };
 
-  // View for existing containers found for the current page URL
-  const renderExistingContainersView = () => {
-    const handleOpenExistingContainer = async (container: ContainerData) => {
-      // Show this container in entity view - fetch full details
-      const containerPlatformId = (container as any)._platformId || selectedPlatformId;
-      if (containerPlatformId) {
-        const platform = availablePlatforms.find(p => p.id === containerPlatformId);
-        if (platform) {
-          setPlatformUrl(platform.url);
-          setSelectedPlatformId(platform.id);
-        }
-      }
-      
-      // Set loading state first
-      setPanelMode('loading');
-      
-      // Fetch full entity details from API
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && container.id) {
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'GET_ENTITY_DETAILS',
-            payload: {
-              id: container.id,
-              entityType: container.entity_type,
-              platformId: containerPlatformId,
-            },
-          });
-          
-          if (response?.success && response.data) {
-            setEntity({
-              ...response.data,
-              type: response.data.entity_type || container.entity_type,
-              existsInPlatform: true,
-              _platformId: containerPlatformId,
-              _platformType: 'opencti',
-              _isNonDefaultPlatform: false,
-            });
-            setMultiPlatformResults([{
-              platformId: containerPlatformId,
-              platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-              entity: { ...response.data, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
-            }]);
-            setCurrentPlatformIndex(0);
-            setEntityContainers([]);
-            setPanelMode('entity');
-            
-            // Also fetch containers for this entity
-            fetchEntityContainers(container.id, containerPlatformId);
-            return;
-          }
-        } catch (error) {
-          log.error(' Failed to fetch container details:', error);
-        }
-      }
-      
-      // Fallback to basic data
-      setEntity({
-        id: container.id,
-        entity_type: container.entity_type,
-        type: container.entity_type,
-        name: container.name,
-        description: (container as any).description,
-        existsInPlatform: true,
-        _platformId: containerPlatformId,
-        _platformType: 'opencti',
-        _isNonDefaultPlatform: false,
-      });
-      setMultiPlatformResults([{
-        platformId: containerPlatformId,
-        platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-        entity: { id: container.id, entity_type: container.entity_type, type: container.entity_type, name: container.name, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
-      }]);
-      setCurrentPlatformIndex(0);
-      setEntityContainers([]);
-      setPanelMode('entity');
-    };
-
-    const handleRefreshContainer = async (container: ContainerData) => {
-      // Set the container ID for upsert mode
-      setUpdatingContainerId(container.id);
-      
-      // Set container type first
-      setContainerType(container.entity_type);
-      
-      // Get platform info
-      const containerPlatformId = (container as any)._platformId || selectedPlatformId;
-      if (containerPlatformId) {
-        const platform = availablePlatforms.find(p => p.id === containerPlatformId);
-        if (platform) {
-          setPlatformUrl(platform.url);
-          setSelectedPlatformId(platform.id);
-        }
-      }
-      
-      // Show loading while fetching full container details
-      setPanelMode('loading');
-      
-      // Fetch full container details from OpenCTI
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && container.id) {
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'GET_ENTITY_DETAILS',
-            payload: {
-              id: container.id,
-              entityType: container.entity_type,
-              platformId: containerPlatformId,
-            },
-          });
-          
-          if (response?.success && response.data) {
-            const fullContainer = response.data;
-            log.debug(' handleRefreshContainer: Full container data:', fullContainer);
-            
-            // Pre-fill the form with the container's existing data (but keep new content from page)
-            // Use callback form to ensure we get the latest content value
-            const containerName = fullContainer.name || container.name;
-            setContainerForm(prev => ({
-              ...prev,
-              name: containerName, // Always use existing container's name, never page title
-              description: fullContainer.description || '',
-            }));
-            
-            // Pre-fill labels if available
-            if (fullContainer.objectLabel && fullContainer.objectLabel.length > 0) {
-              setSelectedLabels(fullContainer.objectLabel.map((l: any) => ({
-                id: l.id || l.value,
-                value: l.value,
-                color: l.color,
-              })));
-            }
-            
-            // Pre-fill markings if available
-            if (fullContainer.objectMarking && fullContainer.objectMarking.length > 0) {
-              setSelectedMarkings(fullContainer.objectMarking.map((m: any) => ({
-                id: m.id || m.definition,
-                definition: m.definition,
-              })));
-            }
-            
-            // Pre-fill container-specific fields based on type
-            const newSpecificFields = { ...containerSpecificFields };
-            
-            // Report types
-            if (fullContainer.report_types) {
-              newSpecificFields.report_types = fullContainer.report_types;
-            }
-            
-            // Grouping context
-            if (fullContainer.context) {
-              newSpecificFields.context = fullContainer.context;
-            }
-            
-            // Case fields
-            if (fullContainer.severity) {
-              newSpecificFields.severity = fullContainer.severity;
-            }
-            if (fullContainer.priority) {
-              newSpecificFields.priority = fullContainer.priority;
-            }
-            if (fullContainer.response_types) {
-              newSpecificFields.response_types = fullContainer.response_types;
-            }
-            
-            // Author (createdBy)
-            if (fullContainer.createdBy?.id) {
-              newSpecificFields.createdBy = fullContainer.createdBy.id;
-            }
-            
-            setContainerSpecificFields(newSpecificFields);
-            
-            // Store original dates to avoid creating duplicates during update
-            // Reports use 'published', other containers use 'created'
-            setUpdatingContainerDates({
-              published: fullContainer.published,
-              created: fullContainer.created,
-            });
-            
-            // Load labels and markings for the platform (if not already loaded)
-            loadLabelsAndMarkings(containerPlatformId);
-            
-            setPanelMode('container-form');
-            return;
-          }
-        } catch (error) {
-          log.error(' handleRefreshContainer: Failed to fetch container details:', error);
-        }
-      }
-      
-      // Fallback: Use basic container data
-      // Use callback form to ensure we get the latest content value
-      setContainerForm(prev => ({
-        ...prev,
-        name: container.name, // Always use existing container's name
-        description: (container as any).description || '',
-      }));
-      
-      // Load labels and markings for the platform
-      loadLabelsAndMarkings(containerPlatformId);
-      
-      setPanelMode('container-form');
-    };
-
-    const handleCreateNew = () => {
-      // Clear existing container selection and proceed to create new
-      // If multiple OpenCTI platforms, go to platform select first (containers are OpenCTI-only)
-      if (openctiPlatforms.length > 1) {
-        setPanelMode('platform-select');
-      } else {
-        // Auto-select the single OpenCTI platform
-        if (openctiPlatforms.length === 1) {
-          setSelectedPlatformId(openctiPlatforms[0].id);
-          setPlatformUrl(openctiPlatforms[0].url);
-        }
-        setPanelMode('container-type');
-      }
-    };
-
-    return (
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <DescriptionOutlined sx={{ color: 'primary.main' }} />
-          <Typography variant="h6" sx={{ fontSize: 16 }}>Existing Container Found</Typography>
-        </Box>
-        
-        <Alert severity="info" sx={{ mb: 2, borderRadius: 1 }}>
-          A container already exists for this article. You can view it, update it with new content, or create a new one.
-        </Alert>
-        
-        {/* List existing containers */}
-        <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block', fontWeight: 600, textTransform: 'uppercase' }}>
-          Found {existingContainers.length} container{existingContainers.length > 1 ? 's' : ''}
-        </Typography>
-        
-        <Box sx={{ mb: 2 }}>
-          {existingContainers.map((container, idx) => {
-            const containerColor = itemColor(container.entity_type, mode === 'dark');
-            const containerPlatform = availablePlatforms.find(p => p.id === (container as any)._platformId);
-            
-            return (
-              <Paper
-                key={container.id || idx}
-                elevation={0}
-                sx={{
-                  p: 1.5,
-                  mb: 1,
-                  bgcolor: 'background.paper',
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                  <ItemIcon type={container.entity_type} size="small" color={containerColor} />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
-                      {container.name}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <span style={{ textTransform: 'capitalize' }}>{container.entity_type.replace(/-/g, ' ')}</span>
-                      {containerPlatform && <span>• {containerPlatform.name}</span>}
-                      {container.createdBy?.name && <span>• {container.createdBy.name}</span>}
-                      {container.modified && <span>• {formatDate(container.modified)}</span>}
-                    </Typography>
-                  </Box>
-                </Box>
-                
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<OpenInNewOutlined sx={{ fontSize: 16 }} />}
-                    onClick={() => handleOpenExistingContainer(container)}
-                    sx={{ flex: 1 }}
-                  >
-                    View
-                  </Button>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={<RefreshOutlined sx={{ fontSize: 16 }} />}
-                    onClick={() => handleRefreshContainer(container)}
-                    sx={{ flex: 1 }}
-                  >
-                    Update
-                  </Button>
-                </Box>
-              </Paper>
-            );
-          })}
-        </Box>
-        
-        <Divider sx={{ my: 2 }} />
-        
-        <Button
-          variant="outlined"
-          onClick={handleCreateNew}
-          startIcon={<AddOutlined />}
-          fullWidth
-        >
-          Create New Container
-        </Button>
-      </Box>
-    );
-  };
-
   const renderContainerFormView = () => (
     <Box sx={{ p: 2 }}>
       {/* Stepper - activeStep should be the last step (Configure Details) */}
@@ -6685,274 +6070,6 @@ const App: React.FC = () => {
         chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
       }
     });
-  };
-
-  // Get the selected investigation platform info
-  const investigationPlatform = availablePlatforms.find(p => p.id === investigationPlatformId);
-
-  const renderInvestigationView = () => {
-    // Step 1: If multiple OpenCTI platforms and none selected, show platform selection
-    // Investigation is OpenCTI-only - filter out OpenAEV platforms
-    if (openctiPlatforms.length > 1 && !investigationPlatformSelected) {
-      return (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <TravelExploreOutlined sx={{ color: 'primary.main' }} />
-            <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
-            <IconButton size="small" onClick={resetInvestigation}>
-              <CloseOutlined fontSize="small" />
-            </IconButton>
-          </Box>
-          
-          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-            Select the OpenCTI platform to scan for existing entities:
-          </Typography>
-          
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {openctiPlatforms.map((platform) => (
-              <Paper
-                key={platform.id}
-                onClick={() => handleSelectInvestigationPlatform(platform.id)}
-                elevation={0}
-                sx={{
-                  p: 2,
-                  cursor: 'pointer',
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    bgcolor: 'action.hover',
-                  },
-                }}
-              >
-                <img 
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`)
-                    : `../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`
-                  } 
-                  alt="OpenCTI" 
-                  style={{ width: 32, height: 32 }} 
-                />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                      {platform.name}
-                    </Typography>
-                    {platform.isEnterprise !== undefined && (
-                      <Box
-                        sx={{
-                          px: 0.5,
-                          py: 0.1,
-                          borderRadius: 0.5,
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          lineHeight: 1.3,
-                          bgcolor: platform.isEnterprise ? '#7b1fa2' : '#616161',
-                          color: '#fff',
-                        }}
-                      >
-                        {platform.isEnterprise ? 'EE' : 'CE'}
-                      </Box>
-                    )}
-                  </Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', wordBreak: 'break-all' }}>
-                    {platform.url} {platform.version ? `• v${platform.version}` : ''}
-                  </Typography>
-                </Box>
-              </Paper>
-            ))}
-          </Box>
-        </Box>
-      );
-    }
-
-    // Step 2: Show scanning / results view
-    return (
-    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <TravelExploreOutlined sx={{ color: 'primary.main' }} />
-        <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
-        <IconButton size="small" onClick={resetInvestigation}>
-          <CloseOutlined fontSize="small" />
-        </IconButton>
-      </Box>
-      
-      {/* Show selected platform only if multiple OpenCTI platforms */}
-      {openctiPlatforms.length > 1 && investigationPlatform && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-          <img 
-            src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-              ? chrome.runtime.getURL(`assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`)
-              : `../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`
-            } 
-            alt="OpenCTI" 
-            style={{ width: 20, height: 20 }} 
-          />
-          <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }}>
-            {investigationPlatform.name}
-          </Typography>
-          <Button 
-            size="small" 
-            onClick={() => {
-              setInvestigationPlatformSelected(false);
-              setInvestigationEntities([]);
-              // Clear highlights
-              chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => {
-                if (tab?.id) {
-                  chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
-                }
-              });
-            }}
-          >
-            Change
-          </Button>
-        </Box>
-      )}
-      
-      {investigationScanning ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 2 }}>
-          <CircularProgress size={40} />
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Scanning page for existing entities...
-          </Typography>
-        </Box>
-      ) : investigationEntities.length === 0 ? (
-        <>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-            No entities found in {investigationPlatform?.name || 'OpenCTI'} on this page.
-          </Typography>
-          
-          <Button
-            variant="outlined"
-            onClick={() => handleInvestigationScan()}
-            startIcon={<SearchOutlined />}
-            fullWidth
-          >
-            Rescan Page
-          </Button>
-        </>
-      ) : (
-        <>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Found {investigationEntities.length} entities
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button size="small" onClick={selectAllInvestigationEntities}>Select All</Button>
-              <Button size="small" onClick={clearInvestigationSelection}>Clear</Button>
-            </Box>
-          </Box>
-          
-          {/* Type filter */}
-          {investigationEntityTypes.length > 1 && (
-            <Box sx={{ mb: 2 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="investigation-type-filter-label">Filter by type</InputLabel>
-                <Select
-                  labelId="investigation-type-filter-label"
-                  value={investigationTypeFilter}
-                  label="Filter by type"
-                  onChange={(e) => setInvestigationTypeFilter(e.target.value)}
-                >
-                  <MenuItem value="all">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <span>All types</span>
-                      <Chip label={investigationEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                    </Box>
-                  </MenuItem>
-                  {investigationEntityTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
-                        <Chip label={investigationEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          )}
-          
-          <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
-            {filteredInvestigationEntities.map((entity) => {
-              const entityColor = itemColor(entity.type, mode === 'dark');
-              return (
-                <Paper
-                  key={entity.id}
-                  elevation={0}
-                  onClick={() => toggleInvestigationEntity(entity.id)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    p: 1.5,
-                    mb: 1,
-                    bgcolor: entity.selected ? hexToRGB(theme.palette.primary.main, 0.1) : 'background.paper',
-                    border: 1,
-                    borderColor: entity.selected ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                    },
-                  }}
-                >
-                  <Checkbox 
-                    checked={entity.selected} 
-                    size="small"
-                    sx={{ p: 0 }}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => toggleInvestigationEntity(entity.id)}
-                  />
-                  <ItemIcon type={entity.type} size="small" color={entityColor} />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                      {entity.name || entity.value}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      {entity.type.replace(/-/g, ' ')}
-                    </Typography>
-                  </Box>
-                </Paper>
-              );
-            })}
-          </Box>
-          
-          {selectedInvestigationCount > 0 && (
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: 2, 
-                borderRadius: 1, 
-                bgcolor: 'background.paper',
-                border: 1,
-                borderColor: 'divider',
-              }}
-            >
-              <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                {selectedInvestigationCount} entit{selectedInvestigationCount === 1 ? 'y' : 'ies'} selected
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={handleCreateWorkbench}
-                disabled={submitting}
-                startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <TravelExploreOutlined />}
-                fullWidth
-              >
-                {submitting ? 'Creating...' : 'Start Investigation'}
-              </Button>
-            </Paper>
-          )}
-        </>
-      )}
-    </Box>
-    );
   };
 
   // Get unique entity types for scan results filter
@@ -7833,7 +6950,6 @@ const App: React.FC = () => {
   };
   
   const renderAtomicTestingView = () => {
-    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
     
     // Step 1: Platform selection (if multiple OpenAEV platforms)
@@ -9235,7 +8351,6 @@ const App: React.FC = () => {
   };
   
   const renderScenarioOverviewView = () => {
-    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
     
     // Filter contracts by platform affinity for technical scenarios
@@ -10869,7 +9984,6 @@ const App: React.FC = () => {
   };
   
   const renderScenarioFormView = () => {
-    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
     const openaevLogoPath = `../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`;
     
     const categories = [
@@ -11602,29 +10716,99 @@ const App: React.FC = () => {
         log.debug('[RENDER-CONTENT] Rendering entity view, entity:', entity);
         return renderEntityView();
       case 'not-found':
-        return renderNotFoundView();
+        return (
+          <NotFoundView
+            entity={entity}
+            mode={mode}
+            entityFromScanResults={entityFromScanResults}
+            setEntityFromScanResults={setEntityFromScanResults}
+            setPanelMode={setPanelMode}
+            setEntitiesToAdd={setEntitiesToAdd}
+          />
+        );
       case 'add':
         return renderAddView();
       case 'import-results':
-        return renderImportResultsView();
+        return (
+          <ImportResultsView
+            mode={mode}
+            importResults={importResults}
+            setImportResults={setImportResults}
+            handleClose={handleClose}
+            logoSuffix={logoSuffix}
+          />
+        );
       case 'preview':
         return renderPreviewView();
       case 'platform-select':
         return renderPlatformSelectView();
       case 'existing-containers':
-        return renderExistingContainersView();
+        return (
+          <ExistingContainersView
+            mode={mode}
+            existingContainers={existingContainers}
+            selectedPlatformId={selectedPlatformId}
+            setSelectedPlatformId={setSelectedPlatformId}
+            availablePlatforms={availablePlatforms}
+            openctiPlatforms={openctiPlatforms}
+            setPlatformUrl={setPlatformUrl}
+            setPanelMode={setPanelMode}
+            setEntity={setEntity}
+            setMultiPlatformResults={setMultiPlatformResults}
+            setCurrentPlatformIndex={setCurrentPlatformIndex}
+            setEntityContainers={setEntityContainers}
+            fetchEntityContainers={fetchEntityContainers}
+            setUpdatingContainerId={setUpdatingContainerId}
+            setContainerType={setContainerType}
+            setContainerForm={setContainerForm}
+            setSelectedLabels={setSelectedLabels}
+            setSelectedMarkings={setSelectedMarkings}
+            containerSpecificFields={containerSpecificFields}
+            setContainerSpecificFields={setContainerSpecificFields}
+            setUpdatingContainerDates={setUpdatingContainerDates}
+            loadLabelsAndMarkings={loadLabelsAndMarkings}
+            formatDate={formatDate}
+          />
+        );
       case 'container-type':
         return renderContainerTypeView();
       case 'container-form':
         return renderContainerFormView();
       case 'investigation':
-        return renderInvestigationView();
+        return (
+          <InvestigationView
+            mode={mode}
+            openctiPlatforms={openctiPlatforms}
+            availablePlatforms={availablePlatforms}
+            investigationPlatformId={investigationPlatformId}
+            investigationPlatformSelected={investigationPlatformSelected}
+            setInvestigationPlatformSelected={setInvestigationPlatformSelected}
+            investigationEntities={investigationEntities}
+            setInvestigationEntities={setInvestigationEntities}
+            investigationScanning={investigationScanning}
+            investigationTypeFilter={investigationTypeFilter}
+            setInvestigationTypeFilter={setInvestigationTypeFilter}
+            investigationEntityTypes={investigationEntityTypes}
+            filteredInvestigationEntities={filteredInvestigationEntities}
+            selectedInvestigationCount={selectedInvestigationCount}
+            submitting={submitting}
+            resetInvestigation={resetInvestigation}
+            handleSelectInvestigationPlatform={handleSelectInvestigationPlatform}
+            handleInvestigationScan={handleInvestigationScan}
+            toggleInvestigationEntity={toggleInvestigationEntity}
+            selectAllInvestigationEntities={selectAllInvestigationEntities}
+            clearInvestigationSelection={clearInvestigationSelection}
+            handleCreateWorkbench={handleCreateWorkbench}
+          />
+        );
       case 'scan-results':
         return (
           <ScanResultsView
             mode={mode}
+            handleClose={handleClose}
             scanResultsEntities={scanResultsEntities}
             setScanResultsEntities={setScanResultsEntities}
+            scanResultsEntitiesRef={scanResultsEntitiesRef}
             scanResultsTypeFilter={scanResultsTypeFilter}
             setScanResultsTypeFilter={setScanResultsTypeFilter}
             scanResultsFoundFilter={scanResultsFoundFilter}
@@ -11643,6 +10827,12 @@ const App: React.FC = () => {
             aiDiscoveringEntities={aiDiscoveringEntities}
             setAiDiscoveringEntities={setAiDiscoveringEntities}
             availablePlatforms={availablePlatforms}
+            openctiPlatforms={openctiPlatforms}
+            openaevPlatforms={openaevPlatforms}
+            selectedPlatformId={selectedPlatformId}
+            setSelectedPlatformId={setSelectedPlatformId}
+            platformUrl={platformUrl}
+            setPlatformUrl={setPlatformUrl}
             showToast={showToast}
             setContainerForm={setContainerForm}
             currentPageTitle={currentPageTitle}

@@ -148,32 +148,86 @@ async function generateWithJsPDF(
     // Helper: Add image to PDF
     const addImage = async (img: ExtractedImage): Promise<void> => {
       try {
+        console.debug('[PDFGenerator] Adding image to PDF:', img.src);
         const imageData = await loadImageAsDataUrl(img.src);
-        if (!imageData) return;
+        if (!imageData) {
+          console.warn('[PDFGenerator] Could not load image:', img.src);
+          return;
+        }
         
-        // Calculate dimensions to fit within content width
-        let imgWidth = Math.min(img.width || 400, contentWidth * 3.78); // Convert mm to approximate pixels
-        let imgHeight = img.height || 300;
+        // Detect image format from data URL
+        let imageFormat: 'JPEG' | 'PNG' | 'GIF' | 'WEBP' = 'PNG';
+        if (imageData.includes('data:image/jpeg') || imageData.includes('data:image/jpg')) {
+          imageFormat = 'JPEG';
+        } else if (imageData.includes('data:image/gif')) {
+          imageFormat = 'GIF';
+        } else if (imageData.includes('data:image/webp')) {
+          imageFormat = 'WEBP';
+        }
+        console.debug('[PDFGenerator] Detected image format:', imageFormat);
         
-        // Scale to fit content width
-        if (imgWidth > contentWidth * 3.78) {
-          const scale = (contentWidth * 3.78) / imgWidth;
-          imgWidth *= scale;
-          imgHeight *= scale;
+        // Get actual dimensions from the data URL
+        const actualDims = await getImageDimensions(imageData);
+        if (!actualDims) {
+          console.warn('[PDFGenerator] Could not get image dimensions:', img.src);
+          return;
+        }
+        
+        let imgWidth = actualDims.width;
+        let imgHeight = actualDims.height;
+        console.debug('[PDFGenerator] Image dimensions:', imgWidth, 'x', imgHeight);
+        
+        // Scale to fit content width (170mm max = ~642px at 3.78 px/mm)
+        const maxWidthPx = contentWidth * 3.78;
+        if (imgWidth > maxWidthPx) {
+          const scale = maxWidthPx / imgWidth;
+          imgWidth = maxWidthPx;
+          imgHeight = imgHeight * scale;
+        }
+        
+        // Also limit height
+        const maxHeightPx = (pageHeight - margin * 2 - 30) * 3.78; // Leave room for header/footer
+        if (imgHeight > maxHeightPx) {
+          const scale = maxHeightPx / imgHeight;
+          imgHeight = maxHeightPx;
+          imgWidth = imgWidth * scale;
         }
         
         // Convert to mm
         const imgWidthMm = imgWidth / 3.78;
         const imgHeightMm = imgHeight / 3.78;
         
+        // Ensure minimum size (sometimes images come through too small)
+        if (imgWidthMm < 10 || imgHeightMm < 10) {
+          console.warn('[PDFGenerator] Image too small, skipping:', imgWidthMm, 'x', imgHeightMm);
+          return;
+        }
+        
         // Check page break
-        checkPageBreak(imgHeightMm + 10);
+        checkPageBreak(imgHeightMm + 15);
         
         // Center the image
         const imgX = margin + (contentWidth - imgWidthMm) / 2;
         
-        pdf.addImage(imageData, 'JPEG', imgX, yPosition, imgWidthMm, imgHeightMm);
-        yPosition += imgHeightMm + 3;
+        console.debug('[PDFGenerator] Rendering image at:', imgX, yPosition, 'size:', imgWidthMm, 'x', imgHeightMm, 'format:', imageFormat);
+        
+        try {
+          // Use addImage with explicit format
+          pdf.addImage(imageData, imageFormat, imgX, yPosition, imgWidthMm, imgHeightMm);
+          yPosition += imgHeightMm + 3;
+          console.debug('[PDFGenerator] Image added successfully, new yPosition:', yPosition);
+        } catch (imgError) {
+          console.error('[PDFGenerator] jsPDF addImage error:', imgError);
+          // Try with auto-detect (passing data URL without format)
+          try {
+            pdf.addImage(imageData, imgX, yPosition, imgWidthMm, imgHeightMm);
+            yPosition += imgHeightMm + 3;
+            console.debug('[PDFGenerator] Image added with auto-detect, new yPosition:', yPosition);
+          } catch (autoError) {
+            console.error('[PDFGenerator] jsPDF addImage auto-detect also failed:', autoError);
+            return;
+          }
+        }
         
         // Add caption if present
         if (img.caption || img.alt) {
@@ -188,8 +242,18 @@ async function generateWithJsPDF(
         
         yPosition += 5;
       } catch (e) {
-        console.debug('[PDFGenerator] Failed to add image:', e);
+        console.error('[PDFGenerator] Failed to add image:', img.src, e);
       }
+    };
+    
+    // Helper: Get image dimensions from data URL
+    const getImageDimensions = (dataUrl: string): Promise<{width: number; height: number} | null> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+      });
     };
     
     // Start building the PDF
@@ -260,8 +324,11 @@ async function generateWithJsPDF(
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content.content;
     
-    // Track images to add after their context
+    // Track images to add after their context (legacy, keeping for fallback)
     const imagesToAdd: ExtractedImage[] = [];
+    
+    // Track all added image sources to avoid duplicates
+    const addedImageSrcs = new Set<string>();
     
     // Process each element
     const processElement = async (element: Element): Promise<void> => {
@@ -382,14 +449,18 @@ async function generateWithJsPDF(
         case 'img': {
           if (options.includeImages) {
             const imgEl = element as HTMLImageElement;
-            const img: ExtractedImage = {
-              src: imgEl.src,
-              alt: imgEl.alt || '',
-              caption: '',
-              width: imgEl.naturalWidth || imgEl.width || 400,
-              height: imgEl.naturalHeight || imgEl.height || 300,
-            };
-            imagesToAdd.push(img);
+            const src = imgEl.src || imgEl.getAttribute('data-src') || '';
+            if (src && !addedImageSrcs.has(src)) {
+              const img: ExtractedImage = {
+                src: src,
+                alt: imgEl.alt || '',
+                caption: '',
+                width: imgEl.naturalWidth || imgEl.width || 400,
+                height: imgEl.naturalHeight || imgEl.height || 300,
+              };
+              await addImage(img);
+              addedImageSrcs.add(src);
+            }
           }
           break;
         }
@@ -399,14 +470,18 @@ async function generateWithJsPDF(
             const imgEl = element.querySelector('img') as HTMLImageElement;
             const figcaption = element.querySelector('figcaption');
             if (imgEl) {
-              const img: ExtractedImage = {
-                src: imgEl.src,
-                alt: imgEl.alt || '',
-                caption: figcaption?.textContent?.trim() || '',
-                width: imgEl.naturalWidth || imgEl.width || 400,
-                height: imgEl.naturalHeight || imgEl.height || 300,
-              };
-              imagesToAdd.push(img);
+              const src = imgEl.src || imgEl.getAttribute('data-src') || '';
+              if (src && !addedImageSrcs.has(src)) {
+                const img: ExtractedImage = {
+                  src: src,
+                  alt: imgEl.alt || '',
+                  caption: figcaption?.textContent?.trim() || '',
+                  width: imgEl.naturalWidth || imgEl.width || 400,
+                  height: imgEl.naturalHeight || imgEl.height || 300,
+                };
+                await addImage(img);
+                addedImageSrcs.add(src);
+              }
             }
           }
           break;
@@ -499,31 +574,48 @@ async function generateWithJsPDF(
       // Add any queued images after their context
       if (options.includeImages && imagesToAdd.length > 0) {
         for (const img of imagesToAdd) {
-          await addImage(img);
+          if (!addedImageSrcs.has(img.src)) {
+            await addImage(img);
+            addedImageSrcs.add(img.src);
+          }
         }
         imagesToAdd.length = 0;
       }
     }
     
-    // If we have remaining images from the extraction, add them at the end
+    // Pre-collect ALL images from the HTML content that may have been missed
+    const allImagesInHtml = tempDiv.querySelectorAll('img');
+    console.debug('[PDFGenerator] Total images found in HTML:', allImagesInHtml.length);
+    
+    for (const imgEl of allImagesInHtml) {
+      const imgElement = imgEl as HTMLImageElement;
+      const src = imgElement.src || imgElement.getAttribute('data-src') || '';
+      if (src && !addedImageSrcs.has(src) && !src.includes('data:image/svg')) {
+        console.debug('[PDFGenerator] Adding missed image from HTML:', src);
+        const img: ExtractedImage = {
+          src: src,
+          alt: imgElement.alt || '',
+          caption: '',
+          width: imgElement.naturalWidth || imgElement.width || 400,
+          height: imgElement.naturalHeight || imgElement.height || 300,
+        };
+        await addImage(img);
+        addedImageSrcs.add(src);
+      }
+    }
+    
+    // If we have images from the extraction that weren't in HTML, add them at the end
     if (options.includeImages && content.images.length > 0) {
-      yPosition += 5;
-      checkPageBreak(20);
-      
-      pdf.setFontSize(12);
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Images', margin, yPosition);
-      yPosition += 8;
-      
-      // Add only images not already in content
-      const addedSrcs = new Set(imagesToAdd.map(i => i.src));
       for (const img of content.images) {
-        if (!addedSrcs.has(img.src)) {
+        if (!addedImageSrcs.has(img.src)) {
+          console.debug('[PDFGenerator] Adding remaining image from extraction:', img.src);
           await addImage(img);
+          addedImageSrcs.add(img.src);
         }
       }
     }
+    
+    console.debug('[PDFGenerator] Total images added to PDF:', addedImageSrcs.size);
     
     // Final footer
     addFooter();
@@ -550,15 +642,190 @@ async function generateWithJsPDF(
 
 /**
  * Load image as data URL for embedding in PDF
+ * Tries multiple methods to handle CORS issues
  */
 async function loadImageAsDataUrl(src: string): Promise<string | null> {
+  if (!src) return null;
+  
+  console.debug('[PDFGenerator] Loading image:', src);
+  
+  // Method 1: Try via background script (bypasses CORS completely)
+  try {
+    const dataUrl = await fetchImageViaBackground(src);
+    if (dataUrl) {
+      console.debug('[PDFGenerator] Loaded via background script:', src);
+      return await resizeImageDataUrl(dataUrl);
+    }
+  } catch (e) {
+    console.debug('[PDFGenerator] Background fetch failed:', src, e);
+  }
+  
+  // Method 2: Try using fetch directly (works for same-origin or CORS-enabled)
+  try {
+    const response = await fetch(src, { 
+      mode: 'cors',
+      credentials: 'omit',
+    });
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const dataUrl = await blobToDataUrl(blob);
+      if (dataUrl) {
+        console.debug('[PDFGenerator] Loaded via direct fetch:', src);
+        return await resizeImageDataUrl(dataUrl);
+      }
+    }
+  } catch (e) {
+    console.debug('[PDFGenerator] Direct fetch failed:', src, e);
+  }
+  
+  // Method 3: Try loading as Image without CORS (may work for same-origin)
+  try {
+    const dataUrl = await loadImageViaCanvas(src, false);
+    if (dataUrl) {
+      console.debug('[PDFGenerator] Loaded via canvas (no CORS):', src);
+      return dataUrl;
+    }
+  } catch (e) {
+    console.debug('[PDFGenerator] Canvas (no CORS) failed:', src, e);
+  }
+  
+  // Method 4: Try with CORS attribute
+  try {
+    const dataUrl = await loadImageViaCanvas(src, true);
+    if (dataUrl) {
+      console.debug('[PDFGenerator] Loaded via canvas (CORS):', src);
+      return dataUrl;
+    }
+  } catch (e) {
+    console.debug('[PDFGenerator] Canvas (CORS) failed:', src, e);
+  }
+  
+  console.warn('[PDFGenerator] All methods failed for image:', src);
+  return null;
+}
+
+/**
+ * Fetch image via background script (bypasses CORS)
+ */
+async function fetchImageViaBackground(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    // Set timeout in case background script doesn't respond
+    const timeoutId = setTimeout(() => {
+      console.debug('[PDFGenerator] Background fetch timeout:', src);
+      resolve(null);
+    }, 15000);
+    
+    try {
+      chrome.runtime.sendMessage(
+        { type: 'FETCH_IMAGE_AS_DATA_URL', payload: { url: src } },
+        (response) => {
+          clearTimeout(timeoutId);
+          
+          if (chrome.runtime.lastError) {
+            console.debug('[PDFGenerator] Background message error:', chrome.runtime.lastError);
+            resolve(null);
+            return;
+          }
+          
+          if (response?.success && response?.dataUrl) {
+            resolve(response.dataUrl);
+          } else {
+            console.debug('[PDFGenerator] Background fetch failed:', response?.error);
+            resolve(null);
+          }
+        }
+      );
+    } catch (e) {
+      clearTimeout(timeoutId);
+      console.debug('[PDFGenerator] Background message exception:', e);
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Convert blob to data URL
+ */
+function blobToDataUrl(blob: Blob): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Resize image data URL if needed
+ */
+async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
     img.onload = () => {
       try {
-        // Create canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl); // Return original if can't resize
+          return;
+        }
+        
+        // Limit size for PDF
+        const maxWidth = 800;
+        const maxHeight = 1000;
+        let width = img.naturalWidth;
+        let height = img.naturalHeight;
+        
+        // Scale down if too large
+        if (width > maxWidth) {
+          const scale = maxWidth / width;
+          width = maxWidth;
+          height = Math.round(height * scale);
+        }
+        if (height > maxHeight) {
+          const scale = maxHeight / height;
+          height = maxHeight;
+          width = Math.round(width * scale);
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // White background for transparency
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      } catch (e) {
+        console.debug('[PDFGenerator] Resize failed, using original');
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Load image via canvas approach
+ */
+function loadImageViaCanvas(src: string, useCors: boolean): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (useCors) {
+      img.crossOrigin = 'anonymous';
+    }
+    
+    const timeoutId = setTimeout(() => {
+      console.debug('[PDFGenerator] Image load timeout:', src);
+      resolve(null);
+    }, 10000); // 10 second timeout
+    
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) {
@@ -566,10 +833,10 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
           return;
         }
         
-        // Limit size for PDF (max 1200px width)
-        const maxWidth = 1200;
-        let width = img.naturalWidth;
-        let height = img.naturalHeight;
+        // Limit size
+        const maxWidth = 800;
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
         
         if (width > maxWidth) {
           const scale = maxWidth / width;
@@ -580,27 +847,24 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
         canvas.width = width;
         canvas.height = height;
         
-        // Draw with white background (for transparency)
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to JPEG data URL
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resolve(dataUrl);
       } catch (e) {
-        console.debug('[PDFGenerator] Failed to convert image:', e);
+        // Canvas tainted - CORS issue
+        console.debug('[PDFGenerator] Canvas tainted:', src, e);
         resolve(null);
       }
     };
     
     img.onerror = () => {
-      console.debug('[PDFGenerator] Failed to load image:', src);
+      clearTimeout(timeoutId);
+      console.debug('[PDFGenerator] Image load error:', src);
       resolve(null);
     };
-    
-    // Set timeout for slow loading images
-    setTimeout(() => resolve(null), 5000);
     
     img.src = src;
   });

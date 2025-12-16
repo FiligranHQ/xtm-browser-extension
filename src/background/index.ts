@@ -3520,6 +3520,53 @@ async function handleMessage(
         break;
       }
       
+      case 'FETCH_IMAGE_AS_DATA_URL': {
+        // Fetch image bypassing CORS (background script has elevated permissions)
+        const { url } = message.payload as { url: string };
+        
+        if (!url) {
+          sendResponse({ success: false, error: 'No URL provided' });
+          break;
+        }
+        
+        try {
+          log.debug(`Fetching image: ${url}`);
+          const response = await fetch(url, {
+            mode: 'cors',
+            credentials: 'omit',
+            headers: {
+              'Accept': 'image/*,*/*;q=0.8',
+            },
+          });
+          
+          if (!response.ok) {
+            log.warn(`Image fetch failed: ${response.status} ${response.statusText}`);
+            sendResponse({ success: false, error: `HTTP ${response.status}` });
+            break;
+          }
+          
+          const blob = await response.blob();
+          
+          // Convert blob to base64 data URL
+          const reader = new FileReader();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Failed to read blob'));
+            reader.readAsDataURL(blob);
+          });
+          
+          log.debug(`Image fetched successfully: ${url.substring(0, 50)}...`);
+          sendResponse({ success: true, dataUrl });
+        } catch (error) {
+          log.warn('Image fetch error:', url, error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Fetch failed' 
+          });
+        }
+        break;
+      }
+      
       default:
         sendResponse(errorResponse('Unknown message type'));
     }

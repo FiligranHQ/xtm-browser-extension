@@ -90,7 +90,7 @@ export interface ExtensionSettings {
   openctiPlatforms: PlatformConfig[];
   openaevPlatforms: PlatformConfig[];
   opengrcPlatforms?: PlatformConfig[]; // Future platform
-  theme: 'light' | 'dark';
+  theme: 'light' | 'dark' | 'auto';
   autoScan: boolean;
   highlightColor?: string;
   scanOnLoad: boolean;
@@ -717,7 +717,9 @@ export type MessageType =
   // AI model management
   | 'AI_TEST_AND_FETCH_MODELS'
   // PDF Generation
-  | 'GENERATE_NATIVE_PDF';
+  | 'GENERATE_NATIVE_PDF'
+  // Image fetching (for CORS bypass)
+  | 'FETCH_IMAGE_AS_DATA_URL';
 
 export interface ExtensionMessage {
   type: MessageType;

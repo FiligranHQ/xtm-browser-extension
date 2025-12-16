@@ -2,11 +2,10 @@
  * Enhanced Content Extractor
  * 
  * Provides clean article extraction with:
- * - Print-mode optimization (leverages @media print styles)
- * - Reader-view generation (Firefox/Safari-style clean view)
+ * - Mozilla Readability as the primary extraction engine
+ * - Minimal preprocessing to avoid breaking Readability's heuristics
  * - Smart image preservation (content images only, no icons)
- * - Multiple content detection heuristics
- * - Clean text extraction for AI/search
+ * - Reader-view generation for clean PDF output
  */
 
 import { Readability } from '@mozilla/readability';
@@ -42,86 +41,30 @@ export interface ExtractedImage {
 }
 
 // Minimum dimensions for content images (skip tiny icons)
-const MIN_IMAGE_WIDTH = 100;
-const MIN_IMAGE_HEIGHT = 100;
-const MIN_IMAGE_AREA = 15000; // 100x150 or similar
+const MIN_IMAGE_WIDTH = 80;
+const MIN_IMAGE_HEIGHT = 80;
 
-// Selectors for elements that should NEVER be in article content
-const SELECTORS_TO_REMOVE = [
-  // Scripts and metadata
-  'script', 'style', 'noscript', 'link[rel="stylesheet"]', 'meta',
-  
-  // Navigation and structure
-  'nav', 'header:not(article header)', 'footer:not(article footer)', 
-  'aside', 'menu', 'menuitem',
-  
-  // Interactive elements
-  'form', 'input', 'button', 'select', 'textarea', 'label',
-  'iframe:not([src*="youtube"]):not([src*="vimeo"])', // Keep video embeds
-  
-  // Ads and promotions
-  '[class*="ad-"]', '[class*="advert"]', '[class*="advertisement"]',
-  '[class*="sponsor"]', '[class*="promo"]', '[class*="banner"]',
-  '[id*="ad-"]', '[id*="advert"]', '[id*="sponsor"]',
-  '[data-ad]', '[data-advertisement]', '.ad', '.ads', '.adsbygoogle',
-  
-  // Social and sharing
-  '[class*="share"]', '[class*="social"]', '[class*="follow"]',
-  '[class*="like-button"]', '[class*="tweet"]', '[class*="facebook"]',
-  
-  // Comments
-  '[class*="comment"]', '[id*="comment"]', '#disqus_thread',
-  '[class*="discussion"]', '[class*="responses"]',
-  
-  // Related content
-  '[class*="related"]', '[class*="recommended"]', '[class*="suggested"]',
-  '[class*="more-from"]', '[class*="you-may-like"]', '[class*="trending"]',
-  
-  // Subscription/paywall
-  '[class*="paywall"]', '[class*="subscribe"]', '[class*="subscription"]',
-  '[class*="newsletter"]', '[class*="signup"]', '[class*="premium"]',
-  '[class*="member"]', '[class*="login"]', '[class*="register"]',
-  
-  // Cookie/consent
-  '[class*="cookie"]', '[class*="consent"]', '[class*="gdpr"]',
-  '[class*="privacy-banner"]', '[class*="notice-banner"]',
-  
-  // Navigation elements
-  '[class*="breadcrumb"]', '[class*="pagination"]', '[class*="nav-"]',
-  '[class*="menu-"]', '[class*="sidebar"]', '[class*="widget"]',
-  '[class*="toc"]', '[class*="table-of-contents"]',
-  
-  // Overlays and modals
-  '[class*="overlay"]', '[class*="modal"]', '[class*="popup"]',
-  '[class*="dialog"]', '[class*="lightbox"]', '[class*="drawer"]',
-  '[class*="backdrop"]', '[class*="toast"]', '[class*="snackbar"]',
-  
-  // Fixed/sticky elements
-  '[class*="sticky"]', '[class*="fixed"]', '[class*="floating"]',
-  '[class*="toolbar"]', '[class*="topbar"]', '[class*="bottom-bar"]',
-  
-  // Hidden elements
-  '[hidden]', '[aria-hidden="true"]', '[style*="display: none"]',
-  '[style*="display:none"]', '[style*="visibility: hidden"]',
-  
-  // ARIA roles for non-content
-  '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
-  '[role="contentinfo"]', '[role="search"]', '[role="form"]',
-  '[role="menu"]', '[role="menubar"]', '[role="dialog"]',
-  '[role="alertdialog"]', '[role="alert"]', '[role="status"]',
-  
-  // Framework-specific
-  '.MuiModal-root', '.MuiBackdrop-root', '.MuiDrawer-root',
-  '.chakra-modal', '.ant-modal', '.ant-drawer',
-  '.ReactModal__Overlay', '[class*="__overlay"]',
+// Elements to remove ONLY during post-processing (after Readability)
+// Keep this minimal to not interfere with Readability's content detection
+const POST_PROCESS_REMOVE = [
+  // Interactive elements that shouldn't be in article
+  'script', 'style', 'noscript', 
+  'form', 'input', 'button', 'select', 'textarea',
+  'iframe:not([src*="youtube"]):not([src*="vimeo"]):not([src*="youtu.be"])',
+  // Tracking and ads
+  '[data-ad]', '.adsbygoogle',
 ];
 
-// Selectors for likely main content areas
+// Selectors to try for finding article content (ordered by specificity)
 const CONTENT_SELECTORS = [
+  'article[class*="post"]',
+  'article[class*="entry"]',
+  'article[class*="content"]',
   'article',
   '[role="article"]',
   '[role="main"]',
   'main',
+  '[itemprop="articleBody"]',
   '[class*="article-body"]',
   '[class*="article-content"]',
   '[class*="article__body"]',
@@ -130,118 +73,368 @@ const CONTENT_SELECTORS = [
   '[class*="post-content"]',
   '[class*="entry-content"]',
   '[class*="story-body"]',
-  '[class*="story-content"]',
-  '[class*="content-body"]',
-  '[itemprop="articleBody"]',
-  '[data-article-body]',
+  '[class*="blog-post"]',
+  '[class*="post__content"]',
   '.prose',
-  '.content',
   '#content',
-  '.post',
-  '.entry',
-];
-
-// Selectors for extracting metadata
-const TITLE_SELECTORS = [
-  'h1[class*="title"]',
-  'h1[class*="headline"]',
-  '[class*="article-title"]',
-  '[class*="post-title"]',
-  '[class*="entry-title"]',
-  '[itemprop="headline"]',
-  'article h1',
-  'main h1',
-  'h1',
-];
-
-const BYLINE_SELECTORS = [
-  '[rel="author"]',
-  '[class*="author"]',
-  '[class*="byline"]',
-  '[itemprop="author"]',
-  '[class*="writer"]',
-  'address',
-];
-
-const DATE_SELECTORS = [
-  'time[datetime]',
-  '[class*="date"]',
-  '[class*="published"]',
-  '[itemprop="datePublished"]',
-  '[class*="timestamp"]',
+  '.content',
 ];
 
 /**
  * Extract clean article content from the current page
  */
 export function extractContent(): ExtractedContent {
-  // Try extraction in order of quality
-  const content = extractWithPrintMode() 
-    || extractWithReadability() 
-    || extractFallback();
+  console.debug('[ContentExtractor] Starting extraction for:', window.location.href);
   
-  return content;
-}
-
-/**
- * Apply print media styles and extract content
- * This often produces cleaner results as sites hide navigation in print
- */
-function extractWithPrintMode(): ExtractedContent | null {
-  try {
-    // Clone document
-    const clone = document.cloneNode(true) as Document;
-    
-    // Force print media evaluation by modifying stylesheets
-    applyPrintStyles(clone);
-    
-    // Remove elements hidden by print styles
-    removeHiddenElements(clone);
-    
-    // Now extract with Readability
-    return extractFromDocument(clone, 'print-mode');
-  } catch (error) {
-    console.debug('[ContentExtractor] Print mode extraction failed:', error);
-    return null;
+  // Try Readability first (it's quite good at finding content)
+  let result = extractWithReadability();
+  
+  // If Readability fails or returns too little content, try fallback
+  if (!result || result.textContent.length < 200) {
+    console.debug('[ContentExtractor] Readability insufficient, trying fallback');
+    const fallback = extractFallback();
+    // Use fallback if it has more content
+    if (!result || fallback.textContent.length > result.textContent.length) {
+      result = fallback;
+    }
   }
+  
+  console.debug('[ContentExtractor] Final extraction:', result.title, 'text length:', result.textContent.length);
+  return result;
 }
 
 /**
- * Standard Readability extraction with enhanced preprocessing
+ * Extract using Mozilla Readability with minimal preprocessing
  */
 function extractWithReadability(): ExtractedContent | null {
   try {
+    // First, find hero/featured image BEFORE cloning (from live DOM)
+    const heroImage = findHeroImage();
+    
+    // Clone the entire document
     const clone = document.cloneNode(true) as Document;
-    return extractFromDocument(clone, 'readability');
+    
+    // Minimal preprocessing: only remove scripts and styles that could cause issues
+    // Do NOT remove content elements - let Readability decide what's important
+    clone.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+    
+    // IMPORTANT: Fix lazy-loaded images BEFORE Readability processes them
+    // This ensures Readability can properly score content with images
+    clone.querySelectorAll('img').forEach(img => {
+      fixImageSourceInClone(img);
+    });
+    
+    // Create Readability instance with generous settings
+    const reader = new Readability(clone, {
+      debug: false,
+      charThreshold: 25, // Lower threshold to capture more content
+      nbTopCandidates: 10, // Consider more candidates
+    });
+    
+    const article = reader.parse();
+    
+    if (!article || !article.content) {
+      console.debug('[ContentExtractor] Readability returned no content');
+      return null;
+    }
+    
+    // Check minimum content threshold
+    const textLength = article.textContent?.length || 0;
+    if (textLength < 100) {
+      console.debug('[ContentExtractor] Readability content too short:', textLength);
+      return null;
+    }
+    
+    console.debug('[ContentExtractor] Readability extracted:', article.title, 'length:', textLength);
+    
+    // Post-process the extracted HTML
+    const processedContent = postProcessContent(article.content);
+    
+    // Prepend hero image if found and not already in content
+    let finalHtml = processedContent.html;
+    if (heroImage) {
+      const contentHasHero = processedContent.element.querySelector(`img[src="${heroImage.src}"]`) ||
+                            processedContent.html.includes(heroImage.src);
+      if (!contentHasHero) {
+        console.debug('[ContentExtractor] Adding hero image:', heroImage.src);
+        const heroHtml = createHeroImageHtml(heroImage);
+        finalHtml = heroHtml + finalHtml;
+        // Re-create element with hero for image extraction
+        processedContent.element.insertAdjacentHTML('afterbegin', heroHtml);
+      }
+    }
+    
+    const images = extractImages(processedContent.element);
+    
+    return {
+      title: article.title || document.title,
+      byline: article.byline || extractByline(),
+      excerpt: article.excerpt || (article.textContent?.substring(0, 200).trim() + '...') || '',
+      content: finalHtml,
+      textContent: cleanText(article.textContent || ''),
+      images,
+      url: window.location.href,
+      siteName: article.siteName || extractSiteName(),
+      publishedDate: extractDate(),
+      readingTime: estimateReadingTime(article.textContent || ''),
+    };
   } catch (error) {
-    console.debug('[ContentExtractor] Readability extraction failed:', error);
+    console.error('[ContentExtractor] Readability failed:', error);
     return null;
   }
 }
 
 /**
- * Fallback extraction using content heuristics
+ * Find hero/featured image from the page
+ * These are often outside the main article content
+ * Note: We skip og:image as it's often a social sharing card, not actual content
+ */
+function findHeroImage(): ExtractedImage | null {
+  // Selectors for actual hero/featured images in the DOM (NOT meta tags)
+  // Meta tags like og:image are often branded social cards, not article images
+  const heroSelectors = [
+    // Structured data (usually actual content)
+    'article [itemprop="image"] img',
+    '[itemprop="image"]:not(meta)',
+    // Common hero image patterns - be specific
+    '.hero-image img',
+    '.featured-image img',
+    '.post-thumbnail img',
+    '.entry-thumbnail img', 
+    '.article-hero img',
+    '.article-featured-image img',
+    '.blog-hero img',
+    '.post-hero img',
+    '.post-featured-image img',
+    // Article-specific image containers
+    'article header figure img',
+    'article header .image img',
+    'article > figure:first-of-type img',
+    '.post header figure img',
+    '.entry header figure img',
+    // First figure in article (common pattern)
+    'article figure:first-of-type img',
+    '.post-content > figure:first-of-type img',
+    '.entry-content > figure:first-of-type img',
+    '.article-body > figure:first-of-type img',
+  ];
+  
+  for (const selector of heroSelectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (!element) continue;
+      
+      // Get the img element
+      const img = element.tagName === 'IMG' ? element as HTMLImageElement : element.querySelector('img');
+      if (!img) continue;
+      
+      const src = getImageSrc(img);
+      if (!src) continue;
+      
+      // Validate: skip logos, icons, and tracking images
+      if (!isContentImage(src, img)) continue;
+      
+      console.debug('[ContentExtractor] Found hero image via selector:', selector, src);
+      return {
+        src: makeAbsoluteUrl(src),
+        alt: img.alt || '',
+        caption: getFigureCaption(img),
+        width: img.naturalWidth || img.width || 0,
+        height: img.naturalHeight || img.height || 0,
+      };
+    } catch { /* Skip invalid selectors */ }
+  }
+  
+  // Fallback: Look for first substantial image in main content area
+  const mainContent = document.querySelector('article, main, [role="main"], .post, .entry');
+  if (mainContent) {
+    const images = mainContent.querySelectorAll('img');
+    for (const img of images) {
+      const src = getImageSrc(img as HTMLImageElement);
+      if (src && isContentImage(src, img as HTMLImageElement)) {
+        console.debug('[ContentExtractor] Found hero via main content scan:', src);
+        return {
+          src: makeAbsoluteUrl(src),
+          alt: (img as HTMLImageElement).alt || '',
+          caption: getFigureCaption(img as HTMLImageElement),
+          width: (img as HTMLImageElement).naturalWidth || (img as HTMLImageElement).width || 0,
+          height: (img as HTMLImageElement).naturalHeight || (img as HTMLImageElement).height || 0,
+        };
+      }
+    }
+  }
+  
+  console.debug('[ContentExtractor] No hero image found');
+  return null;
+}
+
+/**
+ * Check if image is likely actual content (not logo, icon, tracking, or social card)
+ */
+function isContentImage(src: string, img: HTMLImageElement): boolean {
+  const srcLower = src.toLowerCase();
+  
+  // Skip tracking pixels and analytics
+  if (/pixel|track|beacon|analytics|doubleclick|facebook\.com\/tr|\.gif\?/.test(srcLower)) {
+    return false;
+  }
+  
+  // Skip common logo/branding patterns
+  if (/logo|brand|icon|favicon|sprite|badge|button|avatar|profile/i.test(srcLower)) {
+    return false;
+  }
+  
+  // Skip social media share images (often branded cards)
+  if (/share|social|og-image|twitter-card|card-image|meta-image/i.test(srcLower)) {
+    return false;
+  }
+  
+  // Check alt/class for logo hints
+  const alt = (img.alt || '').toLowerCase();
+  const className = (img.className || '').toLowerCase();
+  if (/logo|icon|brand|avatar/i.test(alt + ' ' + className)) {
+    return false;
+  }
+  
+  // Check dimensions - skip very small images
+  const width = img.naturalWidth || img.width || parseInt(img.getAttribute('width') || '0');
+  const height = img.naturalHeight || img.height || parseInt(img.getAttribute('height') || '0');
+  
+  // If we have dimensions, require reasonable size
+  if (width > 0 && height > 0) {
+    // Skip tiny images (icons, bullets)
+    if (width < 100 && height < 100) return false;
+    
+    // Skip very wide/short images (likely banners/ads)
+    const ratio = width / height;
+    if (ratio > 5 || ratio < 0.15) return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Get caption from figure element if present
+ */
+function getFigureCaption(img: HTMLImageElement): string {
+  const figure = img.closest('figure');
+  if (figure) {
+    const figcaption = figure.querySelector('figcaption');
+    return figcaption?.textContent?.trim() || '';
+  }
+  return '';
+}
+
+/**
+ * Get the best available src from an image element
+ */
+function getImageSrc(img: HTMLImageElement): string {
+  // Try regular src first
+  let src = img.src;
+  
+  // Check if it's a placeholder
+  if (!src || src.startsWith('data:') || src.includes('placeholder') || src.includes('blank')) {
+    // Try lazy loading attributes
+    const lazyAttrs = ['data-src', 'data-lazy-src', 'data-original', 'data-srcset'];
+    for (const attr of lazyAttrs) {
+      const lazySrc = img.getAttribute(attr);
+      if (lazySrc && !lazySrc.startsWith('data:')) {
+        src = lazySrc.split(',')[0].trim().split(' ')[0];
+        break;
+      }
+    }
+  }
+  
+  // Try srcset for high-res version
+  const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+  if (srcset) {
+    const parts = srcset.split(',')
+      .map(s => s.trim().split(' '))
+      .filter(p => p[0] && !p[0].startsWith('data:'))
+      .sort((a, b) => parseInt(b[1] || '0') - parseInt(a[1] || '0'));
+    if (parts.length > 0 && parts[0][0]) {
+      src = parts[0][0];
+    }
+  }
+  
+  return src;
+}
+
+
+/**
+ * Create HTML for hero image
+ */
+function createHeroImageHtml(image: ExtractedImage): string {
+  const altAttr = image.alt ? ` alt="${escapeHtmlAttr(image.alt)}"` : '';
+  return `<figure class="hero-image"><img src="${escapeHtmlAttr(image.src)}"${altAttr} style="max-width:100%;height:auto;display:block;margin:0 auto 24px;"></figure>`;
+}
+
+/**
+ * Escape HTML attribute value
+ */
+function escapeHtmlAttr(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Fallback extraction using content container detection
  */
 function extractFallback(): ExtractedContent {
-  const title = extractTitle(document);
-  const byline = extractByline(document);
-  const publishedDate = extractDate(document);
+  console.debug('[ContentExtractor] Using fallback extraction');
+  
+  const title = extractTitle();
+  const byline = extractByline();
+  const publishedDate = extractDate();
+  
+  // Find hero image first
+  const heroImage = findHeroImage();
   
   // Find the best content container
-  const contentElement = findContentElement(document);
+  const contentElement = findContentElement();
+  
+  if (!contentElement) {
+    console.debug('[ContentExtractor] No content container found, using body');
+    return createEmptyResult(title);
+  }
+  
+  // Clone and clean the content
   const clone = contentElement.cloneNode(true) as HTMLElement;
   
-  // Clean the content
-  cleanElement(clone);
+  // Fix images before cleaning
+  clone.querySelectorAll('img').forEach(img => {
+    fixImageSourceInClone(img);
+  });
+  
+  cleanFallbackContent(clone);
+  
+  // Prepend hero image if not already in content
+  let finalHtml = clone.innerHTML;
+  if (heroImage) {
+    const contentHasHero = clone.querySelector(`img[src="${heroImage.src}"]`) ||
+                          clone.innerHTML.includes(heroImage.src);
+    if (!contentHasHero) {
+      console.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
+      const heroHtml = createHeroImageHtml(heroImage);
+      finalHtml = heroHtml + finalHtml;
+      clone.insertAdjacentHTML('afterbegin', heroHtml);
+    }
+  }
   
   const textContent = cleanText(clone.textContent || '');
   const images = extractImages(clone);
+  
+  console.debug('[ContentExtractor] Fallback extracted:', textContent.length, 'chars', images.length, 'images');
   
   return {
     title,
     byline,
     excerpt: textContent.substring(0, 200).trim() + '...',
-    content: clone.innerHTML,
+    content: finalHtml,
     textContent,
     images,
     url: window.location.href,
@@ -252,234 +445,284 @@ function extractFallback(): ExtractedContent {
 }
 
 /**
- * Extract content from a prepared document clone
+ * Post-process Readability output - minimal cleaning and image fixing
  */
-function extractFromDocument(doc: Document, method: string): ExtractedContent | null {
-  // Pre-clean the document
-  SELECTORS_TO_REMOVE.forEach(selector => {
+function postProcessContent(html: string): { html: string; element: HTMLElement } {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  
+  // Remove only clearly problematic elements
+  POST_PROCESS_REMOVE.forEach(selector => {
     try {
-      doc.querySelectorAll(selector).forEach(el => el.remove());
+      div.querySelectorAll(selector).forEach(el => el.remove());
     } catch { /* Skip invalid selectors */ }
   });
   
-  // Use Readability
-  const reader = new Readability(doc, {
-    debug: false,
-    charThreshold: 50,
-    keepClasses: false, // Remove all classes for cleaner output
+  // Clean up empty elements (but keep structure)
+  div.querySelectorAll('div, span').forEach(el => {
+    if (!el.textContent?.trim() && !el.querySelector('img, video, iframe, svg, pre, code, figure')) {
+      el.remove();
+    }
   });
   
-  const article = reader.parse();
+  // Fix ALL images - handle lazy loading and ensure absolute URLs
+  div.querySelectorAll('img').forEach(img => {
+    fixImageSource(img);
+  });
   
-  if (!article || !article.content || article.textContent.length < 100) {
-    return null;
-  }
+  // Also fix images inside picture elements
+  div.querySelectorAll('picture source').forEach(source => {
+    const srcset = source.getAttribute('srcset') || source.getAttribute('data-srcset');
+    if (srcset) {
+      source.setAttribute('srcset', makeAbsoluteUrl(srcset.split(',')[0].trim().split(' ')[0]));
+    }
+  });
   
-  // Post-process the extracted content
-  const contentDiv = document.createElement('div');
-  contentDiv.innerHTML = article.content;
-  
-  // Clean the extracted content
-  cleanElement(contentDiv);
-  
-  // Extract images before they're processed
-  const images = extractImages(contentDiv);
-  
-  // Clean and enhance images in content
-  enhanceImages(contentDiv);
-  
-  const textContent = cleanText(article.textContent);
-  
-  console.debug(`[ContentExtractor] ${method}: extracted ${textContent.length} chars, ${images.length} images`);
-  
-  return {
-    title: article.title || document.title,
-    byline: article.byline || extractByline(document),
-    excerpt: article.excerpt || textContent.substring(0, 200).trim() + '...',
-    content: contentDiv.innerHTML,
-    textContent,
-    images,
-    url: window.location.href,
-    siteName: article.siteName || extractSiteName(),
-    publishedDate: extractDate(document),
-    readingTime: estimateReadingTime(textContent),
-  };
+  return { html: div.innerHTML, element: div };
 }
 
 /**
- * Apply print stylesheet rules to document
+ * Fix image source - handle lazy loading and convert to absolute URL
  */
-function applyPrintStyles(doc: Document): void {
-  // Find all stylesheets and check for print media rules
-  const styleSheets = Array.from(doc.styleSheets);
+function fixImageSource(img: HTMLImageElement): void {
+  // Common lazy-loading attributes (ordered by priority)
+  const lazyAttrs = [
+    'data-src',
+    'data-lazy-src', 
+    'data-original',
+    'data-lazy',
+    'data-srcset',
+    'data-original-src',
+    'data-hi-res-src',
+    'data-full-src',
+    'data-image',
+    'data-url',
+    'loading-src',
+  ];
   
-  styleSheets.forEach(sheet => {
-    try {
-      const rules = Array.from(sheet.cssRules || []);
-      rules.forEach(rule => {
-        if (rule instanceof CSSMediaRule && rule.conditionText?.includes('print')) {
-          // Extract print rules and apply them as regular styles
-          const printRules = Array.from(rule.cssRules);
-          printRules.forEach(printRule => {
-            if (printRule instanceof CSSStyleRule) {
-              // Apply the print style
-              const elements = doc.querySelectorAll(printRule.selectorText);
-              elements.forEach(el => {
-                (el as HTMLElement).style.cssText += printRule.style.cssText;
-              });
-            }
-          });
-        }
-      });
-    } catch { /* CORS or other stylesheet access issues */ }
-  });
+  let finalSrc = img.src;
   
-  // Add a print media query to force print mode detection
-  const printStyle = doc.createElement('style');
-  printStyle.textContent = `
-    @media all {
-      /* Hide common navigation elements in print mode */
-      nav, header, footer, aside, 
-      [class*="nav"], [class*="menu"], [class*="sidebar"],
-      [class*="header"]:not(.article-header), 
-      [class*="footer"]:not(.article-footer),
-      [class*="social"], [class*="share"], [class*="comment"],
-      [class*="related"], [class*="ad"], [class*="promo"] {
-        display: none !important;
-      }
-      
-      /* Show main content */
-      article, main, [role="main"], [class*="content"], [class*="article"] {
-        display: block !important;
-        visibility: visible !important;
+  // Check if current src is invalid or a placeholder
+  const isInvalidSrc = !finalSrc || 
+                       finalSrc.startsWith('data:') || 
+                       finalSrc.includes('placeholder') ||
+                       finalSrc.includes('blank.gif') ||
+                       finalSrc.includes('loading') ||
+                       finalSrc.includes('spacer') ||
+                       finalSrc.endsWith('.svg') && img.getAttribute('data-src'); // SVG placeholder
+  
+  if (isInvalidSrc) {
+    // Try each lazy attribute
+    for (const attr of lazyAttrs) {
+      const lazySrc = img.getAttribute(attr);
+      if (lazySrc && !lazySrc.startsWith('data:')) {
+        // Handle srcset format (take first URL)
+        finalSrc = lazySrc.split(',')[0].trim().split(' ')[0];
+        break;
       }
     }
-  `;
-  doc.head.appendChild(printStyle);
-}
-
-/**
- * Remove elements that are hidden (display:none, visibility:hidden, etc.)
- */
-function removeHiddenElements(doc: Document): void {
-  const allElements = doc.querySelectorAll('*');
+  }
   
-  allElements.forEach(el => {
-    const element = el as HTMLElement;
-    
-    try {
-      const style = element.style;
-      const computedStyle = window.getComputedStyle(element);
-      
-      // Check inline styles
-      if (style.display === 'none' || style.visibility === 'hidden') {
-        element.remove();
-        return;
-      }
-      
-      // Check computed styles
-      if (computedStyle.display === 'none' || 
-          computedStyle.visibility === 'hidden' ||
-          computedStyle.opacity === '0') {
-        element.remove();
-        return;
-      }
-      
-      // Check for zero dimensions (often hidden elements)
-      if (computedStyle.width === '0px' && computedStyle.height === '0px') {
-        element.remove();
-        return;
-      }
-      
-      // Remove fixed/sticky elements (usually navigation/overlays)
-      if (computedStyle.position === 'fixed' || computedStyle.position === 'sticky') {
-        // Keep if it's likely content (like a reading progress bar)
-        if (!element.closest('article, main, [role="main"]')) {
-          element.remove();
-          return;
-        }
-      }
-      
-      // Remove high z-index elements (likely overlays)
-      const zIndex = parseInt(computedStyle.zIndex);
-      if (!isNaN(zIndex) && zIndex > 9000 && !element.closest('article')) {
-        element.remove();
-      }
-    } catch { /* Skip if styles can't be read */ }
-  });
+  // Also check srcset for better resolution
+  const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+  if (srcset && !finalSrc) {
+    const srcsetParts = srcset.split(',');
+    // Get the largest image from srcset
+    const bestSrc = srcsetParts
+      .map(s => s.trim().split(' '))
+      .sort((a, b) => {
+        const sizeA = parseInt(a[1] || '0');
+        const sizeB = parseInt(b[1] || '0');
+        return sizeB - sizeA;
+      })[0];
+    if (bestSrc) {
+      finalSrc = bestSrc[0];
+    }
+  }
+  
+  // Convert to absolute URL
+  if (finalSrc) {
+    finalSrc = makeAbsoluteUrl(finalSrc);
+    img.src = finalSrc;
+    // Also set srcset to the same (prevents broken images)
+    img.removeAttribute('srcset');
+    img.removeAttribute('data-srcset');
+  }
+  
+  // Ensure responsive styling
+  img.style.maxWidth = '100%';
+  img.style.height = 'auto';
+  img.removeAttribute('loading'); // Remove lazy loading attr
 }
 
 /**
- * Find the best content container using heuristics
+ * Convert relative URL to absolute
  */
-function findContentElement(doc: Document): HTMLElement {
-  // Try content selectors in order
+function makeAbsoluteUrl(url: string): string {
+  if (!url) return url;
+  
+  // Already absolute
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // Protocol-relative
+  if (url.startsWith('//')) {
+    return window.location.protocol + url;
+  }
+  
+  // Relative to root
+  if (url.startsWith('/')) {
+    return window.location.origin + url;
+  }
+  
+  // Relative to current path
+  const base = window.location.href.replace(/\/[^/]*$/, '/');
+  return base + url;
+}
+
+/**
+ * Fix image source in cloned document (before Readability)
+ * Similar to fixImageSource but works without live DOM access
+ */
+function fixImageSourceInClone(img: HTMLImageElement): void {
+  const lazyAttrs = [
+    'data-src',
+    'data-lazy-src', 
+    'data-original',
+    'data-lazy',
+    'data-srcset',
+    'data-original-src',
+    'data-hi-res-src',
+    'data-full-src',
+    'data-image',
+    'data-url',
+  ];
+  
+  let currentSrc = img.getAttribute('src') || '';
+  
+  // Check if src is invalid
+  const isInvalidSrc = !currentSrc || 
+                       currentSrc.startsWith('data:') || 
+                       currentSrc.includes('placeholder') ||
+                       currentSrc.includes('blank') ||
+                       currentSrc.includes('loading') ||
+                       currentSrc.includes('spacer');
+  
+  if (isInvalidSrc) {
+    for (const attr of lazyAttrs) {
+      const lazySrc = img.getAttribute(attr);
+      if (lazySrc && !lazySrc.startsWith('data:')) {
+        currentSrc = lazySrc.split(',')[0].trim().split(' ')[0];
+        break;
+      }
+    }
+  }
+  
+  // Check srcset for better image
+  const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+  if (srcset) {
+    const srcsetParts = srcset.split(',');
+    const bestSrc = srcsetParts
+      .map(s => s.trim().split(' '))
+      .filter(parts => parts[0] && !parts[0].startsWith('data:'))
+      .sort((a, b) => parseInt(b[1] || '0') - parseInt(a[1] || '0'))[0];
+    if (bestSrc && bestSrc[0]) {
+      currentSrc = bestSrc[0];
+    }
+  }
+  
+  // Set absolute URL
+  if (currentSrc) {
+    img.setAttribute('src', makeAbsoluteUrl(currentSrc));
+  }
+}
+
+/**
+ * Find the best content container element
+ */
+function findContentElement(): HTMLElement | null {
+  // Try specific content selectors first
   for (const selector of CONTENT_SELECTORS) {
-    const element = doc.querySelector(selector) as HTMLElement;
-    if (element && getTextDensity(element) > 0.3) {
-      return element;
-    }
+    try {
+      const element = document.querySelector(selector) as HTMLElement;
+      if (element && hasSubstantialContent(element)) {
+        console.debug('[ContentExtractor] Found content via selector:', selector);
+        return element;
+      }
+    } catch { /* Skip invalid selectors */ }
   }
   
-  // Find by content density analysis
-  const candidates = Array.from(doc.querySelectorAll('div, section, article'));
-  let bestCandidate: HTMLElement = doc.body;
+  // Score-based fallback
+  const candidates = Array.from(document.querySelectorAll('article, section, div, main'));
+  let bestElement: HTMLElement | null = null;
   let bestScore = 0;
   
-  candidates.forEach(el => {
+  for (const el of candidates) {
     const element = el as HTMLElement;
-    const score = scoreContentElement(element);
+    const score = scoreElement(element);
     if (score > bestScore) {
       bestScore = score;
-      bestCandidate = element;
+      bestElement = element;
     }
-  });
+  }
   
-  return bestCandidate;
+  if (bestElement && bestScore > 50) {
+    console.debug('[ContentExtractor] Found content via scoring, score:', bestScore);
+    return bestElement;
+  }
+  
+  return null;
 }
 
 /**
- * Score an element's likelihood of being the main content
+ * Check if element has substantial content
  */
-function scoreContentElement(element: HTMLElement): number {
-  let score = 0;
-  
-  // Text length (more text = likely content)
+function hasSubstantialContent(element: HTMLElement): boolean {
   const text = element.textContent || '';
-  score += Math.min(text.length / 100, 50);
-  
-  // Paragraph density
   const paragraphs = element.querySelectorAll('p');
-  score += paragraphs.length * 3;
+  return text.length > 500 || paragraphs.length > 3;
+}
+
+/**
+ * Score an element's likelihood of being main content
+ */
+function scoreElement(element: HTMLElement): number {
+  let score = 0;
+  const text = element.textContent || '';
+  const html = element.innerHTML || '';
+  
+  // Text density (text / html ratio)
+  const textDensity = html.length > 0 ? text.length / html.length : 0;
+  if (textDensity > 0.25) score += 20;
+  
+  // Text length
+  score += Math.min(text.length / 50, 30);
+  
+  // Paragraph count
+  const paragraphs = element.querySelectorAll('p');
+  score += Math.min(paragraphs.length * 5, 25);
   
   // Heading presence
   const headings = element.querySelectorAll('h1, h2, h3, h4, h5, h6');
-  score += headings.length * 2;
+  score += Math.min(headings.length * 3, 15);
   
-  // Image presence (content usually has images)
-  const images = element.querySelectorAll('img');
-  score += images.length * 2;
+  // Code blocks (technical articles)
+  const codeBlocks = element.querySelectorAll('pre, code');
+  score += Math.min(codeBlocks.length * 2, 10);
   
-  // Link density (too many links = navigation)
+  // Negative: high link density (navigation)
   const links = element.querySelectorAll('a');
   const linkText = Array.from(links).reduce((sum, a) => sum + (a.textContent?.length || 0), 0);
   const linkDensity = text.length > 0 ? linkText / text.length : 1;
-  if (linkDensity > 0.3) {
+  if (linkDensity > 0.4) score -= 40;
+  
+  // Negative: class/id hints
+  const classId = (element.className + ' ' + element.id).toLowerCase();
+  if (/nav|menu|sidebar|footer|header|comment|ad|share|social/.test(classId)) {
     score -= 30;
   }
-  
-  // Class name hints
-  const className = element.className.toLowerCase();
-  if (/article|content|post|story|entry|prose/.test(className)) {
-    score += 20;
-  }
-  if (/nav|menu|sidebar|footer|header|comment|ad/.test(className)) {
-    score -= 30;
-  }
-  
-  // ID hints
-  const id = element.id.toLowerCase();
-  if (/article|content|post|story|entry|main/.test(id)) {
+  if (/article|content|post|story|entry|main|body/.test(classId)) {
     score += 20;
   }
   
@@ -487,88 +730,79 @@ function scoreContentElement(element: HTMLElement): number {
 }
 
 /**
- * Calculate text density (text chars / total element length)
+ * Clean fallback content (more aggressive than Readability post-processing)
  */
-function getTextDensity(element: HTMLElement): number {
-  const text = element.textContent || '';
-  const html = element.innerHTML;
-  return html.length > 0 ? text.length / html.length : 0;
-}
-
-/**
- * Clean an element by removing unwanted children and attributes
- */
-function cleanElement(element: HTMLElement): void {
-  // Remove unwanted elements
-  SELECTORS_TO_REMOVE.forEach(selector => {
+function cleanFallbackContent(element: HTMLElement): void {
+  // Remove common non-content elements
+  const toRemove = [
+    'script', 'style', 'noscript', 'nav', 'aside',
+    'header:not(article header)', 'footer:not(article footer)',
+    'form', 'input', 'button', 'select', 'textarea',
+    '[role="navigation"]', '[role="banner"]', '[role="complementary"]',
+    '[class*="sidebar"]', '[class*="widget"]', '[class*="ad-"]',
+    '[class*="share"]', '[class*="social"]', '[class*="comment"]',
+    '[class*="related"]', '[class*="recommended"]',
+  ];
+  
+  toRemove.forEach(selector => {
     try {
       element.querySelectorAll(selector).forEach(el => el.remove());
     } catch { /* Skip */ }
   });
   
-  // Clean all remaining elements
+  // Remove event handlers
   element.querySelectorAll('*').forEach(el => {
-    const htmlEl = el as HTMLElement;
-    
-    // Remove event handlers
-    const eventAttrs = ['onclick', 'onload', 'onerror', 'onmouseover', 'onmouseout',
-      'onfocus', 'onblur', 'onsubmit', 'onchange', 'onkeydown', 'onkeyup'];
-    eventAttrs.forEach(attr => htmlEl.removeAttribute(attr));
-    
-    // Remove data attributes (except useful ones)
-    Array.from(htmlEl.attributes)
-      .filter(attr => attr.name.startsWith('data-') && 
-        !['data-src', 'data-srcset', 'data-lazy-src'].includes(attr.name))
-      .forEach(attr => htmlEl.removeAttribute(attr.name));
-    
-    // Remove class and id (for clean output)
-    htmlEl.removeAttribute('class');
-    htmlEl.removeAttribute('id');
-    
-    // Remove style (will be re-styled in reader view)
-    htmlEl.removeAttribute('style');
-  });
-  
-  // Remove empty elements
-  element.querySelectorAll('div, span, p').forEach(el => {
-    if (!el.textContent?.trim() && !el.querySelector('img, video, iframe, svg')) {
-      el.remove();
-    }
+    ['onclick', 'onload', 'onerror', 'onmouseover'].forEach(attr => {
+      el.removeAttribute(attr);
+    });
   });
 }
 
 /**
- * Extract and process images from content
+ * Extract images from content element
  */
 function extractImages(element: HTMLElement): ExtractedImage[] {
   const images: ExtractedImage[] = [];
   const seen = new Set<string>();
   
   element.querySelectorAll('img').forEach(img => {
-    const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+    // Get the best available source (already fixed by postProcessContent)
+    let src = img.src;
     
-    if (!src || seen.has(src)) return;
+    // Also try lazy-loading attributes if src is empty
+    if (!src || src.startsWith('data:')) {
+      const lazyAttrs = ['data-src', 'data-lazy-src', 'data-original', 'data-lazy'];
+      for (const attr of lazyAttrs) {
+        const lazySrc = img.getAttribute(attr);
+        if (lazySrc && !lazySrc.startsWith('data:')) {
+          src = makeAbsoluteUrl(lazySrc);
+          break;
+        }
+      }
+    }
+    
+    // Skip if no valid source
+    if (!src || src.startsWith('data:')) return;
+    
+    // Normalize and deduplicate
+    src = makeAbsoluteUrl(src);
+    if (seen.has(src)) return;
     seen.add(src);
     
-    // Get dimensions
+    // Skip obvious tracking/ad patterns
+    const srcLower = src.toLowerCase();
+    if (/pixel\.|track\.|beacon\.|analytics\.|doubleclick\.|facebook\.com\/tr|\.gif\?/.test(srcLower)) {
+      return;
+    }
+    
+    // Get dimensions (may be 0 for lazy-loaded images, that's OK)
     const width = img.naturalWidth || img.width || parseInt(img.getAttribute('width') || '0');
     const height = img.naturalHeight || img.height || parseInt(img.getAttribute('height') || '0');
     
-    // Skip small images (likely icons, avatars, etc.)
-    if (width > 0 && height > 0) {
-      if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) return;
-      if (width * height < MIN_IMAGE_AREA) return;
-    }
-    
-    // Skip tracking pixels and common non-content patterns
-    const srcLower = src.toLowerCase();
-    if (/pixel|track|beacon|analytics|ad[sx]?[\/\.]|doubleclick|facebook\.com\/tr/.test(srcLower)) {
-      return;
-    }
-    
-    // Skip common icon patterns
-    if (/icon|logo|avatar|badge|button|sprite/.test(srcLower) && width < 200 && height < 200) {
-      return;
+    // Only filter by size if we have valid dimensions AND they're tiny
+    // Many lazy-loaded images will have 0 dimensions until loaded
+    if (width > 0 && height > 0 && width < 50 && height < 50) {
+      return; // Skip tiny icons
     }
     
     // Get caption from figure or alt
@@ -588,96 +822,83 @@ function extractImages(element: HTMLElement): ExtractedImage[] {
     });
   });
   
+  console.debug('[ContentExtractor] Extracted', images.length, 'images');
   return images;
-}
-
-/**
- * Enhance images in content element (lazy loading, captions)
- */
-function enhanceImages(element: HTMLElement): void {
-  element.querySelectorAll('img').forEach(img => {
-    // Handle lazy-loaded images
-    const lazySrc = img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
-    if (lazySrc && (!img.src || img.src.includes('placeholder') || img.src.includes('data:'))) {
-      img.src = lazySrc;
-    }
-    
-    // Handle srcset
-    const lazySrcset = img.getAttribute('data-srcset');
-    if (lazySrcset) {
-      img.setAttribute('srcset', lazySrcset);
-    }
-    
-    // Ensure images are responsive
-    img.style.maxWidth = '100%';
-    img.style.height = 'auto';
-    
-    // Remove tiny images
-    const width = img.naturalWidth || img.width;
-    const height = img.naturalHeight || img.height;
-    if (width > 0 && height > 0 && width < MIN_IMAGE_WIDTH && height < MIN_IMAGE_HEIGHT) {
-      img.remove();
-    }
-  });
 }
 
 /**
  * Extract article title
  */
-function extractTitle(doc: Document): string {
-  for (const selector of TITLE_SELECTORS) {
-    const el = doc.querySelector(selector);
-    if (el?.textContent?.trim()) {
-      return el.textContent.trim();
-    }
+function extractTitle(): string {
+  // Try semantic selectors
+  const selectors = [
+    'h1[class*="title"]',
+    'h1[class*="headline"]',
+    '[class*="article-title"]',
+    '[class*="post-title"]',
+    '[itemprop="headline"]',
+    'article h1',
+    'main h1',
+    'h1',
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      const el = document.querySelector(selector);
+      const text = el?.textContent?.trim();
+      if (text && text.length > 5 && text.length < 300) {
+        return text;
+      }
+    } catch { /* Skip */ }
   }
   
   // Try meta tags
-  const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+  const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
   if (ogTitle) return ogTitle;
   
-  const twitterTitle = doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content');
-  if (twitterTitle) return twitterTitle;
-  
-  return doc.title || 'Untitled';
+  return document.title || 'Untitled';
 }
 
 /**
  * Extract author/byline
  */
-function extractByline(doc: Document): string {
-  for (const selector of BYLINE_SELECTORS) {
-    const el = doc.querySelector(selector);
-    if (el?.textContent?.trim()) {
-      return el.textContent.trim();
-    }
+function extractByline(): string {
+  const selectors = [
+    '[rel="author"]',
+    '[class*="author"]',
+    '[class*="byline"]',
+    '[itemprop="author"]',
+    'address',
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      const el = document.querySelector(selector);
+      const text = el?.textContent?.trim();
+      if (text && text.length > 2 && text.length < 100) {
+        return text;
+      }
+    } catch { /* Skip */ }
   }
   
-  const metaAuthor = doc.querySelector('meta[name="author"]')?.getAttribute('content');
+  const metaAuthor = document.querySelector('meta[name="author"]')?.getAttribute('content');
   return metaAuthor || '';
 }
 
 /**
  * Extract publication date
  */
-function extractDate(doc: Document): string | null {
-  for (const selector of DATE_SELECTORS) {
-    const el = doc.querySelector(selector);
-    if (el) {
-      // Prefer datetime attribute
-      const datetime = el.getAttribute('datetime');
-      if (datetime) return datetime;
-      
-      // Fall back to text content
-      const text = el.textContent?.trim();
-      if (text) return text;
-    }
+function extractDate(): string | null {
+  // Try time element with datetime
+  const timeEl = document.querySelector('time[datetime]');
+  if (timeEl) {
+    return timeEl.getAttribute('datetime') || timeEl.textContent?.trim() || null;
   }
   
   // Try meta tags
-  const metaDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
-    || doc.querySelector('meta[name="date"]')?.getAttribute('content')
-    || doc.querySelector('meta[name="DC.date"]')?.getAttribute('content');
+  const metaDate = document.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
+    || document.querySelector('meta[name="date"]')?.getAttribute('content')
+    || document.querySelector('meta[name="DC.date"]')?.getAttribute('content');
   
   return metaDate || null;
 }
@@ -704,72 +925,39 @@ function estimateReadingTime(text: string): number {
 }
 
 /**
- * Clean text by removing common boilerplate patterns
+ * Clean text content
  */
 function cleanText(text: string): string {
   if (!text) return '';
   
-  let cleaned = text;
-  
-  // Paywall/subscription patterns
-  const patternsToRemove = [
-    // French
-    /Cet article (vous est offert|est réservé|est accessible)[^.]*\./gi,
-    /réservé aux abonnés/gi,
-    /Abonnez-vous/gi,
-    /S['']abonner/gi,
-    /Déjà abonné \?/gi,
-    /Connectez-vous/gi,
-    /Accédez à l['']intégralité[^.]*\./gi,
-    
-    // English
-    /This article is for subscribers/gi,
-    /Subscribe to continue reading/gi,
-    /Already a subscriber\?/gi,
-    /Sign in to read/gi,
-    /Subscribe now/gi,
-    /Get unlimited access/gi,
-    /Start your free trial/gi,
-    /You['']ve reached your limit of free articles/gi,
-    
-    // Generic
-    /Share this article/gi,
-    /Related articles/gi,
-    /Advertisement/gi,
-    /Sponsored content/gi,
-    /More from [^\n]+/gi,
-    /Follow us on [^\n]+/gi,
-    /Read more:/gi,
-    /See also:/gi,
-    
-    // Newsletter
-    /Sign up for our newsletter/gi,
-    /Get the latest news/gi,
-    /Enter your email/gi,
-    
-    // Social
-    /Share on (Twitter|Facebook|LinkedIn|WhatsApp)/gi,
-    /Tweet this/gi,
-  ];
-  
-  patternsToRemove.forEach(pattern => {
-    cleaned = cleaned.replace(pattern, '');
-  });
-  
-  // Clean up whitespace
-  cleaned = cleaned
+  return text
     .replace(/\t/g, ' ')
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/ {2,}/g, ' ')
     .trim();
-  
-  return cleaned;
+}
+
+/**
+ * Create empty result with title only
+ */
+function createEmptyResult(title: string): ExtractedContent {
+  return {
+    title,
+    byline: '',
+    excerpt: '',
+    content: '',
+    textContent: '',
+    images: [],
+    url: window.location.href,
+    siteName: extractSiteName(),
+    publishedDate: null,
+    readingTime: 0,
+  };
 }
 
 /**
  * Generate a clean reader-view HTML document
- * This creates a self-contained HTML that looks like Firefox/Safari reader mode
  */
 export function generateReaderView(content: ExtractedContent): string {
   return `<!DOCTYPE html>
@@ -818,12 +1006,6 @@ export function generateReaderView(content: ExtractedContent): string {
       gap: 16px;
     }
     
-    .reader-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    
     .reader-title {
       font-size: 32px;
       font-weight: 700;
@@ -836,15 +1018,6 @@ export function generateReaderView(content: ExtractedContent): string {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       color: #444;
-    }
-    
-    .reader-excerpt {
-      font-size: 18px;
-      color: #555;
-      font-style: italic;
-      margin-top: 16px;
-      padding-left: 16px;
-      border-left: 3px solid #001bda;
     }
     
     .reader-content {
@@ -906,26 +1079,29 @@ export function generateReaderView(content: ExtractedContent): string {
       font-style: italic;
     }
     
-    .reader-content pre, .reader-content code {
+    .reader-content pre {
       font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
       font-size: 14px;
-      background: #f5f5f5;
-      border-radius: 4px;
-    }
-    
-    .reader-content pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
       padding: 16px;
+      border-radius: 4px;
       overflow-x: auto;
       margin: 24px 0;
     }
     
     .reader-content code {
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 14px;
+      background: #f0f0f0;
       padding: 2px 6px;
+      border-radius: 3px;
     }
     
     .reader-content pre code {
       padding: 0;
       background: none;
+      color: inherit;
     }
     
     .reader-content ul, .reader-content ol {
@@ -969,25 +1145,8 @@ export function generateReaderView(content: ExtractedContent): string {
     }
     
     @media print {
-      body {
-        background: white;
-      }
-      
-      .reader-container {
-        max-width: none;
-        padding: 20px;
-      }
-      
-      .reader-content a {
-        color: #000;
-        text-decoration: underline;
-      }
-      
-      .reader-content a::after {
-        content: " (" attr(href) ")";
-        font-size: 12px;
-        color: #666;
-      }
+      body { background: white; }
+      .reader-container { max-width: none; padding: 20px; }
     }
   </style>
 </head>
@@ -995,17 +1154,12 @@ export function generateReaderView(content: ExtractedContent): string {
   <div class="reader-container">
     <header class="reader-header">
       <div class="reader-meta">
-        <span class="reader-meta-item">
-          <strong>${escapeHtml(content.siteName)}</strong>
-        </span>
-        ${content.publishedDate ? `<span class="reader-meta-item">${escapeHtml(content.publishedDate)}</span>` : ''}
-        <span class="reader-meta-item">${content.readingTime} min read</span>
+        <span><strong>${escapeHtml(content.siteName)}</strong></span>
+        ${content.publishedDate ? `<span>${escapeHtml(content.publishedDate)}</span>` : ''}
+        <span>${content.readingTime} min read</span>
       </div>
       <h1 class="reader-title">${escapeHtml(content.title)}</h1>
       ${content.byline ? `<div class="reader-byline">${escapeHtml(content.byline)}</div>` : ''}
-      ${content.excerpt && content.excerpt !== content.textContent.substring(0, 200).trim() + '...' 
-        ? `<p class="reader-excerpt">${escapeHtml(content.excerpt)}</p>` 
-        : ''}
     </header>
     
     <article class="reader-content">
@@ -1032,11 +1186,9 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Convert the extracted content to a Blob for PDF generation
- * Returns an HTML blob that can be printed to PDF
+ * Convert extracted content to HTML blob for PDF generation
  */
 export function contentToHtmlBlob(content: ExtractedContent): Blob {
   const html = generateReaderView(content);
   return new Blob([html], { type: 'text/html' });
 }
-

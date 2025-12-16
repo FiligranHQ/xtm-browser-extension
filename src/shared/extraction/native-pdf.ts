@@ -102,7 +102,7 @@ export async function generateNativePDF(
     
     console.debug('[NativePDF] Generating PDF with params:', pdfParams);
     
-    const result = await sendDebuggerCommand(target, 'Page.printToPDF', pdfParams);
+    const result = await sendDebuggerCommand(target, 'Page.printToPDF', pdfParams) as { data?: string } | undefined;
     
     if (!result || !result.data) {
       console.error('[NativePDF] No PDF data returned');
@@ -110,7 +110,7 @@ export async function generateNativePDF(
     }
     
     console.debug('[NativePDF] PDF generated successfully, size:', result.data.length);
-    return result.data as string;
+    return result.data;
   } catch (error) {
     console.error('[NativePDF] Failed to generate PDF:', error);
     return null;

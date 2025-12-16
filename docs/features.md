@@ -243,28 +243,46 @@ When creating containers in OpenCTI, you can use AI to generate intelligent desc
 3. AI analyzes the page content and generates a relevant description
 4. The generated description summarizes key threats, observables, and context
 
-### AI Scenario Generation (OpenAEV)
-Generate comprehensive attack scenarios using AI:
+### Full AI Scenario Generation (OpenAEV)
+Generate complete attack scenarios using AI directly from page content:
 1. Click **Scenario** in the popup
-2. Configure affinities:
-   - **Type Affinity**: Attack Scenario, Incident Response, Red Team, Purple Team, etc.
-   - **Platform Affinity**: Windows, Linux, macOS, Network, Cloud, etc.
-3. AI generates a full scenario with:
-   - Contextual injects based on page content
-   - Attack patterns matched from the page
-   - Proper sequencing and dependencies
-   - Kill chain phase ordering
+2. Select your affinities:
+   - **Type Affinity**: Endpoint, Cloud, Web, or Table-top
+   - **Platform Affinity**: Windows, Linux, macOS, Android (for technical scenarios)
+3. Click **Generate Scenario with AI** button
+4. Configure generation parameters:
+   - **Number of Injects**: How many injects to generate (1-20, default 5)
+   - **For Technical Scenarios**: Choose payload executor (PowerShell, CMD, Bash, Sh)
+   - **For Table-top Scenarios**: Set exercise duration in minutes and email language
+   - **Email Language**: Choose from 13 supported languages for email content
+   - **Additional Context**: Provide any extra context for the AI
+5. AI generates a complete scenario with:
+   - **Technical Scenarios**: Executable command payloads that are safe and non-destructive
+   - **Table-top Scenarios**: Realistic email notifications with subjects and bodies in the selected language
+   - Proper sequencing based on attack phases
+   - Context derived from page content (works even without detected attack patterns)
+
+### AI Email Content Generation (OpenAEV)
+For table-top scenarios, AI can generate realistic email content:
+1. Create a table-top scenario and select attack patterns
+2. Select the desired email language from the dropdown (13 languages supported)
+3. Click the AI generate button for emails
+4. AI creates contextual email subjects and bodies for each attack pattern in the selected language
+5. Emails are marked as [SIMULATION] for training purposes
+
+**Supported Email Languages:**
+English, French, German, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Chinese, Japanese, Korean, Arabic
 
 ### AI Atomic Testing (OpenAEV)
 Generate on-the-fly atomic tests with AI:
 1. Click **Atomic Test** in the popup
-2. Select target attack pattern
+2. Select target attack pattern or click **Generate Payload with AI**
 3. Choose target platform and execution preferences
 4. AI generates:
    - Custom command lines (PowerShell, Bash, etc.)
-   - Test procedures tailored to your environment
+   - Test procedures tailored to the page context
    - Cleanup commands
-   - Expected outputs and detection signatures
+   - Safe, non-destructive simulation commands
 
 ### AI Entity Discovery
 AI can help identify entities that pattern matching might miss:

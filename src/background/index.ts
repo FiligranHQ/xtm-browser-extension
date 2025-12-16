@@ -1857,12 +1857,13 @@ async function handleMessage(
       }
       
       case 'CREATE_SCENARIO': {
-        const { name, description, subtitle, category, platformId } = message.payload as {
+        const { name, description, subtitle, category, platformId, isAIGenerated } = message.payload as {
           name: string;
           description?: string;
           subtitle?: string;
           category?: string;
           platformId?: string;
+          isAIGenerated?: boolean;
         };
         
         try {
@@ -1877,6 +1878,8 @@ async function handleMessage(
             scenario_description: description,
             scenario_subtitle: subtitle,
             scenario_category: category,
+            // Note: scenario_tags expects tag IDs (UUIDs), not names
+            // Tags feature will be added when tag management is implemented
           });
           
           // Return with URL
@@ -1923,6 +1926,162 @@ async function handleMessage(
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to add inject to scenario',
+          });
+        }
+        break;
+      }
+      
+      case 'ADD_EMAIL_INJECT_TO_SCENARIO': {
+        // OpenAEV email injector contract ID (hardcoded in OpenAEV platform)
+        const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
+        
+        const { platformId, scenarioId, title, description, subject, body, delayMinutes, teamId, isAIGenerated } = message.payload as {
+          platformId: string;
+          scenarioId: string;
+          title: string;
+          description: string;
+          subject: string;
+          body: string;
+          delayMinutes: number;
+          teamId?: string;
+          isAIGenerated?: boolean;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          const injectPayload = {
+            inject_title: title,
+            inject_description: description,
+            inject_injector_contract: EMAIL_INJECTOR_CONTRACT_ID,
+            inject_depends_duration: delayMinutes * 60, // Convert to seconds
+            inject_content: {
+              subject: subject,
+              body: body.includes('<') ? body : `<p>${body.replace(/\n/g, '</p><p>')}</p>`, // Wrap in HTML if needed
+            },
+            inject_teams: teamId ? [teamId] : undefined,
+            // Note: inject_tags expects tag IDs (UUIDs), not names
+          };
+          
+          log.debug(` Adding email inject to scenario ${scenarioId}:`, injectPayload);
+          const result = await client.addInjectToScenario(scenarioId, injectPayload);
+          log.debug(` Email inject added:`, result);
+          sendResponse(successResponse(result));
+        } catch (error) {
+          log.error(` Failed to add email inject to scenario:`, error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to add email inject to scenario',
+          });
+        }
+        break;
+      }
+      
+      case 'ADD_TECHNICAL_INJECT_TO_SCENARIO': {
+        const { platformId, scenarioId, title, description, command, executor, platforms, delayMinutes, assetId, assetGroupId, isAIGenerated } = message.payload as {
+          platformId: string;
+          scenarioId: string;
+          title: string;
+          description: string;
+          command: string;
+          executor: string;
+          platforms: string[];
+          delayMinutes: number;
+          assetId?: string;
+          assetGroupId?: string;
+          isAIGenerated?: boolean;
+        };
+        
+        try {
+          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+          if (!client) {
+            sendResponse(errorResponse('OpenAEV not configured'));
+            break;
+          }
+          
+          // Map executor names to OpenAEV API values
+          const executorMap: Record<string, string> = {
+            'powershell': 'psh',
+            'psh': 'psh',
+            'cmd': 'cmd',
+            'bash': 'bash',
+            'sh': 'sh',
+          };
+          
+          // Map platform names to OpenAEV API values (case-sensitive)
+          const platformMap: Record<string, string> = {
+            'windows': 'Windows',
+            'linux': 'Linux',
+            'macos': 'MacOS',
+          };
+          
+          // First, create a payload for this inject
+          const payloadData = {
+            payload_type: 'Command' as const,
+            payload_name: `AI Payload - ${title}`,
+            payload_description: description,
+            payload_platforms: platforms.map(p => platformMap[p.toLowerCase()] || p),
+            payload_source: 'MANUAL' as const,
+            payload_status: 'VERIFIED' as const,
+            payload_execution_arch: 'ALL_ARCHITECTURES' as const,
+            payload_expectations: ['PREVENTION', 'DETECTION'],
+            payload_attack_patterns: [] as string[],
+            // Note: payload_tags expects tag IDs (UUIDs), not names
+            command_executor: executorMap[executor.toLowerCase()] || executor,
+            command_content: command,
+          };
+          
+          log.debug(` Creating payload for technical inject:`, payloadData);
+          const payload = await client.createPayload(payloadData);
+          
+          if (!payload?.payload_id) {
+            log.error(` Failed to create payload, no payload_id returned`);
+            sendResponse(errorResponse('Failed to create payload'));
+            break;
+          }
+          
+          log.debug(` Payload created:`, payload.payload_id);
+          
+          // Find the injector contract for this payload
+          const contractRes = await client.findInjectorContractByPayloadId(payload.payload_id);
+          
+          if (!contractRes?.injector_contract_id) {
+            log.warn(` No injector contract found for payload ${payload.payload_id}, skipping inject`);
+            // Cannot create inject without a contract - payload was created but no inject added
+            sendResponse({ 
+              success: true, 
+              data: { 
+                warning: 'Payload created but no matching injector contract found',
+                payload_id: payload.payload_id 
+              } 
+            });
+            break;
+          }
+          
+          // Create inject with the contract
+          const injectPayload = {
+            inject_title: title,
+            inject_description: description,
+            inject_injector_contract: contractRes.injector_contract_id,
+            inject_depends_duration: delayMinutes * 60,
+            inject_assets: assetId ? [assetId] : undefined,
+            inject_asset_groups: assetGroupId ? [assetGroupId] : undefined,
+            // Note: inject_tags expects tag IDs (UUIDs), not names
+          };
+          
+          log.debug(` Adding technical inject to scenario ${scenarioId}:`, injectPayload);
+          const result = await client.addInjectToScenario(scenarioId, injectPayload);
+          log.debug(` Technical inject added:`, result);
+          sendResponse(successResponse(result));
+        } catch (error) {
+          log.error(` Failed to add technical inject to scenario:`, error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to add technical inject to scenario',
           });
         }
         break;
@@ -2511,6 +2670,7 @@ async function handleMessage(
             scenario_description: `Auto-generated scenario from web page: ${pageUrl}\n\nContent summary will be processed by AI.`,
             scenario_subtitle: `Generated by XTM Browser Extension`,
             scenario_category: 'web-threat',
+            // Note: scenario_tags expects tag IDs (UUIDs), not names
           });
           
           sendResponse(successResponse(scenario));
@@ -3303,6 +3463,98 @@ async function handleMessage(
         break;
       }
       
+      case 'AI_GENERATE_FULL_SCENARIO': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse(errorResponse('AI not configured'));
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as {
+            pageTitle: string;
+            pageUrl: string;
+            pageContent: string;
+            scenarioName: string;
+            typeAffinity: string;
+            platformAffinity?: string[];
+            numberOfInjects: number;
+            payloadAffinity?: string;
+            tableTopDuration?: number;
+            additionalContext?: string;
+            detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
+          };
+          
+          log.debug('[AI_GENERATE_FULL_SCENARIO] Request:', {
+            typeAffinity: request.typeAffinity,
+            numberOfInjects: request.numberOfInjects,
+            payloadAffinity: request.payloadAffinity,
+            tableTopDuration: request.tableTopDuration,
+            attackPatterns: request.detectedAttackPatterns?.length || 0,
+          });
+          
+          // Truncate page content if too large
+          const MAX_CONTENT_LENGTH = 6000;
+          if (request.pageContent && request.pageContent.length > MAX_CONTENT_LENGTH) {
+            log.warn(`[AI_GENERATE_FULL_SCENARIO] Page content too large (${request.pageContent.length} chars), truncating`);
+            request.pageContent = request.pageContent.substring(0, MAX_CONTENT_LENGTH) + '\n\n[Content truncated due to size]';
+          }
+          
+          const response = await aiClient.generateFullScenario(request);
+          
+          log.debug('[AI_GENERATE_FULL_SCENARIO] AI response success:', response.success);
+          
+          if (response.success && response.content) {
+            const scenario = parseAIJsonResponse<{
+              name?: string;
+              description?: string;
+              subtitle?: string;
+              category?: string;
+              injects?: Array<{
+                title: string;
+                description: string;
+                type: string;
+                content?: string;
+                executor?: string;
+                subject?: string;
+                body?: string;
+                delayMinutes?: number;
+              }>;
+            }>(response.content);
+            
+            if (!scenario) {
+              log.error('[AI_GENERATE_FULL_SCENARIO] Failed to parse AI response. Raw (first 1000):', response.content.substring(0, 1000));
+              const contentPreview = response.content.substring(0, 200);
+              const hasJson = response.content.includes('{') && response.content.includes('}');
+              sendResponse({ 
+                success: false, 
+                error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
+              });
+            } else if (!scenario.injects || !Array.isArray(scenario.injects)) {
+              log.error('[AI_GENERATE_FULL_SCENARIO] Parsed scenario missing injects array:', scenario);
+              sendResponse({ 
+                success: false, 
+                error: 'AI generated scenario but injects array is missing. Please try again.' 
+              });
+            } else {
+              log.debug('[AI_GENERATE_FULL_SCENARIO] Parsed scenario with', scenario.injects.length, 'injects');
+              sendResponse(successResponse(scenario));
+            }
+          } else {
+            log.error('[AI_GENERATE_FULL_SCENARIO] AI generation failed:', response.error);
+            sendResponse({ success: false, error: response.error || 'AI failed to generate scenario' });
+          }
+        } catch (error) {
+          log.error('[AI_GENERATE_FULL_SCENARIO] Exception:', error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
+          });
+        }
+        break;
+      }
+      
       case 'AI_GENERATE_ATOMIC_TEST': {
         const settings = await getSettings();
         if (!isAIAvailable(settings.ai)) {
@@ -3334,10 +3586,13 @@ async function handleMessage(
             
             // Safeguard: Check if parsing was successful
             if (!atomicTest) {
-              log.error('[AI_GENERATE_ATOMIC_TEST] Failed to parse AI response as JSON. Raw content (first 500 chars):', response.content.substring(0, 500));
+              log.error('[AI_GENERATE_ATOMIC_TEST] Failed to parse AI response as JSON. Raw content (first 1000 chars):', response.content.substring(0, 1000));
+              // Provide more context about what was received
+              const contentPreview = response.content.substring(0, 200);
+              const hasJson = response.content.includes('{') && response.content.includes('}');
               sendResponse({ 
                 success: false, 
-                error: 'Failed to parse AI response - the AI returned invalid JSON. Please try again.' 
+                error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
               });
             } else {
               log.debug('[AI_GENERATE_ATOMIC_TEST] Parsed atomic test:', atomicTest);
@@ -3394,7 +3649,12 @@ async function handleMessage(
             
             if (!parsed || !parsed.emails || !Array.isArray(parsed.emails)) {
               log.error(' AI response parsing failed or invalid structure. Content:', response.content.substring(0, 1000));
-              sendResponse({ success: false, error: 'Failed to parse AI response - invalid JSON structure' });
+              const contentPreview = response.content.substring(0, 200);
+              const hasEmails = response.content.includes('"emails"');
+              sendResponse({ 
+                success: false, 
+                error: `AI response parsing failed. ${hasEmails ? 'Found "emails" but array is invalid.' : 'Missing "emails" array.'} Preview: "${contentPreview}..."` 
+              });
               break;
             }
             

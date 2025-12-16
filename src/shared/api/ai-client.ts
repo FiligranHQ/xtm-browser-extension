@@ -62,8 +62,26 @@ export interface GeneratedInject {
   description: string;
   type: string; // e.g., 'email', 'manual', 'command'
   content?: string; // Command content for executable injects
+  executor?: string; // Executor for command type (powershell, bash, etc.)
+  subject?: string; // Email subject for table-top scenarios
+  body?: string; // Email body for table-top scenarios
   dependsOn?: number; // Index of dependent inject
   delayMinutes?: number;
+}
+
+export interface FullScenarioGenerationRequest {
+  pageTitle: string;
+  pageUrl: string;
+  pageContent: string;
+  scenarioName: string;
+  typeAffinity: string; // ENDPOINT, CLOUD, WEB, TABLE-TOP
+  platformAffinity?: string[]; // windows, linux, macos
+  numberOfInjects: number; // Number of injects to generate
+  payloadAffinity?: string; // For technical: powershell, bash, sh, cmd
+  tableTopDuration?: number; // For table-top: duration in minutes
+  emailLanguage?: string; // For table-top: language for email content
+  additionalContext?: string; // Additional context from user
+  detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
 }
 
 export interface AtomicTestRequest {
@@ -82,6 +100,7 @@ export interface EmailGenerationRequest {
   pageUrl: string;
   pageContent: string;
   scenarioName: string;
+  language?: string; // Language for email content (e.g., 'english', 'french', 'german')
   attackPatterns: Array<{
     id: string;
     name: string;
@@ -435,6 +454,131 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
   }
 
   /**
+   * Generate full scenario with injects for OpenAEV (enhanced version)
+   * Supports both technical scenarios with payloads and table-top scenarios with emails
+   */
+  async generateFullScenario(request: FullScenarioGenerationRequest): Promise<AIGenerationResponse> {
+    const isTableTop = request.typeAffinity === 'TABLE-TOP';
+    
+    const systemPrompt = isTableTop
+      ? `You are a cybersecurity simulation expert creating table-top exercises. Generate realistic incident simulation scenarios with email notifications that simulate real-world security scenarios for training purposes. Each inject should be an email notification that advances the scenario narrative. Output in JSON format only.`
+      : `You are a cybersecurity adversary simulation expert. Generate realistic attack scenarios with executable payloads that simulate specific attack techniques. Commands must be SAFE, NON-DESTRUCTIVE, and reversible. Output in JSON format only.`;
+
+    const hasAttackPatterns = request.detectedAttackPatterns && request.detectedAttackPatterns.length > 0;
+    const attackPatternsInfo = hasAttackPatterns
+      ? request.detectedAttackPatterns!.map(ap => 
+          `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 150)}` : ''}`
+        ).join('\n')
+      : 'None detected - analyze the page content to identify relevant threats and techniques';
+
+    // Truncate page content
+    const truncatedContent = request.pageContent.substring(0, 3000);
+    const truncatedContext = request.additionalContext?.substring(0, 1000) || '';
+
+    let prompt: string;
+    
+    const emailLanguage = request.emailLanguage || 'english';
+    
+    if (isTableTop) {
+      prompt = `Generate a table-top security exercise scenario based on the following:
+
+Scenario Name: ${request.scenarioName}
+Type: Table-Top Exercise
+Duration: ${request.tableTopDuration || 60} minutes
+Number of Email Notifications: ${request.numberOfInjects}
+EMAIL LANGUAGE: ${emailLanguage.toUpperCase()} - All email subjects and bodies MUST be written in ${emailLanguage}.
+
+Source Intelligence:
+- Page: ${request.pageTitle}
+- URL: ${request.pageUrl}
+
+${hasAttackPatterns ? `Detected Attack Patterns/TTPs:\n${attackPatternsInfo}` : `No specific attack patterns were detected on the page. Analyze the page content below to identify relevant threats, attack techniques, vulnerabilities, or security topics mentioned, and create a realistic scenario based on that content.`}
+
+${truncatedContext ? `Additional Context:\n${truncatedContext}\n` : ''}
+Page Content:
+${truncatedContent}
+
+Generate a JSON response with this structure:
+{
+  "name": "scenario name",
+  "description": "detailed scenario description for the exercise",
+  "subtitle": "short tagline describing the exercise theme",
+  "category": "table-top",
+  "injects": [
+    {
+      "title": "inject/email notification title",
+      "description": "brief description of this notification",
+      "type": "email",
+      "subject": "[SIMULATION] realistic email subject line in ${emailLanguage}",
+      "body": "Professional email body in ${emailLanguage} describing the simulated security event (2-4 sentences)",
+      "delayMinutes": minutes from scenario start (0 for first, then spaced based on duration)
+    }
+  ]
+}
+
+Create exactly ${request.numberOfInjects} email notification injects that:
+1. Build a coherent narrative progressing through the attack/incident
+2. Are spaced appropriately across the ${request.tableTopDuration || 60} minute duration
+3. ${hasAttackPatterns ? 'Reference the detected attack patterns where relevant' : 'Create realistic attack scenarios based on threats or techniques mentioned in the page content'}
+4. Include realistic subject lines marked as [SIMULATION]
+5. Have professional, contextual email bodies suitable for training
+6. ALL EMAIL SUBJECTS AND BODIES MUST BE IN ${emailLanguage.toUpperCase()}`;
+    } else {
+      prompt = `Generate a technical adversary simulation scenario based on the following:
+
+Scenario Name: ${request.scenarioName}
+Type: ${request.typeAffinity}
+Target Platforms: ${request.platformAffinity?.join(', ') || 'Windows, Linux'}
+Payload Executor: ${request.payloadAffinity || 'powershell'}
+Number of Injects: ${request.numberOfInjects}
+
+Source Intelligence:
+- Page: ${request.pageTitle}
+- URL: ${request.pageUrl}
+
+${hasAttackPatterns ? `Detected Attack Patterns/TTPs:\n${attackPatternsInfo}` : `No specific attack patterns were detected on the page. Analyze the page content below to identify relevant attack techniques, malware behaviors, threat actor TTPs, or security topics mentioned, and create a realistic simulation scenario based on that content.`}
+
+${truncatedContext ? `Additional Context:\n${truncatedContext}\n` : ''}
+Page Content:
+${truncatedContent}
+
+Generate a JSON response with this structure:
+{
+  "name": "scenario name",
+  "description": "detailed scenario description",
+  "subtitle": "short tagline",
+  "category": "attack-scenario",
+  "injects": [
+    {
+      "title": "inject title",
+      "description": "what this step does and what it simulates",
+      "type": "command",
+      "executor": "${request.payloadAffinity || 'powershell'}",
+      "content": "the actual command to execute (MUST be safe and non-destructive)",
+      "delayMinutes": 0 for first inject, then 1 for each subsequent inject (1 minute spacing)
+    }
+  ]
+}
+
+Create exactly ${request.numberOfInjects} command injects that:
+1. ${hasAttackPatterns ? 'Form a coherent attack chain based on the detected patterns' : 'Form a coherent attack chain based on threats or techniques identified from the page content'}
+2. Are SAFE and NON-DESTRUCTIVE (simulation only)
+3. Use ${request.payloadAffinity || 'powershell'} executor syntax
+4. Produce observable artifacts for detection testing
+5. Progress logically through attack phases (recon → access → persistence → etc.)
+6. Each inject should have delayMinutes of 0 for the first, then 1 for each subsequent (1 minute apart)
+
+IMPORTANT:
+- Commands must be SAFE for testing environments
+- Do NOT include actual malicious payloads
+- Focus on simulation techniques that create detectable artifacts
+- Use appropriate syntax for ${request.payloadAffinity || 'powershell'}`;
+    }
+
+    return this.generate({ prompt, systemPrompt, maxTokens: 4000, temperature: 0.7 });
+  }
+
+  /**
    * Generate on-the-fly atomic test
    */
   async generateAtomicTest(request: AtomicTestRequest): Promise<AIGenerationResponse> {
@@ -488,7 +632,8 @@ Important:
    * Generate email content for table-top scenarios
    */
   async generateEmails(request: EmailGenerationRequest): Promise<AIGenerationResponse> {
-    const systemPrompt = `You are a cybersecurity simulation expert creating realistic phishing awareness and incident simulation emails. Generate professional, contextually appropriate email content that simulates real-world security scenarios for training purposes. Output in JSON format.`;
+    const language = request.language || 'english';
+    const systemPrompt = `You are a cybersecurity simulation expert creating realistic phishing awareness and incident simulation emails. Generate professional, contextually appropriate email content that simulates real-world security scenarios for training purposes. Output in JSON format. Generate all email content in ${language}.`;
 
     const attackPatternsInfo = request.attackPatterns.map(ap => 
       `- ${ap.name}${ap.externalId ? ` (${ap.externalId})` : ''}${ap.killChainPhases?.length ? ` [${ap.killChainPhases.join(', ')}]` : ''}`
@@ -501,6 +646,8 @@ Source Intelligence:
 - Page: ${request.pageTitle}
 - URL: ${request.pageUrl}
 
+LANGUAGE: Generate all email subjects and bodies in ${language.toUpperCase()}.
+
 Attack Patterns to simulate:
 ${attackPatternsInfo}
 
@@ -508,8 +655,8 @@ Context from page:
 ${request.pageContent.substring(0, 2000)}
 
 For EACH attack pattern listed above, generate an email that:
-1. Has a realistic subject line that would be used in a real attack scenario
-2. Has a body that describes the simulated threat/action in a professional security briefing format
+1. Has a realistic subject line that would be used in a real attack scenario (in ${language})
+2. Has a body that describes the simulated threat/action in a professional security briefing format (in ${language})
 3. Is appropriate for training/awareness purposes (marked as [SIMULATION])
 
 IMPORTANT: You must generate exactly one email object for each attack pattern provided.
@@ -520,13 +667,13 @@ Generate a JSON response with this structure:
   "emails": [
     {
       "attackPatternId": "copy the exact id value provided for each attack pattern",
-      "subject": "[SIMULATION] Realistic email subject",
-      "body": "Professional email body describing the simulated security event..."
+      "subject": "[SIMULATION] Realistic email subject in ${language}",
+      "body": "Professional email body in ${language} describing the simulated security event..."
     }
   ]
 }
 
-Keep email bodies concise (2-4 sentences) but informative.`;
+Keep email bodies concise (2-4 sentences) but informative. ALL CONTENT MUST BE IN ${language.toUpperCase()}.`;
 
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.7 });
   }
@@ -739,50 +886,248 @@ export function isAIAvailable(settings?: AISettings): boolean {
  */
 export function parseAIJsonResponse<T>(content: string): T | null {
   if (!content || typeof content !== 'string') {
+    console.error('[parseAIJsonResponse] Invalid content: null or not a string');
     return null;
   }
   
   // Trim whitespace
-  const trimmed = content.trim();
+  let trimmed = content.trim();
   
   if (!trimmed) {
+    console.error('[parseAIJsonResponse] Empty content after trimming');
     return null;
   }
   
-  try {
-    // Try direct JSON parse first
-    return JSON.parse(trimmed);
-  } catch {
-    // Try to extract JSON from markdown code block (```json ... ``` or ``` ... ```)
-    const jsonMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        return JSON.parse(jsonMatch[1].trim());
-      } catch {
-        // Continue to other methods
-      }
-    }
-    
-    // Try to find JSON object in the response (starts with { and ends with })
-    const jsonObjectMatch = trimmed.match(/\{[\s\S]*\}/);
-    if (jsonObjectMatch) {
-      try {
-        return JSON.parse(jsonObjectMatch[0]);
-      } catch {
-        // Continue to other methods
-      }
-    }
-    
-    // Try to find JSON array in the response (starts with [ and ends with ])
-    const jsonArrayMatch = trimmed.match(/\[[\s\S]*\]/);
-    if (jsonArrayMatch) {
-      try {
-        return JSON.parse(jsonArrayMatch[0]);
-      } catch {
-        // Fall through to return null
-      }
-    }
-    
-    return null;
+  // Remove markdown code block markers if present
+  // Handle both ```json ... ``` and ``` ... ``` formats
+  // Also handle cases where closing ``` might be missing (truncated responses)
+  if (trimmed.startsWith('```json')) {
+    trimmed = trimmed.slice(7); // Remove ```json
+  } else if (trimmed.startsWith('```')) {
+    trimmed = trimmed.slice(3); // Remove ```
   }
+  
+  // Remove closing ``` if present (could be at end or with trailing whitespace)
+  trimmed = trimmed.replace(/```\s*$/, '');
+  
+  trimmed = trimmed.trim();
+  
+  // Attempt multiple parsing strategies
+  const strategies = [
+    // Strategy 1: Direct parse of trimmed content
+    () => JSON.parse(trimmed),
+    
+    // Strategy 2: Extract from markdown code block (greedy)
+    () => {
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*)```/);
+      if (jsonMatch && jsonMatch[1]) {
+        return JSON.parse(jsonMatch[1].trim());
+      }
+      throw new Error('No markdown code block found');
+    },
+    
+    // Strategy 3: Extract from markdown code block WITHOUT closing (truncated)
+    () => {
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*)/);
+      if (jsonMatch && jsonMatch[1]) {
+        const jsonContent = jsonMatch[1].trim().replace(/```\s*$/, '').trim();
+        return JSON.parse(jsonContent);
+      }
+      throw new Error('No markdown code block found');
+    },
+    
+    // Strategy 4: Find balanced JSON object from trimmed
+    () => {
+      const jsonStr = extractBalancedJson(trimmed);
+      if (jsonStr) {
+        return JSON.parse(jsonStr);
+      }
+      throw new Error('No balanced JSON found');
+    },
+    
+    // Strategy 5: Find balanced JSON object from original content
+    () => {
+      const jsonStr = extractBalancedJson(content);
+      if (jsonStr) {
+        return JSON.parse(jsonStr);
+      }
+      throw new Error('No balanced JSON found in original');
+    },
+    
+    // Strategy 6: Greedy match for JSON object
+    () => {
+      const jsonObjectMatch = trimmed.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
+        return JSON.parse(jsonObjectMatch[0]);
+      }
+      throw new Error('No JSON object found');
+    },
+    
+    // Strategy 7: Find JSON array
+    () => {
+      const jsonArrayMatch = trimmed.match(/\[[\s\S]*\]/);
+      if (jsonArrayMatch) {
+        return JSON.parse(jsonArrayMatch[0]);
+      }
+      throw new Error('No JSON array found');
+    },
+    
+    // Strategy 8: Try to fix common JSON issues (trailing commas, etc.)
+    () => {
+      let fixed = trimmed;
+      // Remove trailing commas before } or ]
+      fixed = fixed.replace(/,\s*([\]}])/g, '$1');
+      // Try to parse fixed content
+      return JSON.parse(fixed);
+    },
+    
+    // Strategy 9: Try to find balanced JSON after fixing
+    () => {
+      let fixed = trimmed;
+      fixed = fixed.replace(/,\s*([\]}])/g, '$1');
+      const jsonStr = extractBalancedJson(fixed);
+      if (jsonStr) {
+        return JSON.parse(jsonStr);
+      }
+      throw new Error('No balanced JSON found after fixing');
+    },
+    
+    // Strategy 10: Try to complete truncated JSON
+    () => {
+      const completed = tryCompleteJson(trimmed);
+      if (completed) {
+        return JSON.parse(completed);
+      }
+      throw new Error('Could not complete truncated JSON');
+    },
+  ];
+  
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const result = strategies[i]();
+      if (result !== null && result !== undefined) {
+        return result as T;
+      }
+    } catch {
+      // Continue to next strategy
+    }
+  }
+  
+  // Log the content for debugging if all strategies failed
+  console.error('[parseAIJsonResponse] All parsing strategies failed. Content preview:', 
+    trimmed.substring(0, 500) + (trimmed.length > 500 ? '...' : ''));
+  
+  return null;
+}
+
+/**
+ * Try to complete truncated JSON by adding missing closing brackets
+ */
+function tryCompleteJson(content: string): string | null {
+  // Count open and close braces/brackets
+  let braceCount = 0;
+  let bracketCount = 0;
+  let inString = false;
+  let escaped = false;
+  
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    
+    if (char === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{') braceCount++;
+      else if (char === '}') braceCount--;
+      else if (char === '[') bracketCount++;
+      else if (char === ']') bracketCount--;
+    }
+  }
+  
+  // If we have unclosed structures, try to close them
+  if (braceCount > 0 || bracketCount > 0) {
+    let completed = content;
+    
+    // If we're in a string, close it first
+    if (inString) {
+      completed += '"';
+    }
+    
+    // Remove any trailing incomplete key-value or comma
+    completed = completed.replace(/,\s*$/, '');
+    completed = completed.replace(/,\s*"[^"]*$/, '');
+    completed = completed.replace(/:\s*$/, ': null');
+    completed = completed.replace(/:\s*"[^"]*$/, ': ""');
+    
+    // Close brackets and braces
+    for (let i = 0; i < bracketCount; i++) {
+      completed += ']';
+    }
+    for (let i = 0; i < braceCount; i++) {
+      completed += '}';
+    }
+    
+    return completed;
+  }
+  
+  return null;
+}
+
+/**
+ * Extract balanced JSON from a string by counting braces
+ * Handles cases where the JSON might be truncated or have extra content after
+ */
+function extractBalancedJson(content: string): string | null {
+  const startIndex = content.indexOf('{');
+  if (startIndex === -1) return null;
+  
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+    
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    
+    if (char === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+        if (depth === 0) {
+          return content.substring(startIndex, i + 1);
+        }
+      }
+    }
+  }
+  
+  // If we reach here, the JSON is incomplete
+  // Return null to indicate parsing failure
+  return null;
 }

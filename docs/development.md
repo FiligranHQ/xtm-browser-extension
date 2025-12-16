@@ -373,6 +373,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 | `FETCH_IMAGE_AS_DATA_URL` | Content → Background | Fetch image bypassing CORS |
 | `AI_GENERATE_DESCRIPTION` | Panel → Background | Generate AI description |
 | `AI_GENERATE_SCENARIO` | Panel → Background | Generate AI scenario |
+| `AI_GENERATE_FULL_SCENARIO` | Panel → Background | Generate complete AI scenario with injects |
+| `AI_GENERATE_EMAILS` | Panel → Background | Generate email content for table-top scenarios |
+| `AI_GENERATE_ATOMIC_TEST` | Panel → Background | Generate atomic test payload |
+| `AI_DISCOVER_ENTITIES` | Panel → Background | Discover entities using AI |
 | `AI_TEST_AND_FETCH_MODELS` | Options → Background | Test AI key & fetch models |
 
 ## Contributing

@@ -436,6 +436,32 @@ const App: React.FC = () => {
   const [scenarioSelectedAssetGroup, setScenarioSelectedAssetGroup] = useState<string | null>(null);
   const [scenarioSelectedTeam, setScenarioSelectedTeam] = useState<string | null>(null);
 
+  // AI Scenario Generation state
+  const [scenarioCreating, setScenarioCreating] = useState(false); // Whether scenario is being created
+  const [scenarioAIMode, setScenarioAIMode] = useState(false); // Whether AI scenario generation is active
+  const [scenarioAIGenerating, setScenarioAIGenerating] = useState(false);
+  const [scenarioAINumberOfInjects, setScenarioAINumberOfInjects] = useState<number>(5);
+  const [scenarioAIPayloadAffinity, setScenarioAIPayloadAffinity] = useState<string>('powershell'); // powershell, bash, sh, cmd
+  const [scenarioAITableTopDuration, setScenarioAITableTopDuration] = useState<number>(60); // Duration in minutes for table-top
+  const [scenarioAIEmailLanguage, setScenarioAIEmailLanguage] = useState<string>('english'); // Language for email generation
+  const [scenarioAIContext, setScenarioAIContext] = useState<string>(''); // Additional context from user
+  const [scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario] = useState<{
+    name: string;
+    description: string;
+    subtitle?: string;
+    category?: string;
+    injects: Array<{
+      title: string;
+      description: string;
+      type: string;
+      content?: string;
+      executor?: string;
+      delayMinutes?: number;
+      subject?: string; // For email injects in table-top
+      body?: string; // For email body in table-top
+    }>;
+  } | null>(null);
+
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
     return createTheme(themeOptions);
@@ -1585,6 +1611,16 @@ const App: React.FC = () => {
         setScenarioTypeAffinity('ENDPOINT');
         setScenarioPlatformsAffinity(['windows', 'linux', 'macos']);
         setScenarioOverviewData(null);
+        
+        // Reset AI scenario generation state
+        setScenarioAIMode(false);
+        setScenarioAIGenerating(false);
+        setScenarioAINumberOfInjects(5);
+        setScenarioAIPayloadAffinity('powershell');
+        setScenarioAITableTopDuration(60);
+        setScenarioAIEmailLanguage('english');
+        setScenarioAIContext('');
+        setScenarioAIGeneratedScenario(null);
         
         // Store raw attack patterns (they have platformId from the scan)
         setScenarioRawAttackPatterns(attackPatterns || []);
@@ -7649,6 +7685,7 @@ const App: React.FC = () => {
         payload_status: 'VERIFIED',
         payload_execution_arch: 'ALL_ARCHITECTURES',
         payload_expectations: ['PREVENTION', 'DETECTION'],
+        // Note: payload_tags expects tag IDs (UUIDs), not names
       };
       
       const payloadRes = await chrome.runtime.sendMessage({
@@ -7718,12 +7755,19 @@ const App: React.FC = () => {
         window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
         window.parent.postMessage({ type: 'XTM_CLEAR_HIGHLIGHTS' }, '*');
         
-        // Open in new tab
-        const atomicTestingId = response.data.atomic_id || response.data.id;
+        // Open in new tab - check for inject_id (backend response) or atomic_id/id
+        const atomicTestingId = response.data.inject_id || response.data.atomic_id || response.data.id;
         if (atomicTestingId && atomicTestingPlatformId) {
-          const platformUrl = openaevPlatforms.find(p => p.id === atomicTestingPlatformId)?.url || '';
-          const atomicTestingUrl = `${platformUrl}/admin/atomic_testings/${atomicTestingId}`;
-          chrome.tabs.create({ url: atomicTestingUrl });
+          // Use the URL from response if available, otherwise construct it
+          if (response.data.url) {
+            chrome.tabs.create({ url: response.data.url });
+          } else {
+            const platformUrl = openaevPlatforms.find(p => p.id === atomicTestingPlatformId)?.url || '';
+            const atomicTestingUrl = `${platformUrl}/admin/atomic_testings/${atomicTestingId}`;
+            chrome.tabs.create({ url: atomicTestingUrl });
+          }
+        } else {
+          log.warn(' Atomic testing created but no ID found in response:', response.data);
         }
         
         // Reset state
@@ -7883,6 +7927,7 @@ const App: React.FC = () => {
           {(() => {
             const targetPlatform = openaevPlatforms.find(p => p.id === atomicTestingPlatformId);
             const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+            const aiColors = getAiColor(mode);
             
             let tooltipMessage = '';
             if (!aiSettings.available) {
@@ -7899,14 +7944,14 @@ const App: React.FC = () => {
                   mb: 2,
                   borderRadius: 1,
                   border: 1,
-                  borderColor: isAIAvailable ? 'primary.main' : 'divider',
-                  bgcolor: isAIAvailable ? 'rgba(100, 181, 246, 0.08)' : 'action.disabledBackground',
+                  borderColor: isAIAvailable ? aiColors.main : 'divider',
+                  bgcolor: isAIAvailable ? hexToRGB(aiColors.main, 0.08) : 'action.disabledBackground',
                   opacity: isAIAvailable ? 1 : 0.6,
                   flexShrink: 0,
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <AutoAwesomeOutlined sx={{ fontSize: 24, color: isAIAvailable ? 'primary.main' : 'text.disabled' }} />
+                  <AutoAwesomeOutlined sx={{ fontSize: 24, color: isAIAvailable ? aiColors.main : 'text.disabled' }} />
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: isAIAvailable ? 'text.primary' : 'text.disabled' }}>
                       Generate Payload with AI
@@ -7918,7 +7963,7 @@ const App: React.FC = () => {
                   <Tooltip title={isAIAvailable ? 'Create payload with AI' : tooltipMessage}>
                     <span>
                       <Button
-                        variant="contained"
+                        variant="outlined"
                         size="small"
                         disabled={!isAIAvailable}
                         onClick={() => {
@@ -7927,7 +7972,15 @@ const App: React.FC = () => {
                           setSelectedAtomicTarget(null);
                         }}
                         startIcon={<AutoAwesomeOutlined />}
-                        sx={{ textTransform: 'none' }}
+                        sx={{
+                          textTransform: 'none',
+                          borderColor: aiColors.main,
+                          color: aiColors.main,
+                          '&:hover': {
+                            borderColor: aiColors.dark,
+                            bgcolor: hexToRGB(aiColors.main, 0.08),
+                          },
+                        }}
                       >
                         Generate
                       </Button>
@@ -8159,6 +8212,7 @@ const App: React.FC = () => {
     
     // Step 3: Show AI generation form if AI mode is active
     if (atomicTestingAIMode) {
+      const aiColors = getAiColor(mode);
       return (
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
           {/* Header */}
@@ -8194,14 +8248,14 @@ const App: React.FC = () => {
               p: 2, 
               mb: 2, 
               border: 1, 
-              borderColor: 'primary.main', 
+              borderColor: aiColors.main, 
               borderRadius: 1, 
-              bgcolor: 'rgba(100, 181, 246, 0.08)', 
+              bgcolor: hexToRGB(aiColors.main, 0.08), 
               flexShrink: 0 
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <AutoAwesomeOutlined sx={{ color: 'primary.main' }} />
+              <AutoAwesomeOutlined sx={{ color: aiColors.main }} />
               <Typography variant="body2" sx={{ fontWeight: 600 }}>AI-Generated Payload</Typography>
             </Box>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -8426,11 +8480,23 @@ const App: React.FC = () => {
               
               {/* Generate Button */}
               <Button
-                variant="contained"
+                variant="outlined"
                 fullWidth
                 disabled={atomicTestingAIGenerating}
                 onClick={handleGenerateAIPayload}
                 startIcon={atomicTestingAIGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
+                sx={{
+                  borderColor: aiColors.main,
+                  color: aiColors.main,
+                  '&:hover': {
+                    borderColor: aiColors.dark,
+                    bgcolor: hexToRGB(aiColors.main, 0.08),
+                  },
+                  '&.Mui-disabled': {
+                    borderColor: hexToRGB(aiColors.main, 0.3),
+                    color: hexToRGB(aiColors.main, 0.5),
+                  },
+                }}
               >
                 {atomicTestingAIGenerating ? 'Generating Payload...' : 'Generate Payload with AI'}
               </Button>
@@ -9458,6 +9524,191 @@ const App: React.FC = () => {
       // Just proceed to step 1
     };
     
+    // Handle AI scenario generation
+    const handleGenerateAIScenario = async () => {
+      if (!scenarioPlatformId) return;
+      
+      setScenarioAIGenerating(true);
+      setScenarioAIGeneratedScenario(null);
+      
+      try {
+        // Get page content for context
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        let pageContent = '';
+        let pageTitle = '';
+        let pageUrl = '';
+        
+        if (tab?.id) {
+          const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
+          if (contentResponse?.success) {
+            pageContent = contentResponse.data?.content || '';
+            pageTitle = contentResponse.data?.title || tab.title || '';
+            pageUrl = contentResponse.data?.url || tab.url || '';
+          }
+        }
+        
+        const response = await chrome.runtime.sendMessage({
+          type: 'AI_GENERATE_FULL_SCENARIO',
+          payload: {
+            pageTitle,
+            pageUrl,
+            pageContent,
+            scenarioName: scenarioForm.name || `AI Scenario - ${pageTitle || 'Generated'}`,
+            typeAffinity: scenarioTypeAffinity,
+            platformAffinity: scenarioPlatformsAffinity,
+            numberOfInjects: scenarioAINumberOfInjects,
+            payloadAffinity: scenarioTypeAffinity !== 'TABLE-TOP' ? scenarioAIPayloadAffinity : undefined,
+            tableTopDuration: scenarioTypeAffinity === 'TABLE-TOP' ? scenarioAITableTopDuration : undefined,
+            emailLanguage: scenarioTypeAffinity === 'TABLE-TOP' ? scenarioAIEmailLanguage : undefined,
+            additionalContext: scenarioAIContext,
+            detectedAttackPatterns: scenarioOverviewData?.attackPatterns?.map(ap => ({
+              name: ap.name,
+              id: ap.externalId,
+              description: ap.description,
+            })) || [],
+          },
+        });
+        
+        log.debug(' AI scenario generation response:', response);
+        
+        if (response?.success && response.data) {
+          const generatedScenario = response.data;
+          setScenarioAIGeneratedScenario({
+            name: generatedScenario.name || `AI Generated Scenario`,
+            description: generatedScenario.description || 'AI-generated security simulation scenario',
+            subtitle: generatedScenario.subtitle,
+            category: generatedScenario.category,
+            injects: generatedScenario.injects || [],
+          });
+          
+          // Set the scenario name from generated
+          if (generatedScenario.name) {
+            setScenarioForm(prev => ({ ...prev, name: generatedScenario.name }));
+          }
+        } else {
+          log.error(' AI scenario generation failed:', response?.error);
+          // Could show an error toast/alert here
+        }
+      } catch (error) {
+        log.error(' AI scenario generation error:', error);
+      } finally {
+        setScenarioAIGenerating(false);
+      }
+    };
+    
+    // Handle creating the AI-generated scenario
+    const handleCreateAIGeneratedScenario = async () => {
+      if (!scenarioAIGeneratedScenario || !scenarioPlatformId) return;
+      
+      setScenarioCreating(true);
+      
+      try {
+        const isTableTop = scenarioTypeAffinity === 'TABLE-TOP';
+        
+        // Create the scenario first
+        const scenarioResponse = await chrome.runtime.sendMessage({
+          type: 'CREATE_SCENARIO',
+          payload: {
+            platformId: scenarioPlatformId,
+            name: scenarioForm.name || scenarioAIGeneratedScenario.name,
+            description: scenarioAIGeneratedScenario.description,
+            subtitle: scenarioAIGeneratedScenario.subtitle,
+            category: scenarioAIGeneratedScenario.category || (isTableTop ? 'table-top' : 'attack-scenario'),
+          },
+        });
+        
+        log.debug(' Scenario creation response:', scenarioResponse);
+        
+        if (!scenarioResponse?.success || !scenarioResponse.data?.scenario_id) {
+          log.error(' Failed to create scenario:', scenarioResponse?.error);
+          setScenarioCreating(false);
+          return;
+        }
+        
+        const scenarioId = scenarioResponse.data.scenario_id;
+        
+        // Now add all generated injects
+        let delayAccumulator = 0;
+        for (let i = 0; i < scenarioAIGeneratedScenario.injects.length; i++) {
+          const inject = scenarioAIGeneratedScenario.injects[i];
+          const delayMinutes = inject.delayMinutes || (i === 0 ? 0 : scenarioInjectSpacing);
+          delayAccumulator += delayMinutes;
+          
+          if (isTableTop) {
+            // For table-top, create email injects
+            const emailInjectPayload: Record<string, unknown> = {
+              platformId: scenarioPlatformId,
+              scenarioId,
+              title: inject.title,
+              description: inject.description,
+              subject: inject.subject || inject.title,
+              body: inject.body || inject.content || inject.description,
+              delayMinutes: delayAccumulator,
+            };
+            
+            // Add team if selected
+            if (scenarioSelectedTeam) {
+              emailInjectPayload.teamId = scenarioSelectedTeam;
+            }
+            
+            const injectResponse = await chrome.runtime.sendMessage({
+              type: 'ADD_EMAIL_INJECT_TO_SCENARIO',
+              payload: emailInjectPayload,
+            });
+            
+            if (!injectResponse?.success) {
+              log.warn(' Failed to add email inject:', inject.title, injectResponse?.error);
+            }
+          } else {
+            // For technical scenarios, create command injects with payloads
+            const technicalInjectPayload: Record<string, unknown> = {
+              platformId: scenarioPlatformId,
+              scenarioId,
+              title: inject.title,
+              description: inject.description,
+              command: inject.content,
+              executor: inject.executor || scenarioAIPayloadAffinity,
+              platforms: scenarioPlatformsAffinity,
+              delayMinutes: delayAccumulator,
+            };
+            
+            // Add asset or asset group if selected
+            if (scenarioTargetType === 'asset' && scenarioSelectedAsset) {
+              technicalInjectPayload.assetId = scenarioSelectedAsset;
+            } else if (scenarioTargetType === 'asset_group' && scenarioSelectedAssetGroup) {
+              technicalInjectPayload.assetGroupId = scenarioSelectedAssetGroup;
+            }
+            
+            const injectResponse = await chrome.runtime.sendMessage({
+              type: 'ADD_TECHNICAL_INJECT_TO_SCENARIO',
+              payload: technicalInjectPayload,
+            });
+            
+            if (!injectResponse?.success) {
+              log.warn(' Failed to add technical inject:', inject.title, injectResponse?.error);
+            }
+          }
+        }
+        
+        // Success - open scenario in platform
+        const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
+        if (targetPlatform) {
+          const scenarioUrl = `${targetPlatform.url}/admin/scenarios/${scenarioId}`;
+          window.open(scenarioUrl, '_blank');
+        }
+        
+        // Reset and close
+        setScenarioAIMode(false);
+        setScenarioAIGeneratedScenario(null);
+        handleClose();
+        
+      } catch (error) {
+        log.error(' Create AI scenario error:', error);
+      } finally {
+        setScenarioCreating(false);
+      }
+    };
+    
     // Platform selection step (if multiple OpenAEV platforms and not yet selected)
     if (openaevPlatforms.length > 1 && !scenarioPlatformSelected) {
       // Count attack patterns per platform
@@ -9551,6 +9802,490 @@ const App: React.FC = () => {
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Loading attack patterns and inject contracts...
             </Typography>
+          </Box>
+        ) : scenarioAIMode ? (
+          /* AI Scenario Generation Form */
+          <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
+            {/* Back button */}
+            <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+              <Button
+                size="small"
+                startIcon={<ChevronLeftOutlined />}
+                onClick={() => {
+                  setScenarioAIMode(false);
+                  setScenarioAIGeneratedScenario(null);
+                }}
+                sx={{ 
+                  color: 'text.secondary',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                Back to affinity selection
+              </Button>
+            </Box>
+            
+            {/* AI Info Card */}
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                mb: 2, 
+                border: 1, 
+                borderColor: 'primary.main', 
+                borderRadius: 1, 
+                bgcolor: 'rgba(100, 181, 246, 0.08)', 
+                flexShrink: 0 
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <AutoAwesomeOutlined sx={{ color: 'primary.main' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>AI-Generated Scenario</Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {scenarioTypeAffinity === 'TABLE-TOP'
+                  ? 'AI will analyze the page content and generate a complete table-top scenario with realistic email notifications.'
+                  : 'AI will analyze the page content and generate a complete technical scenario with executable payloads.'}
+              </Typography>
+            </Paper>
+            
+            {/* Affinity Summary */}
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+              <Chip 
+                label={`Type: ${scenarioTypeAffinity}`} 
+                size="small"
+                sx={{ 
+                  bgcolor: scenarioTypeAffinity === 'TABLE-TOP' ? '#42a5f5' : '#4caf50',
+                  color: 'white',
+                }}
+              />
+              {scenarioTypeAffinity !== 'TABLE-TOP' && scenarioPlatformsAffinity.map(p => (
+                <Chip 
+                  key={p}
+                  icon={getPlatformIcon(p)}
+                  label={p} 
+                  size="small"
+                  sx={{ 
+                    bgcolor: getPlatformColor(p),
+                    color: 'white',
+                    '& .MuiChip-icon': { color: 'white' },
+                  }}
+                />
+              ))}
+            </Box>
+            
+            {scenarioAIGeneratedScenario ? (
+              /* Show generated scenario preview */
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+                {/* Generated Scenario Info */}
+                <Paper elevation={0} sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Generated Scenario</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>{scenarioAIGeneratedScenario.name}</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1, fontSize: 12 }}>
+                    {scenarioAIGeneratedScenario.description}
+                  </Typography>
+                  {scenarioAIGeneratedScenario.subtitle && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                      {scenarioAIGeneratedScenario.subtitle}
+                    </Typography>
+                  )}
+                </Paper>
+                
+                {/* Injects Preview */}
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                    Generated Injects ({scenarioAIGeneratedScenario.injects.length})
+                  </Typography>
+                  <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                    {scenarioAIGeneratedScenario.injects.map((inject, index) => (
+                      <Paper 
+                        key={index} 
+                        elevation={0} 
+                        sx={{ 
+                          p: 1.5, 
+                          mb: 1, 
+                          border: 1, 
+                          borderColor: 'divider', 
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Chip 
+                            label={`#${index + 1}`} 
+                            size="small" 
+                            sx={{ height: 18, fontSize: 10, minWidth: 28 }} 
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }} noWrap>
+                            {inject.title}
+                          </Typography>
+                          <Chip 
+                            label={inject.type} 
+                            size="small" 
+                            sx={{ 
+                              height: 18, 
+                              fontSize: 10,
+                              bgcolor: inject.type === 'email' ? '#42a5f5' : inject.type === 'command' ? '#ff9800' : '#9e9e9e',
+                              color: 'white',
+                            }} 
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }} noWrap>
+                          {inject.description}
+                        </Typography>
+                        {inject.content && (
+                          <Box 
+                            sx={{ 
+                              mt: 1,
+                              p: 1, 
+                              bgcolor: mode === 'dark' ? '#1e1e1e' : '#f5f5f5', 
+                              borderRadius: 0.5, 
+                              fontFamily: 'monospace', 
+                              fontSize: 10,
+                              maxHeight: 60,
+                              overflow: 'auto',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {inject.content.substring(0, 200)}{inject.content.length > 200 ? '...' : ''}
+                          </Box>
+                        )}
+                      </Paper>
+                    ))}
+                  </Box>
+                </Box>
+                
+                {/* Scenario Name */}
+                <TextField
+                  label="Scenario Name"
+                  value={scenarioForm.name}
+                  onChange={(e) => setScenarioForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder={scenarioAIGeneratedScenario.name}
+                  size="small"
+                  fullWidth
+                />
+                
+                {/* Create Scenario Button */}
+                <Button
+                  variant="contained"
+                  fullWidth
+                  disabled={scenarioCreating}
+                  onClick={handleCreateAIGeneratedScenario}
+                  startIcon={scenarioCreating ? <CircularProgress size={16} color="inherit" /> : <MovieFilterOutlined />}
+                >
+                  {scenarioCreating ? 'Creating Scenario...' : 'Create Scenario'}
+                </Button>
+                
+                {/* Regenerate Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setScenarioAIGeneratedScenario(null)}
+                  startIcon={<RefreshOutlined />}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Generate Different Scenario
+                </Button>
+              </Box>
+            ) : (
+              /* Show AI generation form */
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+                {/* Number of Injects */}
+                <TextField
+                  label="Number of Injects"
+                  type="number"
+                  value={scenarioAINumberOfInjects}
+                  onChange={(e) => setScenarioAINumberOfInjects(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                  size="small"
+                  fullWidth
+                  inputProps={{ min: 1, max: 20 }}
+                  helperText="Number of injects to generate (1-20)"
+                />
+                
+                {scenarioTypeAffinity === 'TABLE-TOP' ? (
+                  /* Table-top specific fields */
+                  <>
+                    <TextField
+                      label="Exercise Duration (minutes)"
+                      type="number"
+                      value={scenarioAITableTopDuration}
+                      onChange={(e) => setScenarioAITableTopDuration(Math.max(15, parseInt(e.target.value) || 60))}
+                      size="small"
+                      fullWidth
+                      inputProps={{ min: 15, step: 15 }}
+                      helperText="Total duration of the table-top exercise"
+                    />
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Email Language</InputLabel>
+                      <Select
+                        value={scenarioAIEmailLanguage}
+                        label="Email Language"
+                        onChange={(e) => setScenarioAIEmailLanguage(e.target.value)}
+                      >
+                        <MenuItem value="english">English</MenuItem>
+                        <MenuItem value="french">Français</MenuItem>
+                        <MenuItem value="german">Deutsch</MenuItem>
+                        <MenuItem value="spanish">Español</MenuItem>
+                        <MenuItem value="italian">Italiano</MenuItem>
+                        <MenuItem value="portuguese">Português</MenuItem>
+                        <MenuItem value="dutch">Nederlands</MenuItem>
+                        <MenuItem value="polish">Polski</MenuItem>
+                        <MenuItem value="russian">Русский</MenuItem>
+                        <MenuItem value="chinese">中文</MenuItem>
+                        <MenuItem value="japanese">日本語</MenuItem>
+                        <MenuItem value="korean">한국어</MenuItem>
+                        <MenuItem value="arabic">العربية</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    {/* Default Team for Table-top */}
+                    <Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
+                        Default Team (for all injects)
+                      </Typography>
+                      {scenarioTeams.length === 0 ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                          <CircularProgress size={16} />
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Loading teams...
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Autocomplete
+                          options={scenarioTeams}
+                          getOptionLabel={(option) => option.team_name || 'Unknown'}
+                          value={scenarioTeams.find(t => t.team_id === scenarioSelectedTeam) || null}
+                          onChange={(_, value) => setScenarioSelectedTeam(value?.team_id || null)}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              label="Select Team" 
+                              size="small" 
+                              placeholder="Choose a team"
+                            />
+                          )}
+                          renderOption={(props, option) => (
+                            <Box component="li" {...props} key={option.team_id}>
+                              <GroupsOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                              <Typography variant="body2">{option.team_name}</Typography>
+                            </Box>
+                          )}
+                          size="small"
+                          noOptionsText="No teams found"
+                        />
+                      )}
+                    </Box>
+                  </>
+                ) : (
+                  /* Technical scenario specific fields */
+                  <>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Payload Technical Affinity</InputLabel>
+                      <Select
+                        value={scenarioAIPayloadAffinity}
+                        label="Payload Technical Affinity"
+                        onChange={(e) => setScenarioAIPayloadAffinity(e.target.value)}
+                      >
+                        {scenarioPlatformsAffinity.some(p => p.toLowerCase() === 'windows') && [
+                          <MenuItem key="powershell" value="powershell">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {getPlatformIcon('windows')}
+                              <span>PowerShell</span>
+                            </Box>
+                          </MenuItem>,
+                          <MenuItem key="cmd" value="cmd">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {getPlatformIcon('windows')}
+                              <span>Command Prompt (cmd)</span>
+                            </Box>
+                          </MenuItem>,
+                        ]}
+                        {scenarioPlatformsAffinity.some(p => ['linux', 'macos'].includes(p.toLowerCase())) && [
+                          <MenuItem key="bash" value="bash">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {getPlatformIcon('linux')}
+                              <span>Bash</span>
+                            </Box>
+                          </MenuItem>,
+                          <MenuItem key="sh" value="sh">
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              {getPlatformIcon('linux')}
+                              <span>Sh</span>
+                            </Box>
+                          </MenuItem>,
+                        ]}
+                      </Select>
+                    </FormControl>
+                    
+                    {/* Default Target for Technical scenarios */}
+                    <Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
+                        Default Target (for all injects)
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                        <Button
+                          variant={scenarioTargetType === 'asset' ? 'contained' : 'outlined'}
+                          size="small"
+                          onClick={() => setScenarioTargetType('asset')}
+                          startIcon={<ComputerOutlined />}
+                          sx={{ flex: 1, minWidth: 0 }}
+                        >
+                          Asset
+                        </Button>
+                        <Button
+                          variant={scenarioTargetType === 'asset_group' ? 'contained' : 'outlined'}
+                          size="small"
+                          onClick={() => setScenarioTargetType('asset_group')}
+                          startIcon={<LanOutlined />}
+                          sx={{ flex: 1, minWidth: 0 }}
+                        >
+                          Asset Group
+                        </Button>
+                      </Box>
+                      {scenarioTargetType === 'asset' ? (
+                        scenarioAssets.length === 0 ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                            <CircularProgress size={16} />
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              Loading assets...
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Autocomplete
+                            options={scenarioAssets}
+                            getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
+                            value={scenarioAssets.find(a => a.asset_id === scenarioSelectedAsset) || null}
+                            onChange={(_, value) => setScenarioSelectedAsset(value?.asset_id || null)}
+                            renderInput={(params) => (
+                              <TextField 
+                                {...params} 
+                                label="Select Asset" 
+                                size="small"
+                                placeholder="Choose an asset"
+                              />
+                            )}
+                            renderOption={(props, option) => (
+                              <Box component="li" {...props} key={option.asset_id}>
+                                <ComputerOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                                <Typography variant="body2">{option.asset_name || option.endpoint_hostname}</Typography>
+                              </Box>
+                            )}
+                            size="small"
+                            noOptionsText="No assets found"
+                          />
+                        )
+                      ) : (
+                        scenarioAssetGroups.length === 0 ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                            <CircularProgress size={16} />
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              Loading asset groups...
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Autocomplete
+                            options={scenarioAssetGroups}
+                            getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
+                            value={scenarioAssetGroups.find(g => g.asset_group_id === scenarioSelectedAssetGroup) || null}
+                            onChange={(_, value) => setScenarioSelectedAssetGroup(value?.asset_group_id || null)}
+                            renderInput={(params) => (
+                              <TextField 
+                                {...params} 
+                                label="Select Asset Group" 
+                                size="small"
+                                placeholder="Choose an asset group"
+                              />
+                            )}
+                            renderOption={(props, option) => (
+                              <Box component="li" {...props} key={option.asset_group_id}>
+                                <LanOutlined sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
+                                <Typography variant="body2">{option.asset_group_name}</Typography>
+                              </Box>
+                            )}
+                            size="small"
+                            noOptionsText="No asset groups found"
+                          />
+                        )
+                      )}
+                    </Box>
+                  </>
+                )}
+                
+                {/* Additional Context */}
+                <TextField
+                  label="Additional Context (optional)"
+                  value={scenarioAIContext}
+                  onChange={(e) => setScenarioAIContext(e.target.value)}
+                  multiline
+                  rows={3}
+                  size="small"
+                  placeholder={scenarioTypeAffinity === 'TABLE-TOP' 
+                    ? "Provide any additional context about the exercise goals, target audience, or specific scenarios to simulate..."
+                    : "Provide any additional context about the attack techniques, target environment, or specific behaviors to simulate..."}
+                  helperText="AI will use the page content plus this context to generate the scenario"
+                />
+                
+                {/* Attack Patterns Summary */}
+                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  {(scenarioOverviewData?.attackPatterns?.length || 0) > 0 ? (
+                    <>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                        Based on {scenarioOverviewData?.attackPatterns?.length || 0} detected attack patterns
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {scenarioOverviewData?.attackPatterns?.slice(0, 5).map((ap) => (
+                          <Chip 
+                            key={ap.id} 
+                            label={ap.externalId || ap.name} 
+                            size="small" 
+                            sx={{ height: 20, fontSize: 10 }} 
+                          />
+                        ))}
+                        {(scenarioOverviewData?.attackPatterns?.length || 0) > 5 && (
+                          <Chip 
+                            label={`+${(scenarioOverviewData?.attackPatterns?.length || 0) - 5} more`} 
+                            size="small" 
+                            sx={{ height: 20, fontSize: 10 }} 
+                          />
+                        )}
+                      </Box>
+                    </>
+                  ) : (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      No attack patterns detected on this page. AI will analyze the page content to identify relevant threats and create a scenario based on that context.
+                    </Typography>
+                  )}
+                </Box>
+                
+                {/* Generate Button */}
+                {(() => {
+                  const aiColors = getAiColor(mode);
+                  return (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      disabled={scenarioAIGenerating}
+                      onClick={handleGenerateAIScenario}
+                      startIcon={scenarioAIGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
+                      sx={{
+                        borderColor: aiColors.main,
+                        color: aiColors.main,
+                        '&:hover': {
+                          borderColor: aiColors.dark,
+                          bgcolor: hexToRGB(aiColors.main, 0.08),
+                        },
+                        '&.Mui-disabled': {
+                          borderColor: hexToRGB(aiColors.main, 0.3),
+                          color: hexToRGB(aiColors.main, 0.5),
+                        },
+                      }}
+                    >
+                      {scenarioAIGenerating ? 'Generating Scenario...' : 'Generate Scenario with AI'}
+                    </Button>
+                  );
+                })()}
+              </Box>
+            )}
           </Box>
         ) : scenarioStep === 0 ? (
           /* Step 0: Affinity Selection */
@@ -9662,6 +10397,89 @@ const App: React.FC = () => {
               </Alert>
             )}
             
+            {/* AI Generate Scenario Option */}
+            {(() => {
+              const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
+              const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+              const aiColors = getAiColor(mode);
+              
+              let tooltipMessage = '';
+              if (!aiSettings.available) {
+                tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+              } else if (!targetPlatform?.isEnterprise) {
+                tooltipMessage = 'AI features require Enterprise Edition.';
+              }
+              
+              return (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    mb: 2,
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: isAIAvailable ? aiColors.main : 'divider',
+                    bgcolor: isAIAvailable ? hexToRGB(aiColors.main, 0.08) : 'action.disabledBackground',
+                    opacity: isAIAvailable ? 1 : 0.6,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <AutoAwesomeOutlined sx={{ fontSize: 24, color: isAIAvailable ? aiColors.main : 'text.disabled' }} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: isAIAvailable ? 'text.primary' : 'text.disabled' }}>
+                        Generate Scenario with AI
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: isAIAvailable ? 'text.secondary' : 'text.disabled' }}>
+                        {isAIAvailable 
+                          ? scenarioTypeAffinity === 'TABLE-TOP'
+                            ? 'AI will analyze page content and generate a complete scenario with realistic email content'
+                            : 'AI will analyze page content and generate a complete scenario with technical payloads'
+                          : tooltipMessage}
+                      </Typography>
+                    </Box>
+                    <Tooltip title={isAIAvailable ? 'Generate full scenario with AI' : tooltipMessage}>
+                      <span>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          disabled={!isAIAvailable}
+                          onClick={() => {
+                            setScenarioAIMode(true);
+                            // Set default payload affinity based on platform
+                            if (scenarioTypeAffinity !== 'TABLE-TOP') {
+                              const primaryPlatform = scenarioPlatformsAffinity[0]?.toLowerCase();
+                              if (primaryPlatform === 'windows') {
+                                setScenarioAIPayloadAffinity('powershell');
+                              } else {
+                                setScenarioAIPayloadAffinity('bash');
+                              }
+                            }
+                          }}
+                          startIcon={<AutoAwesomeOutlined />}
+                          sx={{
+                            textTransform: 'none',
+                            borderColor: aiColors.main,
+                            color: aiColors.main,
+                            '&:hover': {
+                              borderColor: aiColors.dark,
+                              bgcolor: hexToRGB(aiColors.main, 0.12),
+                            },
+                            '&.Mui-disabled': {
+                              borderColor: hexToRGB(aiColors.main, 0.3),
+                              color: hexToRGB(aiColors.main, 0.5),
+                            },
+                          }}
+                        >
+                          Generate
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                </Paper>
+              );
+            })()}
+            
             {/* Attack Patterns Preview */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Detected Attack Patterns ({scenarioOverviewData?.attackPatterns?.length || 0})
@@ -9751,97 +10569,148 @@ const App: React.FC = () => {
                   </Alert>
                 ) : (
                   <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
-                    {scenarioOverviewData.attackPatterns.map((ap) => {
-                      const isSelected = selectedInjects.some(i => i.attackPatternId === ap.id);
-                      const selectedIndex = selectedInjects.findIndex(i => i.attackPatternId === ap.id);
+                    {/* Group attack patterns by kill chain phase */}
+                    {(() => {
+                      const allAps = scenarioOverviewData.attackPatterns;
+                      
+                      // Group attack patterns by kill chain phase
+                      const groupedByPhase: Record<string, typeof allAps> = {};
+                      allAps.forEach(ap => {
+                        const phase = ap.killChainPhases?.[0] || 'Unknown Phase';
+                        if (!groupedByPhase[phase]) {
+                          groupedByPhase[phase] = [];
+                        }
+                        groupedByPhase[phase].push(ap);
+                      });
+                      
+                      // Sort phases by kill chain order (if available)
+                      const knownPhases = scenarioOverviewData.killChainPhases || [];
+                      const sortedPhases = Object.keys(groupedByPhase).sort((a, b) => {
+                        const orderA = knownPhases.find(p => p.phase_name === a)?.phase_order ?? 999;
+                        const orderB = knownPhases.find(p => p.phase_name === b)?.phase_order ?? 999;
+                        return orderA - orderB;
+                      });
+                      
+                      // Render attack pattern card for table-top
+                      const renderTableTopAttackPatternCard = (ap: typeof allAps[0]) => {
+                        const isSelected = selectedInjects.some(i => i.attackPatternId === ap.id);
+                        const selectedIndex = selectedInjects.findIndex(i => i.attackPatternId === ap.id);
+                        
+                        return (
+                          <Paper
+                            key={ap.id}
+                            elevation={0}
+                            onClick={() => {
+                              if (isSelected) {
+                                // Remove from selection
+                                setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                              } else {
+                                // Add to selection with email placeholder
+                                setSelectedInjects(prev => [
+                                  ...prev,
+                                  {
+                                    attackPatternId: ap.id,
+                                    attackPatternName: ap.name,
+                                    contractId: 'email-placeholder',
+                                    contractLabel: 'Email Notification (placeholder)',
+                                    delayMinutes: prev.length * scenarioInjectSpacing,
+                                  },
+                                ]);
+                              }
+                            }}
+                            sx={{
+                              p: 1.5,
+                              mb: 1,
+                              border: 2,
+                              borderColor: isSelected ? '#42a5f5' : 'divider',
+                              borderRadius: 1,
+                              cursor: 'pointer',
+                              bgcolor: isSelected ? 'rgba(66, 165, 245, 0.08)' : 'transparent',
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                bgcolor: isSelected ? 'rgba(66, 165, 245, 0.12)' : 'action.hover',
+                              },
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                              <Checkbox
+                                checked={isSelected}
+                                size="small"
+                                sx={{ p: 0, mr: 0.5 }}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => {
+                                  if (isSelected) {
+                                    setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
+                                  } else {
+                                    setSelectedInjects(prev => [
+                                      ...prev,
+                                      {
+                                        attackPatternId: ap.id,
+                                        attackPatternName: ap.name,
+                                        contractId: 'email-placeholder',
+                                        contractLabel: 'Email Notification (placeholder)',
+                                        delayMinutes: prev.length * scenarioInjectSpacing,
+                                      },
+                                    ]);
+                                  }
+                                }}
+                              />
+                              <EmailOutlined sx={{ fontSize: 18, color: isSelected ? '#42a5f5' : 'text.secondary' }} />
+                              <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                                {ap.name}
+                              </Typography>
+                              <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
+                              {isSelected && (
+                                <Chip 
+                                  label={`#${selectedIndex + 1}`} 
+                                  size="small" 
+                                  sx={{ fontSize: 10, height: 20, bgcolor: '#42a5f5', color: 'white' }} 
+                                />
+                              )}
+                            </Box>
+                            {isSelected && (
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 4 }}>
+                                Email Subject: [Simulation] {ap.name} ({ap.externalId})
+                              </Typography>
+                            )}
+                          </Paper>
+                        );
+                      };
                       
                       return (
-                        <Paper
-                          key={ap.id}
-                          elevation={0}
-                          onClick={() => {
-                            if (isSelected) {
-                              // Remove from selection
-                              setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
-                            } else {
-                              // Add to selection with email placeholder
-                              setSelectedInjects(prev => [
-                                ...prev,
-                                {
-                                  attackPatternId: ap.id,
-                                  attackPatternName: ap.name,
-                                  contractId: 'email-placeholder',
-                                  contractLabel: 'Email Notification (placeholder)',
-                                  delayMinutes: prev.length * scenarioInjectSpacing,
-                                },
-                              ]);
-                            }
-                          }}
-                          sx={{
-                            p: 1.5,
-                            mb: 1,
-                            border: 2,
-                            borderColor: isSelected ? '#42a5f5' : 'divider',
-                            borderRadius: 1,
-                            cursor: 'pointer',
-                            bgcolor: isSelected ? 'rgba(66, 165, 245, 0.08)' : 'transparent',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              bgcolor: isSelected ? 'rgba(66, 165, 245, 0.12)' : 'action.hover',
-                            },
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                            <Checkbox
-                              checked={isSelected}
-                              size="small"
-                              sx={{ p: 0, mr: 0.5 }}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={() => {
-                                if (isSelected) {
-                                  setSelectedInjects(prev => prev.filter(i => i.attackPatternId !== ap.id));
-                                } else {
-                                  setSelectedInjects(prev => [
-                                    ...prev,
-                                    {
-                                      attackPatternId: ap.id,
-                                      attackPatternName: ap.name,
-                                      contractId: 'email-placeholder',
-                                      contractLabel: 'Email Notification (placeholder)',
-                                      delayMinutes: prev.length * scenarioInjectSpacing,
-                                    },
-                                  ]);
-                                }
-                              }}
-                            />
-                            <EmailOutlined sx={{ fontSize: 18, color: isSelected ? '#42a5f5' : 'text.secondary' }} />
-                            <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                              {ap.name}
-                            </Typography>
-                            <Chip label={ap.externalId} size="small" sx={{ fontSize: 10, height: 20 }} />
-                            {isSelected && (
-                              <Chip 
-                                label={`#${selectedIndex + 1}`} 
-                                size="small" 
-                                sx={{ fontSize: 10, height: 20, bgcolor: '#42a5f5', color: 'white' }} 
-                              />
-                            )}
-                          </Box>
-                          {ap.killChainPhases && ap.killChainPhases.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, ml: 4 }}>
-                              {ap.killChainPhases.map((phase, i) => (
-                                <Chip key={i} label={phase} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
-                              ))}
+                        <>
+                          {sortedPhases.map((phase, phaseIndex) => (
+                            <Box key={phase} sx={{ mb: phaseIndex < sortedPhases.length - 1 ? 2 : 0 }}>
+                              {/* Kill Chain Phase Header */}
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 1, 
+                                mb: 1,
+                                py: 0.5,
+                                px: 1,
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                borderLeft: 3,
+                                borderColor: '#42a5f5',
+                              }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: '#42a5f5' }}>
+                                  {phase}
+                                </Typography>
+                                <Chip 
+                                  label={`${groupedByPhase[phase].length}`} 
+                                  size="small" 
+                                  sx={{ height: 16, fontSize: 10, bgcolor: '#42a5f5', color: 'white', minWidth: 24 }} 
+                                />
+                              </Box>
+                              
+                              {/* Attack Patterns in this phase */}
+                              {groupedByPhase[phase].map(ap => renderTableTopAttackPatternCard(ap))}
                             </Box>
-                          )}
-                          {isSelected && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, ml: 4 }}>
-                              Email Subject: [Simulation] {ap.name} ({ap.externalId})
-                            </Typography>
-                          )}
-                        </Paper>
+                          ))}
+                        </>
                       );
-                    })}
+                    })()}
                   </Box>
                 )}
               </>
@@ -9873,6 +10742,7 @@ const App: React.FC = () => {
                   const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
                   const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
                   const hasPlayableAps = scenarioOverviewData?.attackPatterns?.some(ap => getFilteredContracts(ap.contracts).length > 0);
+                  const aiColors = getAiColor(mode);
                   
                   let tooltipMessage = '';
                   if (!aiSettings.available) {
@@ -9973,7 +10843,20 @@ const App: React.FC = () => {
                             }
                           }}
                           startIcon={aiSelectingInjects ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
-                          sx={{ mb: 2, textTransform: 'none' }}
+                          sx={{
+                            mb: 2,
+                            textTransform: 'none',
+                            borderColor: aiColors.main,
+                            color: aiColors.main,
+                            '&:hover': {
+                              borderColor: aiColors.dark,
+                              bgcolor: hexToRGB(aiColors.main, 0.08),
+                            },
+                            '&.Mui-disabled': {
+                              borderColor: hexToRGB(aiColors.main, 0.3),
+                              color: hexToRGB(aiColors.main, 0.5),
+                            },
+                          }}
                         >
                           {aiSelectingInjects ? 'Selecting injects...' : 'Select using AI'}
                         </Button>
@@ -10505,49 +11388,74 @@ const App: React.FC = () => {
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Email Timeline ({emailTimeline.length})
                   </Typography>
-                  {/* Fill emails using AI button */}
-                  {(() => {
-                    const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
-                    const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
-                    
-                    let tooltipMessage = '';
-                    if (!aiSettings.available) {
-                      tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
-                    } else if (!targetPlatform?.isEnterprise) {
-                      tooltipMessage = 'AI features require Enterprise Edition.';
-                    } else {
-                      tooltipMessage = 'Use AI to generate realistic email subjects and body content based on page context';
-                    }
-                    
-                    return (
-                      <Tooltip title={tooltipMessage}>
-                        <span>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            disabled={!isAIAvailable || aiFillingEmails}
-                            onClick={async () => {
-                              if (!isAIAvailable) return;
-                              
-                              setAiFillingEmails(true);
-                              try {
-                                log.debug(' Requesting AI email generation for attack patterns:', emailTimeline.map(e => ({ id: e.attackPatternId, name: e.attackPatternName, externalId: e.externalId })));
+                  {/* Language selector and AI button */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {/* Email Language Selector */}
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <Select
+                        value={scenarioAIEmailLanguage}
+                        onChange={(e) => setScenarioAIEmailLanguage(e.target.value)}
+                        sx={{ fontSize: 12, height: 30 }}
+                      >
+                        <MenuItem value="english">English</MenuItem>
+                        <MenuItem value="french">Français</MenuItem>
+                        <MenuItem value="german">Deutsch</MenuItem>
+                        <MenuItem value="spanish">Español</MenuItem>
+                        <MenuItem value="italian">Italiano</MenuItem>
+                        <MenuItem value="portuguese">Português</MenuItem>
+                        <MenuItem value="dutch">Nederlands</MenuItem>
+                        <MenuItem value="polish">Polski</MenuItem>
+                        <MenuItem value="russian">Русский</MenuItem>
+                        <MenuItem value="chinese">中文</MenuItem>
+                        <MenuItem value="japanese">日本語</MenuItem>
+                        <MenuItem value="korean">한국어</MenuItem>
+                        <MenuItem value="arabic">العربية</MenuItem>
+                      </Select>
+                    </FormControl>
+                    {/* Fill emails using AI button */}
+                    {(() => {
+                      const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
+                      const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+                      
+                      let tooltipMessage = '';
+                      if (!aiSettings.available) {
+                        tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+                      } else if (!targetPlatform?.isEnterprise) {
+                        tooltipMessage = 'AI features require Enterprise Edition.';
+                      } else {
+                        tooltipMessage = 'Use AI to generate realistic email subjects and body content based on page context';
+                      }
+                      
+                      return (
+                        <Tooltip title={tooltipMessage}>
+                          <span>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              disabled={!isAIAvailable || aiFillingEmails}
+                              onClick={async () => {
+                                if (!isAIAvailable) return;
                                 
-                                const response = await chrome.runtime.sendMessage({
-                                  type: 'AI_GENERATE_EMAILS',
-                                  payload: {
-                                    pageTitle: currentPageTitle,
-                                    pageUrl: currentPageUrl,
-                                    pageContent: document.body?.innerText?.substring(0, 3000) || '',
-                                    scenarioName: scenarioForm.name || 'Security Simulation',
-                                    attackPatterns: emailTimeline.map(email => ({
-                                      id: email.attackPatternId,
-                                      name: email.attackPatternName,
-                                      externalId: email.externalId,
-                                      killChainPhases: email.killChainPhases,
-                                    })),
-                                  },
-                                });
+                                setAiFillingEmails(true);
+                                try {
+                                  log.debug(' Requesting AI email generation for attack patterns:', emailTimeline.map(e => ({ id: e.attackPatternId, name: e.attackPatternName, externalId: e.externalId })));
+                                  
+                                  const response = await chrome.runtime.sendMessage({
+                                    type: 'AI_GENERATE_EMAILS',
+                                    payload: {
+                                      pageTitle: currentPageTitle,
+                                      pageUrl: currentPageUrl,
+                                      pageContent: document.body?.innerText?.substring(0, 3000) || '',
+                                      scenarioName: scenarioForm.name || 'Security Simulation',
+                                      language: scenarioAIEmailLanguage,
+                                      attackPatterns: emailTimeline.map(email => ({
+                                        id: email.attackPatternId,
+                                        name: email.attackPatternName,
+                                        externalId: email.externalId,
+                                        killChainPhases: email.killChainPhases,
+                                      })),
+                                    },
+                                  });
                                 
                                 log.debug(' AI email response:', response);
                                 
@@ -10587,6 +11495,7 @@ const App: React.FC = () => {
                       </Tooltip>
                     );
                   })()}
+                  </Box>
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {(() => {

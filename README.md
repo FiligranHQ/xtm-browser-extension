@@ -48,7 +48,7 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 - 🎯 **Attack Pattern Matching** - Match MITRE ATT&CK patterns by ID (T1566, T1059.001)
 - 🔍 **Findings Detection** - Match security findings by value with exact matching
 - 🎮 **Scenario Generation** - Create attack scenarios from web page content
-- 🤖 **AI-Powered Scenarios** - Generate comprehensive attack scenarios using AI (Enterprise Edition)
+- 🤖 **Full AI Scenario Generation** - Generate complete scenarios with AI-created payloads (technical) or email content (table-top) based on page context (Enterprise Edition)
 - ⚡ **Atomic Testing** - Create on-the-fly atomic tests with AI-generated command lines
 
 ### PDF Generation & Content Extraction
@@ -61,8 +61,10 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 ### AI Features (Enterprise Edition)
 - 🧠 **Multiple LLM Support** - OpenAI, Anthropic (Claude), and Google Gemini
 - 📝 **Container Description AI** - Generate intelligent descriptions for OpenCTI containers
-- 🎬 **Scenario AI** - Generate full attack scenarios with proper injects and affinities
-- ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests
+- 🎬 **Full Scenario Generation** - Generate complete attack scenarios with AI-created injects, payloads, or email content based on page context
+- ✉️ **Email Content Generation** - Generate realistic email subjects and bodies for table-top exercises
+- ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests with cleanup commands
+- 🔍 **Smart Entity Discovery** - Discover additional entities that regex patterns might miss
 - 📊 **Model Selection** - Browse and select from available models for each provider
 - 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 

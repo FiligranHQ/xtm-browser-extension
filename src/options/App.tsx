@@ -52,6 +52,8 @@ import {
   GitHub,
   AutoAwesomeOutlined,
   KeyOutlined,
+  MovieFilterOutlined,
+  TravelExploreOutlined,
 } from '@mui/icons-material';
 import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
 import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
@@ -1778,7 +1780,7 @@ const App: React.FC = () => {
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <DescriptionOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <DescriptionOutlined sx={{ color: '#4fc3f7', mt: 0.3 }} />
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>Container Description</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -1787,25 +1789,34 @@ const App: React.FC = () => {
                         </Box>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <AutoAwesomeOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <MovieFilterOutlined sx={{ color: '#ab47bc', mt: 0.3 }} />
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Scenario Generation</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Full Scenario Generation</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Create complete OpenAEV scenarios with injects based on page content
+                            Generate complete OpenAEV scenarios with AI-created injects, payloads, or emails based on page content
                           </Typography>
                         </Box>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <CenterFocusStrongOutlined sx={{ color: 'primary.main', mt: 0.3 }} />
+                        <AutoAwesomeOutlined sx={{ color: '#ff9800', mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Email Content Generation</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Generate realistic email subjects and bodies for table-top scenarios
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <CenterFocusStrongOutlined sx={{ color: '#f44336', mt: 0.3 }} />
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>On-the-fly Atomic Testing</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Generate custom atomic tests with executable commands
+                            Generate custom atomic tests with executable commands for attack patterns
                           </Typography>
                         </Box>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, mt: 0.3 }} />
+                        <TravelExploreOutlined sx={{ color: '#4caf50', mt: 0.3 }} />
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>Smart Entity Discovery</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>

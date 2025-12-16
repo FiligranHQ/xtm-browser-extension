@@ -114,27 +114,6 @@ export function ensurePanelElements(): void {
     panelFrame = document.createElement('iframe');
     panelFrame.className = 'xtm-panel-frame hidden';
     panelFrame.src = chrome.runtime.getURL('panel/index.html');
-    
-    // Apply critical inline styles as backup to prevent host page CSS interference
-    // These ensure the panel stays positioned correctly even if CSS classes are overridden
-    panelFrame.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      right: 0 !important;
-      left: auto !important;
-      bottom: auto !important;
-      width: 560px !important;
-      height: 100vh !important;
-      z-index: 2147483646 !important;
-      border: none !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      translate: none !important;
-      rotate: none !important;
-      scale: none !important;
-      inset: auto 0 auto auto !important;
-    `;
-    
     document.body.appendChild(panelFrame);
   }
   
@@ -149,8 +128,33 @@ export function ensurePanelElements(): void {
  * Show panel elements
  */
 export function showPanelElements(): void {
+  log.debug('[SHOW-PANEL-ELEMENTS] Called, panelOverlay:', !!panelOverlay, 'panelFrame:', !!panelFrame);
+  
+  // Check if styles are injected
+  const styleEl = document.getElementById('xtm-styles');
+  log.debug('[SHOW-PANEL-ELEMENTS] Style element exists:', !!styleEl);
+  if (styleEl) {
+    const hasFrameStyle = styleEl.textContent?.includes('xtm-panel-frame');
+    log.debug('[SHOW-PANEL-ELEMENTS] Style contains xtm-panel-frame:', hasFrameStyle);
+  }
+  
   panelOverlay?.classList.remove('hidden');
   panelFrame?.classList.remove('hidden');
+  
+  // Log computed styles to debug
+  if (panelFrame) {
+    const computed = window.getComputedStyle(panelFrame);
+    log.debug('[SHOW-PANEL-ELEMENTS] panelFrame computed:', {
+      transform: computed.transform,
+      visibility: computed.visibility,
+      display: computed.display,
+      position: computed.position,
+      right: computed.right,
+      width: computed.width,
+    });
+  }
+  
+  log.debug('[SHOW-PANEL-ELEMENTS] After removing hidden class, panelFrame.classList:', panelFrame?.classList.toString());
 }
 
 /**
@@ -358,12 +362,16 @@ export async function showOAEVSearchPanel(): Promise<void> {
  * Show unified search panel
  */
 export async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
+  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] Called with initialQuery:', initialQuery);
   ensurePanelElements();
+  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] After ensurePanelElements');
   showPanelElements();
+  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] After showPanelElements');
   
   const theme = await getCurrentTheme();
   
   sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme, initialQuery });
+  log.debug('[SHOW-UNIFIED-SEARCH-PANEL] Message sent');
 }
 
 /**

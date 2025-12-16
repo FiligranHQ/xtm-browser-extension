@@ -590,94 +590,38 @@ export const HIGHLIGHT_STYLES = `
   
   /* ========================================
      SIDE PANEL FRAME
-     All properties use !important to prevent host page CSS overrides.
-     Additional resets added to prevent modal centering issues.
      ======================================== */
   .xtm-panel-frame {
-    /* Position: Force fixed to right edge */
-    position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
-    left: auto !important;
-    bottom: auto !important;
-    
-    /* Dimensions: Fixed panel width */
-    width: 560px !important;
-    height: 100vh !important;
-    max-width: 560px !important;
-    max-height: 100vh !important;
-    min-width: 560px !important;
-    min-height: 100vh !important;
-    
-    /* Reset all spacing */
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    
-    /* Stacking: Highest z-index for panel */
-    z-index: 2147483646 !important;
-    
-    /* Visual styling */
-    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4) !important;
-    transition: transform 0.3s ease !important;
-    background: #070d19 !important;
-    
-    /* Show state: No transform */
-    transform: translateX(0) !important;
-    
-    /* CRITICAL: Prevent host page CSS from centering/repositioning the panel */
-    translate: none !important;
-    rotate: none !important;
-    scale: none !important;
-    inset: auto 0 auto auto !important; /* Explicit: top auto, right 0, bottom auto, left auto */
-    
-    /* Reset flex/grid positioning that might affect iframe */
-    align-self: auto !important;
-    justify-self: auto !important;
-    place-self: auto !important;
-    
-    /* Reset any filter/clip effects */
-    filter: none !important;
-    clip-path: none !important;
-    -webkit-clip-path: none !important;
-    
-    /* Ensure visibility */
-    visibility: visible !important;
-    opacity: 1 !important;
-    display: block !important;
-    
-    /* Reset animation that might interfere */
-    animation: none !important;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 560px;
+    height: 100vh;
+    border: none;
+    z-index: 2147483646;
+    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s ease;
+    background: #070d19;
   }
   
   .xtm-panel-frame.hidden {
-    transform: translateX(100%) !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
+    transform: translateX(100%);
   }
   
   /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */
   .xtm-panel-overlay {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 560px !important;
-    bottom: 0 !important;
-    width: auto !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    z-index: 2147483635 !important; /* Well below highlights (2147483640) */
-    background: transparent !important;
-    pointer-events: none !important; /* CRITICAL: Allow clicks to pass through to highlights */
-    transform: none !important;
-    translate: none !important;
-    inset: 0 560px 0 0 !important; /* Explicit inset to prevent override */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 560px;
+    bottom: 0;
+    z-index: 2147483635;
+    background: transparent;
+    pointer-events: none;
   }
   
   .xtm-panel-overlay.hidden {
-    display: none !important;
-    visibility: hidden !important;
+    display: none;
   }
 
   /* ========================================
@@ -727,6 +671,15 @@ export const HIGHLIGHT_STYLES = `
     to {
       transform: translateX(-50%) translateY(-100%);
       opacity: 0;
+    }
+  }
+
+  @keyframes xtm-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
     }
   }
 

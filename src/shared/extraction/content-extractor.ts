@@ -9,6 +9,7 @@
  */
 
 import { Readability } from '@mozilla/readability';
+import { escapeHtml } from '../utils/formatters';
 
 export interface ExtractedContent {
   title: string;
@@ -1172,14 +1173,7 @@ export function generateReaderView(content: ExtractedContent): string {
 </html>`;
 }
 
-/**
- * Escape HTML special characters
- */
-function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// escapeHtml is imported from shared/utils/formatters
 
 /**
  * Convert extracted content to HTML blob for PDF generation

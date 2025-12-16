@@ -13,13 +13,13 @@
 export const CONNECTION_TIMEOUT_MS = 8000;
 
 /** Timeout for entity detail fetches */
-export const ENTITY_FETCH_TIMEOUT_MS = 8000;
+export const ENTITY_FETCH_TIMEOUT_MS = 15000;
 
 /** Timeout for search operations */
-export const SEARCH_TIMEOUT_MS = 8000;
+export const SEARCH_TIMEOUT_MS = 10000;
 
 /** Timeout for container fetch operations */
-export const CONTAINER_FETCH_TIMEOUT_MS = 5000;
+export const CONTAINER_FETCH_TIMEOUT_MS = 15000;
 
 /** Timeout for cache refresh operations */
 export const CACHE_REFRESH_TIMEOUT_MS = 30000;

@@ -4,6 +4,7 @@
  */
 
 import { loggers } from '../shared/utils/logger';
+import { escapeHtml } from '../shared/utils/formatters';
 import { 
   extractContent, 
   generatePDF as generateEnhancedPDF,
@@ -1043,12 +1044,6 @@ export function sanitizeFilename(name: string): string {
     .substring(0, 100);
 }
 
-/**
- * Escape HTML special characters
- */
-export function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// Re-export escapeHtml from shared formatters for backwards compatibility
+export { escapeHtml } from '../shared/utils/formatters';
 

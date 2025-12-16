@@ -139,10 +139,25 @@ export interface UnifiedSearchResult {
   id: string;
   type: string;
   name: string;
+  description?: string;
   source: 'opencti' | 'openaev';
   platformId: string;
   platformName: string;
+  entityId?: string;
   entityData?: unknown;
+  data?: Record<string, unknown>;
+}
+
+// Merged search result (for grouping across platforms)
+export interface MergedSearchResult {
+  representativeKey: string;
+  name: string;
+  type: string;
+  platforms: Array<{
+    platformId: string;
+    platformName: string;
+    result: SearchResult;
+  }>;
 }
 
 // AI settings

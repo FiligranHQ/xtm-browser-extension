@@ -67,7 +67,9 @@ import ThemeLight from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
-import { getAiColor, getCvssChipStyle, getSeverityColor, getPlatformIcon, getPlatformColor } from './utils';
+import { getAiColor, getCvssChipStyle, getSeverityColor, getPlatformIcon, getPlatformColor, getMarkingColor, cleanHtmlContent } from './utils';
+import { EmptyView, LoadingView } from './components';
+import { useScenarioState, useAIState, useContainerState } from './hooks';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -82,113 +84,20 @@ import {
   getOAEVTypeFromClass,
 } from '../shared/utils/entity';
 import { formatDate, formatDateTime } from '../shared/utils/formatters';
+import type {
+  PanelMode,
+  ScanResultEntity,
+  ScanResultPlatformMatch,
+  ImportResults,
+  EntityData,
+  ContainerData,
+  SearchResult,
+  PlatformInfo,
+  UnifiedSearchResult,
+  MergedSearchResult,
+} from './types';
 
 const log = loggers.panel;
-
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form' | 'add-selection';
-
-// Interface for platform match in scan results
-interface ScanResultPlatformMatch {
-  platformId: string;
-  platformType: 'opencti' | 'openaev';
-  entityId?: string;
-  entityData?: any;
-  type: string; // The type with platform prefix if needed
-}
-
-// Interface for scan result entity
-interface ScanResultEntity {
-  id: string;
-  type: string;
-  name: string;
-  value?: string;
-  found: boolean;
-  entityId?: string;
-  platformId?: string;
-  platformType?: 'opencti' | 'openaev';
-  entityData?: any;
-  // Multi-platform support: track all platforms where this entity was found
-  platformMatches?: ScanResultPlatformMatch[];
-  // AI discovery fields
-  discoveredByAI?: boolean;
-  aiReason?: string;
-  aiConfidence?: 'high' | 'medium' | 'low';
-}
-
-// Interface for import results statistics
-interface ImportResults {
-  success: boolean;
-  total: number;
-  created: Array<{ id: string; type: string; value: string }>;
-  failed: Array<{ type: string; value: string; error?: string }>;
-  platformName: string;
-}
-
-interface EntityData {
-  id?: string;
-  type?: string;
-  name?: string;
-  description?: string;
-  confidence?: number;
-  created?: string;
-  modified?: string;
-  created_at?: string;
-  updated_at?: string;
-  value?: string;
-  existsInPlatform?: boolean;
-  aliases?: string[];
-  x_opencti_score?: number;
-  entity_type?: string;
-  standard_id?: string;
-  objectMarking?: Array<{ definition: string; x_opencti_color?: string }>;
-  objectLabel?: Array<{ value: string; color: string }>;
-  createdBy?: { id: string; name: string };
-  creators?: Array<{ id: string; name: string }>;
-  representative?: { main?: string };
-  // Vulnerability CVSS fields
-  x_opencti_cvss_base_score?: number;
-  x_opencti_cvss_base_severity?: string;
-  x_opencti_cvss_attack_vector?: string;
-  x_opencti_cisa_kev?: boolean;
-  x_opencti_epss_score?: number;
-  x_opencti_epss_percentile?: number;
-  // Threat Actor fields
-  first_seen?: string;
-  last_seen?: string;
-  goals?: string[];
-  // Malware fields
-  malware_types?: string[];
-  is_family?: boolean;
-  // Multi-platform support
-  _platformId?: string;
-  _platformType?: string;
-  _isNonDefaultPlatform?: boolean;
-  platformId?: string;
-  // Allow additional properties from platform-specific entities
-  [key: string]: unknown;
-}
-
-interface ContainerData {
-  id: string;
-  entity_type: string;
-  name: string;
-  created: string;
-  modified: string;
-  createdBy?: { id: string; name: string };
-}
-
-interface SearchResult extends EntityData {
-  _platformId?: string;
-}
-
-interface PlatformInfo {
-  id: string;
-  name: string;
-  url: string;
-  version?: string;
-  isEnterprise?: boolean;
-  type?: 'opencti' | 'openaev';
-}
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
@@ -376,18 +285,17 @@ const App: React.FC = () => {
   const [availableResponseTypes, setAvailableResponseTypes] = useState<Array<{ id: string; name: string }>>([]);
   const [availableAuthors, setAvailableAuthors] = useState<Array<{ id: string; name: string; entity_type: string }>>([]);
 
-  // AI Configuration state
-  const [aiSettings, setAiSettings] = useState<{
-    enabled: boolean;
-    provider?: string;
-    available: boolean;
-  }>({ enabled: false, available: false });
-  const [aiGeneratingDescription, setAiGeneratingDescription] = useState(false);
-  const [aiSelectingInjects, setAiSelectingInjects] = useState(false);
-  const [aiFillingEmails, setAiFillingEmails] = useState(false);
-  const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
-  // Store page content for AI discovery (set when scan completes)
-  const [scanPageContent, setScanPageContent] = useState<string>('');
+  // AI state - extracted to useAIState hook
+  const {
+    aiSettings, setAiSettings,
+    aiGeneratingDescription, setAiGeneratingDescription,
+    aiSelectingInjects, setAiSelectingInjects,
+    aiFillingEmails, setAiFillingEmails,
+    aiDiscoveringEntities, setAiDiscoveringEntities,
+    aiResolvingRelationships, setAiResolvingRelationships,
+    resolvedRelationships, setResolvedRelationships,
+    scanPageContent, setScanPageContent,
+  } = useAIState();
   
   // Toast notification helper - sends to content script
   const showToast = React.useCallback((options: {
@@ -399,110 +307,39 @@ const App: React.FC = () => {
   }) => {
     window.parent.postMessage({ type: 'XTM_SHOW_TOAST', payload: options }, '*');
   }, []);
-  
-  // AI Relationship resolution state
-  const [aiResolvingRelationships, setAiResolvingRelationships] = useState(false);
-  const [resolvedRelationships, setResolvedRelationships] = useState<Array<{
-    fromIndex: number;
-    toIndex: number;
-    relationshipType: string;
-    confidence: 'high' | 'medium' | 'low';
-    reason: string;
-    excerpt?: string;
-  }>>([]);
 
-  // Scenario creation state (OpenAEV)
-  const [scenarioOverviewData, setScenarioOverviewData] = useState<{
-    attackPatterns: Array<{
-      id: string;
-      name: string;
-      externalId: string;
-      description?: string;
-      killChainPhases: string[];
-      contracts: any[];
-    }>;
-    killChainPhases: Array<{
-      phase_id: string;
-      phase_kill_chain_name: string;
-      phase_name: string;
-      phase_order: number;
-    }>;
-    pageTitle: string;
-    pageUrl: string;
-    pageDescription: string;
-  } | null>(null);
-  const [scenarioForm, setScenarioForm] = useState({
-    name: '',
-    description: '',
-    subtitle: '',
-    category: 'attack-scenario',
-  });
-  const [selectedInjects, setSelectedInjects] = useState<Array<{
-    attackPatternId: string;
-    attackPatternName: string;
-    contractId: string;
-    contractLabel: string;
-    delayMinutes: number;
-  }>>([]);
-  // AI-generated email content for table-top scenarios
-  const [scenarioEmails, setScenarioEmails] = useState<Array<{
-    attackPatternId: string;
-    subject: string;
-    body: string;
-  }>>([]);
-  const [scenarioLoading, setScenarioLoading] = useState(false);
-  const [scenarioStep, setScenarioStep] = useState<0 | 1 | 2>(0); // 0: Affinity, 1: Injects, 2: Details
-  const [scenarioTypeAffinity, setScenarioTypeAffinity] = useState<'ENDPOINT' | 'CLOUD' | 'WEB' | 'TABLE-TOP'>('ENDPOINT');
-  const [scenarioPlatformsAffinity, setScenarioPlatformsAffinity] = useState<string[]>(['windows', 'linux', 'macos']);
-  const [scenarioInjectSpacing, setScenarioInjectSpacing] = useState<number>(1); // Spacing between injects in minutes (1 for technical, 5 for table-top)
-  // Scenario platform selection (when multiple OpenAEV platforms are configured)
-  const [scenarioPlatformSelected, setScenarioPlatformSelected] = useState(false);
-  const [scenarioPlatformId, setScenarioPlatformId] = useState<string | null>(null);
-  // Raw attack patterns from scan (before filtering by platform)
-  const [scenarioRawAttackPatterns, setScenarioRawAttackPatterns] = useState<Array<{
-    id: string;
-    entityId: string;
-    name: string;
-    externalId?: string;
-    description?: string;
-    killChainPhases?: string[];
-    platformId?: string;
-  }>>([]);
-  // Scenario target selection (for technical scenarios: asset/asset_group, for table-top: team)
-  const [scenarioTargetType, setScenarioTargetType] = useState<'asset' | 'asset_group'>('asset');
-  const [scenarioAssets, setScenarioAssets] = useState<any[]>([]);
-  const [scenarioAssetGroups, setScenarioAssetGroups] = useState<any[]>([]);
-  const [scenarioTeams, setScenarioTeams] = useState<any[]>([]);
-  const [scenarioSelectedAsset, setScenarioSelectedAsset] = useState<string | null>(null);
-  const [scenarioSelectedAssetGroup, setScenarioSelectedAssetGroup] = useState<string | null>(null);
-  const [scenarioSelectedTeam, setScenarioSelectedTeam] = useState<string | null>(null);
-
-  // AI Scenario Generation state
-  const [scenarioCreating, setScenarioCreating] = useState(false); // Whether scenario is being created
-  const [scenarioAIMode, setScenarioAIMode] = useState(false); // Whether AI scenario generation is active
-  const [scenarioAIGenerating, setScenarioAIGenerating] = useState(false);
-  const [scenarioAINumberOfInjects, setScenarioAINumberOfInjects] = useState<number>(5);
-  const [scenarioAIPayloadAffinity, setScenarioAIPayloadAffinity] = useState<string>('powershell'); // powershell, bash, sh, cmd
-  const [scenarioAITableTopDuration, setScenarioAITableTopDuration] = useState<number>(60); // Duration in minutes for table-top
-  const [scenarioAIEmailLanguage, setScenarioAIEmailLanguage] = useState<string>('english'); // Language for email generation
-  const [scenarioAITheme, setScenarioAITheme] = useState<string>('cybersecurity'); // Theme for AI scenario generation
-  const [scenarioAIContext, setScenarioAIContext] = useState<string>(''); // Additional context from user
-  const [scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario] = useState<{
-    name: string;
-    description: string;
-    subtitle?: string;
-    category?: string;
-    injects: Array<{
-      title: string;
-      description: string;
-      type: string;
-      content?: string;
-      executor?: string;
-      delayMinutes?: number;
-      subject?: string; // For email injects in table-top
-      body?: string; // For email body in table-top
-    }>;
-  } | null>(null);
+  // Scenario creation state (OpenAEV) - extracted to useScenarioState hook
+  const {
+    scenarioOverviewData, setScenarioOverviewData,
+    scenarioForm, setScenarioForm,
+    selectedInjects, setSelectedInjects,
+    scenarioEmails, setScenarioEmails,
+    scenarioLoading, setScenarioLoading,
+    scenarioStep, setScenarioStep,
+    scenarioTypeAffinity, setScenarioTypeAffinity,
+    scenarioPlatformsAffinity, setScenarioPlatformsAffinity,
+    scenarioInjectSpacing, setScenarioInjectSpacing,
+    scenarioPlatformSelected, setScenarioPlatformSelected,
+    scenarioPlatformId, setScenarioPlatformId,
+    scenarioRawAttackPatterns, setScenarioRawAttackPatterns,
+    scenarioTargetType, setScenarioTargetType,
+    scenarioAssets, setScenarioAssets,
+    scenarioAssetGroups, setScenarioAssetGroups,
+    scenarioTeams, setScenarioTeams,
+    scenarioSelectedAsset, setScenarioSelectedAsset,
+    scenarioSelectedAssetGroup, setScenarioSelectedAssetGroup,
+    scenarioSelectedTeam, setScenarioSelectedTeam,
+    scenarioCreating, setScenarioCreating,
+    scenarioAIMode, setScenarioAIMode,
+    scenarioAIGenerating, setScenarioAIGenerating,
+    scenarioAINumberOfInjects, setScenarioAINumberOfInjects,
+    scenarioAIPayloadAffinity, setScenarioAIPayloadAffinity,
+    scenarioAITableTopDuration, setScenarioAITableTopDuration,
+    scenarioAIEmailLanguage, setScenarioAIEmailLanguage,
+    scenarioAITheme, setScenarioAITheme,
+    scenarioAIContext, setScenarioAIContext,
+    scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario,
+  } = useScenarioState();
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -828,8 +665,9 @@ const App: React.FC = () => {
 
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;
+    log.debug('[HANDLE-MESSAGE] Received message type:', type);
     if (type === 'SELECTION_UPDATED') {
-      log.debug(' handleMessage received SELECTION_UPDATED:', payload);
+      log.debug('[HANDLE-MESSAGE] SELECTION_UPDATED payload:', payload);
     }
     handlePanelState({ type, payload });
   };
@@ -894,49 +732,6 @@ const App: React.FC = () => {
     }
     
     return text;
-  };
-
-  // Helper to clean HTML for content field - minimal cleaning to preserve article content
-  // We intentionally do LIGHT cleaning to avoid breaking paywalled/restricted content
-  const cleanHtmlContent = (html: string): string => {
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    
-    // Remove ONLY elements that are definitely not content
-    // Be conservative - better to include too much than lose actual content
-    const elementsToRemove = [
-      // Scripts and styles (never content)
-      'script', 'style', 'noscript',
-      // Interactive elements that don't render as text
-      'iframe', 'object', 'embed', 'applet',
-      // Form elements
-      'input', 'button', 'select', 'textarea',
-      // Only remove clearly modal/overlay framework elements (exact class matches)
-      '.MuiModal-root', '.MuiBackdrop-root', '.MuiDialog-root',
-      '.ReactModal__Overlay', '.ReactModal__Content',
-      // Hidden elements
-      '[hidden]', '[aria-hidden="true"]',
-    ];
-    
-    elementsToRemove.forEach(selector => {
-      try {
-        temp.querySelectorAll(selector).forEach(el => el.remove());
-      } catch { /* Skip invalid selectors */ }
-    });
-    
-    // Remove ONLY event handlers (keep styles - they may affect layout/images)
-    temp.querySelectorAll('*').forEach(el => {
-      // Remove event handlers only
-      el.removeAttribute('onclick');
-      el.removeAttribute('onload');
-      el.removeAttribute('onerror');
-      el.removeAttribute('onmouseover');
-      el.removeAttribute('onmouseout');
-      el.removeAttribute('onfocus');
-      el.removeAttribute('onblur');
-    });
-    
-    return temp.innerHTML;
   };
 
   // Fetch containers for an entity
@@ -1896,32 +1691,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Interface for merged search results
-  interface MergedSearchResult {
-    representativeKey: string; // Key for grouping (name + type)
-    name: string;
-    type: string;
-    platforms: Array<{
-      platformId: string;
-      platformName: string;
-      result: SearchResult;
-    }>;
-  }
-
-  // Interface for unified search results (across OpenCTI and OpenAEV)
-  interface UnifiedSearchResult {
-    id: string;
-    name: string;
-    type: string;
-    description?: string;
-    source: 'opencti' | 'openaev';
-    platformId: string;
-    platformName: string;
-    entityId: string;
-    // Additional fields for display
-    data?: Record<string, unknown>;
-  }
-
   // Merge search results by representative (name + type)
   const getMergedSearchResults = (): MergedSearchResult[] => {
     const grouped = new Map<string, MergedSearchResult>();
@@ -2072,6 +1841,8 @@ const App: React.FC = () => {
 
   // Handle click on unified search result
   const handleUnifiedSearchResultClick = async (result: UnifiedSearchResult) => {
+    log.debug('[UNIFIED-SEARCH-CLICK] ===== CLICK HANDLER CALLED =====');
+    log.debug('[UNIFIED-SEARCH-CLICK] Result:', { id: result.id, name: result.name, type: result.type, source: result.source, entityId: result.entityId });
     setEntityFromSearchMode('unified-search');
     
     const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
@@ -2095,11 +1866,13 @@ const App: React.FC = () => {
         _platformType: 'opencti',
         _isNonDefaultPlatform: false,
       } as unknown as EntityData);
+      log.debug('[UNIFIED-SEARCH-CLICK] OpenCTI: Entity set, setting panelMode to loading');
       setPanelMode('loading');
       
       // Fetch full entity details from OpenCTI API
       try {
         if (result.entityId && result.platformId) {
+          log.debug('[UNIFIED-SEARCH-CLICK] OpenCTI: Fetching entity details for:', result.entityId);
           const response = await chrome.runtime.sendMessage({
             type: 'GET_ENTITY_DETAILS',
             payload: {
@@ -2121,11 +1894,13 @@ const App: React.FC = () => {
               _platformType: 'opencti',
               _isNonDefaultPlatform: false,
             } as unknown as EntityData);
+            log.debug('[UNIFIED-SEARCH-CLICK] OpenCTI: Full entity fetched, setting panelMode to entity');
             setPanelMode('entity');
             // Fetch containers for OpenCTI entities
             fetchEntityContainers(result.entityId, result.platformId);
           } else {
             // Fall back to search result data
+            log.debug('[UNIFIED-SEARCH-CLICK] OpenCTI: No response data, setting panelMode to entity');
             setPanelMode('entity');
             if (result.entityId) {
               fetchEntityContainers(result.entityId, result.platformId);
@@ -2133,10 +1908,11 @@ const App: React.FC = () => {
           }
         } else {
           // No entity ID, just show what we have
+          log.debug('[UNIFIED-SEARCH-CLICK] OpenCTI: No entityId, setting panelMode to entity directly');
           setPanelMode('entity');
         }
       } catch (error) {
-        console.warn('Failed to fetch full OpenCTI entity details:', error);
+        log.error('[UNIFIED-SEARCH-CLICK] OpenCTI: Error fetching entity details:', error);
         setPanelMode('entity');
         if (result.entityId) {
           fetchEntityContainers(result.entityId, result.platformId);
@@ -2911,35 +2687,6 @@ const App: React.FC = () => {
     </Box>
   );
 
-  // Helper for marking definition colors (fallback when x_opencti_color is not present)
-  const getMarkingColor = (definition: string | undefined): string => {
-    if (!definition) return '#ffffff';
-    switch (definition) {
-      case 'TLP:RED':
-      case 'PAP:RED':
-      case 'CD':
-      case 'CD-SF':
-      case 'DR':
-      case 'DR-SF':
-        return '#c62828';
-      case 'TLP:AMBER':
-      case 'TLP:AMBER+STRICT':
-      case 'PAP:AMBER':
-        return '#d84315';
-      case 'TLP:GREEN':
-      case 'PAP:GREEN':
-      case 'NP':
-        return '#2e7d32';
-      case 'TLP:CLEAR':
-      case 'TLP:WHITE':
-      case 'PAP:CLEAR':
-        return mode === 'dark' ? '#ffffff' : '#2b2b2b';
-      case 'SF':
-        return '#283593';
-      default:
-        return '#ffffff';
-    }
-  };
   
   // Label style for section titles
   const sectionTitleStyle = {
@@ -3348,9 +3095,23 @@ const App: React.FC = () => {
                 <Typography variant="caption" sx={sectionTitleStyle}>
                   Tags
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxWidth: '100%' }}>
                   {(entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).map((tag: string, i: number) => (
-                    <Chip key={i} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+                    <Chip 
+                      key={i} 
+                      label={tag} 
+                      size="small" 
+                      variant="outlined" 
+                      sx={{ 
+                        borderRadius: 1,
+                        maxWidth: 150,
+                        '& .MuiChip-label': { 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        },
+                      }} 
+                    />
                   ))}
                 </Box>
               </Box>
@@ -3960,7 +3721,11 @@ const App: React.FC = () => {
   };
 
   const renderEntityView = () => {
-    if (!entity) return null;
+    log.debug('[RENDER-ENTITY-VIEW] Called, entity:', entity);
+    if (!entity) {
+      log.warn('[RENDER-ENTITY-VIEW] Entity is null, returning null');
+      return null;
+    }
     
     // Check if this is a non-default platform entity (any platform other than OpenCTI)
     const entityType = (entity as any).type || '';
@@ -4588,7 +4353,7 @@ const App: React.FC = () => {
             <Typography variant="caption" sx={sectionTitleStyle}>
               Labels
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxWidth: '100%' }}>
               {objectLabel.map((label: any, i: number) => (
                 <Chip
                   key={i}
@@ -4601,6 +4366,12 @@ const App: React.FC = () => {
                     bgcolor: hexToRGB(label.color, 0.08),
                     fontWeight: 500,
                     borderRadius: 1,
+                    maxWidth: 150,
+                    '& .MuiChip-label': { 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    },
                   }}
                 />
               ))}
@@ -4614,9 +4385,9 @@ const App: React.FC = () => {
             <Typography variant="caption" sx={sectionTitleStyle}>
               Marking Definitions
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, maxWidth: '100%' }}>
               {objectMarking.map((marking: any, i: number) => {
-                const markingColor = marking.x_opencti_color || getMarkingColor(marking.definition);
+                const markingColor = marking.x_opencti_color || getMarkingColor(marking.definition, mode);
                 return (
                   <Chip 
                     key={i} 
@@ -4630,6 +4401,12 @@ const App: React.FC = () => {
                       bgcolor: hexToRGB(markingColor, 0.2),
                       color: mode === 'dark' ? '#ffffff' : 'text.primary',
                       border: `2px solid ${markingColor}`,
+                      maxWidth: 150,
+                      '& .MuiChip-label': { 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      },
                     }}
                   />
                 );
@@ -4797,7 +4574,7 @@ const App: React.FC = () => {
 
         {/* Actions */}
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {entityId && platformUrl && (
+          {entityId && currentPlatform?.url && (
             <Button
               variant="contained"
               size="small"
@@ -4811,7 +4588,13 @@ const App: React.FC = () => {
                   style={{ width: 18, height: 18 }} 
                 />
               }
-              onClick={() => handleOpenInPlatform(entityId, (entity as any)?._draftId)}
+              onClick={() => {
+                // Use currentPlatform URL (the platform this entity belongs to), not the generic platformUrl state
+                const url = (entity as any)?._draftId 
+                  ? `${currentPlatform.url}/dashboard/data/import/draft/${(entity as any)?._draftId}`
+                  : `${currentPlatform.url}/dashboard/id/${entityId}`;
+                window.open(url, '_blank');
+              }}
               fullWidth
             >
               {(entity as any)?._draftId ? 'Open Draft in OpenCTI' : 'Open in OpenCTI'}
@@ -6559,22 +6342,20 @@ const App: React.FC = () => {
               <Typography variant="body2">{option.value}</Typography>
             </Box>
           )}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => (
-              <Chip
-                {...getTagProps({ index })}
-                key={option.id}
-                label={option.value}
-                size="small"
-                sx={{ 
-                  bgcolor: option.color, 
-                  color: '#fff',
-                  borderRadius: 0.5,
-                  '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.7)' },
-                }}
-              />
-            ))
-          }
+          ChipProps={{
+            size: 'small',
+            sx: { 
+              borderRadius: 0.5,
+              maxWidth: 80,
+              '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+            }
+          }}
+          sx={{ 
+            '& .MuiAutocomplete-tag': { 
+              maxWidth: 80,
+            }
+          }}
+          limitTags={2}
         />
 
         {/* Markings Autocomplete */}
@@ -6606,21 +6387,21 @@ const App: React.FC = () => {
               <Typography variant="body2">{option.definition}</Typography>
             </Box>
           )}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => (
-              <Chip
-                {...getTagProps({ index })}
-                key={option.id}
-                label={option.definition}
-                size="small"
-                variant="outlined"
-                sx={{ 
-                  borderRadius: 0.5,
-                  borderColor: (option as any).x_opencti_color || 'divider',
-                }}
-              />
-            ))
-          }
+          ChipProps={{
+            size: 'small',
+            variant: 'outlined',
+            sx: { 
+              borderRadius: 0.5,
+              maxWidth: 80,
+              '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+            }
+          }}
+          sx={{ 
+            '& .MuiAutocomplete-tag': { 
+              maxWidth: 80,
+            }
+          }}
+          limitTags={2}
         />
 
         {/* PDF Attachment Option */}
@@ -7198,6 +6979,9 @@ const App: React.FC = () => {
 
   // Handle click on scan result entity to show its overview
   const handleScanResultEntityClick = async (entity: ScanResultEntity) => {
+    log.debug('[SCAN-RESULT-CLICK] ===== CLICK HANDLER CALLED =====');
+    log.debug('[SCAN-RESULT-CLICK] Entity:', { name: entity.name, type: entity.type, found: entity.found, id: entity.id, entityId: entity.entityId });
+    log.debug('[SCAN-RESULT-CLICK] platformMatches:', entity.platformMatches);
     if (!entity.found) {
       // Not found - show not-found view with add option
       setEntity({
@@ -7209,10 +6993,12 @@ const App: React.FC = () => {
       });
       setEntityFromScanResults(true);
       setMultiPlatformResults([]);
+      log.debug('[SCAN-RESULT-CLICK] Entity NOT found, setting panelMode to not-found');
       setPanelMode('not-found');
       return;
     }
     
+    log.debug('[SCAN-RESULT-CLICK] Entity FOUND, proceeding to show entity view');
     // Found entity - show entity overview
     // Use the first platform match if available, otherwise use entity's platform
     const firstMatch = entity.platformMatches?.[0];
@@ -7279,9 +7065,11 @@ const App: React.FC = () => {
         _isNonDefaultPlatform: firstPlatformType !== 'opencti',
         entityData: firstResult.entity.entityData,
       });
+      log.debug('[SCAN-RESULT-CLICK] Multi-platform: Entity set, entityId:', firstEntityId);
       
       // Fetch full entity details for the first platform
       if (firstResult.entity.entityId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        log.debug('[SCAN-RESULT-CLICK] Multi-platform: Fetching full entity details...');
         setPanelMode('loading');
         try {
           const messageType = firstPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
@@ -7317,15 +7105,19 @@ const App: React.FC = () => {
               i === 0 ? { ...r, entity: fullEntity as EntityData } : r
             ));
           }
+          log.debug('[SCAN-RESULT-CLICK] Multi-platform: Setting panelMode to entity (after fetch)');
           setPanelMode('entity');
         } catch (error) {
-          log.error(' Failed to fetch entity details:', error);
+          log.error('[SCAN-RESULT-CLICK] Failed to fetch entity details:', error);
+          log.debug('[SCAN-RESULT-CLICK] Multi-platform: Setting panelMode to entity (on error)');
           setPanelMode('entity');
         }
       } else {
+        log.debug('[SCAN-RESULT-CLICK] Multi-platform: No entityId or chrome not available, setting panelMode to entity directly');
         setPanelMode('entity');
       }
     } else {
+      log.debug('[SCAN-RESULT-CLICK] Single platform case');
       // Single platform - no multi-platform navigation
       setMultiPlatformResults([]);
       setEntity({
@@ -12573,47 +12365,11 @@ const App: React.FC = () => {
     );
   };
 
-  const renderEmptyView = () => (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 300,
-        color: 'text.secondary',
-        textAlign: 'center',
-        p: 3,
-      }}
-    >
-      <SearchOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-      <Typography variant="body1" sx={{ mb: 1 }}>No entity selected</Typography>
-      <Typography variant="body2">
-        Click on a highlighted entity or use the search to get started.
-      </Typography>
-    </Box>
-  );
-
-  const renderLoadingView = () => (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 200,
-      }}
-    >
-      <CircularProgress size={40} />
-      <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-        Loading...
-      </Typography>
-    </Box>
-  );
-
   const renderContent = () => {
+    log.debug('[RENDER-CONTENT] panelMode:', panelMode, 'entity:', entity ? { id: entity.id, type: entity.type, name: entity.name } : null);
     switch (panelMode) {
       case 'entity':
+        log.debug('[RENDER-CONTENT] Rendering entity view, entity:', entity);
         return renderEntityView();
       case 'not-found':
         return renderNotFoundView();
@@ -12652,9 +12408,9 @@ const App: React.FC = () => {
       case 'scenario-form':
         return renderScenarioFormView();
       case 'loading':
-        return renderLoadingView();
+        return <LoadingView />;
       default:
-        return renderEmptyView();
+        return <EmptyView />;
     }
   };
 

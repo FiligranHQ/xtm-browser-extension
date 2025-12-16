@@ -16,12 +16,9 @@ import {
   hasOpenAEVClients,
 } from '../services/client-manager';
 import { loggers } from '../../shared/utils/logger';
+import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS } from '../../shared/constants';
 
 const log = loggers.background;
-
-// Timeout constants
-const ENTITY_FETCH_TIMEOUT_MS = 15000;
-const SEARCH_TIMEOUT_MS = 10000;
 
 /**
  * Helper to get OpenAEV client for a platform

@@ -120,3 +120,12 @@ export function formatCvssScore(score: number): { label: string; severity: 'none
   return { label: score.toFixed(1), severity: 'critical' };
 }
 
+/**
+ * Escape HTML special characters for safe display
+ */
+export function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+

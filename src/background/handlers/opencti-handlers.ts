@@ -18,13 +18,9 @@ import {
 import { addEntityToSDOCache, type CachedEntity } from '../../shared/utils/storage';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
+import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
 
 const log = loggers.background;
-
-// Timeout constants
-const ENTITY_FETCH_TIMEOUT_MS = 15000;
-const SEARCH_TIMEOUT_MS = 10000;
-const CONTAINER_FETCH_TIMEOUT_MS = 15000;
 
 // List of SDO types that should be cached
 const CACHEABLE_SDO_TYPES = [

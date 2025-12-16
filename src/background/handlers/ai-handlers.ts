@@ -26,8 +26,8 @@ const log = loggers.background;
 /**
  * Check if AI is available
  */
-function isAIAvailable(aiSettings?: { enabled?: boolean; apiKey?: string }): boolean {
-  return !!(aiSettings?.enabled && aiSettings?.apiKey);
+function isAIAvailable(aiSettings?: { provider?: string; apiKey?: string; model?: string }): boolean {
+  return !!(aiSettings?.provider && aiSettings?.apiKey && aiSettings?.model);
 }
 
 /**
@@ -73,7 +73,7 @@ export const handleAICheckStatus: MessageHandler = async (_payload, sendResponse
     data: {
       available,
       provider: settings.ai?.provider,
-      enabled: settings.ai?.enabled,
+      enabled: available,
     }
   });
 };

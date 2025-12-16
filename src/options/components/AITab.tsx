@@ -8,8 +8,6 @@ import {
   Typography,
   Button,
   Paper,
-  Switch,
-  FormControlLabel,
   TextField,
   InputAdornment,
   Alert,
@@ -174,7 +172,6 @@ const AITab: React.FC<AITabProps> = ({
                     setAiTestResult(null);
                     setAvailableModels([]);
                     onUpdateSetting('ai', { 
-                      enabled: false,
                       provider: provider.value as AIProvider,
                       model: undefined,
                       availableModels: undefined,
@@ -224,7 +221,6 @@ const AITab: React.FC<AITabProps> = ({
                       setAvailableModels([]);
                       onUpdateSetting('ai', { 
                         ...settings?.ai,
-                        enabled: false,
                         apiKey: e.target.value,
                         model: undefined,
                         availableModels: undefined,
@@ -282,7 +278,6 @@ const AITab: React.FC<AITabProps> = ({
                       value={settings?.ai?.model || ''}
                       label="Model"
                       onChange={(e) => onUpdateSetting('ai', {
-                        enabled: settings?.ai?.enabled ?? false,
                         provider: settings?.ai?.provider,
                         apiKey: settings?.ai?.apiKey,
                         model: e.target.value,
@@ -306,60 +301,38 @@ const AITab: React.FC<AITabProps> = ({
                   </FormControl>
                 )}
 
-                {/* Enable/Disable Toggle */}
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings?.ai?.enabled && !!settings?.ai?.apiKey && !!settings?.ai?.model}
-                      onChange={(e) => onUpdateSetting('ai', { 
-                        ...settings?.ai, 
-                        enabled: e.target.checked,
-                      })}
-                      disabled={!settings?.ai?.apiKey || !settings?.ai?.model}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2">Enable AI Features</Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {!settings?.ai?.apiKey 
-                          ? 'Enter an API key and test connection first'
-                          : !settings?.ai?.model
-                            ? 'Select a model to enable AI features'
-                            : settings?.ai?.enabled 
-                              ? 'AI features are active' 
-                              : 'AI features are disabled'}
-                      </Typography>
-                    </Box>
-                  }
-                />
               </>
             )}
-
-            {/* Clear AI Configuration */}
-            {settings?.ai?.provider && (
-              <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<LinkOffOutlined />}
-                  onClick={onClearAI}
-                  fullWidth
-                >
-                  Clear AI Configuration
-                </Button>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, textAlign: 'center' }}>
-                  Remove API key and disable all AI features
-                </Typography>
-              </Box>
-            )}
           </Paper>
+
+          {/* Save and Clear buttons */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            {settings?.ai?.provider ? (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<LinkOffOutlined />}
+                onClick={onClearAI}
+              >
+                Clear AI Configuration
+              </Button>
+            ) : (
+              <Box />
+            )}
+            <Button
+              variant="contained"
+              startIcon={<CheckOutlined />}
+              onClick={onSave}
+            >
+              Save AI Settings
+            </Button>
+          </Box>
 
           {/* AI Capabilities Info */}
           <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>AI Capabilities</Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-              When enabled, AI powers the following features:
+              When configured, AI powers the following features:
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
@@ -420,18 +393,6 @@ const AITab: React.FC<AITabProps> = ({
           </Paper>
         </Box>
       )}
-
-      {/* Save Button */}
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          variant="contained"
-          startIcon={<CheckOutlined />}
-          onClick={onSave}
-          disabled={!hasEnterpriseEdition}
-        >
-          Save AI Settings
-        </Button>
-      </Box>
     </Box>
   );
 };

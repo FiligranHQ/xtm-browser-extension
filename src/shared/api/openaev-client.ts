@@ -509,7 +509,12 @@ export class OpenAEVClient {
 
   async getPlayer(playerId: string): Promise<OAEVPlayer | null> {
     try {
-      return await this.request<OAEVPlayer>(`/api/players/${playerId}`);
+      // OpenAEV doesn't have GET /api/players/{id}, use POST /api/users/find instead
+      const users = await this.request<OAEVPlayer[]>('/api/users/find', {
+        method: 'POST',
+        body: JSON.stringify([playerId]),
+      });
+      return users && users.length > 0 ? users[0] : null;
     } catch (error) {
       log.error(' Get player failed:', error);
       return null;

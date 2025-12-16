@@ -299,7 +299,6 @@ function handleHighlightHover(event: MouseEvent): void {
   const rawType = target.dataset.type || 'Unknown';
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
-  const isSelected = selectedForImport.has(value);
   const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
   const isMixedState = target.dataset.mixedState === 'true';
   const isMultiPlatform = target.dataset.multiPlatform === 'true';
@@ -310,38 +309,39 @@ function handleHighlightHover(event: MouseEvent): void {
   
   let statusIcon: string;
   let statusText: string;
-  let actionText: string;
   let additionalInfo = '';
   
   if (isMixedState) {
     try {
       const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-      const platformNames = platformEntities.map((p: { type: string }) => {
+      const platformNames = platformEntities.map((p: { type: string; platformType?: string }) => {
+        // First try to get name from platformType field
+        if (p.platformType) {
+          return p.platformType === 'opencti' ? 'OpenCTI' : 
+                 p.platformType === 'openaev' ? 'OpenAEV' : 
+                 p.platformType.charAt(0).toUpperCase() + p.platformType.slice(1);
+        }
+        // Fall back to extracting from type prefix
         const def = getPlatformFromEntity(p.type);
         return def.name;
       }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
       
       statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
       statusText = `Not in ${platformName}`;
-      actionText = isSelected ? 'Click to deselect • Right-click to add' : 'Click to select for import';
       
+      const foundPlatformText = platformNames.length > 0 ? platformNames.join(', ') : 'other platform';
       additionalInfo = `
         <div class="xtm-tooltip-status found" style="margin-top: 4px;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-          Found in ${platformNames.join(', ')}
-        </div>
-        <div class="xtm-tooltip-action" style="color: #00c853;">
-          Click green badge to view in ${platformNames[0]}
+          Found in ${foundPlatformText}
         </div>
       `;
     } catch {
       statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
       statusText = 'Not in platform';
-      actionText = 'Click to select for import';
     }
   } else if (found) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
-    const isSelectableType = !rawType.startsWith('oaev-');
     
     if (isMultiPlatform) {
       try {
@@ -353,35 +353,18 @@ function handleHighlightHover(event: MouseEvent): void {
         
         const allPlatformNames = [platformName, ...otherPlatformNames];
         statusText = `Found in ${allPlatformNames.join(' and ')}`;
-        if (isSelectableType) {
-          actionText = isSelected 
-            ? 'Click ☑ to deselect • Click elsewhere to view details'
-            : 'Click ☐ to select for container • Click elsewhere to view details';
-        } else {
-          actionText = 'Click to view details • Use arrows to navigate platforms';
-        }
       } catch {
         statusText = `Found in ${platformName}`;
-        actionText = isSelectableType
-          ? (isSelected ? 'Click ☑ to deselect • Click elsewhere to view details' : 'Click ☐ to select for container • Click elsewhere to view details')
-          : 'Click to view details';
       }
     } else {
       statusText = `Found in ${platformName}`;
-      actionText = isSelectableType
-        ? (isSelected ? 'Click ☑ to deselect • Click elsewhere to view details' : 'Click ☐ to select for container • Click elsewhere to view details')
-        : 'Click to view details';
     }
   } else if (isSdoNotAddable) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9e9e9e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-    statusText = 'Not in platform';
-    actionText = `CVE detected but not found in ${platformName}`;
+    statusText = `Not in ${platformName}`;
   } else {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-    statusText = 'Not in platform';
-    actionText = isSelected 
-      ? 'Click to deselect • Right-click to add now'
-      : 'Click to select for import • Right-click to add now';
+    statusText = `Not in ${platformName}`;
   }
   
   tooltip.innerHTML = `
@@ -392,9 +375,6 @@ function handleHighlightHover(event: MouseEvent): void {
     <div class="xtm-tooltip-status ${found ? 'found' : 'not-found'}">
       ${statusIcon}
       ${statusText}
-    </div>
-    <div class="xtm-tooltip-action">
-      ${actionText}
     </div>
     ${additionalInfo}
   `;
@@ -745,7 +725,8 @@ async function scanPage(): Promise<void> {
     if (response.success && response.data) {
       const data = response.data;
       scanResults = data;
-      lastScanData = data;
+      // Include page content in lastScanData for AI features when panel is re-opened
+      lastScanData = { ...data, pageContent: content, pageTitle: document.title, pageUrl: url };
       
       highlightResults(data, {
         onHover: handleHighlightHover,
@@ -780,7 +761,8 @@ async function scanPage(): Promise<void> {
         showPanelElements();
       }
       
-      sendPanelMessage('SCAN_RESULTS', data);
+      // Include page content in scan results for AI features (relationship resolution, etc.)
+      sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });
       sendPanelMessage('SELECTION_UPDATED', {
         selectedCount: selectedForImport.size,
         selectedItems: Array.from(selectedForImport),
@@ -850,7 +832,8 @@ async function scanPageForOAEV(): Promise<void> {
         showPanelElements();
       }
       
-      sendPanelMessage('SCAN_RESULTS', scanResults);
+      // Include page content in scan results for AI features
+      sendPanelMessage('SCAN_RESULTS', { ...scanResults, pageContent: content, pageTitle: document.title, pageUrl: url });
       sendPanelMessage('SELECTION_UPDATED', {
         selectedCount: selectedForImport.size,
         selectedItems: Array.from(selectedForImport),
@@ -886,7 +869,8 @@ async function scanAllPlatforms(): Promise<void> {
     if (response.success && response.data) {
       const data = response.data;
       scanResults = data;
-      lastScanData = data;
+      // Include page content in lastScanData for AI features when panel is re-opened
+      lastScanData = { ...data, pageContent: content, pageTitle: document.title, pageUrl: url };
       
       highlightResults(data, {
         onHover: handleHighlightHover,
@@ -921,7 +905,8 @@ async function scanAllPlatforms(): Promise<void> {
         showPanelElements();
       }
       
-      sendPanelMessage('SCAN_RESULTS', data);
+      // Include page content in scan results for AI features
+      sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });
       sendPanelMessage('SELECTION_UPDATED', {
         selectedCount: selectedForImport.size,
         selectedItems: Array.from(selectedForImport),

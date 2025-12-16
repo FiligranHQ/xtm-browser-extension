@@ -107,6 +107,9 @@ export function clearHighlights(): void {
 
 /**
  * Build a node map for text matching
+ * Note: We join text nodes WITHOUT spaces to enable matching entities
+ * that span multiple text nodes (e.g., CVE-2021-44228 split across elements).
+ * The offset calculation must match the join method.
  */
 export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; fullText: string } {
   let offset = 0;
@@ -119,10 +122,11 @@ export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; full
       start: offset,
       end: offset + text.length,
     });
-    offset += text.length + 1; // +1 for space between nodes
+    offset += text.length; // No +1 - join without spaces for accurate matching
   });
   
-  const fullText = textNodes.map((n) => n.textContent).join(' ');
+  // Join without spaces to allow matching entities that span text nodes
+  const fullText = textNodes.map((n) => n.textContent).join('');
   
   return { nodeMap, fullText };
 }
@@ -372,6 +376,15 @@ function highlightInText(
             const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
             if (hasMixedState) {
               highlight.dataset.mixedState = 'true';
+              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+              // Add mixed state styling - amber with green indicator
+              highlight.classList.add('xtm-mixed-state');
+            }
+            
+            // Store platform entities for multi-platform navigation (when found)
+            if (meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0) {
+              highlight.dataset.multiPlatform = 'true';
+              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
             }
             
             highlight.addEventListener('mouseenter', handlers.onHover);

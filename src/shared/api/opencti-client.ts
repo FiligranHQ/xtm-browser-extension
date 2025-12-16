@@ -1060,8 +1060,8 @@ export class OpenCTIClient {
 
   async globalSearch(searchTerm: string, types?: string[], limit: number = 25): Promise<SearchResult[]> {
     const query = `
-      query GlobalSearch($search: String!, $types: [String], $first: Int) {
-        stixCoreObjects(search: $search, types: $types, first: $first) {
+      query GlobalSearch($search: String!, $types: [String], $first: Int, $orderBy: StixCoreObjectsOrdering, $orderMode: OrderingMode) {
+        stixCoreObjects(search: $search, types: $types, first: $first, orderBy: $orderBy, orderMode: $orderMode) {
           edges {
             node {
               id entity_type representative { main }
@@ -1087,7 +1087,13 @@ export class OpenCTIClient {
         }
       }
     `;
-    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(query, { search: searchTerm, types, first: limit });
+    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(query, { 
+      search: searchTerm, 
+      types, 
+      first: limit,
+      orderBy: '_score',
+      orderMode: 'desc',
+    });
     return data.stixCoreObjects.edges.map((e) => e.node);
   }
 

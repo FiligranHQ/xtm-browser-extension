@@ -44,7 +44,7 @@ export interface AIModelInfo {
 }
 
 export interface AISettings {
-  enabled: boolean;
+  enabled?: boolean; // Deprecated: now computed from provider + apiKey + model
   provider?: AIProvider;
   apiKey?: string;
   // Model selection (optional, uses provider defaults if not set)

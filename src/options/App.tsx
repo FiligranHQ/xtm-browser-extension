@@ -575,7 +575,6 @@ const App: React.FC = () => {
     setAiTestResult(null);
     setAvailableModels([]);
     updateSetting('ai', {
-      enabled: false,
       provider: undefined,
       apiKey: undefined,
       model: undefined,

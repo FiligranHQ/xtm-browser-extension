@@ -762,5 +762,5 @@ Quality over quantity - only include relationships you are confident about.`;
  * Check if AI is configured and available
  */
 export function isAIAvailable(settings?: AISettings): boolean {
-  return !!(settings?.enabled && settings?.provider && settings?.apiKey);
+  return !!(settings?.provider && settings?.apiKey && settings?.model);
 }

@@ -342,7 +342,54 @@ export function extractFirstParagraph(textContent: string, maxLength = 500): str
 // ============================================================================
 
 /**
+ * Check if an element is truly visible on the page
+ */
+function isElementVisible(el: Element): boolean {
+  const htmlEl = el as HTMLElement;
+  
+  // Check if element has dimensions
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    return false;
+  }
+  
+  // Check computed styles
+  try {
+    const style = window.getComputedStyle(htmlEl);
+    if (style.display === 'none' || 
+        style.visibility === 'hidden' || 
+        style.opacity === '0') {
+      return false;
+    }
+  } catch {
+    // If we can't get computed style, assume visible
+  }
+  
+  // Check for hidden attribute
+  if (htmlEl.hidden) {
+    return false;
+  }
+  
+  // Check aria-hidden
+  if (htmlEl.getAttribute('aria-hidden') === 'true') {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Tags that should be excluded from text extraction
+ */
+const EXCLUDED_TAGS = new Set([
+  'script', 'style', 'noscript', 'template', 
+  'video', 'audio', 'link', 'meta',
+  'head', 'br', 'hr', 'img',
+]);
+
+/**
  * Extract text content from Shadow DOM elements (recursive)
+ * Only extracts from visible elements
  */
 export function extractTextFromShadowDOM(root: Document | ShadowRoot | Element): string {
   const textParts: string[] = [];
@@ -350,11 +397,18 @@ export function extractTextFromShadowDOM(root: Document | ShadowRoot | Element):
   const elements = root.querySelectorAll('*');
   
   elements.forEach(el => {
+    // Only process if the host element is visible
+    if (!isElementVisible(el)) {
+      return;
+    }
+    
     if (el.shadowRoot) {
-      const shadowText = el.shadowRoot.textContent || '';
-      if (shadowText.trim()) {
-        textParts.push(shadowText);
+      // Get visible text from shadow root
+      const visibleText = getVisibleTextFromNode(el.shadowRoot);
+      if (visibleText.trim()) {
+        textParts.push(visibleText);
       }
+      // Recursively check nested shadow roots
       const nestedText = extractTextFromShadowDOM(el.shadowRoot);
       if (nestedText.trim()) {
         textParts.push(nestedText);
@@ -366,28 +420,94 @@ export function extractTextFromShadowDOM(root: Document | ShadowRoot | Element):
 }
 
 /**
+ * Recursively extract visible text from a node
+ */
+function getVisibleTextFromNode(node: Node): string {
+  // Text node - return the text
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent?.trim() || '';
+  }
+  
+  // Not an element node - skip
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return '';
+  }
+  
+  const el = node as Element;
+  const tagName = el.tagName?.toLowerCase();
+  
+  // Skip excluded tags
+  if (tagName && EXCLUDED_TAGS.has(tagName)) {
+    return '';
+  }
+  
+  // Skip invisible elements
+  if (!isElementVisible(el)) {
+    return '';
+  }
+  
+  // Collect text from child nodes
+  const textParts: string[] = [];
+  for (const child of Array.from(node.childNodes)) {
+    const text = getVisibleTextFromNode(child);
+    if (text) {
+      textParts.push(text);
+    }
+  }
+  
+  return textParts.join(' ');
+}
+
+/**
  * Get clean visible text content from the page
+ * Only extracts text that is actually visible to the user
  */
 export function getCleanVisibleText(): string {
-  const clone = document.body.cloneNode(true) as HTMLElement;
+  // Walk the actual DOM and collect only visible text
+  const textParts: string[] = [];
   
-  const elementsToRemove = [
-    'script', 'style', 'noscript', 'template', 'svg', 'canvas', 'video', 'audio',
-    'iframe', 'object', 'embed', 'link', 'meta',
-    '[hidden]', '[style*="display: none"]', '[style*="display:none"]',
-    '[style*="visibility: hidden"]', '[style*="visibility:hidden"]',
-    '[aria-hidden="true"]',
-    '.sr-only', '.visually-hidden', '.screen-reader-text',
-  ];
+  function walkNode(node: Node): void {
+    // Text node - check if parent is visible
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim();
+      if (text && node.parentElement && isElementVisible(node.parentElement)) {
+        textParts.push(text);
+      }
+      return;
+    }
+    
+    // Not an element - skip
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    
+    const el = node as Element;
+    const tagName = el.tagName?.toLowerCase();
+    
+    // Skip excluded tags entirely
+    if (tagName && EXCLUDED_TAGS.has(tagName)) {
+      return;
+    }
+    
+    // Skip invisible elements and their children
+    if (!isElementVisible(el)) {
+      return;
+    }
+    
+    // Recurse into children
+    for (const child of Array.from(node.childNodes)) {
+      walkNode(child);
+    }
+  }
   
-  elementsToRemove.forEach(selector => {
-    try {
-      clone.querySelectorAll(selector).forEach(el => el.remove());
-    } catch { /* Skip invalid selectors */ }
-  });
+  // Start walking from body
+  if (document.body) {
+    walkNode(document.body);
+  }
   
-  let text = clone.innerText || clone.textContent || '';
+  let text = textParts.join(' ');
   
+  // Clean up the text
   text = text
     .replace(/[\t\r]/g, ' ')
     .replace(/\n{3,}/g, '\n\n')

@@ -7,9 +7,10 @@ export const HIGHLIGHT_STYLES = `
   /* ========================================
      BASE HIGHLIGHT STYLES - BULLETPROOF
      Force full borders visible above ALL page elements
+     Uses OUTLINE instead of border - outlines are NEVER clipped by overflow:hidden
      ======================================== */
   .xtm-highlight {
-    /* Use inline-block to ensure borders are fully rendered */
+    /* Use inline-block to ensure proper rendering */
     display: inline-block !important;
     position: relative !important;
     
@@ -32,10 +33,10 @@ export const HIGHLIGHT_STYLES = `
     font-weight: inherit !important;
     color: inherit !important;
     
-    /* Border styling - explicit */
-    border-width: 2px !important;
-    border-style: solid !important;
-    border-color: currentColor !important;
+    /* Use OUTLINE instead of border - outlines ignore overflow:hidden! */
+    border: none !important;
+    outline: 2px solid currentColor !important;
+    outline-offset: 0px !important;
     
     /* Multi-line support - ensure borders wrap with text */
     box-decoration-break: clone !important;
@@ -49,7 +50,7 @@ export const HIGHLIGHT_STYLES = `
     clip-path: none !important;
     -webkit-clip-path: none !important;
     
-    /* Prevent parent overflow from clipping borders */
+    /* Prevent parent overflow from clipping */
     transform: translateZ(0) !important;
     -webkit-transform: translateZ(0) !important;
     
@@ -78,13 +79,26 @@ export const HIGHLIGHT_STYLES = `
     cursor: pointer !important;
   }
   
-  /* CRITICAL: Force parent elements to NOT clip highlights
-     This is necessary because many websites have overflow:hidden on containers */
-  *:has(> .xtm-highlight) {
+  /* CRITICAL: Force ALL ancestor elements to NOT clip highlights
+     This is necessary because many websites have overflow:hidden on containers
+     Using multiple levels of :has() to catch nested cases */
+  *:has(.xtm-highlight) {
     overflow: visible !important;
     clip: auto !important;
     clip-path: none !important;
     -webkit-clip-path: none !important;
+  }
+  
+  /* Also target common clipping container patterns */
+  td:has(.xtm-highlight),
+  th:has(.xtm-highlight),
+  span:has(.xtm-highlight),
+  div:has(.xtm-highlight),
+  p:has(.xtm-highlight),
+  a:has(.xtm-highlight),
+  li:has(.xtm-highlight) {
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
   
   /* Ensure clickable cursor on all interactive highlights */
@@ -97,8 +111,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-found {
     background: rgba(0, 200, 83, 0.25) !important;
-    border: 2px solid #4caf50 !important;
-    border-color: #4caf50 !important;
+    outline: 2px solid #4caf50 !important;
     padding: 4px 26px 4px 30px !important;  /* Extra space on left for checkbox */
   }
   
@@ -141,7 +154,7 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-highlight.xtm-found:hover {
     background: rgba(0, 200, 83, 0.4) !important;
-    border-color: #2e7d32 !important;
+    outline-color: #2e7d32 !important;
     box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
   }
   
@@ -157,7 +170,7 @@ export const HIGHLIGHT_STYLES = `
   
   /* Selected state for found entities - green glow */
   .xtm-highlight.xtm-found.xtm-selected {
-    border-color: #00c853 !important;
+    outline-color: #00c853 !important;
     box-shadow: 0 0 8px rgba(0, 200, 83, 0.6) !important;
   }
 
@@ -166,8 +179,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-not-found {
     background: rgba(255, 167, 38, 0.25) !important;
-    border: 2px solid #ffa726 !important;
-    border-color: #ffa726 !important;
+    outline: 2px solid #ffa726 !important;
     padding: 4px 26px 4px 30px !important;  /* Extra space on left for checkbox */
   }
   
@@ -210,7 +222,7 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-highlight.xtm-not-found:hover {
     background: rgba(255, 167, 38, 0.4) !important;
-    border-color: #f57c00 !important;
+    outline-color: #f57c00 !important;
     box-shadow: 0 0 8px rgba(255, 167, 38, 0.5) !important;
   }
 
@@ -218,7 +230,7 @@ export const HIGHLIGHT_STYLES = `
      SELECTED FOR BULK IMPORT - Checked checkbox
      ======================================== */
   .xtm-highlight.xtm-selected {
-    border-color: #0fbcff !important;
+    outline-color: #0fbcff !important;
     box-shadow: 0 0 8px rgba(15, 188, 255, 0.5) !important;
   }
   
@@ -238,8 +250,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-sdo-not-addable {
     background: rgba(158, 158, 158, 0.2) !important;
-    border: 2px solid #9e9e9e !important;
-    border-color: #9e9e9e !important;
+    outline: 2px solid #9e9e9e !important;
     padding: 2px 22px 2px 6px !important;
     cursor: default !important;  /* Not clickable */
   }
@@ -257,6 +268,73 @@ export const HIGHLIGHT_STYLES = `
     background-size: contain !important;
     background-repeat: no-repeat !important;
     display: block !important;
+
+  /* ========================================
+     MIXED STATE - Not found in one platform but found in another
+     Shows amber outline with green badge indicator
+     ======================================== */
+  }
+  .xtm-highlight.xtm-mixed-state {
+    background: linear-gradient(90deg, rgba(255, 167, 38, 0.25) 0%, rgba(255, 167, 38, 0.25) 70%, rgba(0, 200, 83, 0.3) 70%, rgba(0, 200, 83, 0.3) 100%) !important;
+    outline: 2px solid #ffa726 !important;
+    padding: 2px 28px 2px 22px !important;
+    cursor: pointer !important;
+  }
+  
+  /* Checkbox on LEFT for mixed state (for adding to primary platform) */
+  .xtm-highlight.xtm-mixed-state::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 12px !important;
+    height: 12px !important;
+    border: 2px solid #ffa726 !important;
+    border-radius: 3px !important;
+    background: transparent !important;
+    display: block !important;
+    box-sizing: border-box !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+  }
+  
+  /* Green checkmark badge on RIGHT for mixed state (found in other platform) */
+  .xtm-highlight.xtm-mixed-state::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 6px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 16px !important;
+    height: 16px !important;
+    background: #00c853 !important;
+    border-radius: 50% !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 10px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
+    cursor: pointer !important;
+  }
+  
+  .xtm-highlight.xtm-mixed-state:hover {
+    background: linear-gradient(90deg, rgba(255, 167, 38, 0.4) 0%, rgba(255, 167, 38, 0.4) 70%, rgba(0, 200, 83, 0.5) 70%, rgba(0, 200, 83, 0.5) 100%) !important;
+    box-shadow: 0 0 8px rgba(255, 167, 38, 0.5) !important;
+  }
+  
+  /* Mixed state when selected for import */
+  .xtm-highlight.xtm-mixed-state.xtm-selected::before {
+    background: #0fbcff !important;
+    border-color: #0fbcff !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 10px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
     visibility: visible !important;
     opacity: 1 !important;
     z-index: 2147483641 !important;
@@ -264,73 +342,8 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-highlight.xtm-sdo-not-addable:hover {
     background: rgba(158, 158, 158, 0.35) !important;
-    border-color: #757575 !important;
+    outline-color: #757575 !important;
     box-shadow: 0 0 8px rgba(158, 158, 158, 0.4) !important;
-  }
-
-  /* ========================================
-     NON-DEFAULT PLATFORM ENTITIES (OpenAEV, OpenGRC, etc.)
-     Uses same green color as OpenCTI for consistency
-     ======================================== */
-  
-  /* Generic platform entity found - green style (consistent with OpenCTI) */
-  .xtm-highlight.xtm-platform-found {
-    background: rgba(0, 200, 83, 0.25) !important;
-    border: 2px solid #4caf50 !important;
-    border-color: #4caf50 !important;
-  }
-  
-  .xtm-highlight.xtm-platform-found::after {
-    content: '' !important;
-    position: absolute !important;
-    right: 6px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 14px !important;
-    height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 2147483641 !important;
-  }
-  
-  .xtm-highlight.xtm-platform-found:hover {
-    background: rgba(0, 200, 83, 0.4) !important;
-    border-color: #2e7d32 !important;
-    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
-  }
-  
-  /* OpenAEV entity found highlight - green (consistent with OpenCTI) */
-  .xtm-highlight.xtm-oaev-found {
-    background: rgba(0, 200, 83, 0.25) !important;
-    border: 2px solid #4caf50 !important;
-    border-color: #4caf50 !important;
-  }
-  
-  .xtm-highlight.xtm-oaev-found::after {
-    content: '' !important;
-    position: absolute !important;
-    right: 6px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 14px !important;
-    height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 2147483641 !important;
-  }
-  
-  .xtm-highlight.xtm-oaev-found:hover {
-    background: rgba(0, 200, 83, 0.4) !important;
-    border-color: #2e7d32 !important;
-    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
   }
 
   /* ========================================
@@ -340,8 +353,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-ai-discovered {
     background: rgba(149, 117, 205, 0.25) !important;
-    border: 2px solid #9575cd !important;
-    border-color: #9575cd !important;
+    outline: 2px solid #9575cd !important;
     padding: 4px 26px 4px 30px !important;  /* Extra space on left for checkbox */
   }
   
@@ -383,7 +395,7 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-highlight.xtm-ai-discovered:hover {
     background: rgba(149, 117, 205, 0.4) !important;
-    border-color: #673ab7 !important;
+    outline-color: #673ab7 !important;
     box-shadow: 0 0 8px rgba(149, 117, 205, 0.5) !important;
   }
   
@@ -398,75 +410,11 @@ export const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     MIXED STATE - Not found in OpenCTI but FOUND in another platform
-     Orange base with checkbox on left, green indicator on right showing found
-     ======================================== */
-  .xtm-highlight.xtm-mixed {
-    background: linear-gradient(to right, rgba(255, 167, 38, 0.25) 70%, rgba(0, 200, 83, 0.25) 70%) !important;
-    border: 2px solid !important;
-    border-image: linear-gradient(to right, #ffa726 70%, #4caf50 30%) 1 !important;
-    padding: 4px 40px 4px 30px !important;  /* Extra space for both icons */
-  }
-  
-  /* Unchecked checkbox on LEFT (same as not-found) */
-  .xtm-highlight.xtm-mixed::before {
-    content: '' !important;
-    position: absolute !important;
-    left: 10px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 12px !important;
-    height: 12px !important;
-    border: 2px solid #ffa726 !important;
-    border-radius: 2px !important;
-    background: transparent !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 2147483641 !important;
-  }
-  
-  /* Green check icon on RIGHT for found in other platform */
-  .xtm-highlight.xtm-mixed::after {
-    content: '' !important;
-    position: absolute !important;
-    right: 6px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 28px !important;
-    height: 14px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Cpath d='M6 1h16a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H6a5 5 0 0 1-5-5V6a5 5 0 0 1 5-5z' fill='%2300c853' fill-opacity='0.9'/%3E%3Cpath d='M11 4l-3 3-1.5-1.5-.7.7 2.2 2.3 3.7-3.8z' fill='white'/%3E%3Ctext x='16' y='10' font-size='6' fill='white' font-family='Arial'>VIEW</text%3E%3C/svg%3E") !important;
-    background-size: contain !important;
-    background-repeat: no-repeat !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 2147483641 !important;
-    cursor: pointer !important;
-  }
-  
-  .xtm-highlight.xtm-mixed:hover {
-    background: linear-gradient(to right, rgba(255, 167, 38, 0.4) 70%, rgba(0, 200, 83, 0.4) 70%) !important;
-    box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
-  }
-  
-  /* Selected state for mixed */
-  .xtm-highlight.xtm-mixed.xtm-selected::before {
-    background: #0fbcff !important;
-    border-color: #0fbcff !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
-    background-size: 10px !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-  }
-
-  /* ========================================
      INVESTIGATION MODE - Purple style with checkbox on LEFT
      ======================================== */
   .xtm-highlight.xtm-investigation {
     background: rgba(103, 58, 183, 0.25) !important;
-    border: 2px solid #7c4dff !important;
-    border-color: #7c4dff !important;
+    outline: 2px solid #7c4dff !important;
     padding: 4px 8px 4px 30px !important;  /* Extra space on left for checkbox */
     cursor: pointer !important;
   }
@@ -492,14 +440,14 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-highlight.xtm-investigation:hover {
     background: rgba(103, 58, 183, 0.4) !important;
-    border-color: #651fff !important;
+    outline-color: #651fff !important;
     box-shadow: 0 0 8px rgba(103, 58, 183, 0.5) !important;
   }
   
   /* Selected state for investigation */
   .xtm-highlight.xtm-investigation.xtm-selected {
     background: rgba(103, 58, 183, 0.35) !important;
-    border-color: #651fff !important;
+    outline-color: #651fff !important;
     box-shadow: 0 0 8px rgba(103, 58, 183, 0.6) !important;
   }
   
@@ -518,8 +466,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-atomic-testing {
     background: rgba(212, 225, 87, 0.25) !important;
-    border: 2px solid #d4e157 !important;
-    border-color: #d4e157 !important;
+    outline: 2px solid #d4e157 !important;
     padding: 2px 6px !important;  /* Simple padding, no extra space for icons */
     cursor: default !important;  /* Not clickable */
     pointer-events: none !important;  /* Disable all mouse events */
@@ -536,13 +483,13 @@ export const HIGHLIGHT_STYLES = `
   /* Domain/hostname variant - cyan/teal color */
   .xtm-highlight.xtm-atomic-testing.xtm-atomic-domain {
     background: rgba(0, 188, 212, 0.25) !important;
-    border-color: #00bcd4 !important;
+    outline-color: #00bcd4 !important;
   }
   
   /* Attack pattern variant - lime/yellow color (matches panel) */
   .xtm-highlight.xtm-atomic-testing.xtm-atomic-attack-pattern {
     background: rgba(212, 225, 87, 0.25) !important;
-    border-color: #d4e157 !important;
+    outline-color: #d4e157 !important;
   }
 
   /* ========================================
@@ -551,8 +498,7 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-highlight.xtm-scenario {
     background: rgba(212, 225, 87, 0.25) !important;
-    border: 2px solid #d4e157 !important;
-    border-color: #d4e157 !important;
+    outline: 2px solid #d4e157 !important;
     padding: 2px 6px !important;
     cursor: default !important;
     pointer-events: none !important;
@@ -630,73 +576,7 @@ export const HIGHLIGHT_STYLES = `
   .xtm-tooltip-status.not-found {
     color: #ffa726;
   }
-  
-  .xtm-tooltip-action {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
-    margin-top: 6px;
-  }
-  
-  /* ========================================
-     SCAN OVERLAY
-     ======================================== */
-  .xtm-scan-overlay {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
-    color: rgba(255, 255, 255, 0.9);
-    padding: 16px 24px;
-    border-radius: 8px;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    z-index: 2147483647;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .xtm-scan-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(15, 188, 255, 0.3);
-    border-top-color: #0fbcff;
-    border-radius: 50%;
-    animation: xtm-spin 0.8s linear infinite;
-  }
-  
-  @keyframes xtm-spin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .xtm-scan-scroll-btn {
-    background: #0fbcff;
-    color: #001e3c;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: all 0.2s;
-    font-family: inherit;
-    margin-left: 8px;
-  }
-  
-  .xtm-scan-scroll-btn:hover {
-    background: #40caff;
-    transform: translateY(-1px);
-  }
-  
-  .xtm-scan-scroll-btn:active {
-    transform: translateY(0);
-  }
-  
+
   /* Flash animation for scroll-to highlight */
   @keyframes xtm-flash {
     0%, 100% { box-shadow: 0 0 0 0 rgba(15, 188, 255, 0); }
@@ -742,6 +622,128 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-panel-overlay.hidden {
     display: none;
+  }
+
+  /* ========================================
+     TOAST NOTIFICATIONS
+     ======================================== */
+  .xtm-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    z-index: 2147483647;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 500px;
+    animation: xtm-toast-slide-in 0.3s ease-out;
+  }
+
+  @keyframes xtm-toast-slide-in {
+    from {
+      transform: translateX(-50%) translateY(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .xtm-toast.xtm-toast-hiding {
+    animation: xtm-toast-slide-out 0.2s ease-in forwards;
+  }
+
+  @keyframes xtm-toast-slide-out {
+    from {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(-50%) translateY(-100%);
+      opacity: 0;
+    }
+  }
+
+  .xtm-toast-info {
+    border-left: 4px solid #0fbcff;
+  }
+
+  .xtm-toast-success {
+    border-left: 4px solid #4caf50;
+  }
+
+  .xtm-toast-error {
+    border-left: 4px solid #f44336;
+  }
+
+  .xtm-toast-warning {
+    border-left: 4px solid #ff9800;
+  }
+
+  .xtm-toast-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .xtm-toast-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(15, 188, 255, 0.3);
+    border-top-color: #0fbcff;
+    border-radius: 50%;
+    animation: xtm-spin 0.8s linear infinite;
+  }
+
+  .xtm-toast-message {
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  .xtm-toast-action {
+    background: #0fbcff;
+    color: #001e3c;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .xtm-toast-action:hover {
+    background: #40caff;
+  }
+
+  .xtm-toast-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .xtm-toast-close:hover {
+    color: rgba(255, 255, 255, 0.9);
   }
 
 `;

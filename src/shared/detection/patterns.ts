@@ -146,10 +146,17 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // ============================================================================
 
 // CVE identifier
-// Matches: CVE-2021-44228, CVE-2022-0001
-// Also handles non-breaking hyphens (‑), en dashes (–), and other dash-like characters
-// that may appear in web content due to typography or copy-paste
-export const CVE_PATTERN = /CVE[-\u2010\u2011\u2012\u2013]\d{4}[-\u2010\u2011\u2012\u2013]\d{4,}/gi;
+// Matches: CVE-2021-44228, CVE-2022-0001, CVE-2024-38178
+// Handles various dash-like characters that may appear in web content:
+// - Regular hyphen-minus (-)
+// - Non-breaking hyphen (‑) \u2010
+// - Figure dash (‒) \u2012
+// - En dash (–) \u2013
+// - Em dash (—) \u2014
+// - Minus sign (−) \u2212
+// - Soft hyphen \u00AD
+// Also allows optional spaces around dashes for malformed content
+export const CVE_PATTERN = /CVE\s*[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\s*\d{4}\s*[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\s*\d{4,}/gi;
 
 // ============================================================================
 // ASN Pattern

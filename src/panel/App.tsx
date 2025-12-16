@@ -433,7 +433,7 @@ const App: React.FC = () => {
   const [aiFillingEmails, setAiFillingEmails] = useState(false);
   const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
   // Store page content for AI discovery (set when scan completes)
-  const [scanPageContent, _setScanPageContent] = useState<string>('');
+  const [scanPageContent, setScanPageContent] = useState<string>('');
   
   // Toast notification helper - sends to content script
   const showToast = React.useCallback((options: {
@@ -695,9 +695,9 @@ const App: React.FC = () => {
         
         // Fetch AI settings availability
         const ai = response.data?.ai;
-        const aiAvailable = !!(ai?.enabled && ai?.provider && ai?.apiKey);
+        const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
         setAiSettings({
-          enabled: ai?.enabled || false,
+          enabled: aiAvailable,
           provider: ai?.provider,
           available: aiAvailable,
         });
@@ -817,9 +817,9 @@ const App: React.FC = () => {
           
           // Update AI settings
           const ai = newSettings.ai;
-          const aiAvailable = !!(ai?.enabled && ai?.provider && ai?.apiKey);
+          const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
           setAiSettings({
-            enabled: ai?.enabled || false,
+            enabled: aiAvailable,
             provider: ai?.provider,
             available: aiAvailable,
           });
@@ -1625,6 +1625,17 @@ const App: React.FC = () => {
         setScanResultsEntities(scanEntities);
         setScanResultsTypeFilter('all');
         setScanResultsFoundFilter('all');
+        // Store page content for AI features (relationship resolution, etc.)
+        if (results.pageContent) {
+          setScanPageContent(results.pageContent);
+        }
+        // Update page title/URL if provided
+        if (results.pageTitle) {
+          setCurrentPageTitle(results.pageTitle);
+        }
+        if (results.pageUrl) {
+          setCurrentPageUrl(results.pageUrl);
+        }
         // Note: Don't clear selections here - SELECTION_UPDATED message follows with correct state
         // This allows selections to persist when re-opening panel
         setEntityFromScanResults(false);

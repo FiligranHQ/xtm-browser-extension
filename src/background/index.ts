@@ -3615,7 +3615,7 @@ async function handleMessage(
           data: { 
             available,
             provider: settings.ai?.provider,
-            enabled: settings.ai?.enabled,
+            enabled: available,
           } 
         });
         break;

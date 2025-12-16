@@ -1860,113 +1860,6 @@ const HIGHLIGHT_STYLES = `
     display: none;
   }
 
-  /* ========================================
-     BOTTOM SELECTION PANEL
-     Must be above the side panel (2147483646) so buttons are visible
-     ======================================== */
-  .xtm-selection-panel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
-    color: rgba(255, 255, 255, 0.9);
-    padding: 16px 24px;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    z-index: 2147483647;
-    box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.5);
-    border-top: 1px solid rgba(15, 188, 255, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-  }
-  
-  .xtm-selection-panel.visible {
-    transform: translateY(0);
-  }
-  
-  .xtm-selection-info {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  
-  .xtm-selection-count {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .xtm-selection-count-badge {
-    background: #0fbcff;
-    color: #001e3c;
-    font-weight: 700;
-    font-size: 16px;
-    min-width: 32px;
-    height: 32px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 10px;
-  }
-  
-  .xtm-selection-count-text {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.8);
-  }
-  
-  .xtm-selection-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .xtm-selection-btn {
-    padding: 10px 20px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-    font-family: inherit;
-  }
-  
-  .xtm-selection-btn-primary {
-    background: linear-gradient(135deg, #0fbcff 0%, #0ca8e6 100%);
-    color: #001e3c;
-  }
-  
-  .xtm-selection-btn-primary:hover {
-    background: linear-gradient(135deg, #3dcaff 0%, #0fbcff 100%);
-    box-shadow: 0 4px 16px rgba(15, 188, 255, 0.4);
-    color: #001e3c;
-  }
-  
-  .xtm-selection-btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
-  
-  .xtm-selection-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-  
-  .xtm-selection-btn-clear {
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
-    padding: 10px 12px;
-  }
-  
-  .xtm-selection-btn-clear:hover {
-    color: #f44336;
-  }
 `;
 
 // ============================================================================
@@ -2000,121 +1893,7 @@ function createTooltip(): HTMLElement | null {
   return tooltip;
 }
 
-function createSelectionPanel(): HTMLElement | null {
-  // Check if we're on a valid HTML page
-  if (!document.body) {
-    return null;
-  }
-  
-  const panel = document.createElement('div');
-  panel.className = 'xtm-selection-panel';
-  panel.id = 'xtm-selection-panel';
-  panel.innerHTML = `
-    <div class="xtm-selection-info">
-      <div class="xtm-selection-count">
-        <span class="xtm-selection-count-badge" id="xtm-selection-count">0</span>
-        <span class="xtm-selection-count-text">observables selected</span>
-      </div>
-    </div>
-    <div class="xtm-selection-actions">
-      <button class="xtm-selection-btn xtm-selection-btn-clear" id="xtm-clear-selection" title="Clear selection">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-      <button class="xtm-selection-btn xtm-selection-btn-secondary" id="xtm-select-all">Select all new</button>
-      <button class="xtm-selection-btn xtm-selection-btn-primary" id="xtm-preview-selection" style="display: flex; align-items: center; justify-content: center;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; flex-shrink: 0;">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-        Import
-      </button>
-    </div>
-  `;
-  document.body.appendChild(panel);
-  
-  // Add event listeners
-  document.getElementById('xtm-clear-selection')?.addEventListener('click', clearAllSelections);
-  document.getElementById('xtm-select-all')?.addEventListener('click', selectAllNotFound);
-  document.getElementById('xtm-preview-selection')?.addEventListener('click', openPreviewPanel);
-  
-  return panel;
-}
 
-function updateSelectionPanel(): void {
-  const panel = document.getElementById('xtm-selection-panel');
-  const countBadge = document.getElementById('xtm-selection-count');
-  
-  if (!panel || !countBadge) return;
-  
-  const count = selectedForImport.size;
-  countBadge.textContent = String(count);
-  
-  if (count > 0) {
-    panel.classList.add('visible');
-  } else {
-    panel.classList.remove('visible');
-  }
-}
-
-function clearAllSelections(): void {
-  selectedForImport.clear();
-  document.querySelectorAll('.xtm-highlight.xtm-selected').forEach(el => {
-    el.classList.remove('xtm-selected');
-  });
-  updateSelectionPanel();
-  
-  // Notify panel about selection change (sync with right panel)
-  sendPanelMessage('SELECTION_UPDATED', {
-    selectedCount: 0,
-    selectedItems: [],
-  });
-}
-
-function selectAllNotFound(): void {
-  log.debug(' selectAllNotFound called');
-  
-  // Only select observables that can be added (not SDOs like CVEs)
-  const notFoundHighlights = document.querySelectorAll('.xtm-highlight.xtm-not-found');
-  log.debug(` Found ${notFoundHighlights.length} not-found highlights`);
-  
-  notFoundHighlights.forEach(el => {
-    const value = (el as HTMLElement).dataset.value;
-    // Skip if it's a non-addable SDO type
-    if ((el as HTMLElement).classList.contains('xtm-sdo-not-addable')) return;
-    if (value && !selectedForImport.has(value)) {
-      selectedForImport.add(value);
-      el.classList.add('xtm-selected');
-    }
-  });
-  
-  log.debug(` Selected ${selectedForImport.size} items:`, Array.from(selectedForImport));
-  updateSelectionPanel();
-  
-  // Notify panel about selection change (sync with right panel)
-  const messagePayload = {
-    selectedCount: selectedForImport.size,
-    selectedItems: Array.from(selectedForImport),
-  };
-  log.debug(' Sending SELECTION_UPDATED to panel:', messagePayload);
-  sendPanelMessage('SELECTION_UPDATED', messagePayload);
-}
-
-function hideSelectionPanel(): void {
-  const panel = document.getElementById('xtm-selection-panel');
-  if (panel) {
-    panel.classList.remove('visible');
-  }
-}
-
-function openPreviewPanel(): void {
-  // Hide the bottom selection bar when opening the import preview
-  hideSelectionPanel();
-  showPreviewPanel();
-}
 
 function initialize(): void {
   // Check if we're on a valid HTML page
@@ -2133,7 +1912,6 @@ function initialize(): void {
   }
   
   createTooltip();
-  createSelectionPanel();
   
   // Listen for messages from the panel iframe
   window.addEventListener('message', async (event) => {
@@ -2184,7 +1962,6 @@ function initialize(): void {
         } else {
           selectedForImport.add(value);
         }
-        updateSelectionPanel();
         // Notify panel about selection change
         sendPanelMessage('SELECTION_UPDATED', {
           selectedCount: selectedForImport.size,
@@ -2203,7 +1980,6 @@ function initialize(): void {
           });
         }
       });
-      updateSelectionPanel();
       // Notify panel about selection change
       sendPanelMessage('SELECTION_UPDATED', {
         selectedCount: selectedForImport.size,
@@ -2217,15 +1993,25 @@ function initialize(): void {
         });
       });
       selectedForImport.clear();
-      updateSelectionPanel();
       // Notify panel about selection change
       sendPanelMessage('SELECTION_UPDATED', {
         selectedCount: 0,
         selectedItems: [],
       });
-    } else if (event.data?.type === 'XTM_HIDE_SELECTION_PANEL') {
-      // Hide the bottom selection bar (called when import is triggered from panel)
-      hideSelectionPanel();
+    } else if (event.data?.type === 'XTM_DESELECT_ITEM' && event.data.value) {
+      // Deselect a single item (called from preview when trash icon is clicked)
+      const value = event.data.value;
+      // Always remove from selectedForImport and update highlights
+      selectedForImport.delete(value);
+      // Update highlights if they exist
+      document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`).forEach(el => {
+        el.classList.remove('xtm-selected');
+      });
+      // Notify panel about selection change
+      sendPanelMessage('SELECTION_UPDATED', {
+        selectedCount: selectedForImport.size,
+        selectedItems: Array.from(selectedForImport),
+      });
     } else if (event.data?.type === 'XTM_HIGHLIGHT_AI_ENTITIES' && event.data.entities) {
       // Highlight AI-discovered entities on the page
       const entities = event.data.entities as Array<{ type: string; value: string; name: string }>;
@@ -4158,9 +3944,6 @@ function toggleSelection(element: HTMLElement, value: string): void {
       el.classList.add('xtm-selected');
     });
   }
-  
-  // Update the bottom selection panel
-  updateSelectionPanel();
   
   // Notify panel about selection change (sync with right panel checkboxes)
   sendPanelMessage('SELECTION_UPDATED', {

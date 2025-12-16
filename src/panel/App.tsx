@@ -60,6 +60,7 @@ import {
   AutoAwesomeOutlined,
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
+  DeleteOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Target, MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
@@ -312,9 +313,54 @@ const App: React.FC = () => {
     scanResultsEntitiesRef.current = scanResultsEntities;
   }, [scanResultsEntities]);
   const [scanResultsTypeFilter, setScanResultsTypeFilter] = useState<string>('all');
-  const [scanResultsFoundFilter, setScanResultsFoundFilter] = useState<'all' | 'found' | 'not-found'>('all');
+  const [scanResultsFoundFilter, setScanResultsFoundFilter] = useState<'all' | 'found' | 'not-found' | 'ai-discovered'>('all');
   // Selected items for import (synced with content script)
   const [selectedScanItems, setSelectedScanItems] = useState<Set<string>>(new Set());
+  
+  // Sync entitiesToAdd with selectedScanItems when in preview mode
+  React.useEffect(() => {
+    if (panelMode === 'preview' && scanResultsEntitiesRef.current.length > 0) {
+      // Helper function to check if entity is importable (inlined to avoid dependency issues)
+      const checkImportable = (entity: ScanResultEntity): boolean => {
+        if (entity.type.startsWith('oaev-')) return false;
+        const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
+        return octiCount === 0;
+      };
+      
+      // When in preview mode and selection changes, sync the entities list
+      const selectedEntities = scanResultsEntitiesRef.current.filter(entity => {
+        const entityValue = entity.value || entity.name;
+        return entityValue && selectedScanItems.has(entityValue) && checkImportable(entity);
+      });
+      
+      // Convert to entitiesToAdd format
+      const updatedEntities = selectedEntities.map(entity => ({
+        type: entity.type,
+        value: entity.value,
+        name: entity.name || entity.value,
+        existsInPlatform: false,
+        discoveredByAI: entity.discoveredByAI,
+      }));
+      
+      // Only update if the selection actually changed
+      setEntitiesToAdd(current => {
+        const currentValues = new Set(current.map(e => e.value || e.name));
+        const newValues = new Set(updatedEntities.map(e => e.value || e.name));
+        
+        // Check if sets are equal
+        if (currentValues.size !== newValues.size) {
+          return updatedEntities;
+        }
+        for (const v of currentValues) {
+          if (!newValues.has(v)) {
+            return updatedEntities;
+          }
+        }
+        return current; // No change
+      });
+    }
+  }, [panelMode, selectedScanItems]);
+  
   // Create indicators from observables option
   const [createIndicators, setCreateIndicators] = useState(true);
   // PDF attachment option
@@ -2585,13 +2631,27 @@ const App: React.FC = () => {
           }));
           
           // Add to scan results - avoid duplicates
-          const existingValues = new Set(
-            scanResultsEntities.map(e => (e.value || e.name).toLowerCase())
-          );
+          // Include both value/name AND external IDs (like T1059.001) for comprehensive matching
+          const existingValues = new Set<string>();
+          scanResultsEntities.forEach(e => {
+            // Add value and name (lowercase)
+            if (e.value) existingValues.add(e.value.toLowerCase());
+            if (e.name) existingValues.add(e.name.toLowerCase());
+            // Also add external ID if present (e.g., T1059.001 for attack patterns)
+            const entityData = e.entityData || {};
+            const externalId = entityData.x_mitre_id 
+              || entityData.attack_pattern_external_id 
+              || (entityData.entityData?.x_mitre_id)
+              || (entityData.entityData?.attack_pattern_external_id);
+            if (externalId) existingValues.add(externalId.toLowerCase());
+          });
           
-          const uniqueNewEntities = newEntities.filter(e => 
-            !existingValues.has((e.value || e.name).toLowerCase())
-          );
+          const uniqueNewEntities = newEntities.filter(e => {
+            const valueLC = (e.value || '').toLowerCase();
+            const nameLC = (e.name || '').toLowerCase();
+            // Entity is new if neither value nor name matches any already detected value
+            return !existingValues.has(valueLC) && !existingValues.has(nameLC);
+          });
           
           if (uniqueNewEntities.length > 0) {
             setScanResultsEntities(prev => [...prev, ...uniqueNewEntities]);
@@ -5099,6 +5159,24 @@ const App: React.FC = () => {
 
   const renderPreviewView = () => (
     <Box sx={{ p: 2 }}>
+      {/* Back to scan results button */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={() => {
+            setPanelMode('scan-results');
+          }}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          Back to scan results
+        </Button>
+      </Box>
+      
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <ArrowForwardOutlined sx={{ color: 'primary.main' }} />
         <Typography variant="h6">Import Selection</Typography>
@@ -5139,6 +5217,39 @@ const App: React.FC = () => {
               color={e.existsInPlatform ? 'success' : 'warning'}
               variant="outlined"
             />
+            <IconButton
+              size="small"
+              onClick={() => {
+                // Remove entity from the list
+                const newEntities = entitiesToAdd.filter((_, idx) => idx !== i);
+                setEntitiesToAdd(newEntities);
+                
+                // Also update selection on page highlight
+                const entityValue = e.value || e.name;
+                if (entityValue) {
+                  window.parent.postMessage({ type: 'XTM_DESELECT_ITEM', value: entityValue }, '*');
+                  setSelectedScanItems(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(entityValue);
+                    return newSet;
+                  });
+                }
+                
+                // If no entities left, go back to scan results
+                if (newEntities.length === 0) {
+                  setPanelMode('scan-results');
+                }
+              }}
+              sx={{ 
+                color: 'text.secondary',
+                '&:hover': { 
+                  color: 'error.main',
+                  bgcolor: 'error.light',
+                },
+              }}
+            >
+              <DeleteOutlined fontSize="small" />
+            </IconButton>
           </Paper>
         ))}
       </Box>
@@ -6582,7 +6693,11 @@ const App: React.FC = () => {
     if (scanResultsFoundFilter === 'found') {
       filtered = filtered.filter(e => e.found);
     } else if (scanResultsFoundFilter === 'not-found') {
+      // Not found includes both regular not-found AND AI-discovered (since AI-discovered are also not in platform)
       filtered = filtered.filter(e => !e.found);
+    } else if (scanResultsFoundFilter === 'ai-discovered') {
+      // Only show AI-discovered entities
+      filtered = filtered.filter(e => e.discoveredByAI === true);
     }
     
     return filtered;
@@ -6591,6 +6706,7 @@ const App: React.FC = () => {
   // Get counts for scan results
   const scanResultsFoundCount = scanResultsEntities.filter(e => e.found).length;
   const scanResultsNotFoundCount = scanResultsEntities.filter(e => !e.found).length;
+  const scanResultsAICount = scanResultsEntities.filter(e => e.discoveredByAI === true).length;
 
   // Handle click on scan result entity to show its overview
   const handleScanResultEntityClick = async (entity: ScanResultEntity) => {
@@ -6805,9 +6921,6 @@ const App: React.FC = () => {
       return;
     }
     
-    // Hide the bottom selection bar on the page
-    window.parent.postMessage({ type: 'XTM_HIDE_SELECTION_PANEL' }, '*');
-    
     // Build entities for import - use the same format as other import flows
     const entitiesToImport = selectedEntities.map(entity => ({
       type: entity.type,
@@ -6911,6 +7024,34 @@ const App: React.FC = () => {
                   Not Found
                 </Typography>
               </Box>
+              {/* AI Findings filter - only show if there are AI discoveries */}
+              {scanResultsAICount > 0 && (
+                <>
+                  <Divider orientation="vertical" flexItem />
+                  <Box 
+                    onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'ai-discovered' ? 'all' : 'ai-discovered')}
+                    sx={{ 
+                      flex: 1, 
+                      textAlign: 'center', 
+                      p: 1.5,
+                      cursor: 'pointer',
+                      bgcolor: scanResultsFoundFilter === 'ai-discovered' ? getAiColor(mode).main : 'action.hover',
+                      color: scanResultsFoundFilter === 'ai-discovered' ? 'white' : 'inherit',
+                      transition: 'all 0.15s',
+                      '&:hover': {
+                        bgcolor: scanResultsFoundFilter === 'ai-discovered' ? getAiColor(mode).dark : 'action.selected',
+                      },
+                    }}
+                  >
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : getAiColor(mode).main }}>
+                      {scanResultsAICount}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'ai-discovered' ? 0.9 : 1 }}>
+                      AI Findings
+                    </Typography>
+                  </Box>
+                </>
+              )}
             </Box>
             
             {/* Type filter */}
@@ -7032,7 +7173,7 @@ const App: React.FC = () => {
                         minWidth: 'auto',
                       }}
                     >
-                      {allSelected ? 'Deselect all' : 'Select all'}
+                      {allSelected ? 'Deselect all' : 'Select all new'}
                     </Button>
                     {selectedImportableCount > 0 && (
                       <Button

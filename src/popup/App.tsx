@@ -1164,7 +1164,7 @@ const App: React.FC = () => {
             </Box>
             {/* Version */}
             <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, fontSize: 10 }}>
-              v1.0.0 • Click for details
+              v0.0.3 • Click for details
             </Typography>
           </Box>
         </Box>

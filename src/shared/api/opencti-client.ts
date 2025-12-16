@@ -8,6 +8,9 @@ import { loggers } from '../utils/logger';
 
 const log = loggers.opencti;
 
+// User-Agent for API requests
+const USER_AGENT = 'xtm-browser-extension/0.0.3';
+
 import type {
   ExtensionSettings,
   PlatformInfo,
@@ -377,6 +380,7 @@ export class OpenCTIClient {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiToken}`,
+        'User-Agent': USER_AGENT,
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -1501,6 +1505,388 @@ export class OpenCTIClient {
     return data.stixCyberObservableAdd;
   }
 
+  // ============================================================================
+  // STIX Domain Object Creation (SDOs - Threat Intelligence entities)
+  // ============================================================================
+
+  /**
+   * Create an Intrusion Set
+   */
+  async createIntrusionSet(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+    const query = `
+      mutation IntrusionSetAdd($input: IntrusionSetAddInput!) {
+        intrusionSetAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.intrusionSetAdd;
+  }
+
+  /**
+   * Create a Threat Actor (Group or Individual)
+   */
+  async createThreatActor(input: {
+    name: string;
+    description?: string;
+    threat_actor_types?: string[];
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+    const query = `
+      mutation ThreatActorGroupAdd($input: ThreatActorGroupAddInput!) {
+        threatActorGroupAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        threat_actor_types: input.threat_actor_types || ['unknown'],
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.threatActorGroupAdd;
+  }
+
+  /**
+   * Create a Malware
+   */
+  async createMalware(input: {
+    name: string;
+    description?: string;
+    malware_types?: string[];
+    is_family?: boolean;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+    const query = `
+      mutation MalwareAdd($input: MalwareAddInput!) {
+        malwareAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        malware_types: input.malware_types || ['unknown'],
+        is_family: input.is_family ?? true,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.malwareAdd;
+  }
+
+  /**
+   * Create a Tool
+   */
+  async createTool(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+    const query = `
+      mutation ToolAdd($input: ToolAddInput!) {
+        toolAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.toolAdd;
+  }
+
+  /**
+   * Create a Campaign
+   */
+  async createCampaign(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+    const query = `
+      mutation CampaignAdd($input: CampaignAddInput!) {
+        campaignAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.campaignAdd;
+  }
+
+  /**
+   * Create a Vulnerability (CVE)
+   */
+  async createVulnerability(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+    const query = `
+      mutation VulnerabilityAdd($input: VulnerabilityAddInput!) {
+        vulnerabilityAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.vulnerabilityAdd;
+  }
+
+  /**
+   * Create an Attack Pattern
+   */
+  async createAttackPattern(input: {
+    name: string;
+    description?: string;
+    x_mitre_id?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] }> {
+    const query = `
+      mutation AttackPatternAdd($input: AttackPatternAddInput!) {
+        attackPatternAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+          x_mitre_id
+          aliases
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        x_mitre_id: input.x_mitre_id,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.attackPatternAdd;
+  }
+
+  /**
+   * Create a Country
+   */
+  async createCountry(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+    const query = `
+      mutation CountryAdd($input: CountryAddInput!) {
+        countryAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      countryAdd: { id: string; standard_id: string; entity_type: string; name: string };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.countryAdd;
+  }
+
+  /**
+   * Create a Sector
+   */
+  async createSector(input: {
+    name: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+    const query = `
+      mutation SectorAdd($input: SectorAddInput!) {
+        sectorAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          name
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      sectorAdd: { id: string; standard_id: string; entity_type: string; name: string };
+    }>(query, {
+      input: {
+        name: input.name,
+        description: input.description,
+        objectMarking: input.objectMarking,
+        objectLabel: input.objectLabel,
+      },
+    });
+
+    return data.sectorAdd;
+  }
+
+  /**
+   * Create any entity by type - dispatches to the appropriate creation method
+   * Handles both STIX Cyber Observables (SCOs) and STIX Domain Objects (SDOs)
+   */
+  async createEntity(input: {
+    type: string;
+    value?: string;
+    name?: string;
+    description?: string;
+    objectMarking?: string[];
+    objectLabel?: string[];
+  }): Promise<{ id: string; standard_id: string; entity_type: string; name?: string; observable_value?: string; aliases?: string[]; x_mitre_id?: string }> {
+    const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
+    const entityName = input.name || input.value || 'Unknown';
+    
+    // STIX Domain Objects (SDOs) - use name-based creation
+    const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_mitre_id?: string }>> = {
+      'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'threat-actor': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'threat-actor-group': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'threat-actor-individual': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'malware': () => this.createMalware({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'tool': () => this.createTool({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'campaign': () => this.createCampaign({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'vulnerability': () => this.createVulnerability({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'country': () => this.createCountry({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+    };
+
+    // Check if it's an SDO type
+    if (sdoTypes[normalizedType]) {
+      const result = await sdoTypes[normalizedType]();
+      return { ...result, observable_value: undefined };
+    }
+
+    // Otherwise, treat as STIX Cyber Observable (SCO)
+    if (!input.value) {
+      throw new Error(`Observable type "${input.type}" requires a value`);
+    }
+    
+    const observable = await this.createObservable({
+      type: input.type as any,
+      value: input.value,
+      description: input.description,
+      objectMarking: input.objectMarking,
+      objectLabel: input.objectLabel,
+    });
+
+    return {
+      id: observable.id,
+      standard_id: observable.standard_id,
+      entity_type: observable.entity_type,
+      observable_value: observable.observable_value,
+    };
+  }
+
   /**
    * Create an external reference
    * External references must be created first and then attached to entities
@@ -1822,6 +2208,7 @@ export class OpenCTIClient {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiToken}`,
+        'User-Agent': USER_AGENT,
       },
       body: formData,
     });

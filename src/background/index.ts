@@ -44,6 +44,7 @@ import {
   clearSDOCacheForPlatform,
   clearAllSDOCaches,
   cleanupOrphanedCaches,
+  addEntityToSDOCache,
   // OpenAEV cache
   saveOAEVCache,
   shouldRefreshOAEVCache,
@@ -210,11 +211,14 @@ async function initializeClient(): Promise<void> {
 // SDO Cache Management (Multi-Platform)
 // ============================================================================
 
-const CACHE_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
+const CACHE_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes (after successful cache creation)
+const CACHE_RETRY_INTERVAL = 5 * 60 * 1000; // 5 minutes (if cache creation fails)
 let isCacheRefreshing = false;
+let allCachesCreatedSuccessfully = false; // Track if all caches have been successfully created
 
 /**
  * Start periodic SDO cache refresh for all platforms
+ * Uses 5-minute interval until all caches are successfully created, then switches to 30 minutes
  */
 function startSDOCacheRefresh(): void {
   log.info('Starting SDO cache refresh system...');
@@ -226,30 +230,56 @@ function startSDOCacheRefresh(): void {
   
   // Initial refresh check - force immediate refresh on startup
   log.debug('Triggering initial cache check...');
-  checkAndRefreshAllSDOCaches();
+  checkAndRefreshAllSDOCaches().then(() => {
+    scheduleNextCacheRefresh();
+  });
+}
+
+/**
+ * Schedule the next cache refresh based on whether all caches are successfully created
+ */
+function scheduleNextCacheRefresh(): void {
+  // Clear existing interval if any
+  if (cacheRefreshInterval) {
+    clearInterval(cacheRefreshInterval);
+  }
   
-  // Set up periodic refresh
-  cacheRefreshInterval = setInterval(() => {
-    checkAndRefreshAllSDOCaches();
-  }, CACHE_REFRESH_INTERVAL);
+  const interval = allCachesCreatedSuccessfully ? CACHE_REFRESH_INTERVAL : CACHE_RETRY_INTERVAL;
+  const intervalMinutes = interval / 60000;
   
-  log.info('SDO cache refresh scheduled (every 30 minutes)');
+  log.info(`SDO cache refresh scheduled (every ${intervalMinutes} minutes${!allCachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
+  
+  cacheRefreshInterval = setInterval(async () => {
+    await checkAndRefreshAllSDOCaches();
+    // Re-evaluate interval after each check (switch to 30 min if now successful)
+    if (!allCachesCreatedSuccessfully) {
+      // Still failing, keep current interval
+    } else {
+      // Now successful, switch to longer interval if we were on retry interval
+      const currentInterval = allCachesCreatedSuccessfully ? CACHE_REFRESH_INTERVAL : CACHE_RETRY_INTERVAL;
+      if (currentInterval === CACHE_REFRESH_INTERVAL) {
+        scheduleNextCacheRefresh(); // Reschedule with the correct interval
+      }
+    }
+  }, interval);
 }
 
 /**
  * Check and refresh caches for ALL configured OpenCTI platforms
  * @param forceRefresh - If true, refresh all caches regardless of age (also bypasses in-progress check)
+ * @returns true if all caches are successfully created/refreshed
  */
-async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promise<void> {
+async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promise<boolean> {
   if (openCTIClients.size === 0) {
     log.debug('No OpenCTI clients configured, skipping cache refresh');
-    return;
+    allCachesCreatedSuccessfully = true; // No clients = nothing to fail
+    return true;
   }
   
   // When force refresh is requested, wait for existing refresh to complete or skip the check
   if (isCacheRefreshing && !forceRefresh) {
     log.debug('Cache refresh already in progress, skipping');
-    return;
+    return allCachesCreatedSuccessfully;
   }
   
   // If force refresh while already refreshing, log but continue
@@ -269,12 +299,17 @@ async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promi
   isCacheRefreshing = true;
   log.debug(`${forceRefresh ? 'Force refreshing' : 'Checking'} cache for ${openCTIClients.size} OpenCTI platform(s)...`);
   
+  let allSuccessful = true;
+  
   try {
     for (const [platformId, client] of openCTIClients) {
       const needsRefresh = forceRefresh || await shouldRefreshSDOCache(platformId);
       if (needsRefresh) {
         log.debug(`SDO cache for platform ${platformId} ${forceRefresh ? 'force' : 'needs'} refresh, starting...`);
-        await refreshSDOCacheForPlatform(platformId, client);
+        const success = await refreshSDOCacheForPlatform(platformId, client);
+        if (!success) {
+          allSuccessful = false;
+        }
       } else {
         log.debug(`SDO cache for platform ${platformId} is fresh`);
       }
@@ -282,15 +317,30 @@ async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promi
   } finally {
     isCacheRefreshing = false;
   }
+  
+  // Update global state based on results
+  const wasSuccessful = allCachesCreatedSuccessfully;
+  allCachesCreatedSuccessfully = allSuccessful;
+  
+  // If we just transitioned from failing to successful, reschedule with longer interval
+  if (!wasSuccessful && allSuccessful) {
+    log.info('All caches now successfully created, switching to 30-minute refresh interval');
+    scheduleNextCacheRefresh();
+  }
+  
+  return allSuccessful;
 }
 
 /**
  * Refresh the SDO cache for a specific platform
+ * @returns true if cache was successfully created with at least some entities
  */
-async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTIClient): Promise<void> {
+async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTIClient): Promise<boolean> {
   log.debug(`Refreshing SDO cache for platform ${platformId}...`);
   
   const cache: SDOCache = createEmptySDOCache(platformId);
+  let fetchErrors = 0;
+  const totalFetchTypes = 16; // Number of entity types we fetch
   
   try {
     // Fetch each entity type in parallel for speed with better error logging
@@ -301,6 +351,7 @@ async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTICli
         return result;
       } catch (error) {
         log.error(`[${platformId}] Failed to fetch ${name}:`, error);
+        fetchErrors++;
         return [];
       }
     };
@@ -381,8 +432,16 @@ async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTICli
     
     await saveSDOCache(cache, platformId);
     log.info(`[${platformId}] SDO cache refreshed: ${total} entities cached`);
+    
+    // Consider success if we fetched at least some entities and didn't fail on all fetch types
+    const success = total > 0 && fetchErrors < totalFetchTypes;
+    if (!success) {
+      log.warn(`[${platformId}] Cache refresh partially failed: ${fetchErrors}/${totalFetchTypes} fetch types failed, ${total} total entities`);
+    }
+    return success;
   } catch (error) {
     log.error(`[${platformId}] Failed to refresh SDO cache:`, error);
+    return false;
   }
 }
 
@@ -2723,6 +2782,7 @@ async function handleMessage(
             total: number;
             timestamp: number;
             age: number;
+            byType: Record<string, number>;
           }> = [];
           
           // Build per-platform stats for OpenAEV
@@ -2732,6 +2792,7 @@ async function handleMessage(
             total: number;
             timestamp: number;
             age: number;
+            byType: Record<string, number>;
           }> = [];
           
           // Get platform names from settings
@@ -2752,8 +2813,13 @@ async function handleMessage(
           const processedOpenctiPlatforms = new Set<string>();
           for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
             let platformTotal = 0;
-            for (const entities of Object.values(cache.entities)) {
-              platformTotal += entities.length;
+            const byType: Record<string, number> = {};
+            for (const [type, entities] of Object.entries(cache.entities)) {
+              const count = entities.length;
+              if (count > 0) {
+                byType[type] = count;
+              }
+              platformTotal += count;
             }
             grandTotal += platformTotal;
             if (cache.timestamp < oldestTimestamp) {
@@ -2766,6 +2832,7 @@ async function handleMessage(
               total: platformTotal,
               timestamp: cache.timestamp,
               age: Date.now() - cache.timestamp,
+              byType,
             });
             processedOpenctiPlatforms.add(platformId);
           }
@@ -2779,6 +2846,7 @@ async function handleMessage(
                 total: 0,
                 timestamp: 0,
                 age: 0,
+                byType: {},
               });
             }
           }
@@ -2788,8 +2856,13 @@ async function handleMessage(
           let oaevGrandTotal = 0;
           for (const [platformId, cache] of Object.entries(oaevMultiCache.platforms)) {
             let platformTotal = 0;
-            for (const entities of Object.values(cache.entities)) {
-              platformTotal += entities.length;
+            const byType: Record<string, number> = {};
+            for (const [type, entities] of Object.entries(cache.entities)) {
+              const count = entities.length;
+              if (count > 0) {
+                byType[type] = count;
+              }
+              platformTotal += count;
             }
             oaevGrandTotal += platformTotal;
             grandTotal += platformTotal;
@@ -2803,6 +2876,7 @@ async function handleMessage(
               total: platformTotal,
               timestamp: cache.timestamp,
               age: Date.now() - cache.timestamp,
+              byType,
             });
             processedOaevPlatforms.add(platformId);
           }
@@ -2816,6 +2890,7 @@ async function handleMessage(
                 total: 0,
                 timestamp: 0,
                 age: 0,
+                byType: {},
               });
             }
           }
@@ -2841,7 +2916,8 @@ async function handleMessage(
       }
       
       case 'GET_CACHE_REFRESH_STATUS': {
-        sendResponse({ success: true, data: { isRefreshing: isCacheRefreshing } });
+        // Return combined refresh status for both OpenCTI and OpenAEV caches
+        sendResponse({ success: true, data: { isRefreshing: isCacheRefreshing || isOAEVCacheRefreshing } });
         break;
       }
       
@@ -3143,13 +3219,14 @@ async function handleMessage(
         }
         
         const { entities, platformId, createIndicator } = message.payload as { 
-          entities: Array<{ type: string; value: string }>;
+          entities: Array<{ type: string; value?: string; name?: string }>;
           platformId?: string;
           createIndicator?: boolean;
         };
         
         // Use specified platform or first available
-        const client = platformId ? openCTIClients.get(platformId) : openCTIClient;
+        const targetPlatformId = platformId || (openCTIClients.keys().next().value as string);
+        const client = openCTIClients.get(targetPlatformId);
         if (!client) {
           sendResponse(errorResponse('Platform not found'));
           break;
@@ -3157,25 +3234,59 @@ async function handleMessage(
         
         try {
           const results = await Promise.all(
-            // Refang values before creating (OpenCTI stores clean values)
-            entities.map(e => client.createObservable({ 
-              type: e.type as any, 
-              value: refangIndicator(e.value),
-              createIndicator: createIndicator ?? true, // Default to true
-            }))
+            entities.map(async (e) => {
+              // Refang values before creating (OpenCTI stores clean values)
+              const value = e.value ? refangIndicator(e.value) : undefined;
+              const name = e.name || e.value;
+              
+              // Use the unified createEntity method that handles both SDOs and SCOs
+              const created = await client.createEntity({
+                type: e.type,
+                value,
+                name,
+              });
+              
+              // Add created SDO entities to cache (not observables)
+              // SDO types that are cached: Threat-Actor-Group, Threat-Actor-Individual, Intrusion-Set, etc.
+              if (created?.id && created?.entity_type) {
+                const sdoTypes = [
+                  'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
+                  'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
+                  'Organization', 'Individual', 'Event', 'Country', 'Region',
+                  'City', 'Administrative-Area', 'Position'
+                ];
+                
+                if (sdoTypes.includes(created.entity_type)) {
+                  const cachedEntity: CachedEntity = {
+                    id: created.id,
+                    name: created.name || name || '',
+                    aliases: created.aliases,
+                    x_mitre_id: created.x_mitre_id,
+                    type: created.entity_type,
+                    platformId: targetPlatformId,
+                  };
+                  
+                  await addEntityToSDOCache(cachedEntity, targetPlatformId);
+                  log.debug(`Added ${created.entity_type} "${cachedEntity.name}" to cache for platform ${targetPlatformId}`);
+                }
+              }
+              
+              return created;
+            })
           );
           sendResponse(successResponse(results));
         } catch (error) {
+          log.error('[CREATE_OBSERVABLES_BULK] Error:', error);
           sendResponse({
             success: false,
-            error: error instanceof Error ? error.message : 'Failed to create observables',
+            error: error instanceof Error ? error.message : 'Failed to create entities',
           });
         }
         break;
       }
       
       case 'CREATE_INVESTIGATION_WITH_ENTITIES': {
-        if (!openCTIClient) {
+        if (!openCTIClient || openCTIClients.size === 0) {
           sendResponse(errorResponse('Not configured'));
           break;
         }
@@ -3184,16 +3295,48 @@ async function handleMessage(
           entities: Array<{ id?: string; type: string; value?: string; name?: string }> 
         };
         
+        // Get the platform ID for the default client
+        const defaultPlatformId = openCTIClients.keys().next().value as string;
+        
         try {
           // Create any entities that don't exist
           const entityIds: string[] = [];
           for (const entity of investigationEntities) {
             if (entity.id) {
               entityIds.push(entity.id);
-            } else if (entity.value) {
-              const created = await openCTIClient.createObservable({ type: entity.type as any, value: entity.value });
+            } else if (entity.value || entity.name) {
+              // Use the unified createEntity method that handles both SDOs and SCOs
+              const created = await openCTIClient.createEntity({ 
+                type: entity.type, 
+                value: entity.value,
+                name: entity.name,
+              });
               if (created?.id) {
                 entityIds.push(created.id);
+                
+                // Add created SDO entities to cache
+                if (created?.entity_type) {
+                  const sdoTypes = [
+                    'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
+                    'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
+                    'Organization', 'Individual', 'Event', 'Country', 'Region',
+                    'City', 'Administrative-Area', 'Position'
+                  ];
+                  
+                  if (sdoTypes.includes(created.entity_type)) {
+                    const cachedEntity: CachedEntity = {
+                      id: created.id,
+                      name: created.name || entity.name || entity.value || '',
+                      aliases: created.aliases,
+                      x_mitre_id: created.x_mitre_id,
+                      type: created.entity_type,
+                      platformId: defaultPlatformId,
+                    };
+                    
+                    await addEntityToSDOCache(cachedEntity, defaultPlatformId);
+                    log.debug(`Added ${created.entity_type} "${cachedEntity.name}" to cache for platform ${defaultPlatformId}`);
+                  }
+                }
               }
             }
           }
@@ -3207,6 +3350,7 @@ async function handleMessage(
           
           sendResponse(successResponse(investigation));
         } catch (error) {
+          log.error('[CREATE_INVESTIGATION_WITH_ENTITIES] Error:', error);
           sendResponse({
             success: false,
             error: error instanceof Error ? error.message : 'Failed to create investigation',
@@ -3715,13 +3859,22 @@ async function handleMessage(
             }
             
             // Filter out entities that were already detected (double-check)
-            const alreadyDetectedValues = new Set(
-              request.alreadyDetected.map(e => (e.value || e.name).toLowerCase())
-            );
+            // Include both value/name AND external IDs (like T1059.001) for comprehensive matching
+            const alreadyDetectedValues = new Set<string>();
+            request.alreadyDetected.forEach(e => {
+              // Add value and name (lowercase)
+              if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
+              if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
+              // Also add external ID if present (e.g., T1059.001 for attack patterns)
+              if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
+            });
             
-            const newEntities = parsed.entities.filter(e => 
-              !alreadyDetectedValues.has((e.value || e.name).toLowerCase())
-            );
+            const newEntities = parsed.entities.filter(e => {
+              const valueLC = (e.value || '').toLowerCase();
+              const nameLC = (e.name || '').toLowerCase();
+              // Entity is new if neither value nor name matches any already detected value
+              return !alreadyDetectedValues.has(valueLC) && !alreadyDetectedValues.has(nameLC);
+            });
             
             log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${request.alreadyDetected.length} already detected)`);
             

@@ -57,6 +57,8 @@ import {
 } from '@mui/icons-material';
 import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
 import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
+import { itemColor } from '../shared/theme/colors';
+import ItemIcon from '../shared/components/ItemIcon';
 import type { ExtensionSettings, PlatformConfig, AIProvider, AISettings } from '../shared/types';
 
 // Helper to get AI colors based on theme mode
@@ -153,8 +155,8 @@ const App: React.FC = () => {
   const [cacheStats, setCacheStats] = useState<{ 
     total: number; 
     age: number;
-    byPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number }>;
-    oaevByPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number }>;
+    byPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number; byType: Record<string, number> }>;
+    oaevByPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number; byType: Record<string, number> }>;
     oaevTotal?: number;
     isRefreshing?: boolean;
   } | null>(null);
@@ -281,10 +283,12 @@ const App: React.FC = () => {
         byPlatform: response.data.byPlatform?.map((p: any) => ({
           ...p,
           age: Math.round(p.age / 60000),
+          byType: p.byType || {},
         })),
         oaevByPlatform: response.data.oaevByPlatform?.map((p: any) => ({
           ...p,
           age: Math.round(p.age / 60000),
+          byType: p.byType || {},
         })),
         oaevTotal: response.data.oaevTotal || 0,
         isRefreshing: response.data.isRefreshing,
@@ -653,24 +657,20 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setIsRefreshingCache(true);
-    chrome.runtime.sendMessage({ type: 'REFRESH_SDO_CACHE' });
     
-    // Poll for completion
-    const pollInterval = setInterval(async () => {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
-      if (response?.success && !response.data?.isRefreshing) {
-        clearInterval(pollInterval);
-        setIsRefreshingCache(false);
+    try {
+      // Wait for the refresh to complete - the message handler returns after refresh is done
+      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_SDO_CACHE' });
+      
+      if (response?.success) {
+        // Load fresh stats after refresh completes
         await loadCacheStats();
       }
-    }, 1000);
-    
-    // Timeout after 2 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval);
+    } catch (error) {
+      console.error('Cache refresh error:', error);
+    } finally {
       setIsRefreshingCache(false);
-      loadCacheStats();
-    }, 120000);
+    }
   };
 
   const updateSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
@@ -1258,29 +1258,59 @@ const App: React.FC = () => {
                         OpenCTI Platforms
                       </Typography>
                       {cacheStats.byPlatform.map((platform) => (
-                        <Box 
-                          key={platform.platformId}
-                          sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            py: 0.5,
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <img
-                              src={`../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                              alt="OpenCTI"
-                              width={16}
-                              height={16}
-                            />
-                            <Typography variant="body2">{platform.platformName}</Typography>
+                        <Box key={platform.platformId} sx={{ mb: 2 }}>
+                          <Box 
+                            sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between',
+                              py: 0.5,
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <img
+                                src={`../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
+                                alt="OpenCTI"
+                                width={16}
+                                height={16}
+                              />
+                              <Typography variant="body2">{platform.platformName}</Typography>
+                            </Box>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {platform.total === 0 && platform.age === 0
+                                ? 'Building cache...' 
+                                : `${platform.total} entities • ${platform.age}m ago`}
+                            </Typography>
                           </Box>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {platform.total === 0 && platform.age === 0
-                              ? 'Building cache...' 
-                              : `${platform.total} entities • ${platform.age}m ago`}
-                          </Typography>
+                          {/* Type breakdown - always visible */}
+                          {Object.keys(platform.byType).length > 0 && (
+                            <Box sx={{ pl: 3, pt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {Object.entries(platform.byType)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([type, count]) => (
+                                  <Chip
+                                    key={type}
+                                    size="small"
+                                    icon={<ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />}
+                                    label={`${type.replace(/-/g, ' ')} (${count})`}
+                                    sx={{ 
+                                      height: 24,
+                                      fontSize: '0.7rem',
+                                      bgcolor: mode === 'dark' 
+                                        ? `${itemColor(type, true)}20` 
+                                        : `${itemColor(type, false)}15`,
+                                      color: itemColor(type, mode === 'dark'),
+                                      borderColor: `${itemColor(type, mode === 'dark')}40`,
+                                      border: '1px solid',
+                                      '& .MuiChip-icon': {
+                                        marginLeft: '4px',
+                                        marginRight: '-4px',
+                                      },
+                                    }}
+                                  />
+                                ))}
+                            </Box>
+                          )}
                         </Box>
                       ))}
                     </Box>
@@ -1293,29 +1323,59 @@ const App: React.FC = () => {
                         OpenAEV Platforms
                       </Typography>
                       {cacheStats.oaevByPlatform.map((platform) => (
-                        <Box 
-                          key={platform.platformId}
-                          sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            py: 0.5,
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <img
-                              src={`../assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                              alt="OpenAEV"
-                              width={16}
-                              height={16}
-                            />
-                            <Typography variant="body2">{platform.platformName}</Typography>
+                        <Box key={platform.platformId} sx={{ mb: 2 }}>
+                          <Box 
+                            sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between',
+                              py: 0.5,
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <img
+                                src={`../assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
+                                alt="OpenAEV"
+                                width={16}
+                                height={16}
+                              />
+                              <Typography variant="body2">{platform.platformName}</Typography>
+                            </Box>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {platform.total === 0 && platform.age === 0
+                                ? 'Building cache...' 
+                                : `${platform.total} entities • ${platform.age}m ago`}
+                            </Typography>
                           </Box>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            {platform.total === 0 && platform.age === 0
-                              ? 'Building cache...' 
-                              : `${platform.total} entities • ${platform.age}m ago`}
-                          </Typography>
+                          {/* Type breakdown - always visible */}
+                          {Object.keys(platform.byType).length > 0 && (
+                            <Box sx={{ pl: 3, pt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {Object.entries(platform.byType)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([type, count]) => (
+                                  <Chip
+                                    key={type}
+                                    size="small"
+                                    icon={<ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />}
+                                    label={`${type.replace(/-/g, ' ')} (${count})`}
+                                    sx={{ 
+                                      height: 24,
+                                      fontSize: '0.7rem',
+                                      bgcolor: mode === 'dark' 
+                                        ? `${itemColor(type, true)}20` 
+                                        : `${itemColor(type, false)}15`,
+                                      color: itemColor(type, mode === 'dark'),
+                                      borderColor: `${itemColor(type, mode === 'dark')}40`,
+                                      border: '1px solid',
+                                      '& .MuiChip-icon': {
+                                        marginLeft: '4px',
+                                        marginRight: '-4px',
+                                      },
+                                    }}
+                                  />
+                                ))}
+                            </Box>
+                          )}
                         </Box>
                       ))}
                     </Box>
@@ -1950,7 +2010,7 @@ const App: React.FC = () => {
                       Threat Management
                     </Typography>
                   </Box>
-                  <Chip label="v1.0.0" size="small" sx={{ ml: 1 }} />
+                  <Chip label="v0.0.3" size="small" sx={{ ml: 1 }} />
                 </Box>
 
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400, mx: 'auto' }}>

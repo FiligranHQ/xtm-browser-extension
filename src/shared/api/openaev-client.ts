@@ -8,6 +8,9 @@ import { loggers } from '../utils/logger';
 
 const log = loggers.openaev;
 
+// User-Agent for API requests
+const USER_AGENT = 'xtm-browser-extension/0.0.3';
+
 import type {
   PlatformConfig,
   OAEVAsset,
@@ -87,6 +90,7 @@ export class OpenAEVClient {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${this.token}`,
+      'User-Agent': USER_AGENT,
       ...options.headers,
     };
 

@@ -279,6 +279,42 @@ export async function updateSDOCacheForType(
 }
 
 /**
+ * Add a single entity to the SDO cache for a specific platform
+ * This is used when creating new entities to avoid needing a full cache refresh
+ */
+export async function addEntityToSDOCache(
+  entity: CachedEntity,
+  platformId: string
+): Promise<void> {
+  let cache = await getSDOCache(platformId);
+  
+  if (!cache) {
+    cache = createEmptySDOCache(platformId);
+  }
+  
+  // Determine the entity type key for the cache
+  const entityType = entity.type as keyof SDOCache['entities'];
+  
+  // Check if this entity type exists in the cache structure
+  if (!cache.entities[entityType]) {
+    // Entity type not cached (e.g., Vulnerability) - skip
+    return;
+  }
+  
+  // Check if entity already exists in cache (by id)
+  const existingIndex = cache.entities[entityType].findIndex(e => e.id === entity.id);
+  if (existingIndex === -1) {
+    // Add new entity
+    cache.entities[entityType].push(entity);
+  } else {
+    // Update existing entity
+    cache.entities[entityType][existingIndex] = entity;
+  }
+  
+  await saveSDOCache(cache, platformId);
+}
+
+/**
  * Create empty SDO cache structure
  */
 export function createEmptySDOCache(platformId: string = 'default'): SDOCache {

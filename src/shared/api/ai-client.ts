@@ -718,38 +718,37 @@ Keep email bodies concise (2-4 sentences) but informative. ALL CONTENT MUST BE I
    * This helps find entities that regex patterns might miss
    */
   async discoverEntities(request: EntityDiscoveryRequest): Promise<AIGenerationResponse> {
-    const systemPrompt = `You are a cybersecurity threat intelligence analyst expert at extracting indicators of compromise (IOCs) and threat intelligence entities from text. Your task is to identify relevant cybersecurity entities that may have been missed by automated regex-based detection.
+    const systemPrompt = `You are an expert cybersecurity threat intelligence analyst. Your task is to identify ONLY HIGH-VALUE, ACTIONABLE threat intelligence entities that regex patterns missed.
 
-IMPORTANT RULES:
-1. Only extract entities that are EXPLICITLY mentioned in the text - never hallucinate or infer
-2. Return ONLY entities you are confident about - it's better to return nothing than to make up entities
-3. The entity value must be an EXACT match to text in the page content
-4. Do not return entities that are already in the "already detected" list
-5. Focus on cybersecurity-relevant entities for threat intelligence platforms
+CRITICAL RULES - READ CAREFULLY:
+1. BE EXTREMELY CONSERVATIVE - It is MUCH better to return an empty list than to include questionable entities
+2. EXPLICIT MENTIONS ONLY - The entity must be EXPLICITLY and UNAMBIGUOUSLY mentioned in the text
+3. EXACT VALUES - The entity value must match EXACTLY what appears in the text
+4. CYBERSECURITY CONTEXT REQUIRED - The entity must be discussed in a threat/security context, not just mentioned casually
+5. NO DUPLICATES - Never return entities already in the "already detected" list
+6. HIGH CONFIDENCE ONLY - Only return entities you are 90%+ confident about
+7. QUALITY OVER QUANTITY - Return 0-5 entities maximum. If unsure, return none.
 
-ENTITY TYPES YOU CAN DETECT:
-- IPv4-Addr: IPv4 addresses (e.g., 192.168.1.1)
-- IPv6-Addr: IPv6 addresses
-- Domain-Name: Domain names (e.g., malicious-domain.com)
-- Hostname: Hostnames including subdomains
-- Url: Full URLs
-- Email-Addr: Email addresses
-- StixFile: File hashes (MD5, SHA1, SHA256, SHA512)
-- Mac-Addr: MAC addresses
-- Cryptocurrency-Wallet: Bitcoin/Ethereum/crypto wallet addresses
-- Bank-Account: IBAN numbers
-- Phone-Number: Phone numbers
-- User-Agent: Browser/HTTP user agent strings
-- Malware: Malware names/families
-- Threat-Actor-Group: Threat actor group names (APT groups, cybercrime groups)
-- Threat-Actor-Individual: Individual threat actor names
-- Intrusion-Set: Intrusion set names
-- Campaign: Campaign names
-- Attack-Pattern: Attack technique names (not MITRE IDs, but technique names)
-- Vulnerability: CVE identifiers (CVE-XXXX-XXXXX)
-- Tool: Hacking tools, utilities
-- Country: Country names relevant to threats
-- Sector: Industry sectors being targeted
+WHAT TO EXTRACT (only these specific types):
+
+TECHNICAL INDICATORS (highest priority):
+- Malware: ONLY well-known malware families/names (e.g., "Emotet", "Cobalt Strike", "TrickBot") - NOT generic terms
+- Threat-Actor-Group: ONLY named APT groups or cybercrime groups (e.g., "APT29", "Lazarus Group", "FIN7") - must be a KNOWN threat actor
+- Intrusion-Set: ONLY named intrusion sets explicitly identified as such
+- Campaign: ONLY named campaigns explicitly identified as campaigns
+- Tool: ONLY known offensive security/hacking tools (e.g., "Mimikatz", "BloodHound", "Metasploit") - NOT common software
+
+WHAT TO AVOID (DO NOT EXTRACT):
+- Generic software names (Windows, Chrome, Office, etc.)
+- Common company names unless they are explicitly threat actors
+- Country names (too generic, high false positive rate)
+- Industry sector names (too generic)
+- Generic technical terms (authentication, encryption, etc.)
+- Author names, researcher names, or security vendor names
+- Conference names, report titles
+- Version numbers or build identifiers
+- Common words that happen to match entity patterns
+- Anything you are less than 90% confident about
 
 Output ONLY valid JSON, no additional text.`;
 
@@ -766,36 +765,41 @@ Output ONLY valid JSON, no additional text.`;
         }).join('\n')
       : 'None detected yet';
 
-    const prompt = `Analyze the following page content and extract any cybersecurity entities that are NOT already in the detected list.
+    const prompt = `Analyze this cybersecurity article and extract ONLY high-confidence, actionable threat intelligence entities that the regex detection missed.
 
-PAGE TITLE: ${request.pageTitle}
-PAGE URL: ${request.pageUrl}
+PAGE: ${request.pageTitle}
+URL: ${request.pageUrl}
 
-ALREADY DETECTED ENTITIES (do NOT include these):
+ALREADY DETECTED (DO NOT INCLUDE THESE OR VARIATIONS):
 ${alreadyDetectedSummary}
 
-PAGE CONTENT:
+CONTENT:
 ${request.pageContent.substring(0, 6000)}
 
-Extract any additional cybersecurity-relevant entities that were missed. Only include entities you find EXPLICITLY in the text above.
+STRICT EXTRACTION RULES:
+1. Return ONLY entities that are NAMED THREAT ACTORS, NAMED MALWARE FAMILIES, or NAMED CAMPAIGNS
+2. The entity must be discussed as a THREAT in the text - not just mentioned
+3. Must be a KNOWN, DOCUMENTED threat (not a generic term)
+4. Return MAXIMUM 5 entities - prefer quality over quantity
+5. If uncertain about ANY entity, DO NOT include it
 
 Return JSON in this EXACT format:
 {
   "entities": [
     {
-      "type": "Entity-Type",
-      "name": "Display name",
-      "value": "exact value as it appears in text",
-      "reason": "Brief explanation of why this is relevant",
-      "confidence": "high|medium|low",
-      "excerpt": "Short text excerpt where this was found"
+      "type": "Malware|Threat-Actor-Group|Intrusion-Set|Campaign|Tool",
+      "name": "Official name of the threat",
+      "value": "exact text match from content",
+      "reason": "Why this is a genuine threat entity (1 sentence)",
+      "confidence": "high",
+      "excerpt": "Quote from text proving this entity"
     }
   ]
 }
 
-If no additional entities are found, return: {"entities": []}
+If you cannot find HIGH-CONFIDENCE threat entities, return: {"entities": []}
 
-Remember: Only include entities that are EXPLICITLY mentioned in the page content. Do not hallucinate or infer entities.`;
+IMPORTANT: An empty result is preferred over false positives. Only return entities you are CERTAIN about.`;
 
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.3 });
   }

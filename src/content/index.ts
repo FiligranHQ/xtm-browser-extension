@@ -379,6 +379,181 @@ function cleanArticleText(text: string): string {
 }
 
 /**
+ * Extract text content from Shadow DOM elements (recursive)
+ * This is crucial for SPAs like VirusTotal that use Web Components
+ */
+function extractTextFromShadowDOM(root: Document | ShadowRoot | Element): string {
+  const textParts: string[] = [];
+  
+  // Get all elements that might have shadow roots
+  const elements = root.querySelectorAll('*');
+  
+  elements.forEach(el => {
+    // Check for shadow root
+    if (el.shadowRoot) {
+      // Get text from shadow DOM
+      const shadowText = el.shadowRoot.textContent || '';
+      if (shadowText.trim()) {
+        textParts.push(shadowText);
+      }
+      // Recursively extract from nested shadow DOMs
+      const nestedText = extractTextFromShadowDOM(el.shadowRoot);
+      if (nestedText.trim()) {
+        textParts.push(nestedText);
+      }
+    }
+  });
+  
+  return textParts.join(' ');
+}
+
+/**
+ * Extract IOC-like values from data attributes and specific elements
+ * Useful for SPAs where data is in attributes rather than text content
+ */
+function extractDataAttributeContent(): string {
+  const values: string[] = [];
+  
+  // Common data attributes that might contain IOCs
+  const dataAttributePatterns = [
+    'data-hash', 'data-sha256', 'data-sha1', 'data-md5', 'data-value',
+    'data-ip', 'data-domain', 'data-url', 'data-ioc', 'data-indicator',
+    'data-file', 'data-filename', 'data-id', 'data-content', 'data-text',
+  ];
+  
+  // Also look for elements with specific classes/IDs that might contain IOCs
+  const iocSelectors = [
+    '[class*="hash"]', '[class*="sha"]', '[class*="md5"]',
+    '[class*="ip-address"]', '[class*="domain"]', '[class*="indicator"]',
+    '[class*="ioc"]', '[class*="value"]', '[class*="detection"]',
+    '[id*="hash"]', '[id*="sha"]', '[id*="indicator"]',
+    // VirusTotal specific
+    '[class*="file-id"]', '[class*="vt-ui"]',
+  ];
+  
+  // Extract from data attributes
+  document.querySelectorAll('*').forEach(el => {
+    const htmlEl = el as HTMLElement;
+    
+    // Check specific data attributes
+    dataAttributePatterns.forEach(attr => {
+      const value = htmlEl.getAttribute(attr);
+      if (value && value.length > 5) {
+        values.push(value);
+      }
+    });
+    
+    // Get all data-* attributes
+    Array.from(htmlEl.attributes).forEach(attr => {
+      if (attr.name.startsWith('data-') && attr.value.length > 10) {
+        // Check if the value looks like an IOC (hash, IP, domain, etc.)
+        const val = attr.value;
+        if (
+          /^[a-fA-F0-9]{32,128}$/.test(val) || // Hashes
+          /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(val) || // IPv4
+          /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val) || // Domain
+          /^CVE-\d{4}-\d+$/i.test(val) // CVE
+        ) {
+          values.push(val);
+        }
+      }
+    });
+  });
+  
+  // Extract from elements with IOC-related classes
+  iocSelectors.forEach(selector => {
+    try {
+      document.querySelectorAll(selector).forEach(el => {
+        const text = (el as HTMLElement).innerText || el.textContent || '';
+        if (text.trim().length > 0 && text.trim().length < 1000) {
+          values.push(text.trim());
+        }
+      });
+    } catch { /* Skip invalid selectors */ }
+  });
+  
+  // Also get content from code and pre elements (common for hashes)
+  document.querySelectorAll('code, pre, .hash, .sha256, .sha1, .md5, .file-hash').forEach(el => {
+    const text = el.textContent?.trim() || '';
+    if (text.length > 5 && text.length < 200) {
+      values.push(text);
+    }
+  });
+  
+  // Get content from title attributes and aria-labels
+  document.querySelectorAll('[title], [aria-label]').forEach(el => {
+    const title = el.getAttribute('title') || '';
+    const ariaLabel = el.getAttribute('aria-label') || '';
+    if (title.length > 10) values.push(title);
+    if (ariaLabel.length > 10) values.push(ariaLabel);
+  });
+  
+  return values.join('\n');
+}
+
+/**
+ * Get comprehensive page content for scanning
+ * Combines multiple sources to handle SPAs and dynamic content
+ */
+function getComprehensivePageContent(): string {
+  const contentParts: string[] = [];
+  
+  // 1. Regular body text content
+  const bodyText = document.body.innerText || document.body.textContent || '';
+  if (bodyText) {
+    contentParts.push(bodyText);
+  }
+  
+  // 2. Shadow DOM content (for Web Components)
+  try {
+    const shadowText = extractTextFromShadowDOM(document);
+    if (shadowText.trim()) {
+      contentParts.push(shadowText);
+    }
+  } catch (e) {
+    log.debug(' Shadow DOM extraction failed:', e);
+  }
+  
+  // 3. Data attributes and special elements
+  try {
+    const dataContent = extractDataAttributeContent();
+    if (dataContent.trim()) {
+      contentParts.push(dataContent);
+    }
+  } catch (e) {
+    log.debug(' Data attribute extraction failed:', e);
+  }
+  
+  // 4. URL path and query parameters (often contain hashes on VirusTotal, etc.)
+  try {
+    const url = new URL(window.location.href);
+    // Add path segments that look like IOCs
+    url.pathname.split('/').forEach(segment => {
+      if (segment.length > 10) {
+        contentParts.push(segment);
+      }
+    });
+    // Add query parameters
+    url.searchParams.forEach((value, key) => {
+      if (value.length > 5) {
+        contentParts.push(`${key}: ${value}`);
+      }
+    });
+  } catch { /* Skip URL parsing errors */ }
+  
+  // 5. Meta tags content
+  document.querySelectorAll('meta[content]').forEach(meta => {
+    const content = meta.getAttribute('content') || '';
+    if (content.length > 10 && content.length < 500) {
+      contentParts.push(content);
+    }
+  });
+  
+  // Combine and deduplicate
+  return contentParts.join('\n\n');
+}
+
+/**
  * Fallback text content extraction - returns clean text
  */
 function getFallbackTextContent(): string {
@@ -1969,14 +2144,14 @@ function initialize(): void {
       clearHighlights();
       currentScanMode = null;
       lastScanData = null;
-    } else if (event.data?.type === 'XTM_COPY_TO_CLIPBOARD' && event.data.text) {
+    } else if (event.data?.type === 'XTM_COPY_TO_CLIPBOARD' && event.data.payload) {
       // Handle clipboard copy from iframe
       try {
-        await navigator.clipboard.writeText(event.data.text);
+        await navigator.clipboard.writeText(event.data.payload);
       } catch {
         // Fallback
         const textarea = document.createElement('textarea');
-        textarea.value = event.data.text;
+        textarea.value = event.data.payload;
         textarea.style.position = 'fixed';
         textarea.style.left = '-9999px';
         document.body.appendChild(textarea);
@@ -2240,9 +2415,16 @@ async function scanPage(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    // Get page content
-    const content = document.body.innerText;
+    // Small delay to allow dynamic content to render (SPAs like VirusTotal)
+    // This helps with pages that load content via JavaScript
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Get comprehensive page content (includes Shadow DOM, data attributes, etc.)
+    // This is crucial for SPAs that use Web Components or load content dynamically
+    const content = getComprehensivePageContent();
     const url = window.location.href;
+    
+    log.debug(` Scan content length: ${content.length} chars`);
     
     // Send to background for scanning
     const response = await chrome.runtime.sendMessage({
@@ -2317,8 +2499,11 @@ async function scanPageForOAEV(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    // Get page content - use innerText just like OpenCTI's scanPage()
-    const content = document.body.innerText;
+    // Small delay for SPAs
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Get comprehensive page content (handles SPAs, Shadow DOM, etc.)
+    const content = getComprehensivePageContent();
     const url = window.location.href;
     
     log.debug(' Starting OpenAEV scan...');
@@ -2400,8 +2585,11 @@ async function scanAllPlatforms(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    // Get page content
-    const content = document.body.innerText;
+    // Small delay for SPAs
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Get comprehensive page content (handles SPAs, Shadow DOM, etc.)
+    const content = getComprehensivePageContent();
     const url = window.location.href;
     
     log.debug(' Starting unified scan across all platforms...');
@@ -4282,7 +4470,7 @@ async function showOAEVSearchPanel(): Promise<void> {
   sendPanelMessage('SHOW_OAEV_SEARCH_PANEL', { theme });
 }
 
-async function showUnifiedSearchPanel(): Promise<void> {
+async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
   ensurePanelElements();
   showPanelElements();
   
@@ -4290,7 +4478,18 @@ async function showUnifiedSearchPanel(): Promise<void> {
   const theme = await getCurrentTheme();
   
   // Message will be queued if panel not ready yet
-  sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme });
+  sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme, initialQuery });
+}
+
+async function showAddSelectionPanel(selectedText: string): Promise<void> {
+  ensurePanelElements();
+  showPanelElements();
+  
+  // Get current theme to pass to panel
+  const theme = await getCurrentTheme();
+  
+  // Message will be queued if panel not ready yet
+  sendPanelMessage('SHOW_ADD_SELECTION', { theme, selectedText });
 }
 
 // ============================================================================
@@ -4450,6 +4649,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'OPEN_UNIFIED_SEARCH_PANEL':
       showUnifiedSearchPanel();
+      sendResponse({ success: true });
+      break;
+    
+    case 'SEARCH_SELECTION':
+      // Context menu: Search selected text in OpenCTI
+      if (message.payload?.text) {
+        showUnifiedSearchPanel(message.payload.text);
+      }
+      sendResponse({ success: true });
+      break;
+    
+    case 'ADD_SELECTION':
+      // Context menu: Add selected text to OpenCTI
+      if (message.payload?.text) {
+        showAddSelectionPanel(message.payload.text);
+      }
       sendResponse({ success: true });
       break;
     

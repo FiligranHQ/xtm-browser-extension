@@ -450,7 +450,8 @@ export interface ContainerCreateInput {
   name: string;
   description?: string;
   content?: string;
-  published?: string;
+  published?: string; // For Report type - to avoid duplicates during update
+  created?: string; // For non-Report types - to avoid duplicates during update
   // Report-specific
   report_types?: string[];
   // Grouping-specific (mandatory)
@@ -636,6 +637,7 @@ export type MessageType =
   | 'HIDE_PANEL'
   | 'ADD_OBSERVABLE'
   | 'ADD_OBSERVABLES_BULK'
+  | 'CREATE_ENTITY'
   | 'CREATE_CONTAINER'
   | 'CREATE_INVESTIGATION'
   | 'ADD_TO_INVESTIGATION'

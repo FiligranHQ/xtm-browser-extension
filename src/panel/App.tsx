@@ -135,7 +135,7 @@ const getPlatformColor = (platform: string): string => {
   }
 };
 
-type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form';
+type PanelMode = 'empty' | 'loading' | 'entity' | 'not-found' | 'add' | 'preview' | 'platform-select' | 'container-type' | 'container-form' | 'investigation' | 'search' | 'search-results' | 'existing-containers' | 'atomic-testing' | 'oaev-search' | 'unified-search' | 'import-results' | 'scan-results' | 'scenario-overview' | 'scenario-form' | 'add-selection';
 
 // Interface for platform match in scan results
 interface ScanResultPlatformMatch {
@@ -255,6 +255,8 @@ const App: React.FC = () => {
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
   const [unifiedSearching, setUnifiedSearching] = useState(false);
   const [unifiedSearchPlatformFilter, setUnifiedSearchPlatformFilter] = useState<'all' | 'opencti' | 'openaev'>('all');
+  // Add selection state (from context menu "Add to OpenCTI")
+  const [addSelectionText, setAddSelectionText] = useState('');
   const [containerType, setContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState({
     name: '',
@@ -389,6 +391,11 @@ const App: React.FC = () => {
   const [checkingExisting, setCheckingExisting] = useState(false);
   // Container being updated (for upsert mode)
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
+  // Original dates from container being updated (to avoid creating duplicates)
+  const [updatingContainerDates, setUpdatingContainerDates] = useState<{
+    published?: string; // For Report
+    created?: string; // For other container types
+  } | null>(null);
   // Import results for displaying confirmation screen
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
   // Container-specific fields
@@ -1648,9 +1655,18 @@ const App: React.FC = () => {
         setPanelMode('oaev-search');
         break;
       case 'SHOW_UNIFIED_SEARCH_PANEL':
-        setUnifiedSearchQuery('');
+        // Support initial query from context menu "Search in OpenCTI"
+        setUnifiedSearchQuery(data.payload?.initialQuery || '');
         setUnifiedSearchResults([]);
         setPanelMode('unified-search');
+        break;
+      case 'SHOW_ADD_SELECTION':
+        // Context menu "Add to OpenCTI" - show entity creation for selected text
+        if (data.payload?.selectedText) {
+          setAddSelectionText(data.payload.selectedText);
+          setAddSelectionFromContextMenu(true); // Track that we came from context menu
+          setPanelMode('add-selection');
+        }
         break;
       case 'SHOW_SCENARIO_PANEL': {
         // Initialize scenario creation with attack patterns from the page
@@ -2800,6 +2816,11 @@ const App: React.FC = () => {
         createAsDraft: createAsDraft,
         // Relationships from AI resolution
         relationshipsToCreate: relationshipsToCreate.length > 0 ? relationshipsToCreate : undefined,
+        // Update mode: pass the existing container ID and dates to avoid duplicates
+        updateContainerId: updatingContainerId || undefined,
+        // For Reports, use 'published'; for other containers, use 'created'
+        published: updatingContainerId && containerType === 'Report' ? updatingContainerDates?.published : undefined,
+        created: updatingContainerId && containerType !== 'Report' ? updatingContainerDates?.created : undefined,
       },
     });
 
@@ -2851,6 +2872,8 @@ const App: React.FC = () => {
       setContainerWorkflowOrigin(null);
       setAttachPdf(true); // Reset PDF option
       setCreateAsDraft(false); // Reset draft option
+      setUpdatingContainerId(null); // Reset update mode
+      setUpdatingContainerDates(null); // Reset update dates
     } else {
       log.error(' Container creation failed:', response?.error);
     }
@@ -4989,6 +5012,198 @@ const App: React.FC = () => {
     </Box>
   );
 
+  // Helper to detect entity type from text (for add-selection)
+  const detectEntityType = (text: string): string => {
+    const trimmed = text.trim();
+    // IPv4
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(trimmed)) return 'IPv4-Addr';
+    // IPv6 (simplified)
+    if (/^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(trimmed) || 
+        /^([0-9a-fA-F]{1,4}:){1,7}:$/.test(trimmed) ||
+        /^:(:([0-9a-fA-F]{1,4})){1,7}$/.test(trimmed) ||
+        /^([0-9a-fA-F]{1,4}:)+(:([0-9a-fA-F]{1,4})){1,6}$/.test(trimmed)) return 'IPv6-Addr';
+    // Domain
+    if (/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(trimmed)) return 'Domain-Name';
+    // URL
+    if (/^https?:\/\//i.test(trimmed)) return 'Url';
+    // Email
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Email-Addr';
+    // CVE
+    if (/^CVE-\d{4}-\d+$/i.test(trimmed)) return 'Vulnerability';
+    // MD5
+    if (/^[a-fA-F0-9]{32}$/.test(trimmed)) return 'StixFile';
+    // SHA-1
+    if (/^[a-fA-F0-9]{40}$/.test(trimmed)) return 'StixFile';
+    // SHA-256
+    if (/^[a-fA-F0-9]{64}$/.test(trimmed)) return 'StixFile';
+    // SHA-512
+    if (/^[a-fA-F0-9]{128}$/.test(trimmed)) return 'StixFile';
+    // MITRE ATT&CK
+    if (/^T\d{4}(\.\d{3})?$/.test(trimmed)) return 'Attack-Pattern';
+    // Default to unknown - user must select
+    return '';
+  };
+
+  const [addSelectionEntityType, setAddSelectionEntityType] = useState('');
+  const [addingSelection, setAddingSelection] = useState(false);
+  const [addSelectionFromContextMenu, setAddSelectionFromContextMenu] = useState(false);
+
+  // Available observable types for manual selection - sorted alphabetically by label
+  const observableTypes = [
+    { value: 'Attack-Pattern', label: 'Attack Pattern (MITRE)' },
+    { value: 'Campaign', label: 'Campaign' },
+    { value: 'Domain-Name', label: 'Domain Name' },
+    { value: 'Email-Addr', label: 'Email Address' },
+    { value: 'StixFile', label: 'File Hash' },
+    { value: 'Hostname', label: 'Hostname' },
+    { value: 'Intrusion-Set', label: 'Intrusion Set' },
+    { value: 'IPv4-Addr', label: 'IPv4 Address' },
+    { value: 'IPv6-Addr', label: 'IPv6 Address' },
+    { value: 'Malware', label: 'Malware' },
+    { value: 'Threat-Actor', label: 'Threat Actor' },
+    { value: 'Tool', label: 'Tool' },
+    { value: 'Url', label: 'URL' },
+    { value: 'Vulnerability', label: 'Vulnerability (CVE)' },
+  ];
+
+  const handleAddSelection = async () => {
+    if (!addSelectionText || !addSelectionEntityType) return;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+
+    setAddingSelection(true);
+
+    try {
+      // Use first OpenCTI platform
+      const platformId = openctiPlatforms[0]?.id;
+      if (!platformId) {
+        log.error('No OpenCTI platform available');
+        setAddingSelection(false);
+        return;
+      }
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'CREATE_ENTITY',
+        payload: {
+          type: addSelectionEntityType,
+          value: addSelectionText.trim(),
+          name: addSelectionText.trim(),
+          platformId,
+        },
+      });
+
+      if (response?.success && response.data) {
+        // Show the created entity
+        setEntity({
+          ...response.data,
+          existsInPlatform: true,
+          _platformType: 'opencti',
+        });
+        setPlatformUrl(openctiPlatforms[0]?.url || '');
+        setSelectedPlatformId(platformId);
+        setPanelMode('entity');
+        setAddSelectionText('');
+        setAddSelectionEntityType('');
+        setAddSelectionFromContextMenu(false);
+      } else {
+        log.error('Failed to create entity:', response?.error);
+      }
+    } catch (error) {
+      log.error('Error creating entity:', error);
+    }
+
+    setAddingSelection(false);
+  };
+
+  // Auto-detect type when addSelectionText changes
+  React.useEffect(() => {
+    if (addSelectionText) {
+      const detected = detectEntityType(addSelectionText);
+      setAddSelectionEntityType(detected);
+    }
+  }, [addSelectionText]);
+
+  const handleCloseAddSelection = () => {
+    setPanelMode('empty');
+    setAddSelectionText('');
+    setAddSelectionFromContextMenu(false);
+  };
+
+  const renderAddSelectionView = () => (
+    <Box sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        {!addSelectionFromContextMenu && (
+          <IconButton size="small" onClick={handleCloseAddSelection}>
+            <ChevronLeftOutlined />
+          </IconButton>
+        )}
+        <Typography variant="h6" sx={{ fontSize: 16 }}>Add to OpenCTI</Typography>
+      </Box>
+
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          mb: 2,
+          bgcolor: 'background.paper',
+          borderRadius: 1,
+          border: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+          Selected Text
+        </Typography>
+        <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+          {addSelectionText}
+        </Typography>
+      </Paper>
+
+      <Autocomplete
+        options={observableTypes}
+        getOptionLabel={(option) => option.label}
+        value={observableTypes.find(t => t.value === addSelectionEntityType) || null}
+        onChange={(_, newValue) => setAddSelectionEntityType(newValue?.value || '')}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Entity Type"
+            size="small"
+            required
+            helperText={addSelectionEntityType ? 'Type auto-detected from value' : 'Select the entity type'}
+          />
+        )}
+        renderOption={(props, option) => (
+          <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ItemIcon type={option.value} size="small" />
+            <Typography variant="body2">{option.label}</Typography>
+          </Box>
+        )}
+        sx={{ mb: 2 }}
+      />
+
+      {openctiPlatforms.length === 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          No OpenCTI platform configured. Please configure one in settings.
+        </Alert>
+      )}
+
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button
+          variant="contained"
+          onClick={handleAddSelection}
+          disabled={!addSelectionText || !addSelectionEntityType || addingSelection || openctiPlatforms.length === 0}
+          fullWidth
+          endIcon={addingSelection ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
+        >
+          {addingSelection ? 'Adding...' : 'Add to OpenCTI'}
+        </Button>
+        <Button variant="outlined" onClick={handleCloseAddSelection}>
+          Cancel
+        </Button>
+      </Box>
+    </Box>
+  );
+
   const renderImportResultsView = () => {
     if (!importResults) return null;
     
@@ -5973,12 +6188,14 @@ const App: React.FC = () => {
             const fullContainer = response.data;
             log.debug(' handleRefreshContainer: Full container data:', fullContainer);
             
-            // Pre-fill the form with the container's existing data (but keep new content)
-            setContainerForm({
-              name: fullContainer.name || container.name,
+            // Pre-fill the form with the container's existing data (but keep new content from page)
+            // Use callback form to ensure we get the latest content value
+            const containerName = fullContainer.name || container.name;
+            setContainerForm(prev => ({
+              ...prev,
+              name: containerName, // Always use existing container's name, never page title
               description: fullContainer.description || '',
-              content: containerForm.content, // Keep the new content from page
-            });
+            }));
             
             // Pre-fill labels if available
             if (fullContainer.objectLabel && fullContainer.objectLabel.length > 0) {
@@ -6028,6 +6245,13 @@ const App: React.FC = () => {
             
             setContainerSpecificFields(newSpecificFields);
             
+            // Store original dates to avoid creating duplicates during update
+            // Reports use 'published', other containers use 'created'
+            setUpdatingContainerDates({
+              published: fullContainer.published,
+              created: fullContainer.created,
+            });
+            
             // Load labels and markings for the platform (if not already loaded)
             loadLabelsAndMarkings(containerPlatformId);
             
@@ -6040,11 +6264,12 @@ const App: React.FC = () => {
       }
       
       // Fallback: Use basic container data
-      setContainerForm({
-        name: container.name,
+      // Use callback form to ensure we get the latest content value
+      setContainerForm(prev => ({
+        ...prev,
+        name: container.name, // Always use existing container's name
         description: (container as any).description || '',
-        content: containerForm.content,
-      });
+      }));
       
       // Load labels and markings for the platform
       loadLabelsAndMarkings(containerPlatformId);
@@ -6185,7 +6410,8 @@ const App: React.FC = () => {
           required
           size="small"
           placeholder="Enter container name..."
-          helperText="Pre-filled from page title"
+          helperText={updatingContainerId ? "Name from existing container (cannot be changed)" : "Pre-filled from page title"}
+          disabled={!!updatingContainerId}
         />
 
         {/* Report-specific: Report Types */}
@@ -6459,6 +6685,28 @@ const App: React.FC = () => {
           sx={{ ml: 0 }}
         />
 
+        {/* Create as draft option - only show when creating, not updating */}
+        {!updatingContainerId && (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={createAsDraft}
+                onChange={(e) => setCreateAsDraft(e.target.checked)}
+                size="small"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2">Create as draft</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  (requires validation before publishing)
+                </Typography>
+              </Box>
+            }
+            sx={{ ml: 0 }}
+          />
+        )}
+
         {/* Content field info */}
         <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
           <Typography variant="caption">
@@ -6474,26 +6722,6 @@ const App: React.FC = () => {
           </Alert>
         )}
 
-        {/* Create as draft option */}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={createAsDraft}
-              onChange={(e) => setCreateAsDraft(e.target.checked)}
-              size="small"
-            />
-          }
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography variant="body2">Create as draft</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                (requires validation before publishing)
-              </Typography>
-            </Box>
-          }
-          sx={{ ml: 0 }}
-        />
-
         <Button
           variant="contained"
           onClick={handleCreateContainer}
@@ -6502,7 +6730,7 @@ const App: React.FC = () => {
           fullWidth
           sx={{ mt: 1 }}
         >
-          {generatingPdf ? 'Generating PDF...' : submitting ? 'Creating...' : 'Create Container'}
+          {generatingPdf ? 'Generating PDF...' : submitting ? (updatingContainerId ? 'Updating...' : 'Creating...') : (updatingContainerId ? 'Update Container' : 'Create Container')}
         </Button>
       </Box>
     </Box>
@@ -12451,6 +12679,8 @@ const App: React.FC = () => {
         return renderOAEVSearchView();
       case 'unified-search':
         return renderUnifiedSearchView();
+      case 'add-selection':
+        return renderAddSelectionView();
       case 'scenario-overview':
         return renderScenarioOverviewView();
       case 'scenario-form':

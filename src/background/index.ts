@@ -2272,6 +2272,43 @@ async function handleMessage(
         }
         break;
       }
+
+      case 'CREATE_ENTITY': {
+        // Create any entity type (SDO or SCO) - used by context menu "Add to OpenCTI"
+        const entityPayload = message.payload as {
+          type: string;
+          value: string;
+          name?: string;
+          platformId?: string;
+        };
+
+        // Get client for specified platform or default
+        const targetPlatformId = entityPayload.platformId || openCTIClients.keys().next().value as string | undefined;
+        const targetClient = targetPlatformId ? openCTIClients.get(targetPlatformId) : openCTIClient;
+
+        if (!targetClient) {
+          sendResponse(errorResponse('No OpenCTI platform configured'));
+          break;
+        }
+
+        try {
+          // Refang the value before creating (OpenCTI stores clean values)
+          const cleanValue = refangIndicator(entityPayload.value);
+          // Use createEntity which handles both SDOs and SCOs
+          const created = await targetClient.createEntity({
+            type: entityPayload.type,
+            value: cleanValue,
+            name: entityPayload.name || cleanValue,
+          });
+          sendResponse(successResponse(created));
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to create entity',
+          });
+        }
+        break;
+      }
       
       case 'CREATE_CONTAINER': {
         if (openCTIClients.size === 0) {
@@ -2308,6 +2345,10 @@ async function handleMessage(
             relationship_type: string;
             description?: string;
           }>;
+          // Update mode: pass existing container ID and dates to avoid duplicates
+          updateContainerId?: string;
+          published?: string; // For Report type
+          created?: string; // For other container types
         };
         
         try {
@@ -2336,14 +2377,18 @@ async function handleMessage(
               try {
                 // Refang the value before creating (OpenCTI stores clean values)
                 const cleanValue = refangIndicator(entityToCreate.value);
-                const created = await client.createObservable({
-                  type: entityToCreate.type as any,
+                // Use createEntity instead of createObservable to handle both
+                // STIX Domain Objects (SDOs) like Vulnerability, Malware, Threat-Actor
+                // and STIX Cyber Observables (SCOs) like IP, Domain, Hash
+                const created = await client.createEntity({
+                  type: entityToCreate.type,
                   value: cleanValue,
+                  name: cleanValue, // For SDOs that use name instead of value
                 });
                 
                 if (created?.id) {
                   allEntityIds.push(created.id);
-                  log.debug(`Created observable: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
+                  log.debug(`Created entity: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
                 }
               } catch (entityError) {
                 log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
@@ -2416,7 +2461,7 @@ async function handleMessage(
             ...createdRelationships.map(r => r.id),
           ];
           
-          log.info(`Creating container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
+          log.info(`${containerPayload.updateContainerId ? 'Updating' : 'Creating'} container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
           
           const container = await client.createContainer({
             type: containerPayload.type as ContainerType,
@@ -2435,6 +2480,10 @@ async function handleMessage(
             createdBy: containerPayload.createdBy,
             // Draft mode
             createAsDraft: containerPayload.createAsDraft,
+            // Update mode: pass original dates to avoid creating duplicates
+            // For Reports, use 'published'; for other containers, use 'created'
+            published: containerPayload.published,
+            created: containerPayload.created,
           });
           
           // Step 4: Attach external reference to the container

@@ -66,7 +66,7 @@ Automatically detect and highlight security-relevant content on any web page.
 
 ### 📋 Quick Actions
 - **Scan Page**: Detect all threats and observables
-- **Investigate**: Start a workbench investigation (OpenCTI)
+- **Investigate**: Start an investigation (OpenCTI)
 - **Create Container**: Create Reports, Cases, or Groupings (OpenCTI)
 - **Bulk Import**: Add multiple observables at once
 - **Search Assets**: Find matching assets (OpenAEV)

@@ -9,7 +9,7 @@ import { loggers } from '../utils/logger';
 const log = loggers.opencti;
 
 // User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.3';
+const USER_AGENT = 'xtm-browser-extension/0.0.4';
 
 import type {
   ExtensionSettings,
@@ -2150,6 +2150,10 @@ export class OpenCTIClient {
         if (input.response_types && input.response_types.length > 0) {
           containerInput.response_types = input.response_types;
         }
+        // Pass created date if provided (for update mode to avoid duplicates)
+        if (input.created) {
+          containerInput.created = input.created;
+        }
         mutationName = 'caseIncidentAdd';
         query = `
           mutation CreateCaseIncident($input: CaseIncidentAddInput!) {
@@ -2164,6 +2168,10 @@ export class OpenCTIClient {
         containerInput.information_types = ['strategic'];
         containerInput.severity = input.severity || 'medium';
         containerInput.priority = input.priority || 'P3';
+        // Pass created date if provided (for update mode to avoid duplicates)
+        if (input.created) {
+          containerInput.created = input.created;
+        }
         mutationName = 'caseRfiAdd';
         query = `
           mutation CreateCaseRfi($input: CaseRfiAddInput!) {
@@ -2178,6 +2186,10 @@ export class OpenCTIClient {
         containerInput.takedown_types = ['content'];
         containerInput.severity = input.severity || 'medium';
         containerInput.priority = input.priority || 'P3';
+        // Pass created date if provided (for update mode to avoid duplicates)
+        if (input.created) {
+          containerInput.created = input.created;
+        }
         mutationName = 'caseRftAdd';
         query = `
           mutation CreateCaseRft($input: CaseRftAddInput!) {
@@ -2191,6 +2203,10 @@ export class OpenCTIClient {
       case 'Grouping':
         // Context is mandatory for Grouping
         containerInput.context = input.context || 'suspicious-activity';
+        // Pass created date if provided (for update mode to avoid duplicates)
+        if (input.created) {
+          containerInput.created = input.created;
+        }
         mutationName = 'groupingAdd';
         query = `
           mutation CreateGrouping($input: GroupingAddInput!) {

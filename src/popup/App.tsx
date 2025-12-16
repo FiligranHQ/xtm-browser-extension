@@ -1009,7 +1009,7 @@ const App: React.FC = () => {
             <ActionButton
               icon={<TravelExploreOutlined />}
               label="Investigate"
-              subtitle="Start workbench"
+              subtitle="Start an investigation"
               tooltip="Start investigation with entities"
               onClick={handleInvestigate}
               color="#ff9800"
@@ -1164,7 +1164,7 @@ const App: React.FC = () => {
             </Box>
             {/* Version */}
             <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, fontSize: 10 }}>
-              v0.0.3 • Click for details
+              v0.0.4 • Click for details
             </Typography>
           </Box>
         </Box>

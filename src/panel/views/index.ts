@@ -12,11 +12,12 @@ export { NotFoundView } from '../components/NotFoundView';
 export { PanelHeader } from '../components/PanelHeader';
 export { PlatformNavigation } from '../components/PlatformNavigation';
 
-// Note: Additional views like EntityView, SearchView, ContainerFormView, etc.
-// can be extracted from App.tsx as separate components when needed.
-// The refactoring pattern is:
-// 1. Create a new component file (e.g., views/EntityView.tsx)
-// 2. Extract the render function and its dependencies
-// 3. Pass necessary state and callbacks as props
-// 4. Import and use the component in App.tsx
-
+// New extracted view components
+export { ScanResultsView } from './ScanResultsView';
+export { SearchView } from './SearchView';
+export { UnifiedSearchView } from './UnifiedSearchView';
+export { PreviewView } from './PreviewView';
+export { ImportResultsView } from './ImportResultsView';
+export { ContainerTypeView } from './ContainerTypeView';
+export { PlatformSelectView } from './PlatformSelectView';
+export { AddView } from './AddView';

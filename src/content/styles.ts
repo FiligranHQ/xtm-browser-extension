@@ -590,38 +590,58 @@ export const HIGHLIGHT_STYLES = `
   
   /* ========================================
      SIDE PANEL FRAME
+     All properties use !important to prevent host page CSS overrides
      ======================================== */
   .xtm-panel-frame {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 560px;
-    height: 100vh;
-    border: none;
-    z-index: 2147483646;
-    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4);
-    transition: transform 0.3s ease;
-    background: #070d19;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: 560px !important;
+    height: 100vh !important;
+    max-width: 560px !important;
+    max-height: 100vh !important;
+    min-width: 560px !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    z-index: 2147483646 !important;
+    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4) !important;
+    transition: transform 0.3s ease !important;
+    background: #070d19 !important;
+    transform: translateX(0) !important;
+    /* Prevent centering transforms from host page */
+    translate: none !important;
+    inset: auto !important;
   }
   
   .xtm-panel-frame.hidden {
-    transform: translateX(100%);
+    transform: translateX(100%) !important;
+    pointer-events: none !important;
   }
   
   /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */
   .xtm-panel-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 560px;
-    bottom: 0;
-    z-index: 2147483635; /* Well below highlights (2147483640) */
-    background: transparent;
-    pointer-events: none; /* CRITICAL: Allow clicks to pass through to highlights */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 560px !important;
+    bottom: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 2147483635 !important; /* Well below highlights (2147483640) */
+    background: transparent !important;
+    pointer-events: none !important; /* CRITICAL: Allow clicks to pass through to highlights */
+    transform: none !important;
+    translate: none !important;
   }
   
   .xtm-panel-overlay.hidden {
-    display: none;
+    display: none !important;
   }
 
   /* ========================================

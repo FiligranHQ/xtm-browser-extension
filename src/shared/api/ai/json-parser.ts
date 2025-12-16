@@ -213,7 +213,7 @@ function tryCompleteJson(content: string): string | null {
     completed = completed.replace(/,\s*$/, '');
     completed = completed.replace(/,\s*"[^"]*$/, '');
     completed = completed.replace(/:\s*\.{2,}\s*$/, ': ""');  // Handle : ...
-    completed = completed.replace(/:\s*[^"\[\{}\]\s,][^,\]\}]*$/, ': ""');  // Handle : incomplete_value
+    completed = completed.replace(/:\s*[^"[{}\]\s,][^,\]}]*$/, ': ""');  // Handle : incomplete_value
     completed = completed.replace(/:\s*$/, ': null');
     completed = completed.replace(/:\s*"[^"]*$/, ': ""');
     completed = completed.replace(/"[^"]*$/, '""');  // Handle incomplete string at end

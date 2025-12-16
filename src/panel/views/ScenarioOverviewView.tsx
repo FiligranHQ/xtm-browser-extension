@@ -54,61 +54,61 @@ export const ScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (props)
     showToast: _showToast,
     currentPageTitle: _currentPageTitle,
     currentPageUrl: _currentPageUrl,
-    // Scenario state from hook
-    scenarioOverviewData,
-    setScenarioOverviewData,
-    scenarioForm,
-    setScenarioForm,
-    selectedInjects,
-    setSelectedInjects,
-    scenarioEmails,
-    setScenarioEmails,
+    // Scenario state from hook - prefixed unused vars with _ to suppress warnings
+    scenarioOverviewData: _scenarioOverviewData,
+    setScenarioOverviewData: _setScenarioOverviewData,
+    scenarioForm: _scenarioForm,
+    setScenarioForm: _setScenarioForm,
+    selectedInjects: _selectedInjects,
+    setSelectedInjects: _setSelectedInjects,
+    scenarioEmails: _scenarioEmails,
+    setScenarioEmails: _setScenarioEmails,
     scenarioLoading,
-    setScenarioLoading,
+    setScenarioLoading: _setScenarioLoading,
     scenarioStep,
     setScenarioStep,
     scenarioTypeAffinity,
     setScenarioTypeAffinity,
     scenarioPlatformsAffinity,
     setScenarioPlatformsAffinity,
-    scenarioInjectSpacing,
-    setScenarioInjectSpacing,
+    scenarioInjectSpacing: _scenarioInjectSpacing,
+    setScenarioInjectSpacing: _setScenarioInjectSpacing,
     scenarioPlatformSelected,
     setScenarioPlatformSelected,
-    scenarioPlatformId,
+    scenarioPlatformId: _scenarioPlatformId,
     setScenarioPlatformId,
-    scenarioRawAttackPatterns,
-    scenarioTargetType,
-    setScenarioTargetType,
-    scenarioAssets,
-    scenarioAssetGroups,
-    scenarioTeams,
-    scenarioSelectedAsset,
-    setScenarioSelectedAsset,
-    scenarioSelectedAssetGroup,
-    setScenarioSelectedAssetGroup,
-    scenarioSelectedTeam,
-    setScenarioSelectedTeam,
-    scenarioCreating,
-    setScenarioCreating,
-    scenarioAIMode,
-    setScenarioAIMode,
-    scenarioAIGenerating,
-    setScenarioAIGenerating,
-    scenarioAINumberOfInjects,
-    setScenarioAINumberOfInjects,
-    scenarioAIPayloadAffinity,
-    setScenarioAIPayloadAffinity,
-    scenarioAITableTopDuration,
-    setScenarioAITableTopDuration,
-    scenarioAIEmailLanguage,
-    setScenarioAIEmailLanguage,
-    scenarioAITheme,
-    setScenarioAITheme,
-    scenarioAIContext,
-    setScenarioAIContext,
-    scenarioAIGeneratedScenario,
-    setScenarioAIGeneratedScenario,
+    scenarioRawAttackPatterns: _scenarioRawAttackPatterns,
+    scenarioTargetType: _scenarioTargetType,
+    setScenarioTargetType: _setScenarioTargetType,
+    scenarioAssets: _scenarioAssets,
+    scenarioAssetGroups: _scenarioAssetGroups,
+    scenarioTeams: _scenarioTeams,
+    scenarioSelectedAsset: _scenarioSelectedAsset,
+    setScenarioSelectedAsset: _setScenarioSelectedAsset,
+    scenarioSelectedAssetGroup: _scenarioSelectedAssetGroup,
+    setScenarioSelectedAssetGroup: _setScenarioSelectedAssetGroup,
+    scenarioSelectedTeam: _scenarioSelectedTeam,
+    setScenarioSelectedTeam: _setScenarioSelectedTeam,
+    scenarioCreating: _scenarioCreating,
+    setScenarioCreating: _setScenarioCreating,
+    scenarioAIMode: _scenarioAIMode,
+    setScenarioAIMode: _setScenarioAIMode,
+    scenarioAIGenerating: _scenarioAIGenerating,
+    setScenarioAIGenerating: _setScenarioAIGenerating,
+    scenarioAINumberOfInjects: _scenarioAINumberOfInjects,
+    setScenarioAINumberOfInjects: _setScenarioAINumberOfInjects,
+    scenarioAIPayloadAffinity: _scenarioAIPayloadAffinity,
+    setScenarioAIPayloadAffinity: _setScenarioAIPayloadAffinity,
+    scenarioAITableTopDuration: _scenarioAITableTopDuration,
+    setScenarioAITableTopDuration: _setScenarioAITableTopDuration,
+    scenarioAIEmailLanguage: _scenarioAIEmailLanguage,
+    setScenarioAIEmailLanguage: _setScenarioAIEmailLanguage,
+    scenarioAITheme: _scenarioAITheme,
+    setScenarioAITheme: _setScenarioAITheme,
+    scenarioAIContext: _scenarioAIContext,
+    setScenarioAIContext: _setScenarioAIContext,
+    scenarioAIGeneratedScenario: _scenarioAIGeneratedScenario,
+    setScenarioAIGeneratedScenario: _setScenarioAIGeneratedScenario,
   } = props;
 
   const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
@@ -117,20 +117,6 @@ export const ScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (props)
   // Get OpenAEV platforms
   const openaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
   
-  // Filter contracts by platform affinity
-  const getFilteredContracts = (contracts: any[]) => {
-    if (scenarioTypeAffinity === 'TABLE-TOP') return [];
-    if (!contracts) return [];
-    
-    return contracts.filter((contract: any) => {
-      const contractPlatforms = contract.injector_contract_platforms || [];
-      if (contractPlatforms.length === 0) return true;
-      return scenarioPlatformsAffinity.some(p => 
-        contractPlatforms.map((cp: string) => cp.toLowerCase()).includes(p.toLowerCase())
-      );
-    });
-  };
-
   // Handle platform selection
   const handlePlatformSelect = (platformId: string) => {
     const platform = openaevPlatforms.find(p => p.id === platformId);

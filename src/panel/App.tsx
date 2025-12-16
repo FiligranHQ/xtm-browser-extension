@@ -27,7 +27,6 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
-  Snackbar,
 } from '@mui/material';
 import {
   CloseOutlined,
@@ -55,7 +54,6 @@ import {
   ErrorOutline,
   LanguageOutlined,
   DnsOutlined,
-  ArrowBackOutlined,
   EmailOutlined,
   InfoOutlined,
   AutoAwesomeOutlined,
@@ -69,20 +67,17 @@ import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
 import ItemIcon from '../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../shared/theme/colors';
 
-// Helper to get AI colors based on theme mode
-const getAiColor = (mode: 'dark' | 'light') => mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
+// Helper function to get AI colors based on theme mode
+const getAiColor = (mode: 'dark' | 'light') => {
+  return mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
+};
+
 import { loggers } from '../shared/utils/logger';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   parsePrefixedType,
-  isNonDefaultPlatformEntity,
-  getPlatformFromEntity,
-  getDisplayType,
   createPrefixedType,
-  isDefaultPlatform,
-  PLATFORM_REGISTRY,
-  type PlatformType,
 } from '../shared/platform';
 import {
   getOAEVEntityName,
@@ -439,12 +434,17 @@ const App: React.FC = () => {
   const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
   // Store page content for AI discovery (set when scan completes)
   const [scanPageContent, setScanPageContent] = useState<string>('');
-  // Snackbar notification state
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'warning' | 'error' }>({
-    open: false,
-    message: '',
-    severity: 'info',
-  });
+  
+  // Toast notification helper - sends to content script
+  const showToast = React.useCallback((options: {
+    type: 'success' | 'info' | 'warning' | 'error';
+    message: string;
+    action?: { label: string; type: 'scroll_to_first' | 'close_panel' | 'custom' };
+    persistent?: boolean;
+    duration?: number;
+  }) => {
+    window.parent.postMessage({ type: 'XTM_SHOW_TOAST', payload: options }, '*');
+  }, []);
   
   // AI Relationship resolution state
   const [aiResolvingRelationships, setAiResolvingRelationships] = useState(false);
@@ -1622,7 +1622,8 @@ const App: React.FC = () => {
           }
         }
         
-        setScanResultsEntities(Array.from(entityMap.values()));
+        const scanEntities = Array.from(entityMap.values());
+        setScanResultsEntities(scanEntities);
         setScanResultsTypeFilter('all');
         setScanResultsFoundFilter('all');
         // Note: Don't clear selections here - SELECTION_UPDATED message follows with correct state
@@ -2587,11 +2588,14 @@ const App: React.FC = () => {
       if (response?.success && response.data) {
         setContainerForm(prev => ({ ...prev, description: response.data }));
         log.debug(' AI generated description:', response.data.substring(0, 100) + '...');
+        showToast({ type: 'success', message: 'AI generated description' });
       } else {
         log.error(' AI description generation failed:', response?.error);
+        showToast({ type: 'error', message: 'AI description generation failed' });
       }
     } catch (error) {
       log.error(' AI description generation error:', error);
+      showToast({ type: 'error', message: 'AI description generation error' });
     } finally {
       setAiGeneratingDescription(false);
     }
@@ -2732,22 +2736,22 @@ const App: React.FC = () => {
             }
             
             log.info(`Added ${uniqueNewEntities.length} AI-discovered entities to scan results`);
-            setSnackbar({ open: true, message: `AI discovered ${uniqueNewEntities.length} new entit${uniqueNewEntities.length === 1 ? 'y' : 'ies'}`, severity: 'success' });
+            showToast({ type: 'success', message: `AI discovered ${uniqueNewEntities.length} new entit${uniqueNewEntities.length === 1 ? 'y' : 'ies'}` });
           } else {
             log.info('All AI-discovered entities were already in the list');
-            setSnackbar({ open: true, message: 'AI found no new entities (all already detected)', severity: 'info' });
+            showToast({ type: 'info', message: 'AI found no new entities (all already detected)' });
           }
         } else {
           log.info('AI did not discover any additional entities');
-          setSnackbar({ open: true, message: 'AI found no additional entities on this page', severity: 'info' });
+          showToast({ type: 'info', message: 'AI found no additional entities on this page' });
         }
       } else {
         log.error('AI entity discovery failed:', response?.error);
-        setSnackbar({ open: true, message: 'AI discovery failed', severity: 'error' });
+        showToast({ type: 'error', message: 'AI discovery failed' });
       }
     } catch (error) {
       log.error('AI entity discovery error:', error);
-      setSnackbar({ open: true, message: 'AI discovery error', severity: 'error' });
+      showToast({ type: 'error', message: 'AI discovery error' });
     } finally {
       setAiDiscoveringEntities(false);
     }
@@ -2849,6 +2853,7 @@ const App: React.FC = () => {
 
     if (chrome.runtime.lastError) {
       log.error(' Container creation failed:', chrome.runtime.lastError);
+      showToast({ type: 'error', message: 'Container creation failed' });
       setSubmitting(false);
       return;
     }
@@ -2889,6 +2894,10 @@ const App: React.FC = () => {
       setEntityContainers([]);
       setPanelMode('entity');
       
+      // Show success notification
+      const actionText = updatingContainerId ? 'updated' : 'created';
+      showToast({ type: 'success', message: `${containerType} ${actionText} successfully` });
+      
       // Reset form
       setContainerForm({ name: '', description: '', content: '' });
       setEntitiesToAdd([]);
@@ -2899,6 +2908,7 @@ const App: React.FC = () => {
       setUpdatingContainerDates(null); // Reset update dates
     } else {
       log.error(' Container creation failed:', response?.error);
+      showToast({ type: 'error', message: response?.error || 'Container creation failed' });
     }
     setSubmitting(false);
   };
@@ -3177,7 +3187,7 @@ const App: React.FC = () => {
                           // Fetch full entity details in background if needed
                           const entityObj = target.entity;
                           const platformType = entityObj?._platformType || 'opencti';
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           
                           const ed = (entityObj?.entityData || entityObj) as any;
                           const needsFetch = platformType === 'openaev'
                             ? !(ed?.attack_pattern_name || ed?.attack_pattern_description || ed?.scenario_name)
@@ -3247,7 +3257,7 @@ const App: React.FC = () => {
                           // Fetch full entity details in background if needed
                           const entityObj = target.entity;
                           const platformType = entityObj?._platformType || 'opencti';
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           
                           const ed = (entityObj?.entityData || entityObj) as any;
                           const needsFetch = platformType === 'openaev'
                             ? !(ed?.attack_pattern_name || ed?.attack_pattern_description || ed?.scenario_name)
@@ -4121,7 +4131,7 @@ const App: React.FC = () => {
     const needsEntityFetch = (entityObj: EntityData | undefined): boolean => {
       if (!entityObj) return true;
       const platformType = entityObj._platformType || 'opencti';
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const ed = (entityObj.entityData || entityObj) as any;
       if (platformType === 'openaev') {
         // OpenAEV: need fetch if no type-specific fields
@@ -5127,11 +5137,14 @@ const App: React.FC = () => {
         setAddSelectionText('');
         setAddSelectionEntityType('');
         setAddSelectionFromContextMenu(false);
+        showToast({ type: 'success', message: 'Entity created successfully' });
       } else {
         log.error('Failed to create entity:', response?.error);
+        showToast({ type: 'error', message: response?.error || 'Failed to create entity' });
       }
     } catch (error) {
       log.error('Error creating entity:', error);
+      showToast({ type: 'error', message: 'Error creating entity' });
     }
 
     setAddingSelection(false);
@@ -5675,13 +5688,20 @@ const App: React.FC = () => {
                           if (response?.success && response.data?.relationships) {
                             setResolvedRelationships(response.data.relationships);
                             log.info(`AI resolved ${response.data.relationships.length} relationships`);
+                            if (response.data.relationships.length > 0) {
+                              showToast({ type: 'success', message: `AI found ${response.data.relationships.length} relationship${response.data.relationships.length === 1 ? '' : 's'}` });
+                            } else {
+                              showToast({ type: 'info', message: 'AI found no relationships' });
+                            }
                           } else {
                             log.warn('AI relationship resolution failed:', response?.error);
+                            showToast({ type: 'error', message: 'AI relationship resolution failed' });
                           }
                         }
                       );
                     } catch (error) {
                       log.error('AI relationship resolution error:', error);
+                      showToast({ type: 'error', message: 'AI relationship resolution error' });
                       setAiResolvingRelationships(false);
                     }
                   }}
@@ -6861,8 +6881,10 @@ const App: React.FC = () => {
       setInvestigationEntities([]);
       setInvestigationTypeFilter('all');
       setPanelMode('empty');
+      showToast({ type: 'success', message: 'Workbench created successfully' });
     } else {
       log.error(' Failed to create workbench:', response?.error);
+      showToast({ type: 'error', message: response?.error || 'Failed to create workbench' });
     }
     
     setSubmitting(false);
@@ -8236,14 +8258,19 @@ const App: React.FC = () => {
         // Close panel via postMessage to content script
         window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
         
+        showToast({ type: 'success', message: 'Atomic testing created successfully' });
+        
         // Reset state
         setAtomicTestingTargets([]);
         setSelectedAtomicTarget(null);
         setAtomicTestingPlatformSelected(false);
         setPanelMode('empty');
+      } else {
+        showToast({ type: 'error', message: result?.error || 'Failed to create atomic testing' });
       }
     } catch (error) {
       log.error(' Failed to create atomic testing:', error);
+      showToast({ type: 'error', message: 'Failed to create atomic testing' });
     } finally {
       setAtomicTestingCreating(false);
     }
@@ -8515,15 +8542,19 @@ const App: React.FC = () => {
           log.warn(' Atomic testing created but no ID found in response:', response.data);
         }
         
+        showToast({ type: 'success', message: 'AI atomic testing created successfully' });
+        
         // Reset state
         setAtomicTestingAIMode(false);
         setAtomicTestingAIGeneratedPayload(null);
         setAtomicTestingShowList(true);
       } else {
         log.error(' Failed to create atomic testing from AI payload:', response?.error);
+        showToast({ type: 'error', message: response?.error || 'Failed to create atomic testing' });
       }
     } catch (error) {
       log.error(' Error creating atomic testing with AI payload:', error);
+      showToast({ type: 'error', message: 'Error creating atomic testing' });
     } finally {
       setAtomicTestingCreating(false);
     }
@@ -9898,7 +9929,7 @@ const App: React.FC = () => {
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={handleUnifiedSearch} edge="end" disabled={unifiedSearching}>
+                <IconButton onClick={() => handleUnifiedSearch()} edge="end" disabled={unifiedSearching}>
                   {unifiedSearching ? <CircularProgress size={20} /> : <SearchOutlined />}
                 </IconButton>
               </InputAdornment>
@@ -10111,6 +10142,7 @@ const App: React.FC = () => {
       
       if (!scenarioResponse?.success || !scenarioResponse.data) {
         log.error(' Scenario creation failed:', scenarioResponse?.error);
+        showToast({ type: 'error', message: scenarioResponse?.error || 'Scenario creation failed' });
         setSubmitting(false);
         return;
       }
@@ -10192,6 +10224,8 @@ const App: React.FC = () => {
         chrome.tabs.create({ url: scenario.url });
       }
       
+      showToast({ type: 'success', message: 'Scenario created successfully' });
+      
       // Reset and close
       setScenarioForm({ name: '', description: '', subtitle: '', category: 'attack-scenario' });
       setSelectedInjects([]);
@@ -10200,6 +10234,7 @@ const App: React.FC = () => {
       handleClose();
     } catch (error) {
       log.error(' Scenario creation error:', error);
+      showToast({ type: 'error', message: 'Scenario creation failed' });
     }
     
     setSubmitting(false);
@@ -12732,23 +12767,6 @@ const App: React.FC = () => {
         {renderHeader()}
         <Box sx={{ flex: 1, overflow: 'auto' }}>{renderContent()}</Box>
       </Box>
-      
-      {/* Notification Snackbar */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%', borderRadius: 1, fontSize: 12 }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </ThemeProvider>
   );
 };

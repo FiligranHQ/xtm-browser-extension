@@ -135,11 +135,12 @@ export function getOAEVEntityName(entity: Record<string, unknown>, type: string)
     case 'AssetGroup':
       return (entity.asset_group_name || entity.name || 'Unknown Asset Group') as string;
     case 'Player':
-    case 'User':
+    case 'User': {
       const firstName = entity.user_firstname || '';
       const lastName = entity.user_lastname || '';
       const fullName = [firstName, lastName].filter(Boolean).join(' ');
       return fullName || (entity.user_email as string) || 'Unknown Player';
+    }
     case 'Team':
       return (entity.team_name || entity.name || 'Unknown Team') as string;
     case 'Organization':

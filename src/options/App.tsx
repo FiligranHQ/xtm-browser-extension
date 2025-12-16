@@ -1,3 +1,7 @@
+/**
+ * Options Page Main Component
+ * Orchestrates the settings UI for the browser extension
+ */
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   ThemeProvider,
@@ -5,182 +9,74 @@ import {
   CssBaseline,
   Box,
   Typography,
-  TextField,
-  Button,
-  IconButton,
-  InputAdornment,
-  Alert,
-  Paper,
-  Switch,
-  FormControlLabel,
-  Checkbox,
-  FormGroup,
-  Chip,
-  Divider,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Card,
-  CardContent,
-  CardActions,
   Snackbar,
-  CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  Alert,
 } from '@mui/material';
+import ThemeDark from '../shared/theme/ThemeDark';
+import ThemeLight from '../shared/theme/ThemeLight';
+import type { ExtensionSettings, PlatformConfig } from '../shared/types';
+
+// Import constants
 import {
-  VisibilityOutlined,
-  VisibilityOffOutlined,
-  CheckOutlined,
-  RefreshOutlined,
-  InfoOutlined,
-  LightModeOutlined,
-  DarkModeOutlined,
-  DescriptionOutlined,
-  PublicOutlined,
-  DeleteOutlined,
-  AddOutlined,
-  LinkOffOutlined,
-  RestartAltOutlined,
-  PaletteOutlined,
-} from '@mui/icons-material';
+  DEFAULT_DETECTION,
+  OAEV_ENTITY_TYPES,
+  type TabType,
+  type CacheStats,
+  type TestResult,
+  type SnackbarState,
+  type AITestResult,
+  type AvailableModel,
+} from './constants';
+
+// Import components
 import {
-  CenterFocusStrongOutlined,
-  GitHub,
-  AutoAwesomeOutlined,
-  KeyOutlined,
-  MovieFilterOutlined,
-  TravelExploreOutlined,
-  HubOutlined,
-} from '@mui/icons-material';
-import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
-import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
-import { itemColor } from '../shared/theme/colors';
-import ItemIcon from '../shared/components/ItemIcon';
-import type { ExtensionSettings, PlatformConfig, AIProvider, AISettings } from '../shared/types';
-
-// Helper to get AI colors based on theme mode
-const getAiColor = (mode: 'dark' | 'light') => mode === 'dark' ? THEME_DARK_AI : THEME_LIGHT_AI;
-import { PLATFORM_REGISTRY, type PlatformType } from '../shared/platform';
-
-// Observable types that can be detected - sorted alphabetically by label
-const OBSERVABLE_TYPES = [
-  { value: 'Bank-Account', label: 'Bank Accounts (IBAN)' },
-  { value: 'Cryptocurrency-Wallet', label: 'Cryptocurrency Wallets' },
-  { value: 'Domain-Name', label: 'Domain Names' },
-  { value: 'Email-Addr', label: 'Email Addresses' },
-  { value: 'StixFile', label: 'File Hashes (MD5, SHA1, SHA256)' },
-  { value: 'Hostname', label: 'Hostnames' },
-  { value: 'IPv4-Addr', label: 'IPv4 Addresses' },
-  { value: 'IPv6-Addr', label: 'IPv6 Addresses' },
-  { value: 'Mac-Addr', label: 'MAC Addresses' },
-  { value: 'Phone-Number', label: 'Phone Numbers' },
-  { value: 'Url', label: 'URLs' },
-  { value: 'User-Agent', label: 'User Agents' },
-];
-
-// Entity types that can be detected - sorted alphabetically by label
-// These match the entity types that are cached for detection (see storage.ts SDOCache)
-const ENTITY_TYPES = [
-  { value: 'Administrative-Area', label: 'Administrative Areas' },
-  { value: 'Attack-Pattern', label: 'Attack Patterns' },
-  { value: 'Campaign', label: 'Campaigns' },
-  { value: 'City', label: 'Cities' },
-  { value: 'Country', label: 'Countries' },
-  { value: 'Event', label: 'Events' },
-  { value: 'Incident', label: 'Incidents' },
-  { value: 'Individual', label: 'Individuals' },
-  { value: 'Intrusion-Set', label: 'Intrusion Sets' },
-  { value: 'Malware', label: 'Malware' },
-  { value: 'Organization', label: 'Organizations' },
-  { value: 'Position', label: 'Positions' },
-  { value: 'Region', label: 'Regions' },
-  { value: 'Sector', label: 'Sectors' },
-  { value: 'Threat-Actor-Group', label: 'Threat Actor Groups' },
-  { value: 'Threat-Actor-Individual', label: 'Threat Actor Individuals' },
-];
-
-// ============================================================================
-// Platform Entity Types Configuration
-// When adding a new platform, add its entity types constant here
-// ============================================================================
-
-// OpenAEV entity types - sorted alphabetically by label
-const OAEV_ENTITY_TYPES = [
-  { value: 'AssetGroup', label: 'Asset Groups' },
-  { value: 'Asset', label: 'Assets (Endpoints)' },
-  { value: 'AttackPattern', label: 'Attack Patterns' },
-  { value: 'Finding', label: 'Findings' },
-  { value: 'Player', label: 'People' },
-  { value: 'Team', label: 'Teams' },
-];
-
-// OpenGRC entity types - placeholder for future implementation
-// const OPENGRC_ENTITY_TYPES = [
-//   { value: 'Control', label: 'Controls' },
-//   { value: 'Risk', label: 'Risks' },
-//   { value: 'Framework', label: 'Frameworks' },
-// ];
-
-// All platform entity type configurations - keyed by platform type
-const PLATFORM_ENTITY_TYPES: Record<string, Array<{ value: string; label: string }>> = {
-  openaev: OAEV_ENTITY_TYPES,
-  // opengrc: OPENGRC_ENTITY_TYPES,
-};
-
-const DEFAULT_DETECTION = {
-  entityTypes: ENTITY_TYPES.map(e => e.value),
-  observableTypes: OBSERVABLE_TYPES.map(o => o.value),
-  platformEntityTypes: {
-    openaev: OAEV_ENTITY_TYPES.map(o => o.value),
-    // When adding new platforms, add their entity types here:
-    // opengrc: OPENGRC_ENTITY_TYPES.map(e => e.value),
-  },
-};
-
-// Settings navigation tabs - add new platform tabs here when integrating new platforms
-type TabType = 'opencti' | 'openaev' | 'detection' | 'ai' | 'appearance' | 'about';
-// When adding new platform: type TabType = 'opencti' | 'openaev' | 'opengrc' | 'detection' | ...;
+  Sidebar,
+  OpenCTITab,
+  OpenAEVTab,
+  DetectionTab,
+  AITab,
+  AppearanceTab,
+  AboutTab,
+} from './components';
 
 const App: React.FC = () => {
+  // Theme and navigation state
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
   const [activeTab, setActiveTab] = useState<TabType>('opencti');
+  
+  // Settings state
   const [settings, setSettings] = useState<ExtensionSettings | null>(null);
+  const [savedSettings, setSavedSettings] = useState<ExtensionSettings | null>(null);
+  
+  // Platform configuration state
   const [showTokens, setShowTokens] = useState<{ [key: string]: boolean }>({});
   const [testing, setTesting] = useState<{ [key: string]: boolean }>({});
-  const [testResults, setTestResults] = useState<{ [key: string]: { type: 'success' | 'error'; message: string } }>({});
+  const [testResults, setTestResults] = useState<{ [key: string]: TestResult }>({});
   const [testedPlatforms, setTestedPlatforms] = useState<Set<string>>(new Set());
-  const [cacheStats, setCacheStats] = useState<{ 
-    total: number; 
-    age: number;
-    byPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number; byType: Record<string, number> }>;
-    oaevByPlatform?: Array<{ platformId: string; platformName: string; total: number; age: number; byType: Record<string, number> }>;
-    oaevTotal?: number;
-    isRefreshing?: boolean;
-  } | null>(null);
+  
+  // Cache state
+  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
   const [isRefreshingCache, setIsRefreshingCache] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  
+  // AI state
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<AITestResult | null>(null);
+  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+  
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState<SnackbarState>({
     open: false,
     message: '',
     severity: 'success',
   });
-  
-  // AI testing and model fetching state
-  const [aiTesting, setAiTesting] = useState(false);
-  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; description?: string }>>([]);
-  
-  // Track saved settings to detect changes (for disabling Save button when nothing changed)
-  const [savedSettings, setSavedSettings] = useState<ExtensionSettings | null>(null);
 
+  // Create theme based on mode
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
     return createTheme(themeOptions);
   }, [mode]);
 
+  // Load settings on mount
   useEffect(() => {
     // Check if we're running in an extension context
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
@@ -202,12 +98,10 @@ const App: React.FC = () => {
     loadCacheStats();
     
     // Listen for storage changes to keep settings in sync
-    // This ensures the options page updates when settings are saved from popup/splash
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
         const newSettings = changes.settings.newValue;
         if (newSettings) {
-          // Reload settings when they change from another source (e.g., popup splash)
           loadSettings();
         }
       }
@@ -226,6 +120,10 @@ const App: React.FC = () => {
       loadCacheStats();
     }
   }, [activeTab]);
+
+  // ============================================================================
+  // Data Loading Functions
+  // ============================================================================
 
   const loadSettings = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
@@ -253,7 +151,6 @@ const App: React.FC = () => {
         loadedSettings.detection.platformEntityTypes.openaev = OAEV_ENTITY_TYPES.map(o => o.value);
       }
       setSettings(loadedSettings);
-      // Store a deep copy of the loaded settings for change detection
       setSavedSettings(JSON.parse(JSON.stringify(loadedSettings)));
       
       // Mark existing platforms as tested
@@ -266,8 +163,7 @@ const App: React.FC = () => {
       });
       setTestedPlatforms(existingTested);
       
-      let themeMode = loadedSettings.theme;
-      // Theme is strictly configuration-based - no auto detection
+      const themeMode = loadedSettings.theme;
       setMode(themeMode === 'light' ? 'light' : 'dark');
     }
   };
@@ -298,11 +194,10 @@ const App: React.FC = () => {
     }
   };
 
-  /**
-   * Test platform connection
-   * @param type - Platform type (opencti or openaev, with future platforms like opengrc to be added)
-   * @param platformId - Unique ID of the platform instance
-   */
+  // ============================================================================
+  // Platform Handler Functions
+  // ============================================================================
+
   const handleTestConnection = async (type: 'opencti' | 'openaev', platformId: string) => {
     if (!settings) return;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
@@ -311,21 +206,7 @@ const App: React.FC = () => {
     setTesting({ ...testing, [key]: true });
     setTestResults({ ...testResults, [key]: undefined as any });
 
-    // Get platforms based on type - add new platform cases here
-    let platforms: PlatformConfig[] | undefined;
-    switch (type) {
-      case 'opencti':
-        platforms = settings.openctiPlatforms;
-        break;
-      case 'openaev':
-        platforms = settings.openaevPlatforms;
-        break;
-      // case 'opengrc':
-      //   platforms = settings.opengrcPlatforms;
-      //   break;
-      default:
-        platforms = undefined;
-    }
+    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
     const platform = platforms?.find(p => p.id === platformId);
     
     if (!platform?.url || !platform?.apiToken) {
@@ -337,7 +218,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Test connection without saving - send credentials directly
     const response = await chrome.runtime.sendMessage({ 
       type: 'TEST_PLATFORM_CONNECTION_TEMP',
       payload: { 
@@ -353,7 +233,6 @@ const App: React.FC = () => {
     }
     
     if (response?.success) {
-      // Get remote platform name and auto-fill if the current name is default
       const remotePlatformName = type === 'opencti' 
         ? response.data?.settings?.platform_title 
         : response.data?.platform_name;
@@ -361,17 +240,12 @@ const App: React.FC = () => {
       const platformIndex = platforms?.findIndex(p => p.id === platformId) ?? -1;
       const currentPlatform = platforms?.[platformIndex];
       
-      // Auto-fill name if it's a default/generic name or empty
-      const isDefaultName = currentPlatform?.name === 'OpenCTI' || 
-                           currentPlatform?.name === 'OpenAEV' || 
-                           currentPlatform?.name === 'New OpenCTI' || 
+      const isDefaultName = currentPlatform?.name === 'New OpenCTI' || 
                            currentPlatform?.name === 'New OpenAEV' ||
                            !currentPlatform?.name;
       
-      // Get enterprise edition status from response
       const isEnterprise = response.data?.enterprise_edition ?? false;
       
-      // Build updated settings and save immediately
       const settingsKey = `${type}Platforms` as const;
       const updatedPlatforms = [...(settings[settingsKey] || [])];
       if (platformIndex >= 0 && currentPlatform) {
@@ -384,7 +258,6 @@ const App: React.FC = () => {
       }
       const updatedSettings = { ...settings, [settingsKey]: updatedPlatforms };
       
-      // Update local state
       setSettings(updatedSettings);
       
       setTestResults({
@@ -400,7 +273,6 @@ const App: React.FC = () => {
       
       // Auto-save after successful test
       try {
-        // Normalize URLs
         const normalizedSettings = {
           ...updatedSettings,
           openctiPlatforms: updatedSettings.openctiPlatforms.map(p => ({
@@ -424,7 +296,6 @@ const App: React.FC = () => {
           setSnackbar({ open: true, message: 'Platform connected and saved', severity: 'success' });
         }
       } catch (error) {
-        // Save failed silently - user can still manually save
         console.error('Auto-save after test failed:', error);
       }
     } else {
@@ -437,265 +308,6 @@ const App: React.FC = () => {
       });
     }
     setTesting({ ...testing, [key]: false });
-  };
-
-  const handleSave = async () => {
-    if (!settings) return;
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-      setSnackbar({ open: true, message: 'Settings saved (preview mode)', severity: 'success' });
-      return;
-    }
-    
-    // Normalize URLs: remove trailing slashes
-    const normalizedSettings = {
-      ...settings,
-      openctiPlatforms: settings.openctiPlatforms.map(p => ({
-        ...p,
-        url: p.url.replace(/\/+$/, ''), // Remove trailing slashes
-      })),
-      openaevPlatforms: settings.openaevPlatforms.map(p => ({
-        ...p,
-        url: p.url.replace(/\/+$/, ''), // Remove trailing slashes
-      })),
-    };
-    
-    // Update local state with normalized URLs
-    setSettings(normalizedSettings);
-    
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'SAVE_SETTINGS',
-        payload: normalizedSettings,
-      });
-      
-      if (response?.success) {
-        // Update saved settings to reflect current state
-        setSavedSettings(JSON.parse(JSON.stringify(normalizedSettings)));
-        setSettings(normalizedSettings);
-        setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
-        
-        // Start polling for cache refresh completion
-        // The background script triggers cache refresh after settings save
-        setIsRefreshingCache(true);
-        const pollInterval = setInterval(async () => {
-          const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
-          if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
-            clearInterval(pollInterval);
-            setIsRefreshingCache(false);
-            await loadCacheStats();
-          }
-        }, 1000);
-        
-        // Timeout after 2 minutes
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          setIsRefreshingCache(false);
-          loadCacheStats();
-        }, 120000);
-      } else {
-        setSnackbar({ open: true, message: response?.error || 'Failed to save settings', severity: 'error' });
-      }
-    } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to save settings', severity: 'error' });
-    }
-  };
-
-  const handleResetAllSettings = async () => {
-    if (!confirm('Are you sure you want to reset ALL settings? This will remove all connections and preferences.')) {
-      return;
-    }
-    
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-
-    // Clear all caches first
-    await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
-
-    const defaultSettings: ExtensionSettings = {
-      openctiPlatforms: [],
-      openaevPlatforms: [],
-      theme: 'auto',
-      autoScan: false,
-      scanOnLoad: false,
-      showNotifications: true,
-      detection: DEFAULT_DETECTION,
-    };
-
-    await chrome.runtime.sendMessage({
-      type: 'SAVE_SETTINGS',
-      payload: defaultSettings,
-    });
-
-    setSettings(defaultSettings);
-    setTestResults({});
-    setTestedPlatforms(new Set());
-    setCacheStats(null);
-  };
-
-  const handleRemoveAllOpenCTI = async () => {
-    if (!confirm('Remove all OpenCTI platforms? This action cannot be undone.')) return;
-    if (!settings) return;
-    
-    // Clear caches for all OpenCTI platforms
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
-    }
-    
-    // Create updated settings with empty OpenCTI platforms
-    const updatedSettings = {
-      ...settings,
-      openctiPlatforms: [],
-    };
-    
-    // Update local state
-    setSettings(updatedSettings);
-    
-    // Save directly to avoid async state issues
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({
-        type: 'SAVE_SETTINGS',
-        payload: updatedSettings,
-      });
-      // Update saved settings to reflect the new state
-      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
-      setSnackbar({ open: true, message: 'All OpenCTI platforms removed', severity: 'success' });
-    }
-    
-    setTestResults({});
-    setTestedPlatforms(new Set());
-    setCacheStats(null);
-  };
-
-  const handleRemoveAllOpenAEV = async () => {
-    if (!confirm('Remove all OpenAEV platforms? This action cannot be undone.')) return;
-    if (!settings) return;
-    
-    // Clear caches for all OpenAEV platforms
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_OAEV_CACHE' });
-    }
-    
-    // Create updated settings with empty OpenAEV platforms
-    const updatedSettings = {
-      ...settings,
-      openaevPlatforms: [],
-    };
-    
-    // Update local state
-    setSettings(updatedSettings);
-    
-    // Save directly to avoid async state issues
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({
-        type: 'SAVE_SETTINGS',
-        payload: updatedSettings,
-      });
-      // Update saved settings to reflect the new state
-      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
-      setSnackbar({ open: true, message: 'All OpenAEV platforms removed', severity: 'success' });
-    }
-    
-    setTestResults({});
-    setTestedPlatforms(new Set());
-  };
-  
-  const handleRemoveAllPlatforms = async () => {
-    if (!confirm('Remove ALL platforms (both OpenCTI and OpenAEV)? This action cannot be undone.')) return;
-    if (!settings) return;
-    
-    // Clear all caches
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
-      await chrome.runtime.sendMessage({ type: 'CLEAR_OAEV_CACHE' });
-    }
-    
-    const updatedSettings = {
-      ...settings,
-      openctiPlatforms: [],
-      openaevPlatforms: [],
-    };
-    setSettings(updatedSettings);
-    
-    await chrome.runtime.sendMessage({
-      type: 'SAVE_SETTINGS',
-      payload: updatedSettings,
-    });
-    
-    setTestResults({});
-    setCacheStats(null);
-    setSnackbar({ open: true, message: 'All platforms removed', severity: 'success' });
-  };
-
-  const handleResetDetection = () => {
-    if (!settings) return;
-    updateSetting('detection', DEFAULT_DETECTION);
-  };
-
-  const handleResetAppearance = () => {
-    if (!settings) return;
-    setTheme('auto');
-  };
-
-  const handleClearAI = () => {
-    if (!settings) return;
-    if (!confirm('Are you sure you want to clear AI configuration? This will disable all AI features.')) {
-      return;
-    }
-    // Clear AI settings completely
-    setAiTestResult(null);
-    setAvailableModels([]);
-    updateSetting('ai', {
-      enabled: false,
-      provider: undefined,
-      apiKey: undefined,
-      model: undefined,
-      availableModels: undefined,
-      connectionTested: false,
-    });
-    setSnackbar({ open: true, message: 'AI configuration cleared', severity: 'success' });
-  };
-
-  const handleRefreshCache = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    setIsRefreshingCache(true);
-    
-    try {
-      // Wait for the refresh to complete - the message handler returns after refresh is done
-      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_SDO_CACHE' });
-      
-      if (response?.success) {
-        // Load fresh stats after refresh completes
-        await loadCacheStats();
-      }
-    } catch (error) {
-      console.error('Cache refresh error:', error);
-    } finally {
-      setIsRefreshingCache(false);
-    }
-  };
-
-  const updateSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
-    if (!settings) return;
-    setSettings({ ...settings, [key]: value });
-  };
-
-  const setTheme = async (newTheme: 'auto' | 'dark' | 'light') => {
-    if (!settings) return;
-    
-    // Update local state
-    const updatedSettings = { ...settings, theme: newTheme };
-    setSettings(updatedSettings);
-    
-    // Theme is strictly from settings - default to dark
-    setMode(newTheme === 'light' ? 'light' : 'dark');
-    
-    // Save immediately for theme changes
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      await chrome.runtime.sendMessage({
-        type: 'SAVE_SETTINGS',
-        payload: updatedSettings,
-      });
-    }
   };
 
   const addPlatform = (type: 'opencti' | 'openaev') => {
@@ -741,11 +353,9 @@ const App: React.FC = () => {
     const removedPlatform = platforms[index];
     platforms.splice(index, 1);
     
-    // Update local state
     const updatedSettings = { ...settings, [key]: platforms };
     setSettings(updatedSettings);
     
-    // Clear test results for removed platform
     const platformKey = `${type}-${removedPlatform.id}`;
     setTestedPlatforms(prev => {
       const newSet = new Set(prev);
@@ -758,7 +368,6 @@ const App: React.FC = () => {
       return newResults;
     });
     
-    // Save immediately
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
         const response = await chrome.runtime.sendMessage({
@@ -767,7 +376,6 @@ const App: React.FC = () => {
         });
         
         if (response?.success) {
-          // Update saved settings to reflect the new state
           setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
           setSnackbar({ open: true, message: 'Platform removed', severity: 'success' });
         } else {
@@ -779,21 +387,291 @@ const App: React.FC = () => {
     }
   };
 
-  // Check if platform settings have changed from saved state
+  // ============================================================================
+  // Settings Handler Functions
+  // ============================================================================
+
+  const updateSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
+    if (!settings) return;
+    setSettings({ ...settings, [key]: value });
+  };
+
+  const handleSave = async () => {
+    if (!settings) return;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+      setSnackbar({ open: true, message: 'Settings saved (preview mode)', severity: 'success' });
+      return;
+    }
+    
+    const normalizedSettings = {
+      ...settings,
+      openctiPlatforms: settings.openctiPlatforms.map(p => ({
+        ...p,
+        url: p.url.replace(/\/+$/, ''),
+      })),
+      openaevPlatforms: settings.openaevPlatforms.map(p => ({
+        ...p,
+        url: p.url.replace(/\/+$/, ''),
+      })),
+    };
+    
+    setSettings(normalizedSettings);
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: normalizedSettings,
+      });
+      
+      if (response?.success) {
+        setSavedSettings(JSON.parse(JSON.stringify(normalizedSettings)));
+        setSettings(normalizedSettings);
+        setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
+        
+        setIsRefreshingCache(true);
+        const pollInterval = setInterval(async () => {
+          const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
+          if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
+            clearInterval(pollInterval);
+            setIsRefreshingCache(false);
+            await loadCacheStats();
+          }
+        }, 1000);
+        
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setIsRefreshingCache(false);
+          loadCacheStats();
+        }, 120000);
+      } else {
+        setSnackbar({ open: true, message: response?.error || 'Failed to save settings', severity: 'error' });
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to save settings', severity: 'error' });
+    }
+  };
+
+  const setTheme = async (newTheme: 'auto' | 'dark' | 'light') => {
+    if (!settings) return;
+    
+    const updatedSettings = { ...settings, theme: newTheme };
+    setSettings(updatedSettings);
+    setMode(newTheme === 'light' ? 'light' : 'dark');
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+    }
+  };
+
+  // ============================================================================
+  // Reset Handler Functions
+  // ============================================================================
+
+  const handleResetAllSettings = async () => {
+    if (!confirm('Are you sure you want to reset ALL settings? This will remove all connections and preferences.')) {
+      return;
+    }
+    
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+
+    await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
+
+    const defaultSettings: ExtensionSettings = {
+      openctiPlatforms: [],
+      openaevPlatforms: [],
+      theme: 'auto',
+      autoScan: false,
+      scanOnLoad: false,
+      showNotifications: true,
+      detection: DEFAULT_DETECTION,
+    };
+
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_SETTINGS',
+      payload: defaultSettings,
+    });
+
+    setSettings(defaultSettings);
+    setTestResults({});
+    setTestedPlatforms(new Set());
+    setCacheStats(null);
+  };
+
+  const handleRemoveAllOpenCTI = async () => {
+    if (!confirm('Remove all OpenCTI platforms? This action cannot be undone.')) return;
+    if (!settings) return;
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({ type: 'CLEAR_SDO_CACHE' });
+    }
+    
+    const updatedSettings = {
+      ...settings,
+      openctiPlatforms: [],
+    };
+    
+    setSettings(updatedSettings);
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
+      setSnackbar({ open: true, message: 'All OpenCTI platforms removed', severity: 'success' });
+    }
+    
+    setTestResults({});
+    setTestedPlatforms(new Set());
+    setCacheStats(null);
+  };
+
+  const handleRemoveAllOpenAEV = async () => {
+    if (!confirm('Remove all OpenAEV platforms? This action cannot be undone.')) return;
+    if (!settings) return;
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({ type: 'CLEAR_OAEV_CACHE' });
+    }
+    
+    const updatedSettings = {
+      ...settings,
+      openaevPlatforms: [],
+    };
+    
+    setSettings(updatedSettings);
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
+      setSnackbar({ open: true, message: 'All OpenAEV platforms removed', severity: 'success' });
+    }
+    
+    setTestResults({});
+    setTestedPlatforms(new Set());
+  };
+
+  const handleResetDetection = () => {
+    if (!settings) return;
+    updateSetting('detection', DEFAULT_DETECTION);
+  };
+
+  const handleResetAppearance = () => {
+    if (!settings) return;
+    setTheme('auto');
+  };
+
+  const handleClearAI = () => {
+    if (!settings) return;
+    if (!confirm('Are you sure you want to clear AI configuration? This will disable all AI features.')) {
+      return;
+    }
+    setAiTestResult(null);
+    setAvailableModels([]);
+    updateSetting('ai', {
+      enabled: false,
+      provider: undefined,
+      apiKey: undefined,
+      model: undefined,
+      availableModels: undefined,
+      connectionTested: false,
+    });
+    setSnackbar({ open: true, message: 'AI configuration cleared', severity: 'success' });
+  };
+
+  // ============================================================================
+  // Cache Handler Functions
+  // ============================================================================
+
+  const handleRefreshCache = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setIsRefreshingCache(true);
+    
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_SDO_CACHE' });
+      
+      if (response?.success) {
+        await loadCacheStats();
+      }
+    } catch (error) {
+      console.error('Cache refresh error:', error);
+    } finally {
+      setIsRefreshingCache(false);
+    }
+  };
+
+  // ============================================================================
+  // AI Handler Functions
+  // ============================================================================
+
+  const handleTestAndFetchModels = async () => {
+    if (!settings?.ai?.provider || !settings?.ai?.apiKey) return;
+    
+    setAiTesting(true);
+    setAiTestResult(null);
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'AI_TEST_AND_FETCH_MODELS',
+        payload: {
+          provider: settings.ai.provider,
+          apiKey: settings.ai.apiKey,
+        },
+      });
+      
+      if (response?.success && response.data?.models) {
+        setAvailableModels(response.data.models);
+        setAiTestResult({ success: true, message: `Connected! ${response.data.models.length} models available.` });
+        
+        if (!settings.ai.model && response.data.models.length > 0) {
+          updateSetting('ai', {
+            ...settings.ai,
+            model: response.data.models[0].id,
+            availableModels: response.data.models,
+            connectionTested: true,
+          });
+        } else {
+          updateSetting('ai', {
+            ...settings.ai,
+            availableModels: response.data.models,
+            connectionTested: true,
+          });
+        }
+      } else {
+        setAiTestResult({ success: false, message: response?.error || 'Connection failed' });
+      }
+    } catch (error) {
+      setAiTestResult({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Connection test failed' 
+      });
+    } finally {
+      setAiTesting(false);
+    }
+  };
+
+  // ============================================================================
+  // Utility Functions
+  // ============================================================================
+
   const hasPlatformChanges = (type: 'opencti' | 'openaev'): boolean => {
     if (!settings || !savedSettings) return false;
     const currentPlatforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
     const savedPlatforms = type === 'opencti' ? savedSettings.openctiPlatforms : savedSettings.openaevPlatforms;
     
-    // Compare arrays - different length means changes
     if (currentPlatforms.length !== savedPlatforms.length) return true;
     
-    // Compare each platform
     for (let i = 0; i < currentPlatforms.length; i++) {
       const current = currentPlatforms[i];
       const saved = savedPlatforms[i];
       
-      // Compare relevant fields
       if (current.id !== saved.id ||
           current.name !== saved.name ||
           current.url !== saved.url ||
@@ -816,29 +694,33 @@ const App: React.FC = () => {
       const hasUrl = platform.url && platform.url.trim().length > 0;
       const hasToken = platform.apiToken && platform.apiToken.trim().length > 0;
       
-      // If platform has no URL and no token, it's completely empty - disable save
       if (!hasUrl && !hasToken) {
-        return true; // Empty platform configuration
+        return true;
       }
       
-      // If platform has URL but no token, or token but no URL, it's incomplete
       if ((hasUrl && !hasToken) || (!hasUrl && hasToken)) {
-        return true; // Incomplete platform configuration
+        return true;
       }
       
-      // If platform has both URL and token, but hasn't been tested, disable save
       if (hasUrl && hasToken && !testedPlatforms.has(key)) {
-        return true; // Has untested platform with credentials
+        return true;
       }
     }
     
-    // If no validation issues, check if there are any changes to save
     if (!hasPlatformChanges(type)) {
-      return true; // No changes to save
+      return true;
     }
     
     return false;
   };
+
+  const handleToggleTokenVisibility = (key: string) => {
+    setShowTokens({ ...showTokens, [key]: !showTokens[key] });
+  };
+
+  // ============================================================================
+  // Render
+  // ============================================================================
 
   if (!settings) {
     return (
@@ -848,1318 +730,105 @@ const App: React.FC = () => {
     );
   }
 
-  const renderPlatformCard = (platform: PlatformConfig, type: 'opencti' | 'openaev', index: number) => {
-    const key = `${type}-${platform.id}`;
-    const isShowingToken = showTokens[key];
-    const isTesting = testing[key];
-    const testResult = testResults[key];
-    
-    // Platform name is only shown after it has been tested (auto-resolved from remote)
-    const isPlatformTested = testedPlatforms.has(key);
-    const isDefaultName = platform.name === 'New OpenCTI' || 
-                         platform.name === 'New OpenAEV' ||
-                         platform.name === 'OpenCTI' ||
-                         platform.name === 'OpenAEV' ||
-                         !platform.name;
-    const showNameField = isPlatformTested || !isDefaultName;
-
-    return (
-      <Card key={platform.id} variant="outlined" sx={{ mb: 2, borderRadius: 1 }}>
-        <CardContent sx={{ pb: 1 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Platform Name - only shown after testing or if customized */}
-            {showNameField && (
-              <TextField
-                label="Platform Name"
-                size="small"
-                value={platform.name}
-                onChange={(e) => updatePlatform(type, index, { name: e.target.value })}
-                fullWidth
-                helperText="Auto-resolved from platform. You can customize it."
-              />
-            )}
-            <TextField
-              label="URL"
-              size="small"
-              placeholder={type === 'opencti' ? 'https://opencti.example.com' : 'https://openaev.example.com'}
-              value={platform.url}
-              onChange={(e) => updatePlatform(type, index, { url: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="API Token"
-              size="small"
-              type={isShowingToken ? 'text' : 'password'}
-              value={platform.apiToken}
-              onChange={(e) => updatePlatform(type, index, { apiToken: e.target.value })}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowTokens({ ...showTokens, [key]: !isShowingToken })} edge="end" size="small">
-                        {isShowingToken ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            {testResult && (
-              <Alert severity={testResult.type} sx={{ borderRadius: 1, py: 0 }}>
-                {testResult.message}
-              </Alert>
-            )}
-          </Box>
-        </CardContent>
-        <CardActions sx={{ px: 2, pb: 2, pt: 0, mt: 2.5, justifyContent: 'space-between' }}>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => handleTestConnection(type, platform.id)}
-            disabled={isTesting || !platform.url || !platform.apiToken}
-            startIcon={<CheckOutlined />}
-          >
-            {isTesting ? 'Testing...' : 'Test'}
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            onClick={() => removePlatform(type, index)}
-            startIcon={<DeleteOutlined />}
-          >
-            Remove
-          </Button>
-        </CardActions>
-      </Card>
-    );
-  };
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-        {/* Sidebar - OpenCTI-inspired navigation */}
-        <Box
-          sx={{
-            width: 220,
-            bgcolor: 'background.paper',
-            borderRight: 1,
-            borderColor: 'divider',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <img
-                src={`../assets/logos/logo_filigran_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                alt="Filigran"
-                width={24}
-                height={24}
-              />
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11, lineHeight: 1.2 }}>
-                  Filigran Threat Management
-                </Typography>
-              </Box>
-            </Box>
-          </Box>
-
-          {/* Navigation - OpenCTI-style */}
-          <List sx={{ flex: 1, py: 1 }}>
-            {[
-              { 
-                id: 'opencti', 
-                label: 'OpenCTI', 
-                icon: (
-                  <img 
-                    src={`../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                    alt="OpenCTI" 
-                    width={20} 
-                    height={20}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                )
-              },
-              { 
-                id: 'openaev', 
-                label: 'OpenAEV', 
-                icon: (
-                  <img 
-                    src={`../assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                    alt="OpenAEV" 
-                    width={20} 
-                    height={20}
-                    onError={(e) => { 
-                      // Fallback to filigran logo if openaev fails
-                      (e.target as HTMLImageElement).src = `../assets/logos/logo_filigran_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`;
-                    }}
-                  />
-                )
-              },
-              { 
-                id: 'ai', 
-                label: 'Agentic AI', 
-                icon: (
-                  <img 
-                    src={`../assets/logos/logo_xtm-one_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                    alt="XTM One" 
-                    width={20} 
-                    height={20}
-                    onError={(e) => { 
-                      // Fallback to AutoAwesome icon if logo fails
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ),
-                // Agentic AI is only available if at least one platform is Enterprise Edition
-                disabled: ![
-                  ...(settings?.openctiPlatforms || []),
-                  ...(settings?.openaevPlatforms || []),
-                ].some((p: any) => p.isEnterprise),
-                badge: ![
-                  ...(settings?.openctiPlatforms || []),
-                  ...(settings?.openaevPlatforms || []),
-                ].some((p: any) => p.isEnterprise) ? 'EE' : undefined,
-              },
-              { 
-                id: 'detection', 
-                label: 'Detection', 
-                icon: <CenterFocusStrongOutlined sx={{ fontSize: 20 }} />,
-                disabled: (settings?.openctiPlatforms?.length || 0) === 0 && (settings?.openaevPlatforms?.length || 0) === 0,
-              },
-              { id: 'appearance', label: 'Appearance', icon: <PaletteOutlined sx={{ fontSize: 20 }} /> },
-              { id: 'about', label: 'About', icon: <InfoOutlined sx={{ fontSize: 20 }} /> },
-            ].map((item) => (
-              <ListItemButton
-                key={item.id}
-                selected={activeTab === item.id}
-                onClick={() => !item.disabled && setActiveTab(item.id as TabType)}
-                disabled={item.disabled}
-                sx={{
-                  mx: 1,
-                  borderRadius: 1,
-                  mb: 0.5,
-                  height: 40,
-                  '&.Mui-selected': {
-                    bgcolor: 'rgba(0, 188, 212, 0.08)',
-                    borderLeft: '3px solid',
-                    borderLeftColor: 'primary.main',
-                    '&:hover': {
-                      bgcolor: 'rgba(0, 188, 212, 0.12)',
-                    },
-                  },
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  '&.Mui-disabled': {
-                    opacity: 0.5,
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 36, color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.secondary' }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText 
-                  primary={item.label} 
-                  primaryTypographyProps={{ 
-                    fontSize: 13, 
-                    fontWeight: activeTab === item.id ? 600 : 400,
-                    color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.primary',
-                  }} 
-                />
-              </ListItemButton>
-            ))}
-          </List>
-        </Box>
+        {/* Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          mode={mode}
+          settings={settings}
+        />
 
         {/* Main Content */}
         <Box sx={{ flex: 1, p: 4, maxWidth: 900, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* OpenCTI Tab */}
           {activeTab === 'opencti' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>OpenCTI Platforms</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Configure one or more OpenCTI platform connections for threat intelligence
-              </Typography>
-
-              <Box sx={{ flex: 1 }}>
-                {settings.openctiPlatforms.map((platform, index) => renderPlatformCard(platform, 'opencti', index))}
-
-                <Button
-                  variant="outlined"
-                  startIcon={<AddOutlined />}
-                  onClick={() => addPlatform('opencti')}
-                  sx={{ mt: 1, mb: 3 }}
-                >
-                  Add OpenCTI Platform
-                </Button>
-              </Box>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<LinkOffOutlined />}
-                  onClick={handleRemoveAllOpenCTI}
-                  disabled={settings.openctiPlatforms.length === 0}
-                >
-                  Remove All
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSave}
-                  disabled={isPlatformSaveDisabled('opencti')}
-                >
-                  Save Settings
-                </Button>
-              </Box>
-            </Box>
+            <OpenCTITab
+              settings={settings}
+              showTokens={showTokens}
+              testing={testing}
+              testResults={testResults}
+              testedPlatforms={testedPlatforms}
+              onToggleTokenVisibility={handleToggleTokenVisibility}
+              onUpdatePlatform={updatePlatform}
+              onRemovePlatform={removePlatform}
+              onTestConnection={handleTestConnection}
+              onAddPlatform={addPlatform}
+              onRemoveAll={handleRemoveAllOpenCTI}
+              onSave={handleSave}
+              isSaveDisabled={isPlatformSaveDisabled('opencti')}
+            />
           )}
 
           {/* OpenAEV Tab */}
           {activeTab === 'openaev' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>OpenAEV Platforms</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Configure one or more OpenAEV platform connections for attack & exposure validation
-              </Typography>
-
-              <Box sx={{ flex: 1 }}>
-                {settings.openaevPlatforms.map((platform, index) => renderPlatformCard(platform, 'openaev', index))}
-                <Button
-                  variant="outlined"
-                  startIcon={<AddOutlined />}
-                  onClick={() => addPlatform('openaev')}
-                  sx={{ mt: 1, mb: 3 }}
-                >
-                  Add OpenAEV Platform
-                </Button>
-              </Box>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<LinkOffOutlined />}
-                  onClick={handleRemoveAllOpenAEV}
-                  disabled={settings.openaevPlatforms.length === 0}
-                >
-                  Remove All
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSave}
-                  disabled={isPlatformSaveDisabled('openaev')}
-                >
-                  Save Settings
-                </Button>
-              </Box>
-            </Box>
+            <OpenAEVTab
+              settings={settings}
+              showTokens={showTokens}
+              testing={testing}
+              testResults={testResults}
+              testedPlatforms={testedPlatforms}
+              onToggleTokenVisibility={handleToggleTokenVisibility}
+              onUpdatePlatform={updatePlatform}
+              onRemovePlatform={removePlatform}
+              onTestConnection={handleTestConnection}
+              onAddPlatform={addPlatform}
+              onRemoveAll={handleRemoveAllOpenAEV}
+              onSave={handleSave}
+              isSaveDisabled={isPlatformSaveDisabled('openaev')}
+            />
           )}
 
           {/* Detection Tab */}
           {activeTab === 'detection' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Detection Settings</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Configure how entities are detected on web pages
-              </Typography>
-
-              <Box sx={{ flex: 1 }}>
-                <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Scan Behavior</Typography>
-                  
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={settings.autoScan}
-                        onChange={(e) => updateSetting('autoScan', e.target.checked)}
-                        color="success"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2">Auto-scan on page load</Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          Automatically scan pages when they finish loading
-                        </Typography>
-                      </Box>
-                    }
-                    sx={{ mb: 2, alignItems: 'flex-start' }}
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={settings.showNotifications}
-                        onChange={(e) => updateSetting('showNotifications', e.target.checked)}
-                        color="success"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2">Show notifications</Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          Display notifications for scan results
-                        </Typography>
-                      </Box>
-                    }
-                    sx={{ alignItems: 'flex-start' }}
-                  />
-                </Paper>
-                
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-                  <Button variant="contained" onClick={handleSave}>
-                    Save Scan Behavior
-                  </Button>
-                </Box>
-
-                <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Entity Cache</Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                    Cached entities for offline detection
-                  </Typography>
-
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: cacheStats?.byPlatform?.length ? 2 : 0 }}>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {cacheStats ? `${cacheStats.total} entities cached` : 'No cache data'}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {isRefreshingCache 
-                          ? 'Refreshing cache...' 
-                          : cacheStats 
-                            ? `Last updated ${cacheStats.age} minutes ago` 
-                            : 'Cache not initialized'}
-                      </Typography>
-                    </Box>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={isRefreshingCache ? <CircularProgress size={16} /> : <RefreshOutlined />}
-                      onClick={handleRefreshCache}
-                      disabled={isRefreshingCache}
-                    >
-                      {isRefreshingCache ? 'Refreshing...' : 'Refresh Cache'}
-                    </Button>
-                  </Box>
-                  
-                  {/* Per-platform breakdown - OpenCTI */}
-                  {cacheStats?.byPlatform && cacheStats.byPlatform.length > 0 && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, display: 'block' }}>
-                        OpenCTI Platforms
-                      </Typography>
-                      {cacheStats.byPlatform.map((platform) => (
-                        <Box key={platform.platformId} sx={{ mb: 2 }}>
-                          <Box 
-                            sx={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'space-between',
-                              py: 0.5,
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <img
-                                src={`../assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                                alt="OpenCTI"
-                                width={16}
-                                height={16}
-                              />
-                              <Typography variant="body2">{platform.platformName}</Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              {platform.total === 0 && platform.age === 0
-                                ? 'Building cache...' 
-                                : `${platform.total} entities • ${platform.age}m ago`}
-                            </Typography>
-                          </Box>
-                          {/* Type breakdown - always visible */}
-                          {Object.keys(platform.byType).length > 0 && (
-                            <Box sx={{ pl: 3, pt: 0.5 }}>
-                              {Object.entries(platform.byType)
-                                .sort(([, a], [, b]) => b - a)
-                                .map(([type, count]) => (
-                                  <Box 
-                                    key={type}
-                                    sx={{ 
-                                      display: 'flex', 
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      py: 0.25,
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                      <ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />
-                                      <Typography 
-                                        variant="caption" 
-                                        sx={{ 
-                                          color: 'text.primary',
-                                          fontWeight: 500,
-                                        }}
-                                      >
-                                        {type.replace(/-/g, ' ')}
-                                      </Typography>
-                                    </Box>
-                                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                                      {count}
-                                    </Typography>
-                                  </Box>
-                                ))}
-                            </Box>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-
-                  {/* Per-platform breakdown - OpenAEV */}
-                  {cacheStats?.oaevByPlatform && cacheStats.oaevByPlatform.length > 0 && (
-                    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, display: 'block' }}>
-                        OpenAEV Platforms
-                      </Typography>
-                      {cacheStats.oaevByPlatform.map((platform) => (
-                        <Box key={platform.platformId} sx={{ mb: 2 }}>
-                          <Box 
-                            sx={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'space-between',
-                              py: 0.5,
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <img
-                                src={`../assets/logos/logo_openaev_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                                alt="OpenAEV"
-                                width={16}
-                                height={16}
-                              />
-                              <Typography variant="body2">{platform.platformName}</Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              {platform.total === 0 && platform.age === 0
-                                ? 'Building cache...' 
-                                : `${platform.total} entities • ${platform.age}m ago`}
-                            </Typography>
-                          </Box>
-                          {/* Type breakdown - always visible */}
-                          {Object.keys(platform.byType).length > 0 && (
-                            <Box sx={{ pl: 3, pt: 0.5 }}>
-                              {Object.entries(platform.byType)
-                                .sort(([, a], [, b]) => b - a)
-                                .map(([type, count]) => (
-                                  <Box 
-                                    key={type}
-                                    sx={{ 
-                                      display: 'flex', 
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      py: 0.25,
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                      <ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />
-                                      <Typography 
-                                        variant="caption" 
-                                        sx={{ 
-                                          color: 'text.primary',
-                                          fontWeight: 500,
-                                        }}
-                                      >
-                                        {type.replace(/-/g, ' ')}
-                                      </Typography>
-                                    </Box>
-                                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                                      {count}
-                                    </Typography>
-                                  </Box>
-                                ))}
-                            </Box>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* Info about scope of detection settings */}
-                <Alert severity="info" sx={{ mb: 3 }}>
-                  These settings affect which entity types are detected during <strong>Scan</strong> and <strong>Investigation</strong> modes only. 
-                  <strong> Atomic Testing</strong> and <strong>Scenario Generation</strong> will always detect attack patterns and hostnames/domains regardless of these settings.
-                </Alert>
-
-                {/* Observable Types */}
-                <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Observable Types</Typography>
-                  <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                    {OBSERVABLE_TYPES.map((item) => (
-                      <FormControlLabel
-                        key={item.value}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={settings.detection?.observableTypes?.includes(item.value) ?? true}
-                            onChange={(e) => {
-                              const types = settings.detection?.observableTypes || [];
-                              updateSetting('detection', {
-                                ...settings.detection,
-                                observableTypes: e.target.checked
-                                  ? [...types, item.value]
-                                  : types.filter((t) => t !== item.value),
-                              });
-                            }}
-                          />
-                        }
-                        label={<Typography variant="body2">{item.label}</Typography>}
-                      />
-                    ))}
-                  </FormGroup>
-                </Paper>
-
-                {/* OpenCTI Entity Types */}
-                <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenCTI Entity Types</Typography>
-                  <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                    {ENTITY_TYPES.map((item) => (
-                      <FormControlLabel
-                        key={item.value}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={settings.detection?.entityTypes?.includes(item.value) ?? true}
-                            onChange={(e) => {
-                              const types = settings.detection?.entityTypes || [];
-                              updateSetting('detection', {
-                                ...settings.detection,
-                                entityTypes: e.target.checked
-                                  ? [...types, item.value]
-                                  : types.filter((t) => t !== item.value),
-                              });
-                            }}
-                          />
-                        }
-                        label={<Typography variant="body2">{item.label}</Typography>}
-                      />
-                    ))}
-                  </FormGroup>
-                </Paper>
-
-                {/* OpenAEV Entity Types */}
-                <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenAEV Entity Types</Typography>
-                  <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                    {OAEV_ENTITY_TYPES.map((item) => (
-                      <FormControlLabel
-                        key={item.value}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={settings.detection?.platformEntityTypes?.openaev?.includes(item.value) ?? true}
-                            onChange={(e) => {
-                              const types = settings.detection?.platformEntityTypes?.openaev || [];
-                              updateSetting('detection', {
-                                ...settings.detection,
-                                platformEntityTypes: {
-                                  ...settings.detection?.platformEntityTypes,
-                                  openaev: e.target.checked
-                                    ? [...types, item.value]
-                                    : types.filter((t) => t !== item.value),
-                                },
-                              });
-                            }}
-                          />
-                        }
-                        label={<Typography variant="body2">{item.label}</Typography>}
-                      />
-                    ))}
-                  </FormGroup>
-                </Paper>
-              </Box>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<RestartAltOutlined />}
-                  onClick={handleResetDetection}
-                >
-                  Reset to Default
-                </Button>
-                <Button variant="contained" onClick={handleSave}>
-                  Save Detection Settings
-                </Button>
-              </Box>
-            </Box>
+            <DetectionTab
+              settings={settings}
+              cacheStats={cacheStats}
+              isRefreshingCache={isRefreshingCache}
+              mode={mode}
+              onUpdateSetting={updateSetting}
+              onRefreshCache={handleRefreshCache}
+              onResetDetection={handleResetDetection}
+              onSave={handleSave}
+            />
           )}
 
-          {/* Agentic AI Tab */}
+          {/* AI Tab */}
           {activeTab === 'ai' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Agentic AI</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Configure AI-powered features for intelligent content generation and scenario creation
-              </Typography>
-
-              {/* Check if any platform has EE */}
-              {![
-                ...(settings?.openctiPlatforms || []),
-                ...(settings?.openaevPlatforms || []),
-              ].some((p: any) => p.isEnterprise) ? (
-                <Alert severity="info" sx={{ mb: 3 }}>
-                  AI features require at least one Enterprise Edition (EE) platform. 
-                  Connect an EE platform to enable AI capabilities.
-                </Alert>
-              ) : (
-                <Box sx={{ flex: 1 }}>
-                  {/* XTM One Section - Coming Soon */}
-                  <Paper 
-                    elevation={0} 
-                    sx={{ 
-                      p: 3, 
-                      bgcolor: 'background.paper', 
-                      borderRadius: 1, 
-                      mb: 3,
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Box sx={{ 
-                      position: 'absolute', 
-                      top: 0, 
-                      right: 0, 
-                      bgcolor: 'warning.main', 
-                      color: 'warning.contrastText',
-                      px: 2,
-                      py: 0.5,
-                      borderBottomLeftRadius: 8,
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                    }}>
-                      COMING SOON
-                    </Box>
-                    
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <img 
-                        src={`../assets/logos/logo_xtm-one_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                        alt="XTM One" 
-                        width={48} 
-                        height={48}
-                        style={{ opacity: 0.7 }}
-                      />
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                          XTM One
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'text.disabled' }}>
-                          Filigran Agentic AI Platform
-                        </Typography>
-                      </Box>
-                    </Box>
-                    
-                    <Typography variant="body2" sx={{ color: 'text.disabled', mb: 2 }}>
-                      XTM One is Filigran's upcoming agentic AI platform that will provide advanced threat intelligence analysis, 
-                      automated scenario generation, and intelligent security recommendations powered by cutting-edge AI technology.
-                    </Typography>
-                    
-                    <Box sx={{ 
-                      display: 'flex', 
-                      gap: 1, 
-                      flexWrap: 'wrap',
-                      opacity: 0.6,
-                    }}>
-                      {['Agentic Workflows', 'Auto-Investigation', 'Smart Enrichment', 'Threat Prediction'].map((feature) => (
-                        <Chip 
-                          key={feature}
-                          label={feature} 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: 'action.disabledBackground',
-                            color: 'text.disabled',
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  </Paper>
-
-                  {/* BYOK (Bring Your Own Key) Section */}
-                  <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mb: 3 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Bring Your Own LLM</Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                      Connect your own LLM provider to enable AI features. Select a provider, enter your API key, and choose your preferred model.
-                    </Typography>
-
-                    {/* Provider Selection */}
-                    <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                      {[
-                        { value: 'openai', label: 'OpenAI', sublabel: 'GPT' },
-                        { value: 'anthropic', label: 'Anthropic', sublabel: 'Claude' },
-                        { value: 'gemini', label: 'Google', sublabel: 'Gemini' },
-                      ].map((provider) => (
-                        <Paper
-                          key={provider.value}
-                          onClick={() => {
-                            // Reset test results and models when switching providers
-                            setAiTestResult(null);
-                            setAvailableModels([]);
-                            updateSetting('ai', { 
-                              enabled: false,
-                              provider: provider.value as AIProvider,
-                              model: undefined,
-                              availableModels: undefined,
-                              connectionTested: false,
-                              apiKey: settings?.ai?.apiKey,
-                            });
-                          }}
-                          sx={{
-                            p: 2,
-                            minWidth: 140,
-                            cursor: 'pointer',
-                            border: settings?.ai?.provider === provider.value ? '2px solid' : '1px solid',
-                            borderColor: settings?.ai?.provider === provider.value ? 'primary.main' : 'divider',
-                            bgcolor: settings?.ai?.provider === provider.value ? 'action.selected' : 'background.paper',
-                            borderRadius: 1,
-                            textAlign: 'center',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              borderColor: 'primary.main',
-                              bgcolor: 'action.hover',
-                            },
-                          }}
-                        >
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            {provider.label}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {provider.sublabel}
-                          </Typography>
-                        </Paper>
-                      ))}
-                    </Box>
-
-                    {/* API Key Input with Test Button */}
-                    {settings?.ai?.provider && settings.ai.provider !== 'xtm-one' && (
-                      <>
-                        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                          <TextField
-                            fullWidth
-                            type="password"
-                            label={`${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API Key`}
-                            placeholder={`Enter your ${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API key`}
-                            value={settings?.ai?.apiKey || ''}
-                            onChange={(e) => {
-                              // Reset test results when API key changes
-                              setAiTestResult(null);
-                              setAvailableModels([]);
-                              updateSetting('ai', { 
-                                ...settings?.ai,
-                                enabled: false,
-                                apiKey: e.target.value,
-                                model: undefined,
-                                availableModels: undefined,
-                                connectionTested: false,
-                              });
-                            }}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <KeyOutlined sx={{ color: 'text.secondary' }} />
-                                </InputAdornment>
-                              ),
-                            }}
-                            helperText={
-                              settings.ai.provider === 'openai' 
-                                ? 'Get your API key from platform.openai.com' 
-                                : settings.ai.provider === 'anthropic'
-                                ? 'Get your API key from console.anthropic.com'
-                                : 'Get your API key from aistudio.google.com'
-                            }
-                          />
-                          <Button
-                            variant="outlined"
-                            disabled={!settings?.ai?.apiKey || aiTesting}
-                            onClick={async () => {
-                              if (!settings?.ai?.provider || !settings?.ai?.apiKey) return;
-                              
-                              setAiTesting(true);
-                              setAiTestResult(null);
-                              
-                              try {
-                                const response = await chrome.runtime.sendMessage({
-                                  type: 'AI_TEST_AND_FETCH_MODELS',
-                                  payload: {
-                                    provider: settings.ai.provider,
-                                    apiKey: settings.ai.apiKey,
-                                  },
-                                });
-                                
-                                if (response?.success && response.data?.models) {
-                                  setAvailableModels(response.data.models);
-                                  setAiTestResult({ success: true, message: `Connected! ${response.data.models.length} models available.` });
-                                  
-                                  // Auto-select first model if none selected
-                                  if (!settings.ai.model && response.data.models.length > 0) {
-                                    updateSetting('ai', {
-                                      ...settings.ai,
-                                      model: response.data.models[0].id,
-                                      availableModels: response.data.models,
-                                      connectionTested: true,
-                                    });
-                                  } else {
-                                    updateSetting('ai', {
-                                      ...settings.ai,
-                                      availableModels: response.data.models,
-                                      connectionTested: true,
-                                    });
-                                  }
-                                } else {
-                                  setAiTestResult({ success: false, message: response?.error || 'Connection failed' });
-                                }
-                              } catch (error) {
-                                setAiTestResult({ 
-                                  success: false, 
-                                  message: error instanceof Error ? error.message : 'Connection test failed' 
-                                });
-                              } finally {
-                                setAiTesting(false);
-                              }
-                            }}
-                            sx={{ 
-                              minWidth: 150,
-                              height: 56,
-                            }}
-                          >
-                            {aiTesting ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              'Test Connection'
-                            )}
-                          </Button>
-                        </Box>
-
-                        {/* Test Result Alert */}
-                        {aiTestResult && (
-                          <Alert 
-                            severity={aiTestResult.success ? 'success' : 'error'} 
-                            sx={{ mb: 2 }}
-                            onClose={() => setAiTestResult(null)}
-                          >
-                            {aiTestResult.message}
-                          </Alert>
-                        )}
-
-                        {/* Model Selection */}
-                        {(availableModels.length > 0 || settings?.ai?.availableModels?.length) && (
-                          <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel>Model</InputLabel>
-                            <Select
-                              value={settings?.ai?.model || ''}
-                              label="Model"
-                              onChange={(e) => updateSetting('ai', {
-                                enabled: settings?.ai?.enabled ?? false,
-                                provider: settings?.ai?.provider,
-                                apiKey: settings?.ai?.apiKey,
-                                model: e.target.value,
-                                availableModels: settings?.ai?.availableModels,
-                                connectionTested: settings?.ai?.connectionTested,
-                              })}
-                            >
-                              {(availableModels.length > 0 ? availableModels : (settings?.ai?.availableModels || [])).map((model) => (
-                                <MenuItem key={model.id} value={model.id}>
-                                  <Box>
-                                    <Typography variant="body2">{model.name}</Typography>
-                                    {model.description && (
-                                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                        {model.description}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        )}
-
-                        {/* Enable/Disable Toggle */}
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={settings?.ai?.enabled && !!settings?.ai?.apiKey && !!settings?.ai?.model}
-                              onChange={(e) => updateSetting('ai', { 
-                                ...settings?.ai, 
-                                enabled: e.target.checked,
-                              })}
-                              disabled={!settings?.ai?.apiKey || !settings?.ai?.model}
-                            />
-                          }
-                          label={
-                            <Box>
-                              <Typography variant="body2">Enable AI Features</Typography>
-                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {!settings?.ai?.apiKey 
-                                  ? 'Enter an API key and test connection first'
-                                  : !settings?.ai?.model
-                                    ? 'Select a model to enable AI features'
-                                    : settings?.ai?.enabled 
-                                      ? 'AI features are active' 
-                                      : 'AI features are disabled'}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </>
-                    )}
-
-                    {/* Clear AI Configuration */}
-                    {settings?.ai?.provider && (
-                      <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          startIcon={<LinkOffOutlined />}
-                          onClick={handleClearAI}
-                          fullWidth
-                        >
-                          Clear AI Configuration
-                        </Button>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1, textAlign: 'center' }}>
-                          Remove API key and disable all AI features
-                        </Typography>
-                      </Box>
-                    )}
-                  </Paper>
-
-                  {/* AI Capabilities Info */}
-                  <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>AI Capabilities</Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                      When enabled, AI powers the following features:
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <DescriptionOutlined sx={{ color: '#4fc3f7', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Container Description</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Generate intelligent descriptions when creating containers in OpenCTI
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <MovieFilterOutlined sx={{ color: '#ab47bc', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Full Scenario Generation</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Generate complete OpenAEV scenarios with AI-created injects, payloads, or emails based on page content
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <AutoAwesomeOutlined sx={{ color: '#ff9800', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Email Content Generation</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Generate realistic email subjects and bodies for table-top scenarios
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <CenterFocusStrongOutlined sx={{ color: '#f44336', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>On-the-fly Atomic Testing</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Generate custom atomic tests with executable commands for attack patterns
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <TravelExploreOutlined sx={{ color: '#4caf50', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Smart Entity Discovery</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Discover additional entities that regex patterns might miss during page scans
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                        <HubOutlined sx={{ color: '#e91e63', mt: 0.3 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Relationship Resolution</Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            Automatically suggest STIX relationships between entities based on page context
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Box>
-              )}
-
-              {/* Save Button */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                  variant="contained"
-                  startIcon={<CheckOutlined />}
-                  onClick={handleSave}
-                  disabled={![
-                    ...(settings?.openctiPlatforms || []),
-                    ...(settings?.openaevPlatforms || []),
-                  ].some((p: any) => p.isEnterprise)}
-                >
-                  Save AI Settings
-                </Button>
-              </Box>
-
-              </Box>
+            <AITab
+              settings={settings}
+              mode={mode}
+              aiTesting={aiTesting}
+              aiTestResult={aiTestResult}
+              availableModels={availableModels}
+              onUpdateSetting={updateSetting}
+              onTestAndFetchModels={handleTestAndFetchModels}
+              onClearAI={handleClearAI}
+              onSave={handleSave}
+              setAiTestResult={setAiTestResult}
+              setAvailableModels={setAvailableModels}
+            />
           )}
 
           {/* Appearance Tab */}
           {activeTab === 'appearance' && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Appearance</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Customize the extension's appearance
-              </Typography>
-
-              <Box sx={{ flex: 1 }}>
-                <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>Theme</Typography>
-                  
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    {[
-                      { value: 'dark', label: 'Dark', icon: <DarkModeOutlined /> },
-                      { value: 'light', label: 'Light', icon: <LightModeOutlined /> },
-                    ].map((item) => (
-                      <Paper
-                        key={item.value}
-                        onClick={() => setTheme(item.value as 'dark' | 'light')}
-                        sx={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 1,
-                          p: 2,
-                          cursor: 'pointer',
-                          border: 2,
-                          borderColor: settings.theme === item.value ? 'primary.main' : 'divider',
-                          borderRadius: 1,
-                          bgcolor: settings.theme === item.value ? 'action.selected' : 'transparent',
-                          transition: 'all 0.2s',
-                          '&:hover': { borderColor: 'primary.main' },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            bgcolor: item.value === 'dark' ? '#1a1a2e' : '#e8e8e8',
-                          }}
-                        >
-                          {item.icon}
-                        </Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {item.label}
-                        </Typography>
-                      </Paper>
-                    ))}
-                  </Box>
-                  
-                  <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
-                    Choose your preferred color theme for the extension panel.
-                  </Typography>
-                </Paper>
-              </Box>
-
-              <Divider sx={{ my: 3 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<RestartAltOutlined />}
-                  onClick={handleResetAppearance}
-                >
-                  Reset to Default
-                </Button>
-                <Button variant="contained" onClick={handleSave}>
-                  Save Appearance
-                </Button>
-              </Box>
-            </Box>
+            <AppearanceTab
+              settings={settings}
+              onSetTheme={setTheme}
+              onResetAppearance={handleResetAppearance}
+              onSave={handleSave}
+            />
           )}
 
           {/* About Tab */}
           {activeTab === 'about' && (
-            <Box>
-              <Typography variant="h6" sx={{ mb: 1 }}>About</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-                Filigran Threat Management Extension
-              </Typography>
-
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, textAlign: 'center', mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 2 }}>
-                  <img
-                    src={`../assets/logos/logo_filigran_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
-                    alt="Filigran"
-                    width={40}
-                    height={40}
-                  />
-                  <Box sx={{ textAlign: 'left' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                      Filigran
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      Threat Management
-                    </Typography>
-                  </Box>
-                  <Chip label="v0.0.4" size="small" sx={{ ml: 1 }} />
-                </Box>
-
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400, mx: 'auto' }}>
-                  A powerful browser extension for threat intelligence scanning with OpenCTI and attack surface validation with OpenAEV.
-                </Typography>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Links as horizontal tiles */}
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, textAlign: 'left' }}>Links</Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 3 }}>
-                  <Paper
-                    component="a"
-                    href="https://github.com/FiligranHQ/xtm-browser-extension/tree/main/docs"
-                    target="_blank"
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      bgcolor: 'action.hover',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      textDecoration: 'none',
-                      transition: 'all 0.2s',
-                      cursor: 'pointer',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        transform: 'translateY(-2px)',
-                        boxShadow: 2,
-                      },
-                    }}
-                  >
-                    <DescriptionOutlined sx={{ fontSize: 28, color: 'primary.main' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      Documentation
-                    </Typography>
-                  </Paper>
-                  <Paper
-                    component="a"
-                    href="https://github.com/FiligranHQ/xtm-browser-extension"
-                    target="_blank"
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      bgcolor: 'action.hover',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      textDecoration: 'none',
-                      transition: 'all 0.2s',
-                      cursor: 'pointer',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        transform: 'translateY(-2px)',
-                        boxShadow: 2,
-                      },
-                    }}
-                  >
-                    <GitHub sx={{ fontSize: 28, color: 'primary.main' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      GitHub
-                    </Typography>
-                  </Paper>
-                  <Paper
-                    component="a"
-                    href="https://filigran.io"
-                    target="_blank"
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      bgcolor: 'action.hover',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      textDecoration: 'none',
-                      transition: 'all 0.2s',
-                      cursor: 'pointer',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        transform: 'translateY(-2px)',
-                        boxShadow: 2,
-                      },
-                    }}
-                  >
-                    <PublicOutlined sx={{ fontSize: 28, color: 'primary.main' }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      Filigran.io
-                    </Typography>
-                  </Paper>
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  © 2025 Filigran. Licensed under Apache 2.0.
-                </Typography>
-              </Paper>
-
-              {/* Reset All Settings */}
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Reset Settings</Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                  Clear all settings and connections to start fresh
-                </Typography>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutlined />}
-                  onClick={handleResetAllSettings}
-                >
-                  Reset All Settings
-                </Button>
-              </Paper>
-            </Box>
+            <AboutTab
+              mode={mode}
+              onResetAllSettings={handleResetAllSettings}
+            />
           )}
         </Box>
       </Box>

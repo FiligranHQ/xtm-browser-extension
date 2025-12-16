@@ -3,7 +3,6 @@
  * These match the exact colors used in the OpenCTI platform
  */
 
-/* eslint-disable no-bitwise */
 export const stringToColour = (str: string | null | undefined, reversed = false): string => {
   if (!str) {
     return '#5d4037';
@@ -31,7 +30,7 @@ export const stringToColour = (str: string | null | undefined, reversed = false)
   }
   return colour;
 };
-/* eslint-enable no-bitwise */
+ 
 
 /**
  * Get color for entity type - matches OpenCTI's itemColor function exactly

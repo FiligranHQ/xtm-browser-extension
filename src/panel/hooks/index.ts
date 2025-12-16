@@ -10,3 +10,5 @@ export {
   sectionTitleStyle,
 } from './useEntityDisplay';
 
+export { usePanelState, type PanelStateReturn } from './usePanelState';
+

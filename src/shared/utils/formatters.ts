@@ -72,7 +72,7 @@ export function formatFileSize(bytes: number): string {
  * Format a number with thousands separator
  */
 export function formatNumber(num: number | undefined | null): string {
-  if (num == null) return '';
+  if (num === null || num === undefined) return '';
   return num.toLocaleString();
 }
 
@@ -105,7 +105,7 @@ export function camelToSpaced(str: string): string {
  * Format confidence score for display
  */
 export function formatConfidence(confidence: number | undefined | null): string {
-  if (confidence == null) return '';
+  if (confidence === null || confidence === undefined) return '';
   return `${confidence}%`;
 }
 

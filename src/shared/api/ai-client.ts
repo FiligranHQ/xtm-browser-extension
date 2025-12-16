@@ -9,185 +9,40 @@
 
 import type { AIProvider, AISettings } from '../types';
 
-// ============================================================================
-// Types
-// ============================================================================
+// Re-export types from the ai module for backwards compatibility
+export type {
+  AIGenerationRequest,
+  AIGenerationResponse,
+  ContainerDescriptionRequest,
+  ScenarioGenerationRequest,
+  GeneratedScenario,
+  GeneratedInject,
+  FullScenarioGenerationRequest,
+  AtomicTestRequest,
+  GeneratedAtomicTest,
+  EmailGenerationRequest,
+  GeneratedEmail,
+  EntityDiscoveryRequest,
+  DiscoveredEntity,
+  RelationshipResolutionRequest,
+  ResolvedRelationship,
+} from './ai/types';
 
-export interface AIGenerationRequest {
-  prompt: string;
-  systemPrompt?: string;
-  maxTokens?: number;
-  temperature?: number;
-}
+// Re-export the JSON parser
+export { parseAIJsonResponse } from './ai/json-parser';
 
-export interface AIGenerationResponse {
-  success: boolean;
-  content?: string;
-  error?: string;
-}
-
-export interface ContainerDescriptionRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  containerType: string;
-  containerName: string;
-  detectedEntities?: string[];
-  detectedObservables?: string[];
-}
-
-export interface ScenarioGenerationRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  scenarioName: string;
-  typeAffinity?: string;
-  platformAffinity?: string[];
-  detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
-  detectedDomains?: string[];
-  detectedHostnames?: string[];
-  detectedEmails?: string[];
-}
-
-export interface GeneratedScenario {
-  name: string;
-  description: string;
-  subtitle?: string;
-  category?: string;
-  injects: GeneratedInject[];
-}
-
-export interface GeneratedInject {
-  title: string;
-  description: string;
-  type: string; // e.g., 'email', 'manual', 'command'
-  content?: string; // Command content for executable injects
-  executor?: string; // Executor for command type (powershell, bash, etc.)
-  subject?: string; // Email subject for table-top scenarios
-  body?: string; // Email body for table-top scenarios
-  dependsOn?: number; // Index of dependent inject
-  delayMinutes?: number;
-}
-
-export interface FullScenarioGenerationRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  scenarioName: string;
-  typeAffinity: string; // ENDPOINT, CLOUD, WEB, TABLE-TOP
-  platformAffinity?: string[]; // windows, linux, macos
-  numberOfInjects: number; // Number of injects to generate
-  payloadAffinity?: string; // For technical: powershell, bash, sh, cmd
-  tableTopDuration?: number; // For table-top: duration in minutes
-  emailLanguage?: string; // For table-top: language for email content
-  additionalContext?: string; // Additional context from user
-  detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
-}
-
-export interface AtomicTestRequest {
-  attackPattern: {
-    name: string;
-    id?: string;
-    description?: string;
-    mitrePlatforms?: string[];
-  };
-  targetPlatform: string; // windows, linux, macos
-  context?: string; // Additional context from page
-}
-
-export interface EmailGenerationRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  scenarioName: string;
-  language?: string; // Language for email content (e.g., 'english', 'french', 'german')
-  attackPatterns: Array<{
-    id: string;
-    name: string;
-    externalId?: string;
-    killChainPhases?: string[];
-  }>;
-}
-
-export interface GeneratedEmail {
-  attackPatternId: string;
-  subject: string;
-  body: string;
-}
-
-export interface GeneratedAtomicTest {
-  name: string;
-  description: string;
-  executor: string; // powershell, bash, sh, cmd
-  command: string;
-  cleanupCommand?: string;
-  prerequisites?: string[];
-}
-
-export interface EntityDiscoveryRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  /** Already detected entities (known or unknown) - to avoid duplicates */
-  alreadyDetected: Array<{
-    type: string;
-    name: string;
-    value?: string;
-    found: boolean;
-    /** External ID for attack patterns (e.g., T1562.001) */
-    externalId?: string;
-  }>;
-}
-
-export interface DiscoveredEntity {
-  /** Entity type (e.g., 'IPv4-Addr', 'Domain-Name', 'Malware', 'Threat-Actor-Group') */
-  type: string;
-  /** Display name or identifier */
-  name: string;
-  /** The actual value as found in the page (for observables) */
-  value: string;
-  /** Why this entity is relevant - brief explanation */
-  reason: string;
-  /** Confidence level: high, medium, low */
-  confidence: 'high' | 'medium' | 'low';
-  /** The exact text excerpt from the page where this was found */
-  excerpt?: string;
-}
-
-// ============================================================================
-// Relationship Resolution Types
-// ============================================================================
-
-export interface RelationshipResolutionRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  /** Entities to find relationships between */
-  entities: Array<{
-    type: string;
-    name: string;
-    value?: string;
-    /** Whether this entity already exists in OpenCTI */
-    existsInPlatform: boolean;
-    /** OpenCTI entity ID if it exists */
-    octiEntityId?: string;
-  }>;
-}
-
-export interface ResolvedRelationship {
-  /** Index of the source entity in the entities array */
-  fromIndex: number;
-  /** Index of the target entity in the entities array */
-  toIndex: number;
-  /** STIX relationship type (e.g., 'uses', 'targets', 'indicates', 'related-to') */
-  relationshipType: string;
-  /** Confidence level: high, medium, low */
-  confidence: 'high' | 'medium' | 'low';
-  /** Explanation for why this relationship exists */
-  reason: string;
-  /** Text excerpt from the page supporting this relationship */
-  excerpt?: string;
-}
+// Import types for internal use
+import type {
+  AIGenerationRequest,
+  AIGenerationResponse,
+  ContainerDescriptionRequest,
+  ScenarioGenerationRequest,
+  FullScenarioGenerationRequest,
+  AtomicTestRequest,
+  EmailGenerationRequest,
+  EntityDiscoveryRequest,
+  RelationshipResolutionRequest,
+} from './ai/types';
 
 // ============================================================================
 // AI Client Class
@@ -203,13 +58,14 @@ export class AIClient {
     gemini: 'https://generativelanguage.googleapis.com/v1beta',
   };
 
-  // Default models for each provider (fallback if none selected)
   private static readonly DEFAULT_MODELS: Record<AIProvider, string> = {
     openai: 'gpt-5.2',
     anthropic: 'claude-sonnet-4-5',
     gemini: 'gemini-2.5-flash-lite',
     'xtm-one': '',
   };
+
+  private static readonly MAX_MODELS = 20;
 
   constructor(settings: AISettings) {
     if (!settings.provider || !settings.apiKey) {
@@ -223,19 +79,14 @@ export class AIClient {
     this.model = settings.model;
   }
 
-  /**
-   * Get the model to use for generation
-   */
   private getModel(): string {
     return this.model || AIClient.DEFAULT_MODELS[this.provider] || '';
   }
 
-  private static readonly MAX_MODELS = 20;
+  // ==========================================================================
+  // Model Discovery
+  // ==========================================================================
 
-  /**
-   * Test connection and fetch available models from the provider
-   * Returns raw data from APIs, sorted by creation date, limited to 20 models
-   */
   async testConnectionAndFetchModels(): Promise<{
     success: boolean;
     models?: Array<{ id: string; name: string; description?: string; created?: number }>;
@@ -243,51 +94,29 @@ export class AIClient {
   }> {
     try {
       switch (this.provider) {
-        case 'openai':
-          return await this.fetchOpenAIModels();
-        case 'anthropic':
-          return await this.fetchAnthropicModels();
-        case 'gemini':
-          return await this.fetchGeminiModels();
-        default:
-          return { success: false, error: 'Unknown AI provider' };
+        case 'openai': return await this.fetchOpenAIModels();
+        case 'anthropic': return await this.fetchAnthropicModels();
+        case 'gemini': return await this.fetchGeminiModels();
+        default: return { success: false, error: 'Unknown AI provider' };
       }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch models',
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch models' };
     }
   }
 
-  /**
-   * Fetch available models from OpenAI
-   * API: GET /v1/models
-   * https://platform.openai.com/docs/api-reference/models/list
-   */
-  private async fetchOpenAIModels(): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
-    error?: string;
-  }> {
+  private async fetchOpenAIModels() {
     const response = await fetch(`${this.baseUrls.openai}/models`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
+      headers: { 'Authorization': `Bearer ${this.apiKey}` },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (response.status === 401) {
-        throw new Error('Invalid API key');
-      }
+      if (response.status === 401) throw new Error('Invalid API key');
       throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    
-    // Get all models, sort by created date (newest first), limit to MAX_MODELS
     const models = (data.data || [])
       .sort((a: { created: number }, b: { created: number }) => (b.created || 0) - (a.created || 0))
       .slice(0, AIClient.MAX_MODELS)
@@ -301,16 +130,7 @@ export class AIClient {
     return { success: true, models };
   }
 
-  /**
-   * Fetch available models from Anthropic
-   * API: GET /v1/models
-   * https://docs.anthropic.com/en/api/models-list
-   */
-  private async fetchAnthropicModels(): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
-    error?: string;
-  }> {
+  private async fetchAnthropicModels() {
     const response = await fetch(`${this.baseUrls.anthropic}/models`, {
       method: 'GET',
       headers: {
@@ -322,16 +142,11 @@ export class AIClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (response.status === 401) {
-        throw new Error('Invalid API key');
-      }
+      if (response.status === 401) throw new Error('Invalid API key');
       throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    
-    // Get all models, sort by created_at date (newest first), limit to MAX_MODELS
-    // Anthropic returns { data: [...] } with models having created_at as ISO string
     const models = (data.data || [])
       .sort((a: { created_at?: string }, b: { created_at?: string }) => {
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -348,32 +163,16 @@ export class AIClient {
     return { success: true, models };
   }
 
-  /**
-   * Fetch available models from Google Gemini
-   * API: GET /v1beta/models
-   * https://ai.google.dev/api/models#method:-models.list
-   */
-  private async fetchGeminiModels(): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
-    error?: string;
-  }> {
-    const response = await fetch(
-      `${this.baseUrls.gemini}/models?key=${this.apiKey}`,
-      { method: 'GET' }
-    );
+  private async fetchGeminiModels() {
+    const response = await fetch(`${this.baseUrls.gemini}/models?key=${this.apiKey}`, { method: 'GET' });
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (response.status === 401 || response.status === 400) {
-        throw new Error('Invalid API key');
-      }
+      if (response.status === 401 || response.status === 400) throw new Error('Invalid API key');
       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    
-    // Get all models, limit to MAX_MODELS (Gemini doesn't have created_at, sort by name)
     const models = (data.models || [])
       .slice(0, AIClient.MAX_MODELS)
       .map((m: { name: string; displayName?: string; description?: string }) => ({
@@ -385,32 +184,27 @@ export class AIClient {
     return { success: true, models };
   }
 
-  /**
-   * Generate content using the configured AI provider
-   */
+  // ==========================================================================
+  // Core Generation
+  // ==========================================================================
+
   async generate(request: AIGenerationRequest): Promise<AIGenerationResponse> {
     try {
       switch (this.provider) {
-        case 'openai':
-          return await this.generateOpenAI(request);
-        case 'anthropic':
-          return await this.generateAnthropic(request);
-        case 'gemini':
-          return await this.generateGemini(request);
-        default:
-          return { success: false, error: 'Unknown AI provider' };
+        case 'openai': return await this.generateOpenAI(request);
+        case 'anthropic': return await this.generateAnthropic(request);
+        case 'gemini': return await this.generateGemini(request);
+        default: return { success: false, error: 'Unknown AI provider' };
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'AI generation failed' 
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'AI generation failed' };
     }
   }
 
-  /**
-   * Generate container description
-   */
+  // ==========================================================================
+  // Feature-Specific Generation Methods
+  // ==========================================================================
+
   async generateContainerDescription(request: ContainerDescriptionRequest): Promise<AIGenerationResponse> {
     const systemPrompt = `You are a cybersecurity analyst assistant. Generate concise, professional descriptions for threat intelligence containers (reports, groupings, notes). Focus on the key findings, threats, and relevance. Keep the description between 2-4 paragraphs.`;
 
@@ -435,9 +229,6 @@ Please generate a professional description that:
     return this.generate({ prompt, systemPrompt, maxTokens: 1000 });
   }
 
-  /**
-   * Generate scenario with injects for OpenAEV
-   */
   async generateScenario(request: ScenarioGenerationRequest): Promise<AIGenerationResponse> {
     const systemPrompt = `You are a cybersecurity simulation expert. Generate realistic adversary simulation scenarios with specific injects (actions/steps) for security testing. Each inject should be actionable and time-sequenced. Output in JSON format.`;
 
@@ -488,10 +279,6 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
     return this.generate({ prompt, systemPrompt, maxTokens: 2500, temperature: 0.7 });
   }
 
-  /**
-   * Generate full scenario with injects for OpenAEV (enhanced version)
-   * Supports both technical scenarios with payloads and table-top scenarios with emails
-   */
   async generateFullScenario(request: FullScenarioGenerationRequest): Promise<AIGenerationResponse> {
     const isTableTop = request.typeAffinity === 'TABLE-TOP';
     
@@ -501,18 +288,14 @@ Create 5-10 realistic injects that simulate the attack chain described, with app
 
     const hasAttackPatterns = request.detectedAttackPatterns && request.detectedAttackPatterns.length > 0;
     const attackPatternsInfo = hasAttackPatterns
-      ? request.detectedAttackPatterns!.map(ap => 
-          `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 150)}` : ''}`
-        ).join('\n')
+      ? request.detectedAttackPatterns!.map(ap => `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 150)}` : ''}`).join('\n')
       : 'None detected - analyze the page content to identify relevant threats and techniques';
 
-    // Truncate page content
     const truncatedContent = request.pageContent.substring(0, 3000);
     const truncatedContext = request.additionalContext?.substring(0, 1000) || '';
-
-    let prompt: string;
-    
     const emailLanguage = request.emailLanguage || 'english';
+    
+    let prompt: string;
     
     if (isTableTop) {
       prompt = `Generate a table-top security exercise scenario based on the following:
@@ -613,24 +396,16 @@ IMPORTANT:
     return this.generate({ prompt, systemPrompt, maxTokens: 4000, temperature: 0.7 });
   }
 
-  /**
-   * Generate on-the-fly atomic test
-   */
   async generateAtomicTest(request: AtomicTestRequest): Promise<AIGenerationResponse> {
     const systemPrompt = `You are an expert in adversary simulation and atomic testing (like Atomic Red Team). Generate safe, reversible test commands that simulate specific attack techniques. Always include cleanup commands. Output in JSON format only - no markdown, no explanations, just valid JSON.`;
 
-    // Truncate context to reasonable size to prevent token limits
     const MAX_CONTEXT_LENGTH = 4000;
     const truncatedContext = request.context 
-      ? (request.context.length > MAX_CONTEXT_LENGTH 
-          ? request.context.substring(0, MAX_CONTEXT_LENGTH) + '...[truncated]' 
-          : request.context)
+      ? (request.context.length > MAX_CONTEXT_LENGTH ? request.context.substring(0, MAX_CONTEXT_LENGTH) + '...[truncated]' : request.context)
       : '';
     
     const truncatedDescription = request.attackPattern.description
-      ? (request.attackPattern.description.length > 1000
-          ? request.attackPattern.description.substring(0, 1000) + '...[truncated]'
-          : request.attackPattern.description)
+      ? (request.attackPattern.description.length > 1000 ? request.attackPattern.description.substring(0, 1000) + '...[truncated]' : request.attackPattern.description)
       : '';
 
     const prompt = `Generate an atomic test for the following attack technique:
@@ -663,9 +438,6 @@ Important:
     return this.generate({ prompt, systemPrompt, maxTokens: 1000, temperature: 0.5 });
   }
 
-  /**
-   * Generate email content for table-top scenarios
-   */
   async generateEmails(request: EmailGenerationRequest): Promise<AIGenerationResponse> {
     const language = request.language || 'english';
     const systemPrompt = `You are a cybersecurity simulation expert creating realistic phishing awareness and incident simulation emails. Generate professional, contextually appropriate email content that simulates real-world security scenarios for training purposes. Output in JSON format. Generate all email content in ${language}.`;
@@ -713,10 +485,6 @@ Keep email bodies concise (2-4 sentences) but informative. ALL CONTENT MUST BE I
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.7 });
   }
 
-  /**
-   * Discover additional entities from page content using AI
-   * This helps find entities that regex patterns might miss
-   */
   async discoverEntities(request: EntityDiscoveryRequest): Promise<AIGenerationResponse> {
     const systemPrompt = `You are an expert cybersecurity threat intelligence analyst. Your task is to identify ONLY HIGH-VALUE, ACTIONABLE threat intelligence entities that regex patterns missed.
 
@@ -730,8 +498,6 @@ CRITICAL RULES - READ CAREFULLY:
 7. QUALITY OVER QUANTITY - Return 0-5 entities maximum. If unsure, return none.
 
 WHAT TO EXTRACT (only these specific types):
-
-TECHNICAL INDICATORS (highest priority):
 - Malware: ONLY well-known malware families/names (e.g., "Emotet", "Cobalt Strike", "TrickBot") - NOT generic terms
 - Threat-Actor-Group: ONLY named APT groups or cybercrime groups (e.g., "APT29", "Lazarus Group", "FIN7") - must be a KNOWN threat actor
 - Intrusion-Set: ONLY named intrusion sets explicitly identified as such
@@ -752,12 +518,9 @@ WHAT TO AVOID (DO NOT EXTRACT):
 
 Output ONLY valid JSON, no additional text.`;
 
-    // Build a summary of already detected entities
-    // Include external IDs for attack patterns (e.g., T1562.001) to prevent AI from re-detecting them
     const alreadyDetectedSummary = request.alreadyDetected.length > 0
       ? request.alreadyDetected.map(e => {
           const parts = [`- ${e.type}: ${e.value || e.name}`];
-          // Add external ID if available (for attack patterns like T1562.001)
           if (e.externalId && e.externalId !== e.value && e.externalId !== e.name) {
             parts.push(` (also known as: ${e.externalId})`);
           }
@@ -804,10 +567,6 @@ IMPORTANT: An empty result is preferred over false positives. Only return entiti
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.3 });
   }
 
-  /**
-   * Resolve STIX relationships between entities using AI
-   * Based on the page context and the entities, suggests relevant relationships
-   */
   async resolveRelationships(request: RelationshipResolutionRequest): Promise<AIGenerationResponse> {
     const systemPrompt = `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling. Your task is to identify PRECISE and RELEVANT relationships between threat intelligence entities based on contextual evidence from the page content.
 
@@ -863,37 +622,8 @@ GENERAL RELATIONSHIPS:
 - "duplicate-of": Object is a DUPLICATE OF another object
 - "part-of": Entity is PART OF another entity (e.g., sub-campaign)
 
-ENTITY TYPE COMPATIBILITY GUIDE:
-- Threat-Actor → uses → Malware, Tool, Attack-Pattern, Infrastructure
-- Threat-Actor → targets → Identity, Location, Vulnerability, Sector
-- Threat-Actor → attributed-to → Identity, Location
-- Threat-Actor → located-at/originates-from → Location, Country
-- Intrusion-Set → uses → Malware, Tool, Attack-Pattern
-- Intrusion-Set → targets → Identity, Location, Sector
-- Intrusion-Set → attributed-to → Threat-Actor
-- Campaign → uses → Malware, Tool, Attack-Pattern, Infrastructure
-- Campaign → targets → Identity, Location, Vulnerability, Sector
-- Campaign → attributed-to → Threat-Actor, Intrusion-Set
-- Malware → uses → Attack-Pattern, Tool
-- Malware → targets → Identity, Sector, Vulnerability
-- Malware → communicates-with/beacons-to → IPv4-Addr, IPv6-Addr, Domain-Name, Url
-- Malware → exploits → Vulnerability
-- Malware → drops/delivers/downloads → Malware, Tool
-- Malware → variant-of → Malware
-- Tool → targets → Identity, Location, Vulnerability
-- Tool → uses → Attack-Pattern
-- Indicator → indicates → Malware, Attack-Pattern, Threat-Actor, Campaign, Intrusion-Set, Tool
-- Indicator → based-on → Observable (IP, Domain, Hash, etc.)
-- Attack-Pattern → targets → Identity, Location, Vulnerability
-- Vulnerability → has → Course-of-Action (mitigation)
-- Infrastructure → hosts → Malware, Tool
-- Infrastructure → communicates-with → Infrastructure
-- Domain-Name → resolves-to → IPv4-Addr, IPv6-Addr
-- Observable ↔ Observable → related-to (only when contextually linked in the same attack/incident)
-
 Output ONLY valid JSON, no markdown, no explanation.`;
 
-    // Build the entity list with indices and types for better context
     const entityList = request.entities.map((e, index) => 
       `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
     ).join('\n');
@@ -947,20 +677,16 @@ Quality over quantity - only include relationships you are confident about.`;
     return this.generate({ prompt, systemPrompt, maxTokens: 4000, temperature: 0.2 });
   }
 
-  // ============================================================================
-  // Provider-specific implementations
-  // ============================================================================
+  // ==========================================================================
+  // Provider-Specific Implementations
+  // ==========================================================================
 
   private async generateOpenAI(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const modelToUse = this.getModel();
     const response = await fetch(`${this.baseUrls.openai}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
       body: JSON.stringify({
-        model: modelToUse,
+        model: this.getModel(),
         messages: [
           ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
           { role: 'user', content: request.prompt },
@@ -976,14 +702,10 @@ Quality over quantity - only include relationships you are confident about.`;
     }
 
     const data = await response.json();
-    return {
-      success: true,
-      content: data.choices?.[0]?.message?.content || '',
-    };
+    return { success: true, content: data.choices?.[0]?.message?.content || '' };
   }
 
   private async generateAnthropic(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const modelToUse = this.getModel();
     const response = await fetch(`${this.baseUrls.anthropic}/messages`, {
       method: 'POST',
       headers: {
@@ -993,12 +715,10 @@ Quality over quantity - only include relationships you are confident about.`;
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: modelToUse,
+        model: this.getModel(),
         max_tokens: request.maxTokens || 1500,
         system: request.systemPrompt,
-        messages: [
-          { role: 'user', content: request.prompt },
-        ],
+        messages: [{ role: 'user', content: request.prompt }],
       }),
     });
 
@@ -1008,33 +728,18 @@ Quality over quantity - only include relationships you are confident about.`;
     }
 
     const data = await response.json();
-    return {
-      success: true,
-      content: data.content?.[0]?.text || '',
-    };
+    return { success: true, content: data.content?.[0]?.text || '' };
   }
 
   private async generateGemini(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const modelToUse = this.getModel();
     const response = await fetch(
-      `${this.baseUrls.gemini}/models/${modelToUse}:generateContent?key=${this.apiKey}`,
+      `${this.baseUrls.gemini}/models/${this.getModel()}:generateContent?key=${this.apiKey}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: request.systemPrompt ? `${request.systemPrompt}\n\n${request.prompt}` : request.prompt },
-              ],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: request.maxTokens || 1500,
-            temperature: request.temperature || 0.7,
-          },
+          contents: [{ parts: [{ text: request.systemPrompt ? `${request.systemPrompt}\n\n${request.prompt}` : request.prompt }] }],
+          generationConfig: { maxOutputTokens: request.maxTokens || 1500, temperature: request.temperature || 0.7 },
         }),
       }
     );
@@ -1045,10 +750,7 @@ Quality over quantity - only include relationships you are confident about.`;
     }
 
     const data = await response.json();
-    return {
-      success: true,
-      content: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
-    };
+    return { success: true, content: data.candidates?.[0]?.content?.parts?.[0]?.text || '' };
   }
 }
 
@@ -1061,255 +763,4 @@ Quality over quantity - only include relationships you are confident about.`;
  */
 export function isAIAvailable(settings?: AISettings): boolean {
   return !!(settings?.enabled && settings?.provider && settings?.apiKey);
-}
-
-/**
- * Parse JSON from AI response (handles markdown code blocks and various edge cases)
- */
-export function parseAIJsonResponse<T>(content: string): T | null {
-  if (!content || typeof content !== 'string') {
-    console.error('[parseAIJsonResponse] Invalid content: null or not a string');
-    return null;
-  }
-  
-  // Trim whitespace
-  let trimmed = content.trim();
-  
-  if (!trimmed) {
-    console.error('[parseAIJsonResponse] Empty content after trimming');
-    return null;
-  }
-  
-  // Remove markdown code block markers if present
-  // Handle both ```json ... ``` and ``` ... ``` formats
-  // Also handle cases where closing ``` might be missing (truncated responses)
-  if (trimmed.startsWith('```json')) {
-    trimmed = trimmed.slice(7); // Remove ```json
-  } else if (trimmed.startsWith('```')) {
-    trimmed = trimmed.slice(3); // Remove ```
-  }
-  
-  // Remove closing ``` if present (could be at end or with trailing whitespace)
-  trimmed = trimmed.replace(/```\s*$/, '');
-  
-  trimmed = trimmed.trim();
-  
-  // Attempt multiple parsing strategies
-  const strategies = [
-    // Strategy 1: Direct parse of trimmed content
-    () => JSON.parse(trimmed),
-    
-    // Strategy 2: Extract from markdown code block (greedy)
-    () => {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*)```/);
-      if (jsonMatch && jsonMatch[1]) {
-        return JSON.parse(jsonMatch[1].trim());
-      }
-      throw new Error('No markdown code block found');
-    },
-    
-    // Strategy 3: Extract from markdown code block WITHOUT closing (truncated)
-    () => {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*)/);
-      if (jsonMatch && jsonMatch[1]) {
-        const jsonContent = jsonMatch[1].trim().replace(/```\s*$/, '').trim();
-        return JSON.parse(jsonContent);
-      }
-      throw new Error('No markdown code block found');
-    },
-    
-    // Strategy 4: Find balanced JSON object from trimmed
-    () => {
-      const jsonStr = extractBalancedJson(trimmed);
-      if (jsonStr) {
-        return JSON.parse(jsonStr);
-      }
-      throw new Error('No balanced JSON found');
-    },
-    
-    // Strategy 5: Find balanced JSON object from original content
-    () => {
-      const jsonStr = extractBalancedJson(content);
-      if (jsonStr) {
-        return JSON.parse(jsonStr);
-      }
-      throw new Error('No balanced JSON found in original');
-    },
-    
-    // Strategy 6: Greedy match for JSON object
-    () => {
-      const jsonObjectMatch = trimmed.match(/\{[\s\S]*\}/);
-      if (jsonObjectMatch) {
-        return JSON.parse(jsonObjectMatch[0]);
-      }
-      throw new Error('No JSON object found');
-    },
-    
-    // Strategy 7: Find JSON array
-    () => {
-      const jsonArrayMatch = trimmed.match(/\[[\s\S]*\]/);
-      if (jsonArrayMatch) {
-        return JSON.parse(jsonArrayMatch[0]);
-      }
-      throw new Error('No JSON array found');
-    },
-    
-    // Strategy 8: Try to fix common JSON issues (trailing commas, etc.)
-    () => {
-      let fixed = trimmed;
-      // Remove trailing commas before } or ]
-      fixed = fixed.replace(/,\s*([\]}])/g, '$1');
-      // Try to parse fixed content
-      return JSON.parse(fixed);
-    },
-    
-    // Strategy 9: Try to find balanced JSON after fixing
-    () => {
-      let fixed = trimmed;
-      fixed = fixed.replace(/,\s*([\]}])/g, '$1');
-      const jsonStr = extractBalancedJson(fixed);
-      if (jsonStr) {
-        return JSON.parse(jsonStr);
-      }
-      throw new Error('No balanced JSON found after fixing');
-    },
-    
-    // Strategy 10: Try to complete truncated JSON
-    () => {
-      const completed = tryCompleteJson(trimmed);
-      if (completed) {
-        return JSON.parse(completed);
-      }
-      throw new Error('Could not complete truncated JSON');
-    },
-  ];
-  
-  for (let i = 0; i < strategies.length; i++) {
-    try {
-      const result = strategies[i]();
-      if (result !== null && result !== undefined) {
-        return result as T;
-      }
-    } catch {
-      // Continue to next strategy
-    }
-  }
-  
-  // Log the content for debugging if all strategies failed
-  console.error('[parseAIJsonResponse] All parsing strategies failed. Content preview:', 
-    trimmed.substring(0, 500) + (trimmed.length > 500 ? '...' : ''));
-  
-  return null;
-}
-
-/**
- * Try to complete truncated JSON by adding missing closing brackets
- */
-function tryCompleteJson(content: string): string | null {
-  // Count open and close braces/brackets
-  let braceCount = 0;
-  let bracketCount = 0;
-  let inString = false;
-  let escaped = false;
-  
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-    
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
-      if (char === '{') braceCount++;
-      else if (char === '}') braceCount--;
-      else if (char === '[') bracketCount++;
-      else if (char === ']') bracketCount--;
-    }
-  }
-  
-  // If we have unclosed structures, try to close them
-  if (braceCount > 0 || bracketCount > 0) {
-    let completed = content;
-    
-    // If we're in a string, close it first
-    if (inString) {
-      completed += '"';
-    }
-    
-    // Remove any trailing incomplete key-value or comma
-    completed = completed.replace(/,\s*$/, '');
-    completed = completed.replace(/,\s*"[^"]*$/, '');
-    completed = completed.replace(/:\s*$/, ': null');
-    completed = completed.replace(/:\s*"[^"]*$/, ': ""');
-    
-    // Close brackets and braces
-    for (let i = 0; i < bracketCount; i++) {
-      completed += ']';
-    }
-    for (let i = 0; i < braceCount; i++) {
-      completed += '}';
-    }
-    
-    return completed;
-  }
-  
-  return null;
-}
-
-/**
- * Extract balanced JSON from a string by counting braces
- * Handles cases where the JSON might be truncated or have extra content after
- */
-function extractBalancedJson(content: string): string | null {
-  const startIndex = content.indexOf('{');
-  if (startIndex === -1) return null;
-  
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  
-  for (let i = startIndex; i < content.length; i++) {
-    const char = content[i];
-    
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
-      if (char === '{') {
-        depth++;
-      } else if (char === '}') {
-        depth--;
-        if (depth === 0) {
-          return content.substring(startIndex, i + 1);
-        }
-      }
-    }
-  }
-  
-  // If we reach here, the JSON is incomplete
-  // Return null to indicate parsing failure
-  return null;
 }

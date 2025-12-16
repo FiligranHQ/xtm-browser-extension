@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   ThemeProvider, 
   createTheme,
@@ -12,7 +12,6 @@ import {
   Button,
   keyframes,
   Popover,
-  ListItemIcon,
   TextField,
   InputAdornment,
   CircularProgress,
@@ -28,14 +27,12 @@ import {
   SearchOutlined,
   DescriptionOutlined,
   TravelExploreOutlined,
-  DevicesOutlined,
   OpenInNewOutlined,
   VisibilityOutlined,
   VisibilityOffOutlined,
   ChevronRightOutlined,
   SkipNextOutlined,
   MovieFilterOutlined,
-  MoreHorizOutlined,
   AutoAwesomeOutlined,
   RocketLaunchOutlined,
 } from '@mui/icons-material';
@@ -43,7 +40,7 @@ import { Target } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import { loggers } from '../shared/utils/logger';
-import { PLATFORM_REGISTRY, type PlatformType } from '../shared/platform';
+import type { PlatformType } from '../shared/platform';
 
 const log = loggers.popup;
 

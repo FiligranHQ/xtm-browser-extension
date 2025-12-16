@@ -104,7 +104,7 @@ export function setCacheRefreshInProgress(inProgress: boolean): void {
  */
 export async function initializeOpenCTIClient(
   platform: PlatformConfig,
-  skipCacheRefresh = false
+  _skipCacheRefresh = false
 ): Promise<OpenCTIClient> {
   log.info(`[${platform.id}] Initializing OpenCTI client for ${platform.name}...`);
   

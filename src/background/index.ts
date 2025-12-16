@@ -6,8 +6,7 @@
 
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
-import { AIClient, isAIAvailable, parseAIJsonResponse } from '../shared/api/ai-client';
-import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest, EntityDiscoveryRequest, RelationshipResolutionRequest } from '../shared/api/ai-client';
+import { AIClient, isAIAvailable, parseAIJsonResponse, type ContainerDescriptionRequest, type ScenarioGenerationRequest, type AtomicTestRequest, type EntityDiscoveryRequest, type RelationshipResolutionRequest } from '../shared/api/ai-client';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';

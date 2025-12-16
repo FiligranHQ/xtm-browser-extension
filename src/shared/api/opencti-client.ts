@@ -5,11 +5,28 @@
  */
 
 import { loggers } from '../utils/logger';
-
-const log = loggers.opencti;
-
-// User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.4';
+import {
+  MARKING_FRAGMENT,
+  LABEL_FRAGMENT,
+  IDENTITY_FRAGMENT,
+  OBSERVABLE_PROPERTIES,
+  SDO_PROPERTIES,
+  ALL_FRAGMENTS,
+} from './opencti/fragments';
+import {
+  type SDOQueryResponse,
+  type LocationQueryResponse,
+  type LabelQueryResponse,
+  type MarkingQueryResponse,
+  type VocabularyQueryResponse,
+  type IdentityQueryResult,
+  type ContainerQueryResult,
+} from './opencti/types';
+import {
+  normalizeToStixType,
+  stixToGraphQLType,
+  buildObservableInput,
+} from './opencti/observable-utils';
 
 import type {
   ExtensionSettings,
@@ -27,333 +44,10 @@ import type {
   InvestigationCreateInput,
 } from '../types';
 
-// ============================================================================
-// Query Result Types (for strict type checking)
-// ============================================================================
+const log = loggers.opencti;
 
-interface SDOQueryResponse {
-  stixDomainObjects: {
-    edges: Array<{
-      node: {
-        id: string;
-        entity_type: string;
-        name?: string;
-        aliases?: string[];
-        x_opencti_aliases?: string[];
-        x_mitre_id?: string;
-      };
-    }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-      globalCount: number;
-    };
-  };
-}
-
-interface LocationQueryResponse {
-  locations: {
-    edges: Array<{
-      node: {
-        id: string;
-        entity_type: string;
-        name: string;
-        x_opencti_aliases?: string[];
-      };
-    }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-      globalCount: number;
-    };
-  };
-}
-
-interface LabelQueryResponse {
-  labels: {
-    edges: Array<{
-      node: { id: string; value: string; color: string };
-    }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-    };
-  };
-}
-
-interface MarkingQueryResponse {
-  markingDefinitions: {
-    edges: Array<{
-      node: { id: string; definition: string; definition_type: string; x_opencti_color: string };
-    }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-    };
-  };
-}
-
-interface VocabularyQueryResponse {
-  vocabularies: {
-    edges: Array<{ node: { id: string; name: string; description?: string } }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-    };
-  };
-}
-
-interface IdentityQueryResponse {
-  identities: {
-    edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string;
-    };
-  };
-}
-
-// ============================================================================
-// GraphQL Fragments
-// ============================================================================
-
-const MARKING_FRAGMENT = `
-  fragment MarkingFields on MarkingDefinition {
-    id
-    definition_type
-    definition
-    x_opencti_order
-    x_opencti_color
-  }
-`;
-
-const LABEL_FRAGMENT = `
-  fragment LabelFields on Label {
-    id
-    value
-    color
-  }
-`;
-
-const IDENTITY_FRAGMENT = `
-  fragment IdentityFields on Identity {
-    id
-    standard_id
-    entity_type
-    name
-    description
-    identity_class
-  }
-`;
-
-const OBSERVABLE_PROPERTIES = `
-  id
-  standard_id
-  entity_type
-  parent_types
-  created_at
-  updated_at
-  observable_value
-  x_opencti_description
-  x_opencti_score
-  objectMarking {
-    ...MarkingFields
-  }
-  objectLabel {
-    ...LabelFields
-  }
-  createdBy {
-    ...IdentityFields
-  }
-  creators {
-    id
-    name
-  }
-  ... on IPv4Addr {
-    value
-  }
-  ... on IPv6Addr {
-    value
-  }
-  ... on DomainName {
-    value
-  }
-  ... on Hostname {
-    value
-  }
-  ... on EmailAddr {
-    value
-  }
-  ... on Url {
-    value
-  }
-  ... on MacAddr {
-    value
-  }
-  ... on StixFile {
-    name
-    hashes {
-      algorithm
-      hash
-    }
-  }
-  ... on Artifact {
-    hashes {
-      algorithm
-      hash
-    }
-  }
-  indicators {
-    edges {
-      node {
-        id
-        name
-        pattern
-        pattern_type
-        x_opencti_score
-      }
-    }
-  }
-`;
-
-const SDO_PROPERTIES = `
-  id
-  standard_id
-  entity_type
-  parent_types
-  created_at
-  updated_at
-  created
-  modified
-  revoked
-  confidence
-  objectMarking {
-    ...MarkingFields
-  }
-  objectLabel {
-    ...LabelFields
-  }
-  createdBy {
-    ...IdentityFields
-  }
-  creators {
-    id
-    name
-  }
-  externalReferences {
-    edges {
-      node {
-        id
-        source_name
-        description
-        url
-        external_id
-      }
-    }
-  }
-  ... on IntrusionSet {
-    name
-    description
-    aliases
-    first_seen
-    last_seen
-    goals
-    resource_level
-    primary_motivation
-    secondary_motivations
-  }
-  ... on Malware {
-    name
-    description
-    aliases
-    malware_types
-    is_family
-    first_seen
-    last_seen
-  }
-  ... on ThreatActor {
-    name
-    description
-    aliases
-    threat_actor_types
-    first_seen
-    last_seen
-    goals
-    resource_level
-    primary_motivation
-    secondary_motivations
-  }
-  ... on Campaign {
-    name
-    description
-    aliases
-    first_seen
-    last_seen
-    objective
-  }
-  ... on Vulnerability {
-    name
-    description
-    x_opencti_aliases
-    x_opencti_cvss_base_score
-    x_opencti_cvss_base_severity
-    x_opencti_epss_score
-    x_opencti_epss_percentile
-    x_opencti_cisa_kev
-  }
-  ... on Tool {
-    name
-    description
-    aliases
-    tool_types
-  }
-  ... on AttackPattern {
-    name
-    description
-    aliases
-    x_mitre_id
-  }
-  ... on Indicator {
-    name
-    description
-    pattern
-    pattern_type
-    valid_from
-    valid_until
-    x_opencti_score
-    x_opencti_main_observable_type
-  }
-  ... on Report {
-    name
-    description
-    report_types
-    published
-  }
-  ... on Grouping {
-    name
-    description
-    context
-  }
-  ... on CaseIncident {
-    name
-    description
-    severity
-    priority
-    response_types
-  }
-  ... on CaseRfi {
-    name
-    description
-    severity
-    priority
-  }
-  ... on CaseRft {
-    name
-    description
-    severity
-    priority
-  }
-`;
+// User-Agent for API requests
+const USER_AGENT = 'xtm-browser-extension/0.0.4';
 
 // ============================================================================
 // API Client Class
@@ -416,7 +110,6 @@ export class OpenCTIClient {
 
   /**
    * Test connection and get platform info
-   * Note: We avoid querying platform_theme here as its type varies between OpenCTI versions
    */
   async testConnection(): Promise<PlatformInfo> {
     const query = `
@@ -454,7 +147,7 @@ export class OpenCTIClient {
         user_email: data.me?.user_email,
       },
       settings: {
-        platform_theme: 'dark', // Default, actual theme fetched separately if needed
+        platform_theme: 'dark',
         platform_title: data.settings.platform_title,
       },
     };
@@ -554,16 +247,13 @@ export class OpenCTIClient {
 
   /**
    * Search for an observable by exact value
-   * For Domain-Name/Hostname types, searches both types since they can be interchangeable
    */
   async searchObservableByValue(
     value: string,
     type?: ObservableType
   ): Promise<StixCyberObservable | null> {
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query SearchObservable($filters: FilterGroup) {
         stixCyberObservables(filters: $filters, first: 1) {
           edges {
@@ -581,8 +271,6 @@ export class OpenCTIClient {
       filterGroups: [],
     };
 
-    // For Domain-Name and Hostname, search both types since they can be interchangeable
-    // A hostname like "capital.go2cloud.org" might be stored as Domain-Name or Hostname
     if (type === 'Domain-Name' || type === 'Hostname') {
       filters.filters.push({ key: 'entity_type', values: ['Domain-Name', 'Hostname'] });
     } else if (type) {
@@ -606,9 +294,7 @@ export class OpenCTIClient {
     hashType: HashType
   ): Promise<StixCyberObservable | null> {
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query SearchFileByHash($filters: FilterGroup) {
         stixCyberObservables(filters: $filters, first: 1) {
           edges {
@@ -644,7 +330,6 @@ export class OpenCTIClient {
   ): Promise<Map<string, StixCyberObservable>> {
     const results = new Map<string, StixCyberObservable>();
     
-    // Process in batches to avoid overwhelming the API
     const batchSize = 20;
     for (let i = 0; i < values.length; i += batchSize) {
       const batch = values.slice(i, i + batchSize);
@@ -683,9 +368,7 @@ export class OpenCTIClient {
     types?: string[]
   ): Promise<StixDomainObject | null> {
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query SearchSDO($types: [String], $filters: FilterGroup) {
         stixDomainObjects(types: $types, filters: $filters, first: 1) {
           edges {
@@ -697,7 +380,6 @@ export class OpenCTIClient {
       }
     `;
 
-    // First try exact name match
     let filters = {
       mode: 'and',
       filters: [{ key: 'name', values: [name], operator: 'eq' }],
@@ -714,7 +396,6 @@ export class OpenCTIClient {
       return data.stixDomainObjects.edges[0].node;
     }
 
-    // Try alias match
     filters = {
       mode: 'and',
       filters: [{ key: 'aliases', values: [name], operator: 'eq' }],
@@ -735,9 +416,7 @@ export class OpenCTIClient {
    */
   async getSDOById(id: string): Promise<StixDomainObject | null> {
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query GetSDO($id: String!) {
         stixDomainObject(id: $id) {
           ${SDO_PROPERTIES}
@@ -757,9 +436,7 @@ export class OpenCTIClient {
    */
   async getObservableById(id: string): Promise<StixCyberObservable | null> {
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query GetObservable($id: String!) {
         stixCyberObservable(id: $id) {
           ${OBSERVABLE_PROPERTIES}
@@ -775,22 +452,18 @@ export class OpenCTIClient {
   }
 
   // ==========================================================================
-  // SDO Bulk Fetch for Caching (with full pagination support)
+  // SDO Bulk Fetch for Caching
   // ==========================================================================
 
-  /**
-   * Default page size for pagination (balance between efficiency and API limits)
-   */
   private static readonly DEFAULT_PAGE_SIZE = 500;
 
   /**
    * Fetch SDOs of a specific type for caching with full pagination
-   * Iterates through all pages to ensure no entities are missed
    */
   async fetchSDOsForCache(
     entityType: string,
     pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE
-  ): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
+  ): Promise<Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>> {
     const query = `
       query FetchSDOsForCache($types: [String], $first: Int, $after: ID) {
         stixDomainObjects(types: $types, first: $first, after: $after) {
@@ -798,82 +471,26 @@ export class OpenCTIClient {
             node {
               id
               entity_type
-              ... on ThreatActorGroup {
-                name
-                aliases
-              }
-              ... on ThreatActorIndividual {
-                name
-                aliases
-              }
-              ... on IntrusionSet {
-                name
-                aliases
-              }
-              ... on Campaign {
-                name
-                aliases
-              }
-              ... on Incident {
-                name
-                aliases
-              }
-              ... on Malware {
-                name
-                aliases
-              }
-              ... on Vulnerability {
-                name
-                x_opencti_aliases
-              }
-              ... on Sector {
-                name
-                x_opencti_aliases
-              }
-              ... on Country {
-                name
-                x_opencti_aliases
-              }
-              ... on Region {
-                name
-                x_opencti_aliases
-              }
-              ... on City {
-                name
-                x_opencti_aliases
-              }
-              ... on AdministrativeArea {
-                name
-                x_opencti_aliases
-              }
-              ... on Position {
-                name
-                x_opencti_aliases
-              }
-              ... on Organization {
-                name
-                x_opencti_aliases
-              }
-              ... on Individual {
-                name
-                x_opencti_aliases
-              }
-              ... on Event {
-                name
-                aliases
-              }
-              ... on AttackPattern {
-                name
-                aliases
-                x_mitre_id
-              }
+              ... on ThreatActorGroup { name aliases }
+              ... on ThreatActorIndividual { name aliases }
+              ... on IntrusionSet { name aliases }
+              ... on Campaign { name aliases }
+              ... on Incident { name aliases }
+              ... on Malware { name aliases }
+              ... on Vulnerability { name x_opencti_aliases }
+              ... on Sector { name x_opencti_aliases }
+              ... on Country { name x_opencti_aliases }
+              ... on Region { name x_opencti_aliases }
+              ... on City { name x_opencti_aliases }
+              ... on AdministrativeArea { name x_opencti_aliases }
+              ... on Position { name x_opencti_aliases }
+              ... on Organization { name x_opencti_aliases }
+              ... on Individual { name x_opencti_aliases }
+              ... on Event { name aliases }
+              ... on AttackPattern { name aliases x_mitre_id }
             }
           }
-          pageInfo {
-            hasNextPage
-            endCursor
-            globalCount
-          }
+          pageInfo { hasNextPage endCursor globalCount }
         }
       }
     `;
@@ -889,16 +506,11 @@ export class OpenCTIClient {
       const pageResults = data.stixDomainObjects.edges
         .map((edge) => {
           const node = edge.node;
-          // Merge aliases and x_opencti_aliases (x_mitre_id is kept separate for explicit matching)
-          const allAliases = [
-            ...(node.aliases || []), 
-            ...(node.x_opencti_aliases || []),
-          ];
+          const allAliases = [...(node.aliases || []), ...(node.x_opencti_aliases || [])];
           return {
             id: node.id,
             name: node.name || '',
             aliases: allAliases.length > 0 ? allAliases : undefined,
-            // Keep x_mitre_id as separate field for attack patterns
             x_mitre_id: node.x_mitre_id || undefined,
           };
         })
@@ -909,82 +521,43 @@ export class OpenCTIClient {
       after = data.stixDomainObjects.pageInfo.endCursor;
       pageCount++;
 
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for ${entityType}: ${pageResults.length} items (total: ${allResults.length}, hasMore: ${hasNextPage})`);
+      log.debug(`[OpenCTI] Fetched page ${pageCount} for ${entityType}: ${pageResults.length} items`);
     }
 
-    log.info(`[OpenCTI] Completed fetching ${entityType}: ${allResults.length} total items in ${pageCount} pages`);
+    log.info(`[OpenCTI] Completed fetching ${entityType}: ${allResults.length} total items`);
     return allResults;
   }
 
-  /**
-   * Fetch all threat actor groups for caching (with full pagination)
-   */
-  async fetchThreatActorGroups(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Threat-Actor-Group');
-  }
+  // Convenience methods for specific entity types
+  async fetchThreatActorGroups() { return this.fetchSDOsForCache('Threat-Actor-Group'); }
+  async fetchThreatActorIndividuals() { return this.fetchSDOsForCache('Threat-Actor-Individual'); }
+  async fetchIntrusionSets() { return this.fetchSDOsForCache('Intrusion-Set'); }
+  async fetchCampaigns() { return this.fetchSDOsForCache('Campaign'); }
+  async fetchIncidents() { return this.fetchSDOsForCache('Incident'); }
+  async fetchMalware() { return this.fetchSDOsForCache('Malware'); }
+  async fetchVulnerabilities() { return this.fetchSDOsForCache('Vulnerability'); }
+  async fetchSectors() { return this.fetchSDOsForCache('Sector'); }
+  async fetchOrganizations() { return this.fetchSDOsForCache('Organization'); }
+  async fetchIndividuals() { return this.fetchSDOsForCache('Individual'); }
+  async fetchEvents() { return this.fetchSDOsForCache('Event'); }
+  async fetchAttackPatterns() { return this.fetchSDOsForCache('Attack-Pattern'); }
+  async fetchCountries() { return this.fetchSDOsForCache('Country'); }
+  async fetchRegions() { return this.fetchSDOsForCache('Region'); }
+  async fetchCities() { return this.fetchSDOsForCache('City'); }
+  async fetchAdministrativeAreas() { return this.fetchSDOsForCache('Administrative-Area'); }
+  async fetchPositions() { return this.fetchSDOsForCache('Position'); }
 
   /**
-   * Fetch all threat actor individuals for caching (with full pagination)
-   */
-  async fetchThreatActorIndividuals(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Threat-Actor-Individual');
-  }
-
-  /**
-   * Fetch all intrusion sets for caching (with full pagination)
-   */
-  async fetchIntrusionSets(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Intrusion-Set');
-  }
-
-  /**
-   * Fetch all campaigns for caching (with full pagination)
-   */
-  async fetchCampaigns(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Campaign');
-  }
-
-  /**
-   * Fetch all incidents for caching (with full pagination)
-   */
-  async fetchIncidents(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Incident');
-  }
-
-  /**
-   * Fetch all malware for caching (with full pagination)
-   */
-  async fetchMalware(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Malware');
-  }
-
-  /**
-   * Fetch all vulnerabilities for caching (with full pagination)
-   */
-  async fetchVulnerabilities(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Vulnerability');
-  }
-
-  /**
-   * Fetch all locations (countries, regions, cities) for caching with full pagination
+   * Fetch all locations for caching with full pagination
    */
   async fetchLocations(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
     const query = `
       query FetchLocations($first: Int, $after: ID) {
         locations(first: $first, after: $after) {
           edges {
-            node {
-              id
-              entity_type
-              name
-              x_opencti_aliases
-            }
+            node { id entity_type name x_opencti_aliases }
           }
-          pageInfo {
-            hasNextPage
-            endCursor
-            globalCount
-          }
+          pageInfo { hasNextPage endCursor globalCount }
         }
       }
     `;
@@ -992,97 +565,20 @@ export class OpenCTIClient {
     const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
-    let pageCount = 0;
 
     while (hasNextPage) {
       const data: LocationQueryResponse = await this.query<LocationQueryResponse>(query, { first: pageSize, after });
-
       const pageResults = data.locations.edges.map((edge) => ({
         id: edge.node.id,
         name: edge.node.name,
         aliases: edge.node.x_opencti_aliases,
       }));
-
       allResults.push(...pageResults);
       hasNextPage = data.locations.pageInfo.hasNextPage;
       after = data.locations.pageInfo.endCursor;
-      pageCount++;
-
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for Locations: ${pageResults.length} items (total: ${allResults.length}, hasMore: ${hasNextPage})`);
     }
 
-    log.info(`[OpenCTI] Completed fetching Locations: ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
-  }
-
-  /**
-   * Fetch all sectors for caching (with full pagination)
-   */
-  async fetchSectors(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Sector');
-  }
-
-  /**
-   * Fetch all organizations for caching (with full pagination)
-   */
-  async fetchOrganizations(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Organization');
-  }
-
-  /**
-   * Fetch all individuals for caching (with full pagination)
-   */
-  async fetchIndividuals(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Individual');
-  }
-
-  /**
-   * Fetch all events for caching (with full pagination)
-   */
-  async fetchEvents(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Event');
-  }
-
-  /**
-   * Fetch all attack patterns for caching with full pagination (includes x_mitre_id as separate field)
-   */
-  async fetchAttackPatterns(): Promise<Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>> {
-    return this.fetchSDOsForCache('Attack-Pattern');
-  }
-
-  /**
-   * Fetch all countries for caching (with full pagination)
-   */
-  async fetchCountries(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Country');
-  }
-
-  /**
-   * Fetch all regions for caching (with full pagination)
-   */
-  async fetchRegions(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Region');
-  }
-
-  /**
-   * Fetch all cities for caching (with full pagination)
-   */
-  async fetchCities(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('City');
-  }
-
-  /**
-   * Fetch all administrative areas for caching (with full pagination)
-   */
-  async fetchAdministrativeAreas(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Administrative-Area');
-  }
-
-  /**
-   * Fetch all positions for caching (with full pagination)
-   */
-  async fetchPositions(): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    return this.fetchSDOsForCache('Position');
   }
 
   /**
@@ -1092,17 +588,8 @@ export class OpenCTIClient {
     const query = `
       query FetchLabels($first: Int, $after: ID) {
         labels(first: $first, after: $after) {
-          edges {
-            node {
-              id
-              value
-              color
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+          edges { node { id value color } }
+          pageInfo { hasNextPage endCursor }
         }
       }
     `;
@@ -1110,21 +597,14 @@ export class OpenCTIClient {
     const allResults: Array<{ id: string; value: string; color: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
-    let pageCount = 0;
 
     while (hasNextPage) {
       const data: LabelQueryResponse = await this.query<LabelQueryResponse>(query, { first: pageSize, after });
-
-      const pageResults = data.labels.edges.map((e) => e.node);
-      allResults.push(...pageResults);
+      allResults.push(...data.labels.edges.map((e) => e.node));
       hasNextPage = data.labels.pageInfo.hasNextPage;
       after = data.labels.pageInfo.endCursor;
-      pageCount++;
-
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for Labels: ${pageResults.length} items (total: ${allResults.length})`);
     }
 
-    log.info(`[OpenCTI] Completed fetching Labels: ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
   }
 
@@ -1135,18 +615,8 @@ export class OpenCTIClient {
     const query = `
       query FetchMarkingDefinitions($first: Int, $after: ID) {
         markingDefinitions(first: $first, after: $after) {
-          edges {
-            node {
-              id
-              definition
-              definition_type
-              x_opencti_color
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+          edges { node { id definition definition_type x_opencti_color } }
+          pageInfo { hasNextPage endCursor }
         }
       }
     `;
@@ -1154,43 +624,26 @@ export class OpenCTIClient {
     const allResults: Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
-    let pageCount = 0;
 
     while (hasNextPage) {
       const data: MarkingQueryResponse = await this.query<MarkingQueryResponse>(query, { first: pageSize, after });
-
-      const pageResults = data.markingDefinitions.edges.map((e) => e.node);
-      allResults.push(...pageResults);
+      allResults.push(...data.markingDefinitions.edges.map((e) => e.node));
       hasNextPage = data.markingDefinitions.pageInfo.hasNextPage;
       after = data.markingDefinitions.pageInfo.endCursor;
-      pageCount++;
-
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for MarkingDefinitions: ${pageResults.length} items (total: ${allResults.length})`);
     }
 
-    log.info(`[OpenCTI] Completed fetching MarkingDefinitions: ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
   }
 
   /**
    * Fetch open vocabulary values by category with full pagination
-   * Used for report_types, grouping context, case severity/priority, etc.
    */
   async fetchVocabulary(category: string, pageSize: number = 100): Promise<Array<{ id: string; name: string; description?: string }>> {
     const query = `
       query FetchVocabulary($category: VocabularyCategory!, $first: Int, $after: ID) {
         vocabularies(category: $category, first: $first, after: $after) {
-          edges {
-            node {
-              id
-              name
-              description
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+          edges { node { id name description } }
+          pageInfo { hasNextPage endCursor }
         }
       }
     `;
@@ -1198,42 +651,26 @@ export class OpenCTIClient {
     const allResults: Array<{ id: string; name: string; description?: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
-    let pageCount = 0;
 
     while (hasNextPage) {
       const data: VocabularyQueryResponse = await this.query<VocabularyQueryResponse>(query, { category, first: pageSize, after });
-
-      const pageResults = data.vocabularies.edges.map((e) => e.node);
-      allResults.push(...pageResults);
+      allResults.push(...data.vocabularies.edges.map((e) => e.node));
       hasNextPage = data.vocabularies.pageInfo.hasNextPage;
       after = data.vocabularies.pageInfo.endCursor;
-      pageCount++;
-
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for Vocabulary(${category}): ${pageResults.length} items (total: ${allResults.length})`);
     }
 
-    log.info(`[OpenCTI] Completed fetching Vocabulary(${category}): ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
   }
 
   /**
-   * Fetch identities (Organizations, Individuals, Systems) for the createdBy field with full pagination
+   * Fetch identities for the createdBy field with full pagination
    */
   async fetchIdentities(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; entity_type: string }>> {
     const query = `
       query FetchIdentities($first: Int, $after: ID) {
         identities(first: $first, after: $after, types: ["Organization", "Individual", "System"]) {
-          edges {
-            node {
-              id
-              name
-              entity_type
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+          edges { node { id name entity_type } }
+          pageInfo { hasNextPage endCursor }
         }
       }
     `;
@@ -1241,30 +678,14 @@ export class OpenCTIClient {
     const allResults: Array<{ id: string; name: string; entity_type: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
-    let pageCount = 0;
 
-    type IdentityQueryResult = {
-        identities: {
-          edges: Array<{ node: { id: string; name: string; entity_type: string } }>;
-          pageInfo: {
-            hasNextPage: boolean;
-            endCursor: string;
-          };
-        };
-      };
     while (hasNextPage) {
       const data: IdentityQueryResult = await this.query<IdentityQueryResult>(query, { first: pageSize, after });
-
-      const pageResults = data.identities.edges.map((e) => e.node);
-      allResults.push(...pageResults);
+      allResults.push(...data.identities.edges.map((e) => e.node));
       hasNextPage = data.identities.pageInfo.hasNextPage;
       after = data.identities.pageInfo.endCursor;
-      pageCount++;
-
-      log.debug(`[OpenCTI] Fetched page ${pageCount} for Identities: ${pageResults.length} items (total: ${allResults.length})`);
     }
 
-    log.info(`[OpenCTI] Completed fetching Identities: ${allResults.length} total items in ${pageCount} pages`);
     return allResults;
   }
 
@@ -1285,192 +706,9 @@ export class OpenCTIClient {
     objectMarking?: string[];
     objectLabel?: string[];
   }): Promise<StixCyberObservable> {
-    // Normalize the input type to STIX format (with hyphens)
-    // Handles: IPv4Addr -> IPv4-Addr, ipv4-addr -> IPv4-Addr, ipv4addr -> IPv4-Addr
-    const normalizeToStixType = (type: string): string => {
-      const typeNormalizationMap: Record<string, string> = {
-        'ipv4addr': 'IPv4-Addr',
-        'ipv4-addr': 'IPv4-Addr',
-        'ipv6addr': 'IPv6-Addr',
-        'ipv6-addr': 'IPv6-Addr',
-        'domainname': 'Domain-Name',
-        'domain-name': 'Domain-Name',
-        'hostname': 'Hostname',
-        'emailaddr': 'Email-Addr',
-        'email-addr': 'Email-Addr',
-        'url': 'Url',
-        'macaddr': 'Mac-Addr',
-        'mac-addr': 'Mac-Addr',
-        'stixfile': 'StixFile',
-        'file': 'StixFile',
-        'autonomoussystem': 'Autonomous-System',
-        'autonomous-system': 'Autonomous-System',
-        'cryptocurrencywallet': 'Cryptocurrency-Wallet',
-        'cryptocurrency-wallet': 'Cryptocurrency-Wallet',
-        'useragent': 'User-Agent',
-        'user-agent': 'User-Agent',
-        'phonenumber': 'Phone-Number',
-        'phone-number': 'Phone-Number',
-        'bankaccount': 'Bank-Account',
-        'bank-account': 'Bank-Account',
-        'artifact': 'Artifact',
-        'directory': 'Directory',
-        'emailmessage': 'Email-Message',
-        'email-message': 'Email-Message',
-        'mutex': 'Mutex',
-        'networktraffic': 'Network-Traffic',
-        'network-traffic': 'Network-Traffic',
-        'process': 'Process',
-        'software': 'Software',
-        'windowsregistrykey': 'Windows-Registry-Key',
-        'windows-registry-key': 'Windows-Registry-Key',
-        'windowsregistryvaluetype': 'Windows-Registry-Value-Type',
-        'windows-registry-value-type': 'Windows-Registry-Value-Type',
-        'x509certificate': 'X509-Certificate',
-        'x509-certificate': 'X509-Certificate',
-        'paymentcard': 'Payment-Card',
-        'payment-card': 'Payment-Card',
-        'credential': 'Credential',
-        'trackingnumber': 'Tracking-Number',
-        'tracking-number': 'Tracking-Number',
-        'mediacontent': 'Media-Content',
-        'media-content': 'Media-Content',
-        'text': 'Text',
-      };
-      return typeNormalizationMap[type.toLowerCase()] || type;
-    };
-
-    // Map STIX type to GraphQL input type (remove hyphens)
-    const stixToGqlType: Record<string, string> = {
-      'IPv4-Addr': 'IPv4Addr',
-      'IPv6-Addr': 'IPv6Addr',
-      'Domain-Name': 'DomainName',
-      'Hostname': 'Hostname',
-      'Email-Addr': 'EmailAddr',
-      'Url': 'Url',
-      'Mac-Addr': 'MacAddr',
-      'StixFile': 'StixFile',
-      'Autonomous-System': 'AutonomousSystem',
-      'Cryptocurrency-Wallet': 'CryptocurrencyWallet',
-      'User-Agent': 'UserAgent',
-      'Phone-Number': 'PhoneNumber',
-      'Bank-Account': 'BankAccount',
-      'Artifact': 'Artifact',
-      'Directory': 'Directory',
-      'Email-Message': 'EmailMessage',
-      'Mutex': 'Mutex',
-      'Network-Traffic': 'NetworkTraffic',
-      'Process': 'Process',
-      'Software': 'Software',
-      'Windows-Registry-Key': 'WindowsRegistryKey',
-      'Windows-Registry-Value-Type': 'WindowsRegistryValueType',
-      'X509-Certificate': 'X509Certificate',
-      'Payment-Card': 'PaymentCard',
-      'Credential': 'Credential',
-      'Tracking-Number': 'TrackingNumber',
-      'Media-Content': 'MediaContent',
-      'Text': 'Text',
-    };
-
-    // Normalize to STIX format first
     const stixType = normalizeToStixType(input.type);
-    // Then convert to GraphQL format
-    const gqlType = stixToGqlType[stixType] || stixType.replace(/-/g, '');
-    
-    // Helper to detect hash type from value
-    const detectHashType = (value: string): HashType | null => {
-      const cleanValue = value.trim().toLowerCase();
-      if (/^[a-f0-9]{32}$/i.test(cleanValue)) return 'MD5';
-      if (/^[a-f0-9]{40}$/i.test(cleanValue)) return 'SHA-1';
-      if (/^[a-f0-9]{64}$/i.test(cleanValue)) return 'SHA-256';
-      if (/^[a-f0-9]{128}$/i.test(cleanValue)) return 'SHA-512';
-      // SSDEEP format: blocksize:hash1:hash2
-      if (/^\d+:[a-z0-9+/]+:[a-z0-9+/]+$/i.test(cleanValue)) return 'SSDEEP';
-      return null;
-    };
-    
-    // Build the appropriate input based on observable type
-    // Different observable types require different input structures per OpenCTI GraphQL schema
-    let observableInput: Record<string, unknown> = {};
-    
-    const isFileType = stixType === 'StixFile' || gqlType === 'StixFile';
-    const isArtifact = stixType === 'Artifact' || gqlType === 'Artifact';
-    const isX509 = stixType === 'X509-Certificate' || gqlType === 'X509Certificate';
-    
-    if (isFileType || isArtifact || isX509) {
-      // Hash-based observables: StixFile, Artifact, X509Certificate
-      // These types use 'hashes' field, NOT 'value'
-      const hashType = input.hashType || detectHashType(input.value);
-      if (hashType) {
-        observableInput = {
-          hashes: [{ algorithm: hashType, hash: input.value }],
-        };
-      } else if (isFileType) {
-        // For StixFile without detectable hash, use name field (filename)
-        observableInput = { name: input.value };
-      } else if (isArtifact) {
-        // For Artifact without hash, use url or payload_bin
-        observableInput = input.value.startsWith('http') ? { url: input.value } : { payload_bin: input.value };
-      } else if (isX509) {
-        // For X509 without hash, use serial_number
-        observableInput = { serial_number: input.value };
-      }
-    } else if (stixType === 'Autonomous-System' || gqlType === 'AutonomousSystem') {
-      // AutonomousSystem requires 'number' (Int), not 'value'
-      // Extract ASN number from formats like "AS12345", "ASN12345", or just "12345"
-      const asnMatch = input.value.match(/(?:AS[N]?)?(\d+)/i);
-      const asnNumber = asnMatch ? parseInt(asnMatch[1], 10) : parseInt(input.value, 10);
-      observableInput = { number: asnNumber, name: input.value };
-    } else if (stixType === 'Bank-Account' || gqlType === 'BankAccount') {
-      // BankAccount uses 'iban', 'bic', or 'account_number'
-      // IBAN format: 2 letters + 2 digits + up to 30 alphanumeric
-      if (/^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/i.test(input.value.replace(/\s/g, ''))) {
-        observableInput = { iban: input.value.replace(/\s/g, '').toUpperCase() };
-      } else if (/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/i.test(input.value.replace(/\s/g, ''))) {
-        // BIC/SWIFT format: 8 or 11 characters
-        observableInput = { bic: input.value.replace(/\s/g, '').toUpperCase() };
-      } else {
-        observableInput = { account_number: input.value };
-      }
-    } else if (stixType === 'Payment-Card' || gqlType === 'PaymentCard') {
-      // PaymentCard requires 'card_number'
-      observableInput = { card_number: input.value.replace(/[\s-]/g, '') };
-    } else if (stixType === 'Media-Content' || gqlType === 'MediaContent') {
-      // MediaContent requires 'url'
-      observableInput = { url: input.value, title: input.value };
-    } else if (stixType === 'Directory' || gqlType === 'Directory') {
-      // Directory requires 'path'
-      observableInput = { path: input.value };
-    } else if (stixType === 'Process' || gqlType === 'Process') {
-      // Process requires 'command_line'
-      observableInput = { command_line: input.value };
-    } else if (stixType === 'Software' || gqlType === 'Software') {
-      // Software uses 'name'
-      observableInput = { name: input.value };
-    } else if (stixType === 'Mutex' || gqlType === 'Mutex') {
-      // Mutex uses 'name'
-      observableInput = { name: input.value };
-    } else if (stixType === 'Windows-Registry-Key' || gqlType === 'WindowsRegistryKey') {
-      // WindowsRegistryKey uses 'attribute_key'
-      observableInput = { attribute_key: input.value };
-    } else if (stixType === 'Windows-Registry-Value-Type' || gqlType === 'WindowsRegistryValueType') {
-      // WindowsRegistryValueType uses 'name' and 'data'
-      observableInput = { name: input.value, data: input.value };
-    } else if (stixType === 'Network-Traffic' || gqlType === 'NetworkTraffic') {
-      // NetworkTraffic - try to parse port info
-      observableInput = { protocols: ['tcp'] };
-    } else if (stixType === 'Email-Message' || gqlType === 'EmailMessage') {
-      // EmailMessage uses 'subject' or 'body'
-      observableInput = { subject: input.value };
-    } else if (stixType === 'User-Account' || gqlType === 'UserAccount') {
-      // UserAccount uses 'account_login' or 'user_id'
-      observableInput = { account_login: input.value };
-    } else {
-      // Default: types that use 'value' field
-      // IPv4Addr, IPv6Addr, DomainName, Hostname, EmailAddr, Url, MacAddr,
-      // CryptocurrencyWallet, UserAgent, PhoneNumber, Text, Credential, TrackingNumber
-      observableInput = { value: input.value };
-    }
+    const gqlType = stixToGraphQLType(stixType);
+    const observableInput = buildObservableInput(stixType, gqlType, input.value, input.hashType);
 
     const query = `
       mutation CreateObservable(
@@ -1491,359 +729,125 @@ export class OpenCTIClient {
           objectLabel: $objectLabel,
           ${gqlType}: $${gqlType}
         ) {
-          id
-          standard_id
-          entity_type
-          observable_value
+          id standard_id entity_type observable_value
         }
       }
     `;
 
     const variables = {
-      type: stixType,  // API expects STIX format like "IPv4-Addr", not "IPv4Addr"
+      type: stixType,
       x_opencti_score: input.score,
       x_opencti_description: input.description,
       createIndicator: input.createIndicator ?? false,
       objectMarking: input.objectMarking,
       objectLabel: input.objectLabel,
-      [gqlType]: observableInput,  // But the input variable uses GraphQL format
+      [gqlType]: observableInput,
     };
 
-    const data = await this.query<{
-      stixCyberObservableAdd: StixCyberObservable;
-    }>(query, variables);
-
+    const data = await this.query<{ stixCyberObservableAdd: StixCyberObservable }>(query, variables);
     return data.stixCyberObservableAdd;
   }
 
-  // ============================================================================
-  // STIX Domain Object Creation (SDOs - Threat Intelligence entities)
-  // ============================================================================
+  // ==========================================================================
+  // SDO Creation Methods
+  // ==========================================================================
 
-  /**
-   * Create an Intrusion Set
-   */
-  async createIntrusionSet(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+  async createIntrusionSet(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation IntrusionSetAdd($input: IntrusionSetAddInput!) {
-        intrusionSetAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          aliases
-        }
+        intrusionSetAdd(input: $input) { id standard_id entity_type name aliases }
       }
     `;
-
-    const data = await this.query<{
-      intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
     return data.intrusionSetAdd;
   }
 
-  /**
-   * Create a Threat Actor (Group or Individual)
-   */
-  async createThreatActor(input: {
-    name: string;
-    description?: string;
-    threat_actor_types?: string[];
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+  async createThreatActor(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation ThreatActorGroupAdd($input: ThreatActorGroupAddInput!) {
-        threatActorGroupAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          aliases
-        }
+        threatActorGroupAdd(input: $input) { id standard_id entity_type name aliases }
       }
     `;
-
-    const data = await this.query<{
-      threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        threat_actor_types: input.threat_actor_types || ['unknown'],
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
+    const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, {
+      input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
     });
-
     return data.threatActorGroupAdd;
   }
 
-  /**
-   * Create a Malware
-   */
-  async createMalware(input: {
-    name: string;
-    description?: string;
-    malware_types?: string[];
-    is_family?: boolean;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+  async createMalware(input: { name: string; description?: string; malware_types?: string[]; is_family?: boolean; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation MalwareAdd($input: MalwareAddInput!) {
-        malwareAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          aliases
-        }
+        malwareAdd(input: $input) { id standard_id entity_type name aliases }
       }
     `;
-
-    const data = await this.query<{
-      malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        malware_types: input.malware_types || ['unknown'],
-        is_family: input.is_family ?? true,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
+    const data = await this.query<{ malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, {
+      input: { ...input, malware_types: input.malware_types || ['unknown'], is_family: input.is_family ?? true },
     });
-
     return data.malwareAdd;
   }
 
-  /**
-   * Create a Tool
-   */
-  async createTool(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+  async createTool(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation ToolAdd($input: ToolAddInput!) {
-        toolAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          aliases
-        }
+        toolAdd(input: $input) { id standard_id entity_type name aliases }
       }
     `;
-
-    const data = await this.query<{
-      toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
     return data.toolAdd;
   }
 
-  /**
-   * Create a Campaign
-   */
-  async createCampaign(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] }> {
+  async createCampaign(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation CampaignAdd($input: CampaignAddInput!) {
-        campaignAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          aliases
-        }
+        campaignAdd(input: $input) { id standard_id entity_type name aliases }
       }
     `;
-
-    const data = await this.query<{
-      campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
     return data.campaignAdd;
   }
 
-  /**
-   * Create a Vulnerability (CVE)
-   */
-  async createVulnerability(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+  async createVulnerability(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation VulnerabilityAdd($input: VulnerabilityAddInput!) {
-        vulnerabilityAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-        }
+        vulnerabilityAdd(input: $input) { id standard_id entity_type name }
       }
     `;
-
-    const data = await this.query<{
-      vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
     return data.vulnerabilityAdd;
   }
 
-  /**
-   * Create an Attack Pattern
-   */
-  async createAttackPattern(input: {
-    name: string;
-    description?: string;
-    x_mitre_id?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] }> {
+  async createAttackPattern(input: { name: string; description?: string; x_mitre_id?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation AttackPatternAdd($input: AttackPatternAddInput!) {
-        attackPatternAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-          x_mitre_id
-          aliases
-        }
+        attackPatternAdd(input: $input) { id standard_id entity_type name x_mitre_id aliases }
       }
     `;
-
-    const data = await this.query<{
-      attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        x_mitre_id: input.x_mitre_id,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] } }>(query, { input });
     return data.attackPatternAdd;
   }
 
-  /**
-   * Create a Country
-   */
-  async createCountry(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+  async createCountry(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation CountryAdd($input: CountryAddInput!) {
-        countryAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-        }
+        countryAdd(input: $input) { id standard_id entity_type name }
       }
     `;
-
-    const data = await this.query<{
-      countryAdd: { id: string; standard_id: string; entity_type: string; name: string };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ countryAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
     return data.countryAdd;
   }
 
-  /**
-   * Create a Sector
-   */
-  async createSector(input: {
-    name: string;
-    description?: string;
-    objectMarking?: string[];
-    objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name: string }> {
+  async createSector(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
     const query = `
       mutation SectorAdd($input: SectorAddInput!) {
-        sectorAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          name
-        }
+        sectorAdd(input: $input) { id standard_id entity_type name }
       }
     `;
-
-    const data = await this.query<{
-      sectorAdd: { id: string; standard_id: string; entity_type: string; name: string };
-    }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        objectMarking: input.objectMarking,
-        objectLabel: input.objectLabel,
-      },
-    });
-
+    const data = await this.query<{ sectorAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
     return data.sectorAdd;
   }
 
   /**
    * Create any entity by type - dispatches to the appropriate creation method
-   * Handles both STIX Cyber Observables (SCOs) and STIX Domain Objects (SDOs)
    */
   async createEntity(input: {
     type: string;
@@ -1856,7 +860,6 @@ export class OpenCTIClient {
     const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
     const entityName = input.name || input.value || 'Unknown';
     
-    // STIX Domain Objects (SDOs) - use name-based creation
     const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_mitre_id?: string }>> = {
       'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'threat-actor': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
@@ -1871,19 +874,17 @@ export class OpenCTIClient {
       'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
     };
 
-    // Check if it's an SDO type
     if (sdoTypes[normalizedType]) {
       const result = await sdoTypes[normalizedType]();
       return { ...result, observable_value: undefined };
     }
 
-    // Otherwise, treat as STIX Cyber Observable (SCO)
     if (!input.value) {
       throw new Error(`Observable type "${input.type}" requires a value`);
     }
     
     const observable = await this.createObservable({
-      type: input.type as any,
+      type: input.type as ObservableType,
       value: input.value,
       description: input.description,
       objectMarking: input.objectMarking,
@@ -1898,194 +899,81 @@ export class OpenCTIClient {
     };
   }
 
-  /**
-   * Create an external reference
-   * External references must be created first and then attached to entities
-   */
-  async createExternalReference(input: {
-    source_name: string;
-    url?: string;
-    external_id?: string;
-    description?: string;
-  }): Promise<{ id: string; standard_id: string; url?: string }> {
+  // ==========================================================================
+  // External Reference Operations
+  // ==========================================================================
+
+  async createExternalReference(input: { source_name: string; url?: string; external_id?: string; description?: string }): Promise<{ id: string; standard_id: string; url?: string }> {
     const query = `
       mutation ExternalReferenceAdd($input: ExternalReferenceAddInput!) {
-        externalReferenceAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          source_name
-          description
-          url
-          external_id
-        }
+        externalReferenceAdd(input: $input) { id standard_id entity_type source_name description url external_id }
       }
     `;
-
-    const data = await this.query<{
-      externalReferenceAdd: { id: string; standard_id: string; url?: string };
-    }>(query, { input });
-
+    const data = await this.query<{ externalReferenceAdd: { id: string; standard_id: string; url?: string } }>(query, { input });
     return data.externalReferenceAdd;
   }
 
-  /**
-   * Add an external reference to a STIX Domain Object (like a container)
-   */
   async addExternalReferenceToEntity(entityId: string, externalReferenceId: string): Promise<void> {
     const query = `
       mutation StixDomainObjectEditRelationAdd($id: ID!, $input: StixRefRelationshipAddInput!) {
-        stixDomainObjectEdit(id: $id) {
-          relationAdd(input: $input) {
-            id
-          }
-        }
+        stixDomainObjectEdit(id: $id) { relationAdd(input: $input) { id } }
       }
     `;
-
-    await this.query(query, {
-      id: entityId,
-      input: {
-        toId: externalReferenceId,
-        relationship_type: 'external-reference',
-      },
-    });
+    await this.query(query, { id: entityId, input: { toId: externalReferenceId, relationship_type: 'external-reference' } });
   }
 
-  /**
-   * Search for external references by URL
-   */
   async findExternalReferencesByUrl(url: string): Promise<Array<{ id: string; url: string; source_name: string }>> {
     const query = `
       query ExternalReferences($filters: FilterGroup) {
         externalReferences(filters: $filters, first: 10) {
-          edges {
-            node {
-              id
-              standard_id
-              source_name
-              description
-              url
-            }
-          }
+          edges { node { id standard_id source_name description url } }
         }
       }
     `;
-
-    const filters = {
-      mode: 'and',
-      filters: [
-        {
-          key: 'url',
-          values: [url],
-          operator: 'eq',
-        },
-      ],
-      filterGroups: [],
-    };
-
-    const data = await this.query<{
-      externalReferences: {
-        edges: Array<{ node: { id: string; url: string; source_name: string } }>;
-      };
-    }>(query, { filters });
-
+    const filters = { mode: 'and', filters: [{ key: 'url', values: [url], operator: 'eq' }], filterGroups: [] };
+    const data = await this.query<{ externalReferences: { edges: Array<{ node: { id: string; url: string; source_name: string } }> } }>(query, { filters });
     return data.externalReferences.edges.map(edge => edge.node);
   }
 
-  /**
-   * Search for containers that have an external reference with the given URL
-   * Two-step process: 1) Find external references by URL, 2) Find containers with those refs
-   */
   async findContainersByExternalReferenceUrl(url: string): Promise<StixDomainObject[]> {
-    // Step 1: Find external references matching the URL
     const externalRefs = await this.findExternalReferencesByUrl(url);
-    
-    if (externalRefs.length === 0) {
-      return [];
-    }
+    if (externalRefs.length === 0) return [];
 
-    // Step 2: Search for containers that have these external reference IDs
     const extRefIds = externalRefs.map(ref => ref.id);
-    
     const query = `
-      ${MARKING_FRAGMENT}
-      ${LABEL_FRAGMENT}
-      ${IDENTITY_FRAGMENT}
+      ${ALL_FRAGMENTS}
       query FindContainersByExternalRefs($filters: FilterGroup) {
-        stixDomainObjects(
-          types: ["Report", "Case-Incident", "Case-Rfi", "Case-Rft", "Grouping"]
-          filters: $filters
-          first: 10
-          orderBy: modified
-          orderMode: desc
-        ) {
-          edges {
-            node {
-              ${SDO_PROPERTIES}
-            }
-          }
+        stixDomainObjects(types: ["Report", "Case-Incident", "Case-Rfi", "Case-Rft", "Grouping"], filters: $filters, first: 10, orderBy: modified, orderMode: desc) {
+          edges { node { ${SDO_PROPERTIES} } }
         }
       }
     `;
-
-    // Filter by external reference IDs
-    const filters = {
-      mode: 'and',
-      filters: [
-        {
-          key: 'externalReferences',
-          values: extRefIds,
-          operator: 'eq',
-        },
-      ],
-      filterGroups: [],
-    };
-
-    const data = await this.query<{
-      stixDomainObjects: {
-        edges: Array<{ node: StixDomainObject }>;
-      };
-    }>(query, { filters });
-
+    const filters = { mode: 'and', filters: [{ key: 'externalReferences', values: extRefIds, operator: 'eq' }], filterGroups: [] };
+    const data = await this.query<{ stixDomainObjects: { edges: Array<{ node: StixDomainObject }> } }>(query, { filters });
     return data.stixDomainObjects.edges.map(edge => edge.node);
   }
 
-  /**
-   * Create a draft workspace
-   * Used to create entities in draft mode before validation
-   */
+  // ==========================================================================
+  // Draft and Container Operations
+  // ==========================================================================
+
   async createDraftWorkspace(name: string): Promise<{ id: string; name: string }> {
     const query = `
       mutation DraftWorkspaceAdd($input: DraftWorkspaceAddInput!) {
-        draftWorkspaceAdd(input: $input) {
-          id
-          name
-        }
+        draftWorkspaceAdd(input: $input) { id name }
       }
     `;
-    
-    const data = await this.query<{
-      draftWorkspaceAdd: { id: string; name: string };
-    }>(query, { input: { name } });
-    
+    const data = await this.query<{ draftWorkspaceAdd: { id: string; name: string } }>(query, { input: { name } });
     return data.draftWorkspaceAdd;
   }
 
-  /**
-   * Create a new container (Report, Case, Grouping)
-   * Each container type has its own mutation and input type
-   * If createAsDraft is true, creates a draft workspace first and adds the container to it
-   */
   async createContainer(input: ContainerCreateInput): Promise<StixDomainObject & { draftId?: string }> {
-    // If creating as draft, first create a draft workspace
     let draftId: string | undefined;
     if (input.createAsDraft) {
       const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
       draftId = draftWorkspace.id;
     }
     
-    // Build container input based on type
     const containerInput: Record<string, unknown> = {
       name: input.name,
       description: input.description,
@@ -2095,38 +983,13 @@ export class OpenCTIClient {
       createdBy: input.createdBy,
     };
 
-    // Add external references for the source URL
     if (input.externalReferences && input.externalReferences.length > 0) {
       containerInput.externalReferences = input.externalReferences;
     }
 
+    const containerFields = `id standard_id entity_type name description created modified createdBy { id name } objectLabel { id value color } objectMarking { id definition x_opencti_color }`;
     let query: string;
     let mutationName: string;
-
-    // Common fields to return for all container types
-    const containerFields = `
-      id
-      standard_id
-      entity_type
-      name
-      description
-      created
-      modified
-      createdBy {
-        id
-        name
-      }
-      objectLabel {
-        id
-        value
-        color
-      }
-      objectMarking {
-        id
-        definition
-        x_opencti_color
-      }
-    `;
 
     switch (input.type) {
       case 'Report':
@@ -2134,383 +997,157 @@ export class OpenCTIClient {
         containerInput.report_types = input.report_types || ['threat-report'];
         containerInput.content = input.content;
         mutationName = 'reportAdd';
-        query = `
-          mutation CreateReport($input: ReportAddInput!) {
-            reportAdd(input: $input) {
-              ${containerFields}
-            }
-          }
-        `;
+        query = `mutation CreateReport($input: ReportAddInput!) { reportAdd(input: $input) { ${containerFields} } }`;
         break;
-
       case 'Case-Incident':
-        // Use provided values or defaults
         containerInput.severity = input.severity || 'medium';
         containerInput.priority = input.priority || 'P3';
-        if (input.response_types && input.response_types.length > 0) {
-          containerInput.response_types = input.response_types;
-        }
-        // Pass created date if provided (for update mode to avoid duplicates)
-        if (input.created) {
-          containerInput.created = input.created;
-        }
+        if (input.response_types?.length) containerInput.response_types = input.response_types;
+        if (input.created) containerInput.created = input.created;
         mutationName = 'caseIncidentAdd';
-        query = `
-          mutation CreateCaseIncident($input: CaseIncidentAddInput!) {
-            caseIncidentAdd(input: $input) {
-              ${containerFields}
-            }
-          }
-        `;
+        query = `mutation CreateCaseIncident($input: CaseIncidentAddInput!) { caseIncidentAdd(input: $input) { ${containerFields} } }`;
         break;
-
       case 'Case-Rfi':
         containerInput.information_types = ['strategic'];
         containerInput.severity = input.severity || 'medium';
         containerInput.priority = input.priority || 'P3';
-        // Pass created date if provided (for update mode to avoid duplicates)
-        if (input.created) {
-          containerInput.created = input.created;
-        }
+        if (input.created) containerInput.created = input.created;
         mutationName = 'caseRfiAdd';
-        query = `
-          mutation CreateCaseRfi($input: CaseRfiAddInput!) {
-            caseRfiAdd(input: $input) {
-              ${containerFields}
-            }
-          }
-        `;
+        query = `mutation CreateCaseRfi($input: CaseRfiAddInput!) { caseRfiAdd(input: $input) { ${containerFields} } }`;
         break;
-
       case 'Case-Rft':
         containerInput.takedown_types = ['content'];
         containerInput.severity = input.severity || 'medium';
         containerInput.priority = input.priority || 'P3';
-        // Pass created date if provided (for update mode to avoid duplicates)
-        if (input.created) {
-          containerInput.created = input.created;
-        }
+        if (input.created) containerInput.created = input.created;
         mutationName = 'caseRftAdd';
-        query = `
-          mutation CreateCaseRft($input: CaseRftAddInput!) {
-            caseRftAdd(input: $input) {
-              ${containerFields}
-            }
-          }
-        `;
+        query = `mutation CreateCaseRft($input: CaseRftAddInput!) { caseRftAdd(input: $input) { ${containerFields} } }`;
         break;
-
       case 'Grouping':
-        // Context is mandatory for Grouping
         containerInput.context = input.context || 'suspicious-activity';
-        // Pass created date if provided (for update mode to avoid duplicates)
-        if (input.created) {
-          containerInput.created = input.created;
-        }
+        if (input.created) containerInput.created = input.created;
         mutationName = 'groupingAdd';
-        query = `
-          mutation CreateGrouping($input: GroupingAddInput!) {
-            groupingAdd(input: $input) {
-              ${containerFields}
-            }
-          }
-        `;
+        query = `mutation CreateGrouping($input: GroupingAddInput!) { groupingAdd(input: $input) { ${containerFields} } }`;
         break;
-
       default:
         throw new Error(`Unsupported container type: ${input.type}`);
     }
 
-    // Execute query with draft context if creating as draft
-    const data = await this.query<{
-      [key: string]: StixDomainObject;
-    }>(query, { input: containerInput }, draftId);
-
+    const data = await this.query<{ [key: string]: StixDomainObject }>(query, { input: containerInput }, draftId);
     const container = data[mutationName];
-    
-    // Return container with draftId if created in draft mode
-    if (draftId) {
-      return { ...container, draftId };
-    }
-    
-    return container;
+    return draftId ? { ...container, draftId } : container;
   }
 
-  /**
-   * Upload a file to a container
-   */
-  async uploadFileToEntity(
-    entityId: string,
-    file: { name: string; data: Blob | ArrayBuffer; mimeType: string }
-  ): Promise<void> {
+  async uploadFileToEntity(entityId: string, file: { name: string; data: Blob | ArrayBuffer; mimeType: string }): Promise<void> {
     const formData = new FormData();
-    
     const operations = JSON.stringify({
-      query: `
-        mutation StixDomainObjectFileUpload($id: ID!, $file: Upload!) {
-          stixDomainObjectEdit(id: $id) {
-            importPush(file: $file) {
-              id
-              name
-            }
-          }
-        }
-      `,
-      variables: {
-        id: entityId,
-        file: null,
-      },
+      query: `mutation StixDomainObjectFileUpload($id: ID!, $file: Upload!) { stixDomainObjectEdit(id: $id) { importPush(file: $file) { id name } } }`,
+      variables: { id: entityId, file: null },
     });
-    
-    const map = JSON.stringify({ '0': ['variables.file'] });
-    
     formData.append('operations', operations);
-    formData.append('map', map);
+    formData.append('map', JSON.stringify({ '0': ['variables.file'] }));
     formData.append('0', new Blob([file.data], { type: file.mimeType }), file.name);
 
     const response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiToken}`,
-        'User-Agent': USER_AGENT,
-      },
+      headers: { 'Authorization': `Bearer ${this.apiToken}`, 'User-Agent': USER_AGENT },
       body: formData,
     });
 
-    if (!response.ok) {
-      throw new Error(`File upload failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`File upload failed: ${response.status}`);
   }
 
   // ==========================================================================
   // Search Operations
   // ==========================================================================
 
-  /**
-   * Global search across all entities
-   */
-  async globalSearch(
-    searchTerm: string,
-    types?: string[],
-    limit: number = 25
-  ): Promise<SearchResult[]> {
+  async globalSearch(searchTerm: string, types?: string[], limit: number = 25): Promise<SearchResult[]> {
     const query = `
       query GlobalSearch($search: String!, $types: [String], $first: Int) {
         stixCoreObjects(search: $search, types: $types, first: $first) {
           edges {
             node {
-              id
-              entity_type
-              representative {
-                main
-              }
-              ... on ThreatActorGroup {
-                name
-                aliases
-              }
-              ... on ThreatActorIndividual {
-                name
-                aliases
-              }
-              ... on IntrusionSet {
-                name
-                aliases
-              }
-              ... on Campaign {
-                name
-                aliases
-              }
-              ... on Incident {
-                name
-                aliases
-              }
-              ... on Malware {
-                name
-                aliases
-              }
-              ... on Vulnerability {
-                name
-                x_opencti_cvss_base_score
-                x_opencti_cvss_base_severity
-              }
-              ... on Country {
-                name
-              }
-              ... on Region {
-                name
-              }
-              ... on City {
-                name
-              }
-              ... on Sector {
-                name
-              }
-              ... on Organization {
-                name
-              }
-              ... on Individual {
-                name
-              }
-              ... on Event {
-                name
-              }
-              ... on Report {
-                name
-              }
-              ... on Grouping {
-                name
-              }
-              ... on StixCyberObservable {
-                observable_value
-                x_opencti_score
-              }
+              id entity_type representative { main }
+              ... on ThreatActorGroup { name aliases }
+              ... on ThreatActorIndividual { name aliases }
+              ... on IntrusionSet { name aliases }
+              ... on Campaign { name aliases }
+              ... on Incident { name aliases }
+              ... on Malware { name aliases }
+              ... on Vulnerability { name x_opencti_cvss_base_score x_opencti_cvss_base_severity }
+              ... on Country { name }
+              ... on Region { name }
+              ... on City { name }
+              ... on Sector { name }
+              ... on Organization { name }
+              ... on Individual { name }
+              ... on Event { name }
+              ... on Report { name }
+              ... on Grouping { name }
+              ... on StixCyberObservable { observable_value x_opencti_score }
             }
           }
         }
       }
     `;
-
-    const data = await this.query<{
-      stixCoreObjects: {
-        edges: Array<{ node: SearchResult }>;
-      };
-    }>(query, { search: searchTerm, types, first: limit });
-
+    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(query, { search: searchTerm, types, first: limit });
     return data.stixCoreObjects.edges.map((e) => e.node);
   }
 
-  /**
-   * Get entity URL for direct link to OpenCTI
-   */
   getEntityUrl(entityId: string, entityType: string): string {
     const typePathMap: Record<string, string> = {
-      'Intrusion-Set': 'threats/intrusion_sets',
-      'Malware': 'arsenal/malwares',
-      'Threat-Actor': 'threats/threat_actors_group',
-      'Campaign': 'threats/campaigns',
-      'Vulnerability': 'arsenal/vulnerabilities',
-      'Tool': 'arsenal/tools',
-      'Attack-Pattern': 'techniques/attack_patterns',
-      'Indicator': 'observations/indicators',
-      'Report': 'analyses/reports',
-      'Case-Incident': 'cases/incidents',
-      'Grouping': 'analyses/groupings',
-      'Investigation': 'workspaces/investigations',
-      // Observables
-      'IPv4-Addr': 'observations/observables',
-      'IPv6-Addr': 'observations/observables',
-      'Domain-Name': 'observations/observables',
-      'Url': 'observations/observables',
-      'Email-Addr': 'observations/observables',
-      'StixFile': 'observations/observables',
-      'Artifact': 'observations/observables',
+      'Intrusion-Set': 'threats/intrusion_sets', 'Malware': 'arsenal/malwares', 'Threat-Actor': 'threats/threat_actors_group',
+      'Campaign': 'threats/campaigns', 'Vulnerability': 'arsenal/vulnerabilities', 'Tool': 'arsenal/tools',
+      'Attack-Pattern': 'techniques/attack_patterns', 'Indicator': 'observations/indicators', 'Report': 'analyses/reports',
+      'Case-Incident': 'cases/incidents', 'Grouping': 'analyses/groupings', 'Investigation': 'workspaces/investigations',
+      'IPv4-Addr': 'observations/observables', 'IPv6-Addr': 'observations/observables', 'Domain-Name': 'observations/observables',
+      'Url': 'observations/observables', 'Email-Addr': 'observations/observables', 'StixFile': 'observations/observables', 'Artifact': 'observations/observables',
     };
-
-    const path = typePathMap[entityType] || 'dashboard';
-    return `${this.baseUrl}/${path}/${entityId}`;
+    return `${this.baseUrl}/${typePathMap[entityType] || 'dashboard'}/${entityId}`;
   }
 
   // ==========================================================================
-  // Investigation (Workbench) Operations
+  // Investigation Operations
   // ==========================================================================
 
-  /**
-   * Create a new investigation (workbench)
-   */
   async createInvestigation(input: InvestigationCreateInput): Promise<Investigation> {
     const query = `
       mutation CreateInvestigation($input: WorkspaceAddInput!) {
-        workspaceAdd(input: $input) {
-          id
-          name
-          description
-          type
-          investigated_entities_ids
-          created_at
-          updated_at
-        }
+        workspaceAdd(input: $input) { id name description type investigated_entities_ids created_at updated_at }
       }
     `;
-
-    const workspaceInput = {
-      type: 'investigation',
-      name: input.name,
-      description: input.description,
-      investigated_entities_ids: input.investigated_entities_ids || [],
-    };
-
-    const data = await this.query<{
-      workspaceAdd: Investigation;
-    }>(query, { input: workspaceInput });
-
+    const data = await this.query<{ workspaceAdd: Investigation }>(query, {
+      input: { type: 'investigation', name: input.name, description: input.description, investigated_entities_ids: input.investigated_entities_ids || [] },
+    });
     return data.workspaceAdd;
   }
 
-  /**
-   * Add entities to an existing investigation
-   */
-  async addEntitiesToInvestigation(
-    investigationId: string,
-    entityIds: string[]
-  ): Promise<Investigation> {
+  async addEntitiesToInvestigation(investigationId: string, entityIds: string[]): Promise<Investigation> {
     const query = `
       mutation AddToInvestigation($id: ID!, $input: [EditInput!]!) {
-        workspaceFieldPatch(id: $id, input: $input) {
-          id
-          name
-          investigated_entities_ids
-        }
+        workspaceFieldPatch(id: $id, input: $input) { id name investigated_entities_ids }
       }
     `;
-
-    const data = await this.query<{
-      workspaceFieldPatch: Investigation;
-    }>(query, {
-      id: investigationId,
-      input: [{
-        key: 'investigated_entities_ids',
-        value: entityIds,
-        operation: 'add',
-      }],
+    const data = await this.query<{ workspaceFieldPatch: Investigation }>(query, {
+      id: investigationId, input: [{ key: 'investigated_entities_ids', value: entityIds, operation: 'add' }],
     });
-
     return data.workspaceFieldPatch;
   }
 
-  /**
-   * Create observables and start an investigation with them
-   * This is a convenience method that:
-   * 1. Creates observables that don't exist
-   * 2. Creates an investigation
-   * 3. Adds all entities (existing + newly created) to the investigation
-   */
   async createInvestigationWithEntities(
     name: string,
     description: string | undefined,
-    entities: Array<{
-      type: 'observable' | 'sdo';
-      existingId?: string;
-      newObservable?: {
-        type: ObservableType;
-        value: string;
-        hashType?: HashType;
-      };
-    }>
+    entities: Array<{ type: 'observable' | 'sdo'; existingId?: string; newObservable?: { type: ObservableType; value: string; hashType?: HashType } }>
   ): Promise<{ investigation: Investigation; createdEntityIds: string[] }> {
     const createdEntityIds: string[] = [];
     const allEntityIds: string[] = [];
 
-    // First, create any new observables
     for (const entity of entities) {
       if (entity.existingId) {
         allEntityIds.push(entity.existingId);
       } else if (entity.newObservable) {
         try {
-          const newObs = await this.createObservable({
-            type: entity.newObservable.type,
-            value: entity.newObservable.value,
-            hashType: entity.newObservable.hashType,
-          });
+          const newObs = await this.createObservable({ type: entity.newObservable.type, value: entity.newObservable.value, hashType: entity.newObservable.hashType });
           allEntityIds.push(newObs.id);
           createdEntityIds.push(newObs.id);
         } catch (error) {
@@ -2519,160 +1156,51 @@ export class OpenCTIClient {
       }
     }
 
-    // Create the investigation with all entity IDs
-    const investigation = await this.createInvestigation({
-      name,
-      description,
-      investigated_entities_ids: allEntityIds,
-    });
-
+    const investigation = await this.createInvestigation({ name, description, investigated_entities_ids: allEntityIds });
     return { investigation, createdEntityIds };
   }
 
-  /**
-   * Get investigation URL for direct link
-   */
   getInvestigationUrl(investigationId: string): string {
     return `${this.baseUrl}/dashboard/workspaces/investigations/${investigationId}`;
   }
 
-  /**
-   * Fetch containers that contain a specific entity
-   * Uses the root containers query with filters and ordering (sorted by created desc)
-   */
-  async fetchContainersForEntity(entityId: string, limit: number = 10): Promise<Array<{
-    id: string;
-    entity_type: string;
-    name: string;
-    created: string;
-    modified: string;
-    createdBy?: { id: string; name: string };
-  }>> {
-    // Use root containers query with filters and ordering (like OpenCTI frontend does)
+  async fetchContainersForEntity(entityId: string, limit: number = 10): Promise<Array<{ id: string; entity_type: string; name: string; created: string; modified: string; createdBy?: { id: string; name: string } }>> {
     const query = `
-      query GetContainersForEntity(
-        $first: Int
-        $orderBy: ContainersOrdering
-        $orderMode: OrderingMode
-        $filters: FilterGroup
-      ) {
-        containers(
-          first: $first
-          orderBy: $orderBy
-          orderMode: $orderMode
-          filters: $filters
-        ) {
+      query GetContainersForEntity($first: Int, $orderBy: ContainersOrdering, $orderMode: OrderingMode, $filters: FilterGroup) {
+        containers(first: $first, orderBy: $orderBy, orderMode: $orderMode, filters: $filters) {
           edges {
             node {
-              id
-              entity_type
-              created
-              modified
-              createdBy {
-                ... on Identity {
-                  id
-                  name
-                }
-              }
-              ... on Report {
-                name
-              }
-              ... on Grouping {
-                name
-              }
-              ... on Note {
-                attribute_abstract
-                content
-              }
-              ... on Opinion {
-                opinion
-              }
-              ... on ObservedData {
-                name
-                first_observed
-                last_observed
-              }
-              ... on CaseIncident {
-                name
-              }
-              ... on CaseRfi {
-                name
-              }
-              ... on CaseRft {
-                name
-              }
-              ... on Task {
-                name
-              }
+              id entity_type created modified
+              createdBy { ... on Identity { id name } }
+              ... on Report { name }
+              ... on Grouping { name }
+              ... on Note { attribute_abstract content }
+              ... on Opinion { opinion }
+              ... on ObservedData { name first_observed last_observed }
+              ... on CaseIncident { name }
+              ... on CaseRfi { name }
+              ... on CaseRft { name }
+              ... on Task { name }
             }
           }
         }
       }
     `;
-
-    // Build filters to find containers that include this entity
-    const filters = {
-      mode: 'and',
-      filters: [
-        {
-          key: 'objects',
-          values: [entityId],
-        },
-      ],
-      filterGroups: [],
-    };
+    const filters = { mode: 'and', filters: [{ key: 'objects', values: [entityId] }], filterGroups: [] };
 
     try {
-      const data = await this.query<{
-        containers: {
-          edges: Array<{
-            node: {
-              id: string;
-              entity_type: string;
-              name?: string;
-              attribute_abstract?: string;
-              content?: string;
-              opinion?: string;
-              first_observed?: string;
-              last_observed?: string;
-              created: string;
-              modified: string;
-              createdBy?: { id: string; name: string };
-            };
-          }>;
-        };
-      }>(query, { 
-        first: limit, 
-        orderBy: 'created',
-        orderMode: 'desc',
-        filters,
-      });
-
+      const data = await this.query<ContainerQueryResult>(query, { first: limit, orderBy: 'created', orderMode: 'desc', filters });
       return data.containers?.edges?.map(edge => {
         const node = edge.node;
-        // Determine name based on entity type
         let name = node.name;
         if (!name) {
-          if (node.attribute_abstract) {
-            name = node.attribute_abstract.substring(0, 50) + (node.attribute_abstract.length > 50 ? '...' : '');
-          } else if (node.content) {
-            name = node.content.substring(0, 50) + (node.content.length > 50 ? '...' : '');
-          } else if (node.opinion) {
-            name = `Opinion: ${node.opinion}`;
-          } else if (node.first_observed && node.last_observed) {
-            name = `Observed Data (${new Date(node.first_observed).toLocaleDateString()})`;
-          } else {
-            name = node.entity_type;
-          }
+          if (node.attribute_abstract) name = node.attribute_abstract.substring(0, 50) + (node.attribute_abstract.length > 50 ? '...' : '');
+          else if (node.content) name = node.content.substring(0, 50) + (node.content.length > 50 ? '...' : '');
+          else if (node.opinion) name = `Opinion: ${node.opinion}`;
+          else if (node.first_observed && node.last_observed) name = `Observed Data (${new Date(node.first_observed).toLocaleDateString()})`;
+          else name = node.entity_type;
         }
-        return {
-          id: node.id,
-          entity_type: node.entity_type,
-          name,
-          created: node.created,
-          modified: node.modified,
-          createdBy: node.createdBy,
-        };
+        return { id: node.id, entity_type: node.entity_type, name, created: node.created, modified: node.modified, createdBy: node.createdBy };
       }) || [];
     } catch (error) {
       log.warn('Failed to fetch containers for entity:', error);
@@ -2681,123 +1209,48 @@ export class OpenCTIClient {
   }
 
   // ==========================================================================
-  // Workbench (Investigation) Operations
+  // Workbench Operations
   // ==========================================================================
 
-  /**
-   * Create a workbench (investigation workspace)
-   */
-  async createWorkbench(input: {
-    name: string;
-    description?: string;
-  }): Promise<{ id: string; name: string }> {
+  async createWorkbench(input: { name: string; description?: string }): Promise<{ id: string; name: string }> {
     const query = `
       mutation WorkbenchAdd($input: WorkspaceAddInput!) {
-        workspaceAdd(input: $input) {
-          id
-          name
-          entity_type
-        }
+        workspaceAdd(input: $input) { id name entity_type }
       }
     `;
-
-    const data = await this.query<{ workspaceAdd: { id: string; name: string; entity_type: string } }>(query, {
-      input: {
-        name: input.name,
-        description: input.description,
-        type: 'INVESTIGATION',
-      },
-    });
-
+    const data = await this.query<{ workspaceAdd: { id: string; name: string; entity_type: string } }>(query, { input: { ...input, type: 'INVESTIGATION' } });
     return data.workspaceAdd;
   }
 
-  /**
-   * Add objects (entities or relationships) to a container
-   */
   async addObjectsToContainer(containerId: string, objectIds: string[]): Promise<void> {
     if (objectIds.length === 0) return;
-    
     const query = `
       mutation ContainerEditObjectsAdd($id: ID!, $toIds: [String]!) {
-        containerEdit(id: $id) {
-          objectsAdd(toIds: $toIds) {
-            id
-          }
-        }
+        containerEdit(id: $id) { objectsAdd(toIds: $toIds) { id } }
       }
     `;
-
-    await this.query(query, {
-      id: containerId,
-      toIds: objectIds,
-    });
+    await this.query(query, { id: containerId, toIds: objectIds });
   }
 
-  /**
-   * Create a STIX Core Relationship between two entities
-   */
-  async createStixCoreRelationship(input: {
-    fromId: string;
-    toId: string;
-    relationship_type: string;
-    description?: string;
-    confidence?: number;
-    objectMarking?: string[];
-  }): Promise<{ id: string; standard_id: string }> {
+  async createStixCoreRelationship(input: { fromId: string; toId: string; relationship_type: string; description?: string; confidence?: number; objectMarking?: string[] }): Promise<{ id: string; standard_id: string }> {
     const query = `
       mutation StixCoreRelationshipAdd($input: StixCoreRelationshipAddInput!) {
-        stixCoreRelationshipAdd(input: $input) {
-          id
-          standard_id
-          entity_type
-          relationship_type
-          from {
-            ... on BasicObject {
-              id
-              entity_type
-            }
-          }
-          to {
-            ... on BasicObject {
-              id
-              entity_type
-            }
-          }
-        }
+        stixCoreRelationshipAdd(input: $input) { id standard_id entity_type relationship_type from { ... on BasicObject { id entity_type } } to { ... on BasicObject { id entity_type } } }
       }
     `;
-
-    const data = await this.query<{
-      stixCoreRelationshipAdd: { id: string; standard_id: string };
-    }>(query, { input });
-
+    const data = await this.query<{ stixCoreRelationshipAdd: { id: string; standard_id: string } }>(query, { input });
     return data.stixCoreRelationshipAdd;
   }
 
-  /**
-   * Add entities to a workbench
-   */
   async addEntitiesToWorkbench(workbenchId: string, entityIds: string[]): Promise<void> {
     const query = `
       mutation WorkspaceStixCoreObjectsAdd($id: ID!, $toIds: [String]!) {
-        workspaceEdit(id: $id) {
-          relationAdd(input: { toIds: $toIds, relationship_type: "has" }) {
-            id
-          }
-        }
+        workspaceEdit(id: $id) { relationAdd(input: { toIds: $toIds, relationship_type: "has" }) { id } }
       }
     `;
-
-    await this.query(query, {
-      id: workbenchId,
-      toIds: entityIds,
-    });
+    await this.query(query, { id: workbenchId, toIds: entityIds });
   }
 
-  /**
-   * Get workbench URL
-   */
   getWorkbenchUrl(workbenchId: string): string {
     return `${this.baseUrl}/dashboard/workspaces/investigations/${workbenchId}`;
   }
@@ -2811,28 +1264,16 @@ let clientInstance: OpenCTIClient | null = null;
 
 /**
  * Get or create the OpenCTI client instance
- * Uses the first configured OpenCTI platform
  */
 export async function getOpenCTIClient(): Promise<OpenCTIClient | null> {
-  if (clientInstance) {
-    return clientInstance;
-  }
+  if (clientInstance) return clientInstance;
 
   const settings = await chrome.storage.local.get('settings') as { settings?: ExtensionSettings };
-  const openctiPlatforms = settings.settings?.openctiPlatforms;
+  const firstPlatform = settings.settings?.openctiPlatforms?.find(p => p.enabled && p.url && p.apiToken);
   
-  // Use the first enabled platform
-  const firstPlatform = openctiPlatforms?.find(p => p.enabled && p.url && p.apiToken);
-  
-  if (!firstPlatform) {
-    return null;
-  }
+  if (!firstPlatform) return null;
 
-  clientInstance = new OpenCTIClient({
-    url: firstPlatform.url,
-    apiToken: firstPlatform.apiToken,
-  });
-
+  clientInstance = new OpenCTIClient({ url: firstPlatform.url, apiToken: firstPlatform.apiToken });
   return clientInstance;
 }
 
@@ -2842,4 +1283,3 @@ export async function getOpenCTIClient(): Promise<OpenCTIClient | null> {
 export function resetOpenCTIClient(): void {
   clientInstance = null;
 }
-

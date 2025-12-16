@@ -5,12 +5,10 @@
  */
 
 import { loggers } from '../utils/logger';
-
-const log = loggers.detection;
-
 import type {
   DetectedObservable,
   DetectedSDO,
+  DetectedPlatformEntity,
   StixCyberObservable,
   StixDomainObject,
 } from '../types';
@@ -23,13 +21,24 @@ import {
   isDefanged,
   type PatternConfig,
 } from './patterns';
+import {
+  createMatchingRegex,
+  hasValidBoundaries,
+  hasOverlappingRange,
+  createRangeKey,
+  isParentMitreId,
+  needsManualBoundaryCheck,
+} from './matching';
 import { OpenCTIClient } from '../api/opencti-client';
 import {
   getAllCachedEntityNamesForMatching,
   getAllCachedOAEVEntityNamesForMatching,
-  type CachedEntity,
-  type CachedOAEVEntity,
 } from '../utils/storage';
+
+// Re-export utilities for backwards compatibility
+export { extractTextFromHTML, getTextNodes, normalizeText } from './text-utils';
+
+const log = loggers.detection;
 
 // ============================================================================
 // Detection Result Types
@@ -41,20 +50,6 @@ export interface DetectionResult {
   cves: DetectedSDO[];
   platformEntities: DetectedPlatformEntity[];
   scanTime: number;
-}
-
-// Platform Entity Detection (for non-OpenCTI platforms like OpenAEV)
-export interface DetectedPlatformEntity {
-  platformType: string; // e.g., 'openaev', 'opengrc'
-  type: string; // e.g., 'Asset', 'AssetGroup', 'Team', 'Player', 'AttackPattern', 'Finding'
-  name: string;
-  value: string; // The matched text
-  startIndex: number;
-  endIndex: number;
-  found: boolean;
-  entityId?: string;
-  platformId?: string;
-  entityData?: any; // Original entity data from cache
 }
 
 // ============================================================================
@@ -88,8 +83,6 @@ export class DetectionEngine {
   async loadKnownEntities(): Promise<void> {
     // This would ideally fetch a cached list of known threat actors,
     // malware, etc. For now, we'll do on-demand searches.
-    // In a production version, you might want to implement caching
-    // and periodic background updates.
   }
 
   /**
@@ -109,7 +102,7 @@ export class DetectionEngine {
       
       for (const match of matches) {
         // Check for overlapping ranges
-        const rangeKey = `${match.startIndex}-${match.endIndex}`;
+        const rangeKey = createRangeKey(match.startIndex, match.endIndex);
         if (seenRanges.has(rangeKey)) {
           continue;
         }
@@ -136,10 +129,7 @@ export class DetectionEngine {
   /**
    * Find all matches for a pattern
    */
-  private findMatches(
-    text: string,
-    config: PatternConfig
-  ): DetectedObservable[] {
+  private findMatches(text: string, config: PatternConfig): DetectedObservable[] {
     const matches: DetectedObservable[] = [];
     
     // Reset regex state
@@ -189,7 +179,6 @@ export class DetectionEngine {
     let match;
     while ((match = pattern.exec(text)) !== null) {
       // Normalize various dash characters to standard hyphen for consistent lookup
-      // Handles: hyphen-minus (-), hyphen (‐), non-breaking hyphen (‑), figure dash (‒), en dash (–)
       const normalizedName = match[0].toUpperCase().replace(/[\u2010\u2011\u2012\u2013]/g, '-');
       detected.push({
         type: 'Vulnerability',
@@ -207,10 +196,7 @@ export class DetectionEngine {
   /**
    * Search for known entity names in text
    */
-  async detectSDOs(
-    text: string,
-    entityNames: string[]
-  ): Promise<DetectedSDO[]> {
+  async detectSDOs(text: string, entityNames: string[]): Promise<DetectedSDO[]> {
     const detected: DetectedSDO[] = [];
 
     for (const name of entityNames) {
@@ -236,16 +222,10 @@ export class DetectionEngine {
 
   /**
    * Enrich detected observables with OpenCTI data (searches ALL platforms)
-   * Returns the first match but also includes all platform matches for navigation
    */
-  async enrichObservables(
-    observables: DetectedObservable[]
-  ): Promise<DetectedObservable[]> {
+  async enrichObservables(observables: DetectedObservable[]): Promise<DetectedObservable[]> {
     const searchPromises = observables.map(async (obs) => {
-      // Search across ALL platforms and collect all matches
       const platformMatches: Array<{ platformId: string; entityId: string; entityData: StixCyberObservable }> = [];
-      
-      // Use refanged value for lookups (OpenCTI stores clean values, not defanged)
       const searchValue = obs.refangedValue || obs.value;
       
       for (const [platformId, client] of this.clients) {
@@ -253,30 +233,19 @@ export class DetectionEngine {
           let result: StixCyberObservable | null = null;
 
           if (obs.hashType) {
-            result = await client.searchObservableByHash(
-              searchValue,
-              obs.hashType
-            );
+            result = await client.searchObservableByHash(searchValue, obs.hashType);
           } else {
-            result = await client.searchObservableByValue(
-              searchValue,
-              obs.type
-            );
+            result = await client.searchObservableByValue(searchValue, obs.type);
           }
 
           if (result) {
-            platformMatches.push({
-              platformId,
-              entityId: result.id,
-              entityData: result,
-            });
+            platformMatches.push({ platformId, entityId: result.id, entityData: result });
           }
-        } catch (error) {
+        } catch {
           // Continue to next platform
         }
       }
       
-      // If found in at least one platform
       if (platformMatches.length > 0) {
         const firstMatch = platformMatches[0];
         return {
@@ -285,7 +254,6 @@ export class DetectionEngine {
           entityId: firstMatch.entityId,
           entityData: firstMatch.entityData,
           platformId: firstMatch.platformId,
-          // Include all platform matches for multi-platform navigation
           platformMatches: platformMatches.length > 1 ? platformMatches : undefined,
         };
       }
@@ -298,18 +266,14 @@ export class DetectionEngine {
 
   /**
    * Enrich detected SDOs with OpenCTI data (searches ALL platforms)
-   * Returns the first match but also includes all platform matches for navigation
    */
   async enrichSDOs(sdos: DetectedSDO[]): Promise<DetectedSDO[]> {
-    // Deduplicate by name
     const uniqueNames = [...new Set(sdos.map((s) => s.name))];
-    // Map name to ALL platform matches (not just first)
     const searchResults = new Map<string, Array<{ entity: StixDomainObject; platformId: string }>>();
 
     for (const name of uniqueNames) {
       const matches: Array<{ entity: StixDomainObject; platformId: string }> = [];
       
-      // Search across ALL platforms
       for (const [platformId, client] of this.clients) {
         try {
           const result = await client.searchSDOByNameOrAlias(
@@ -318,9 +282,8 @@ export class DetectionEngine {
           );
           if (result) {
             matches.push({ entity: result, platformId });
-            // DON'T break - continue to check all platforms
           }
-        } catch (error) {
+        } catch {
           // Continue to next platform
         }
       }
@@ -341,7 +304,6 @@ export class DetectionEngine {
           entityId: firstMatch.entity.id,
           entityData: firstMatch.entity,
           platformId: firstMatch.platformId,
-          // Include all platform matches for multi-platform navigation
           platformMatches: matches.length > 1 ? matches.map(m => ({
             platformId: m.platformId,
             entityId: m.entity.id,
@@ -357,22 +319,18 @@ export class DetectionEngine {
    * Enrich CVEs with OpenCTI data (searches all platforms)
    */
   async enrichCVEs(cves: DetectedSDO[]): Promise<DetectedSDO[]> {
-    // Deduplicate by name
     const uniqueCVEs = [...new Set(cves.map((c) => c.name))];
     const searchResults = new Map<string, { entity: StixDomainObject; platformId: string }>();
 
     for (const cve of uniqueCVEs) {
-      // Search across all platforms
       for (const [platformId, client] of this.clients) {
         try {
-          const result = await client.searchSDOByNameOrAlias(cve, [
-            'Vulnerability',
-          ]);
+          const result = await client.searchSDOByNameOrAlias(cve, ['Vulnerability']);
           if (result) {
             searchResults.set(cve.toUpperCase(), { entity: result, platformId });
             break; // Found, no need to search other platforms
           }
-        } catch (error) {
+        } catch {
           // Continue to next platform
         }
       }
@@ -398,10 +356,9 @@ export class DetectionEngine {
    */
   async detectSDOsFromCache(text: string): Promise<DetectedSDO[]> {
     const detected: DetectedSDO[] = [];
-    const seenEntities = new Set<string>(); // Avoid duplicates
-    const seenRanges = new Set<string>(); // Avoid overlapping highlights
+    const seenEntities = new Set<string>();
+    const seenRanges = new Set<string>();
     
-    // Get cached entity map
     const entityMap = await getAllCachedEntityNamesForMatching();
     
     if (entityMap.size === 0) {
@@ -414,7 +371,6 @@ export class DetectionEngine {
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
     
-    // For each cached entity name/alias, check if it exists in the text
     for (const [nameLower, entity] of sortedEntities) {
       // Skip very short names (< 3 chars) to avoid false positives
       if (nameLower.length < 3) continue;
@@ -422,27 +378,7 @@ export class DetectionEngine {
       // Skip if we already found this entity
       if (seenEntities.has(entity.id)) continue;
       
-      // Escape special regex characters in the name
-      const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
-      // Determine matching strategy based on content type
-      const hasSpecialChars = /[.\-_]/.test(nameLower);
-      // Check if this is a MITRE ATT&CK ID (T1059, T1059.001, TA0001, etc.)
-      const isMitreId = /^t[as]?\d{4}(\.\d{3})?$/i.test(nameLower);
-      
-      let regex: RegExp;
-      if (isMitreId) {
-        // MITRE IDs (T1059, T1059.001): use word boundaries for exact match
-        // The \b works well here because MITRE IDs are alphanumeric with dots
-        regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
-      } else if (hasSpecialChars) {
-        // For names with special characters, use lookahead/lookbehind or simple indexOf
-        // We'll use a simpler approach: match the exact string, then verify boundaries manually
-        regex = new RegExp(escapedName, 'gi');
-      } else {
-        // For simple alphanumeric names, use word boundaries
-        regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
-      }
+      const regex = createMatchingRegex(nameLower);
       
       let match;
       while ((match = regex.exec(text)) !== null) {
@@ -452,51 +388,30 @@ export class DetectionEngine {
         const startIndex = match.index;
         const endIndex = startIndex + matchedText.length;
         
-        // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
-        // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
-        const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
-        if (isParentMitreId) {
+        // For parent MITRE techniques, skip if followed by a dot (part of sub-technique)
+        if (isParentMitreId(nameLower)) {
           const charAfter = endIndex < text.length ? text[endIndex] : '';
-          if (charAfter === '.') {
-            // This parent technique is followed by a dot, likely part of a sub-technique
-            // Skip this match to avoid duplicate detection
-            continue;
-          }
+          if (charAfter === '.') continue;
         }
         
-        // For names with special chars (but not MITRE IDs which use word boundaries), verify boundaries manually
-        if (hasSpecialChars && !isMitreId) {
-          const charBefore = startIndex > 0 ? text[startIndex - 1] : ' ';
-          const charAfter = endIndex < text.length ? text[endIndex] : ' ';
-          
-          // Check if surrounded by word-boundary characters (not alphanumeric)
-          const isValidBoundary = (c: string) => /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
-          if (!isValidBoundary(charBefore) && /[a-zA-Z0-9]/.test(charBefore)) continue;
-          if (!isValidBoundary(charAfter) && /[a-zA-Z0-9]/.test(charAfter)) continue;
+        // For names with special chars (but not IPs/MACs/MITRE IDs), verify boundaries manually
+        if (needsManualBoundaryCheck(nameLower)) {
+          if (!hasValidBoundaries(text, startIndex, endIndex)) continue;
         }
         
         // Check for overlapping ranges
-        const rangeKey = `${startIndex}-${endIndex}`;
-        let hasOverlap = false;
-        for (const existingRange of seenRanges) {
-          const [existStart, existEnd] = existingRange.split('-').map(Number);
-          if (!(endIndex <= existStart || startIndex >= existEnd)) {
-            hasOverlap = true;
-            break;
-          }
-        }
-        if (hasOverlap) continue;
+        const rangeKey = createRangeKey(startIndex, endIndex);
+        if (hasOverlappingRange(startIndex, endIndex, seenRanges)) continue;
         
         detected.push({
           type: entity.type as DetectedSDO['type'],
-          name: entity.name, // Use canonical name from cache
-          // Store the actual matched text (may differ from name if matched via alias or x_mitre_id)
+          name: entity.name,
           matchedValue: matchedText !== entity.name ? matchedText : undefined,
           startIndex,
           endIndex,
-          found: true, // Already know it's in the cache
+          found: true,
           entityId: entity.id,
-          platformId: entity.platformId, // Include platform ID for multi-platform support
+          platformId: entity.platformId,
           entityData: {
             id: entity.id,
             entity_type: entity.type,
@@ -523,7 +438,6 @@ export class DetectionEngine {
     const seenEntities = new Set<string>();
     const seenRanges = new Set<string>();
     
-    // Get cached platform entity map (currently OpenAEV)
     const entityMap = await getAllCachedOAEVEntityNamesForMatching();
     
     if (entityMap.size === 0) {
@@ -537,36 +451,13 @@ export class DetectionEngine {
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
     
     for (const [nameLower, entity] of sortedEntities) {
-      // Skip very short names (except for MITRE IDs which are 4+ chars like T1059)
-      const isMitreId = /^t\d{4}(\.\d{3})?$/i.test(nameLower);
+      // Skip very short names (except for MITRE IDs which are 4+ chars)
       if (nameLower.length < 4) continue;
       
       // Skip if we already found this entity
       if (seenEntities.has(entity.id)) continue;
       
-      // Escape special regex characters in the name
-      const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
-      // Determine matching strategy based on content type
-      const hasSpecialChars = /[.\-_@]/.test(nameLower);
-      const isIpAddress = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(nameLower);
-      const isMacAddress = /^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$/i.test(nameLower);
-      
-      let regex: RegExp;
-      if (isIpAddress || isMacAddress) {
-        // IP and MAC addresses: match exactly with word boundaries or punctuation boundaries
-        // Use lookahead/lookbehind simulation for IPs
-        regex = new RegExp(`(?<![\\w.])${escapedName}(?![\\w.])`, 'gi');
-      } else if (isMitreId) {
-        // MITRE IDs (T1059, T1059.001): require exact word boundaries
-        regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
-      } else if (hasSpecialChars) {
-        // Names with special characters: simple match, verify boundaries later
-        regex = new RegExp(escapedName, 'gi');
-      } else {
-        // Normal names: use word boundaries for exact word match
-        regex = new RegExp(`\\b${escapedName}\\b`, 'gi');
-      }
+      const regex = createMatchingRegex(nameLower);
       
       let match;
       while ((match = regex.exec(text)) !== null) {
@@ -576,41 +467,23 @@ export class DetectionEngine {
         const startIndex = match.index;
         const endIndex = startIndex + matchedText.length;
         
-        // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
-        // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
-        const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
-        if (isParentMitreId) {
+        // For parent MITRE techniques, skip if followed by a dot (part of sub-technique)
+        if (isParentMitreId(nameLower)) {
           const charAfter = endIndex < text.length ? text[endIndex] : '';
-          if (charAfter === '.') {
-            // This parent technique is followed by a dot, likely part of a sub-technique
-            continue;
-          }
+          if (charAfter === '.') continue;
         }
         
         // For names with special chars (but not IPs/MACs/MITRE IDs), verify boundaries manually
-        if (hasSpecialChars && !isIpAddress && !isMacAddress && !isMitreId) {
-          const charBefore = startIndex > 0 ? text[startIndex - 1] : ' ';
-          const charAfter = endIndex < text.length ? text[endIndex] : ' ';
-          
-          const isValidBoundary = (c: string) => /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
-          if (!isValidBoundary(charBefore) && /[a-zA-Z0-9]/.test(charBefore)) continue;
-          if (!isValidBoundary(charAfter) && /[a-zA-Z0-9]/.test(charAfter)) continue;
+        if (needsManualBoundaryCheck(nameLower)) {
+          if (!hasValidBoundaries(text, startIndex, endIndex)) continue;
         }
         
         // Check for overlapping ranges
-        const rangeKey = `${startIndex}-${endIndex}`;
-        let hasOverlap = false;
-        for (const existingRange of seenRanges) {
-          const [existStart, existEnd] = existingRange.split('-').map(Number);
-          if (!(endIndex <= existStart || startIndex >= existEnd)) {
-            hasOverlap = true;
-            break;
-          }
-        }
-        if (hasOverlap) continue;
+        const rangeKey = createRangeKey(startIndex, endIndex);
+        if (hasOverlappingRange(startIndex, endIndex, seenRanges)) continue;
         
         detected.push({
-          platformType: 'openaev', // Currently only OpenAEV entities are detected
+          platformType: 'openaev',
           type: entity.type,
           name: entity.name,
           value: matchedText,
@@ -635,10 +508,7 @@ export class DetectionEngine {
   /**
    * Full scan of text content
    */
-  async scan(
-    text: string,
-    knownEntityNames: string[] = []
-  ): Promise<DetectionResult> {
+  async scan(text: string, knownEntityNames: string[] = []): Promise<DetectionResult> {
     const startTime = performance.now();
 
     // Detect all observables
@@ -670,7 +540,6 @@ export class DetectionEngine {
     }
 
     // Enrich observables and CVEs with OpenCTI data
-    // SDOs from cache are already enriched
     const [enrichedObservables, enrichedCVEs] = await Promise.all([
       this.enrichObservables(observables),
       this.enrichCVEs(cves),
@@ -700,107 +569,3 @@ export class DetectionEngine {
     };
   }
 }
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Extract clean text from HTML
- */
-export function extractTextFromHTML(html: string): string {
-  // Create a temporary element to parse HTML
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  
-  // Remove script and style elements
-  const scripts = doc.querySelectorAll('script, style, noscript');
-  scripts.forEach((el) => el.remove());
-  
-  // Get text content
-  return doc.body.textContent || '';
-}
-
-/**
- * Get text nodes from a DOM element for highlighting
- * Enhanced to traverse Shadow DOM for SPAs like VirusTotal
- */
-export function getTextNodes(element: Node): Text[] {
-  const textNodes: Text[] = [];
-  
-  // Helper to check if a text node should be included
-  const shouldIncludeNode = (node: Node): boolean => {
-    if (!node.textContent?.trim()) {
-      return false;
-    }
-    const parent = node.parentElement;
-    if (
-      parent &&
-      ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(
-        parent.tagName
-      )
-    ) {
-      return false;
-    }
-    return true;
-  };
-  
-  // Recursive function to traverse DOM including Shadow DOM
-  const traverseNode = (root: Node) => {
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_ALL, // Show all nodes to catch elements with shadow roots
-      {
-        acceptNode: (node) => {
-          // Accept text nodes that pass our filter
-          if (node.nodeType === Node.TEXT_NODE) {
-            return shouldIncludeNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-          }
-          // Accept element nodes to traverse their children
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const tagName = (node as Element).tagName;
-            // Skip script/style elements entirely
-            if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(tagName)) {
-              return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_SKIP; // Skip element itself but traverse children
-          }
-          return NodeFilter.FILTER_SKIP;
-        },
-      }
-    );
-
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        textNodes.push(node as Text);
-      }
-    }
-    
-    // Now traverse shadow DOMs
-    // We need to check all elements for shadow roots
-    const elements = (root as Element).querySelectorAll?.('*') || [];
-    elements.forEach((el) => {
-      if (el.shadowRoot) {
-        traverseNode(el.shadowRoot);
-      }
-    });
-    
-    // Also check the root element itself for shadow root (if it's an element)
-    if ((root as Element).shadowRoot) {
-      traverseNode((root as Element).shadowRoot!);
-    }
-  };
-  
-  traverseNode(element);
-  
-  return textNodes;
-}
-
-/**
- * Normalize whitespace in text for matching
- */
-export function normalizeText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-

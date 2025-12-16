@@ -1,6 +1,18 @@
 # Filigran XTM Browser Extension
 
-A cross-browser extension for integrating with OpenCTI and OpenAEV platforms. Detect threats, observables, and security entities directly from any web page. Features AI-powered content analysis, PDF generation, and scenario generation for Enterprise Edition users.
+The **Filigran XTM Browser Extension** transforms your web browser into a powerful threat intelligence workstation. Seamlessly integrated with [OpenCTI](https://filigran.io/solutions/open-cti/) (Cyber Threat Intelligence) and [OpenAEV](https://filigran.io/solutions/openaev/) (Attack & Exposure Validation) platforms, this extension enables security analysts to detect, enrich, and operationalize threat data directly from any web page.
+
+**Turn any threat report into actionable intelligence in seconds.** Automatically scan pages for indicators of compromise (IOCs), threat actors, malware families, MITRE ATT&CK techniques, vulnerabilities, and more. With a single click, create structured reports, launch investigations, or generate attack scenarios—all without leaving your browser.
+
+### Why Use This Extension?
+
+- 🔗 **Seamless Platform Integration** — Connect to multiple OpenCTI and OpenAEV instances simultaneously
+- ⚡ **Real-Time Detection** — Instantly identify threats, observables, and entities as you browse
+- 🧠 **AI-Powered Analysis** — Generate intelligent descriptions, attack scenarios, and atomic tests (Enterprise Edition)
+- 📄 **One-Click Capture** — Create professional PDF snapshots and structured reports from any article
+- 🎯 **Visual Intelligence** — Color-coded highlights show what's known, new, or dangerous
+- 🔒 **Defanged IOC Support** — Automatically detect and refang `example[.]com`, `hxxps://` formats
+- 🏢 **Enterprise Ready** — Multi-platform support with Enterprise Edition AI capabilities
 
 [![OpenCTI Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml)
 [![OpenAEV Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml)

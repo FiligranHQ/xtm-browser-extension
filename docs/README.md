@@ -1,6 +1,8 @@
 # Filigran XTM Browser Extension Documentation
 
-Welcome to the documentation for the Filigran XTM (Threat Management) Browser Extension.
+Welcome to the documentation for the **Filigran XTM Browser Extension** — your browser-based threat intelligence workstation.
+
+This extension integrates with [OpenCTI](https://filigran.io/solutions/open-cti/) and [OpenAEV](https://filigran.io/solutions/openaev/) platforms, enabling security analysts to detect threats, create reports, and operationalize intelligence directly from any web page.
 
 ## Table of Contents
 

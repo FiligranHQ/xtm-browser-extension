@@ -24,3 +24,6 @@ export { AddView } from './AddView';
 export { ScenarioOverviewView } from './ScenarioOverviewView';
 export { ExistingContainersView } from './ExistingContainersView';
 export { InvestigationView } from './InvestigationView';
+export { ContainerFormView } from './ContainerFormView';
+export { AddSelectionView } from './AddSelectionView';
+export { OAEVSearchView } from './OAEVSearchView';

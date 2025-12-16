@@ -4,7 +4,6 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import { escapeHtml } from '../shared/utils/formatters';
 import { 
   extractContent, 
   generatePDF as generateEnhancedPDF,

@@ -18,10 +18,7 @@ import {
   Stepper,
   Step,
   StepLabel,
-  InputAdornment,
-  FormControlLabel,
   Checkbox,
-  Switch,
   MenuItem,
   Select,
   FormControl,
@@ -30,17 +27,13 @@ import {
 } from '@mui/material';
 import {
   CloseOutlined,
-  SearchOutlined,
   OpenInNewOutlined,
   ContentCopyOutlined,
   ChevronLeftOutlined,
   ChevronRightOutlined,
   ArrowForwardOutlined,
-  AddOutlined,
-  DescriptionOutlined,
   SecurityOutlined,
   WarningAmberOutlined,
-  PictureAsPdfOutlined,
   RefreshOutlined,
   TravelExploreOutlined,
   ComputerOutlined,
@@ -50,16 +43,11 @@ import {
   MovieFilterOutlined,
   Kayaking,
   DomainOutlined,
-  CheckCircleOutlined,
-  ErrorOutline,
   LanguageOutlined,
   DnsOutlined,
   EmailOutlined,
   InfoOutlined,
   AutoAwesomeOutlined,
-  CheckBoxOutlined,
-  CheckBoxOutlineBlankOutlined,
-  DeleteOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Target } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
@@ -69,7 +57,7 @@ import { itemColor, hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
 import { getAiColor, getCvssChipStyle, getSeverityColor, getPlatformIcon, getPlatformColor, getMarkingColor, cleanHtmlContent } from './utils';
 import { EmptyView, LoadingView } from './components';
-import { useScenarioState, useAIState, useContainerState } from './hooks';
+import { useScenarioState, useAIState } from './hooks';
 import {
   ScanResultsView,
   SearchView,
@@ -79,14 +67,13 @@ import {
   ContainerTypeView,
   PlatformSelectView,
   AddView,
-  ScenarioOverviewView,
   ExistingContainersView,
   InvestigationView,
-  ImportResultsView,
   NotFoundView,
-  ContainerTypeView,
+  ContainerFormView,
+  AddSelectionView,
+  OAEVSearchView,
 } from './views';
-import { generateDescription } from './utils/description-helpers';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -4632,57 +4619,6 @@ const App: React.FC = () => {
     );
   };
 
-  const renderAddView = () => (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 1 }}>Add to OpenCTI</Typography>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        The following entities will be created:
-      </Typography>
-
-      <Box sx={{ maxHeight: 300, overflow: 'auto', mb: 2 }}>
-        {entitiesToAdd.map((e, i) => (
-          <Paper
-            key={i}
-            elevation={0}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              p: 1.5,
-              mb: 1,
-              bgcolor: 'background.paper',
-              borderRadius: 1,
-            }}
-          >
-            <ItemIcon type={e.type} size="small" />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                {e.value || e.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'capitalize' }}>
-                {e.type?.replace(/-/g, ' ')}
-              </Typography>
-            </Box>
-          </Paper>
-        ))}
-      </Box>
-
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button
-          variant="contained"
-          onClick={handleAddEntities}
-          disabled={submitting}
-          fullWidth
-        >
-          {submitting ? 'Creating...' : 'Create Entities'}
-        </Button>
-        <Button variant="outlined" onClick={() => setPanelMode('empty')}>
-          Cancel
-        </Button>
-      </Box>
-    </Box>
-  );
-
   // Helper to detect entity type from text (for add-selection)
   const detectEntityType = (text: string): string => {
     const trimmed = text.trim();
@@ -4718,24 +4654,6 @@ const App: React.FC = () => {
   const [addSelectionEntityType, setAddSelectionEntityType] = useState('');
   const [addingSelection, setAddingSelection] = useState(false);
   const [addSelectionFromContextMenu, setAddSelectionFromContextMenu] = useState(false);
-
-  // Available observable types for manual selection - sorted alphabetically by label
-  const observableTypes = [
-    { value: 'Attack-Pattern', label: 'Attack Pattern (MITRE)' },
-    { value: 'Campaign', label: 'Campaign' },
-    { value: 'Domain-Name', label: 'Domain Name' },
-    { value: 'Email-Addr', label: 'Email Address' },
-    { value: 'StixFile', label: 'File Hash' },
-    { value: 'Hostname', label: 'Hostname' },
-    { value: 'Intrusion-Set', label: 'Intrusion Set' },
-    { value: 'IPv4-Addr', label: 'IPv4 Address' },
-    { value: 'IPv6-Addr', label: 'IPv6 Address' },
-    { value: 'Malware', label: 'Malware' },
-    { value: 'Threat-Actor', label: 'Threat Actor' },
-    { value: 'Tool', label: 'Tool' },
-    { value: 'Url', label: 'URL' },
-    { value: 'Vulnerability', label: 'Vulnerability (CVE)' },
-  ];
 
   const handleAddSelection = async () => {
     if (!addSelectionText || !addSelectionEntityType) return;
@@ -4796,1082 +4714,10 @@ const App: React.FC = () => {
     }
   }, [addSelectionText]);
 
-  const handleCloseAddSelection = () => {
-    setPanelMode('empty');
-    setAddSelectionText('');
-    setAddSelectionFromContextMenu(false);
-  };
-
-  const renderAddSelectionView = () => (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        {!addSelectionFromContextMenu && (
-          <IconButton size="small" onClick={handleCloseAddSelection}>
-            <ChevronLeftOutlined />
-          </IconButton>
-        )}
-        <Typography variant="h6" sx={{ fontSize: 16 }}>Add to OpenCTI</Typography>
-      </Box>
-
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 2,
-          bgcolor: 'background.paper',
-          borderRadius: 1,
-          border: 1,
-          borderColor: 'divider',
-        }}
-      >
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-          Selected Text
-        </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-          {addSelectionText}
-        </Typography>
-      </Paper>
-
-      <Autocomplete
-        options={observableTypes}
-        getOptionLabel={(option) => option.label}
-        value={observableTypes.find(t => t.value === addSelectionEntityType) || null}
-        onChange={(_, newValue) => setAddSelectionEntityType(newValue?.value || '')}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Entity Type"
-            size="small"
-            required
-            helperText={addSelectionEntityType ? 'Type auto-detected from value' : 'Select the entity type'}
-          />
-        )}
-        renderOption={(props, option) => (
-          <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ItemIcon type={option.value} size="small" />
-            <Typography variant="body2">{option.label}</Typography>
-          </Box>
-        )}
-        sx={{ mb: 2 }}
-      />
-
-      {openctiPlatforms.length === 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          No OpenCTI platform configured. Please configure one in settings.
-        </Alert>
-      )}
-
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button
-          variant="contained"
-          onClick={handleAddSelection}
-          disabled={!addSelectionText || !addSelectionEntityType || addingSelection || openctiPlatforms.length === 0}
-          fullWidth
-          endIcon={addingSelection ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
-        >
-          {addingSelection ? 'Adding...' : 'Add to OpenCTI'}
-        </Button>
-        <Button variant="outlined" onClick={handleCloseAddSelection}>
-          Cancel
-        </Button>
-      </Box>
-    </Box>
-  );
-
-  const renderPreviewView = () => {
-    // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
-    const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
-    
-    return (
-    <Box sx={{ p: 2 }}>
-      {/* Back to scan results button */}
-      <Box sx={{ mb: 1.5 }}>
-        <Button
-          size="small"
-          startIcon={<ChevronLeftOutlined />}
-          onClick={() => {
-            setPanelMode('scan-results');
-            // Clear resolved relationships when going back
-            setResolvedRelationships([]);
-          }}
-          sx={{ 
-            color: 'text.secondary',
-            textTransform: 'none',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          Back to scan results
-        </Button>
-      </Box>
-      
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <ArrowForwardOutlined sx={{ color: 'primary.main' }} />
-        <Typography variant="h6">Import Selection</Typography>
-      </Box>
-      
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} selected for import
-      </Typography>
-
-      {/* Entity list */}
-      <Box sx={{ maxHeight: 250, overflow: 'auto', mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-        {entitiesToAdd.map((e, i) => (
-          <Paper
-            key={i}
-            elevation={0}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              p: 1.5,
-              borderBottom: i < entitiesToAdd.length - 1 ? 1 : 0,
-              borderColor: 'divider',
-              bgcolor: 'transparent',
-            }}
-          >
-            <ItemIcon type={e.type} size="small" />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                {e.value || e.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {e.type?.replace(/-/g, ' ')}
-              </Typography>
-            </Box>
-            <Chip
-              label={e.existsInPlatform ? 'Exists' : 'New'}
-              size="small"
-              color={e.existsInPlatform ? 'success' : 'warning'}
-              variant="outlined"
-            />
-            <IconButton
-              size="small"
-              onClick={() => {
-                // Remove entity from the list
-                const newEntities = entitiesToAdd.filter((_, idx) => idx !== i);
-                setEntitiesToAdd(newEntities);
-                
-                // Also update selection on page highlight
-                const entityValue = e.value || e.name;
-                if (entityValue) {
-                  window.parent.postMessage({ type: 'XTM_DESELECT_ITEM', value: entityValue }, '*');
-                  setSelectedScanItems(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(entityValue);
-                    return newSet;
-                  });
-                }
-                
-                // If no entities left, go back to scan results
-                if (newEntities.length === 0) {
-                  setPanelMode('scan-results');
-                }
-              }}
-              sx={{ 
-                color: 'text.secondary',
-                '&:hover': { 
-                  color: 'error.main',
-                },
-              }}
-            >
-              <DeleteOutlined fontSize="small" />
-            </IconButton>
-          </Paper>
-        ))}
-      </Box>
-
-      {/* Options */}
-      <Box sx={{ mb: 2 }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={createIndicators}
-              onChange={(e) => setCreateIndicators(e.target.checked)}
-              size="small"
-            />
-          }
-          label={
-            <Box>
-              <Typography variant="body2">Create indicators from observables</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Automatically generate STIX indicators for each observable
-              </Typography>
-            </Box>
-          }
-          sx={{ alignItems: 'flex-start', ml: 0 }}
-        />
-      </Box>
-
-      {/* AI Relationship Resolution */}
-      {entitiesToAdd.length >= 2 && (
-        <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: resolvedRelationships.length > 0 ? 1.5 : 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.2rem' }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                AI Relationships
-              </Typography>
-            </Box>
-            <Tooltip title={!aiSettings.available ? 'AI not configured' : !hasEnterprisePlatform ? 'Requires Enterprise platform' : 'Analyze page context to find relationships between entities'}>
-              <span>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform}
-                  onClick={async () => {
-                    if (!aiSettings.available) return;
-                    
-                    setAiResolvingRelationships(true);
-                    
-                    try {
-                      // Get page content for AI analysis
-                      let pageContent = scanPageContent;
-                      let pageTitle = currentPageTitle || '';
-                      let pageUrl = currentPageUrl || '';
-                      
-                      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-                        try {
-                          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                          if (tab?.id) {
-                            const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-                            if (contentResponse?.success) {
-                              pageContent = contentResponse.data?.content || '';
-                              pageTitle = contentResponse.data?.title || pageTitle;
-                              pageUrl = contentResponse.data?.url || tab.url || pageUrl;
-                            }
-                          }
-                        } catch (error) {
-                          log.debug('Could not get page content for AI relationship resolution:', error);
-                        }
-                      }
-                      
-                      if (!pageContent) {
-                        log.error('No page content available for AI relationship resolution');
-                        setAiResolvingRelationships(false);
-                        return;
-                      }
-                      
-                      // Build entities array for AI
-                      const entities = entitiesToAdd.map(e => ({
-                        type: e.type,
-                        name: e.name || e.value || '',
-                        value: e.value,
-                        existsInPlatform: e.existsInPlatform || false,
-                        octiEntityId: (e as any).octiEntityId,
-                      }));
-                      
-                      // Call AI to resolve relationships
-                      chrome.runtime.sendMessage(
-                        {
-                          type: 'AI_RESOLVE_RELATIONSHIPS',
-                          payload: {
-                            pageTitle,
-                            pageUrl,
-                            pageContent,
-                            entities,
-                          },
-                        },
-                        (response) => {
-                          setAiResolvingRelationships(false);
-                          
-                          if (chrome.runtime.lastError) {
-                            log.error('AI relationship resolution error:', chrome.runtime.lastError);
-                            return;
-                          }
-                          
-                          if (response?.success && response.data?.relationships) {
-                            setResolvedRelationships(response.data.relationships);
-                            log.info(`AI resolved ${response.data.relationships.length} relationships`);
-                            if (response.data.relationships.length > 0) {
-                              showToast({ type: 'success', message: `AI found ${response.data.relationships.length} relationship${response.data.relationships.length === 1 ? '' : 's'}` });
-                            } else {
-                              showToast({ type: 'info', message: 'AI found no relationships' });
-                            }
-                          } else {
-                            log.warn('AI relationship resolution failed:', response?.error);
-                            showToast({ type: 'error', message: 'AI relationship resolution failed' });
-                          }
-                        }
-                      );
-                    } catch (error) {
-                      log.error('AI relationship resolution error:', error);
-                      showToast({ type: 'error', message: 'AI relationship resolution error' });
-                      setAiResolvingRelationships(false);
-                    }
-                  }}
-                  startIcon={aiResolvingRelationships ? <CircularProgress size={14} color="inherit" /> : <AutoAwesomeOutlined />}
-                  sx={{ 
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    color: getAiColor(mode).main,
-                    borderColor: getAiColor(mode).main,
-                    '&:hover': {
-                      borderColor: getAiColor(mode).dark,
-                      bgcolor: hexToRGB(getAiColor(mode).main, 0.1),
-                    },
-                  }}
-                >
-                  {aiResolvingRelationships ? 'Resolving...' : resolvedRelationships.length > 0 ? 'Re-analyze' : 'Resolve'}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          
-          {/* Resolved relationships list */}
-          {resolvedRelationships.length > 0 && (
-            <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
-              {resolvedRelationships.map((rel, index) => {
-                const fromEntity = entitiesToAdd[rel.fromIndex];
-                const toEntity = entitiesToAdd[rel.toIndex];
-                if (!fromEntity || !toEntity) return null;
-                
-                const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
-                
-                return (
-                  <Paper
-                    key={index}
-                    elevation={0}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      p: 1,
-                      mb: 0.5,
-                      bgcolor: hexToRGB(getAiColor(mode).main, 0.05),
-                      border: 1,
-                      borderColor: hexToRGB(getAiColor(mode).main, 0.2),
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.primary' }}>
-                          {fromEntity.name || fromEntity.value}
-                        </Typography>
-                        <Chip 
-                          label={rel.relationshipType} 
-                          size="small" 
-                          sx={{ 
-                            height: 18, 
-                            fontSize: '0.65rem',
-                            bgcolor: hexToRGB(getAiColor(mode).main, 0.2),
-                            color: getAiColor(mode).main,
-                          }} 
-                        />
-                        <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.primary' }}>
-                          {toEntity.name || toEntity.value}
-                        </Typography>
-                      </Box>
-                      <Tooltip title={rel.reason} placement="bottom-start">
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }} noWrap>
-                          {rel.reason}
-                        </Typography>
-                      </Tooltip>
-                    </Box>
-                    <Chip 
-                      label={rel.confidence} 
-                      size="small" 
-                      sx={{ 
-                        height: 16, 
-                        fontSize: '0.6rem',
-                        color: confidenceColor,
-                        borderColor: confidenceColor,
-                      }} 
-                      variant="outlined"
-                    />
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
-                      }}
-                      sx={{ 
-                        p: 0.25,
-                        color: 'text.secondary',
-                        '&:hover': { color: 'error.main' },
-                      }}
-                    >
-                      <DeleteOutlined sx={{ fontSize: '0.9rem' }} />
-                    </IconButton>
-                  </Paper>
-                );
-              })}
-            </Box>
-          )}
-          
-          {resolvedRelationships.length === 0 && !aiResolvingRelationships && (
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Use AI to discover relationships between selected entities based on page context
-            </Typography>
-          )}
-        </Box>
-      )}
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={async () => {
-            // Mark this as coming from preview (has entities to add)
-            setContainerWorkflowOrigin('preview');
-            setExistingContainers([]);
-            
-            // Check for existing containers first if we have a page URL
-            if (currentPageUrl && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-              setCheckingExisting(true);
-              setPanelMode('loading');
-              
-              chrome.runtime.sendMessage(
-                { type: 'FIND_CONTAINERS_BY_URL', payload: { url: currentPageUrl } },
-                (response) => {
-                  setCheckingExisting(false);
-                  if (chrome.runtime.lastError) {
-                    // On error, proceed to creation
-                    // Only check OpenCTI platforms for container creation (not OpenAEV)
-                    if (openctiPlatforms.length > 1) {
-                      setPanelMode('platform-select');
-                    } else {
-                      // Auto-select the single OpenCTI platform
-                      if (openctiPlatforms.length === 1) {
-                        setSelectedPlatformId(openctiPlatforms[0].id);
-                        setPlatformUrl(openctiPlatforms[0].url);
-                      }
-                      setPanelMode('container-type');
-                    }
-                    return;
-                  }
-                  
-                  if (response?.success && response.data?.length > 0) {
-                    // Found existing containers - show them first
-                    setExistingContainers(response.data);
-                    setPanelMode('existing-containers');
-                  } else {
-                    // No existing containers - proceed to creation
-                    // Only check OpenCTI platforms for container creation (not OpenAEV)
-                    if (openctiPlatforms.length > 1) {
-                      setPanelMode('platform-select');
-                    } else {
-                      // Auto-select the single OpenCTI platform
-                      if (openctiPlatforms.length === 1) {
-                        setSelectedPlatformId(openctiPlatforms[0].id);
-                        setPlatformUrl(openctiPlatforms[0].url);
-                      }
-                      setPanelMode('container-type');
-                    }
-                  }
-                }
-              );
-            } else {
-              // No page URL - go directly to creation flow
-              // Only check OpenCTI platforms for container creation (not OpenAEV)
-              if (openctiPlatforms.length > 1) {
-                setPanelMode('platform-select');
-              } else {
-                // Auto-select the single OpenCTI platform
-                if (openctiPlatforms.length === 1) {
-                  setSelectedPlatformId(openctiPlatforms[0].id);
-                  setPlatformUrl(openctiPlatforms[0].url);
-                }
-                setPanelMode('container-type');
-              }
-            }
-          }}
-          startIcon={<DescriptionOutlined />}
-          fullWidth
-        >
-          Create Container{resolvedRelationships.length > 0 ? ` (${entitiesToAdd.length} entities, ${resolvedRelationships.length} relationships)` : ` with ${entitiesToAdd.length} entities`}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            // For import without container, check if multiple OpenCTI platforms
-            if (openctiPlatforms.length > 1) {
-              // Need platform selection first
-              setContainerWorkflowOrigin('import');
-              setPanelMode('platform-select');
-            } else if (openctiPlatforms.length === 1) {
-              // Auto-select single platform and import
-              setSelectedPlatformId(openctiPlatforms[0].id);
-              setPlatformUrl(openctiPlatforms[0].url);
-              handleAddEntities();
-            } else {
-              // No OpenCTI platform - handleAddEntities will show error
-              handleAddEntities();
-            }
-          }}
-          disabled={submitting}
-          fullWidth
-        >
-          {submitting ? 'Importing...' : 'Import without Container'}
-        </Button>
-      </Box>
-    </Box>
-  );
-  };
-
-  const renderPlatformSelectView = () => {
-    // Determine if back button should be shown
-    // Show back if coming from preview mode (has entities selected) or from import workflow
-    const showBackButton = (containerWorkflowOrigin === 'preview' || containerWorkflowOrigin === 'import') && entitiesToAdd.length > 0;
-    const isImportWorkflow = containerWorkflowOrigin === 'import';
-    
-    return (
-    <Box sx={{ p: 2 }}>
-      {/* Stepper - only show for container creation, not import */}
-      {!isImportWorkflow && (
-        <Stepper activeStep={0} sx={{ mb: 3 }}>
-          {containerSteps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-      )}
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        {showBackButton && (
-          <IconButton size="small" onClick={() => setPanelMode('preview')}>
-            <ChevronLeftOutlined />
-          </IconButton>
-        )}
-        <Typography variant="h6" sx={{ fontSize: 16 }}>Select Platform</Typography>
-      </Box>
-
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        {isImportWorkflow 
-          ? 'Choose which OpenCTI platform to import entities into:'
-          : 'Choose which OpenCTI platform to create the container in:'
-        }
-      </Typography>
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {openctiPlatforms.map((platform) => (
-          <Paper
-            key={platform.id}
-            onClick={() => {
-              setSelectedPlatformId(platform.id);
-              setPlatformUrl(platform.url);
-              if (isImportWorkflow) {
-                // Import workflow - proceed with entity creation
-                setContainerWorkflowOrigin(null);
-                handleAddEntities();
-              } else {
-                // Container workflow - go to type selection
-                setPanelMode('container-type');
-              }
-            }}
-            elevation={0}
-            sx={{
-              p: 2,
-              cursor: 'pointer',
-              border: 2,
-              borderColor: selectedPlatformId === platform.id ? 'primary.main' : 'divider',
-              borderRadius: 1,
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              '&:hover': { 
-                borderColor: 'primary.main',
-                bgcolor: 'action.hover',
-              },
-            }}
-          >
-            <img 
-              src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
-                : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
-              } 
-              alt="OpenCTI" 
-              style={{ width: 32, height: 32 }} 
-            />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
-                <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                  {platform.name}
-                </Typography>
-                {platform.isEnterprise !== undefined && (
-                  <Box
-                    sx={{
-                      px: 0.5,
-                      py: 0.1,
-                      borderRadius: 0.5,
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      lineHeight: 1.3,
-                      bgcolor: platform.isEnterprise 
-                        ? (mode === 'dark' ? '#00f1bd' : '#0c7e69')
-                        : '#616161',
-                      color: platform.isEnterprise ? '#000' : '#fff',
-                    }}
-                  >
-                    {platform.isEnterprise ? 'EE' : 'CE'}
-                  </Box>
-                )}
-              </Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', wordBreak: 'break-all' }}>
-                {platform.url} {platform.version ? `• v${platform.version}` : ''}
-              </Typography>
-            </Box>
-          </Paper>
-        ))}
-      </Box>
-    </Box>
-  );
-  };
-
   // Container creation is OpenCTI-only, so only count OpenCTI platforms
   const containerSteps = openctiPlatforms.length > 1 
     ? ['Select Platform', 'Select Type', 'Configure Details']
     : ['Select Type', 'Configure Details'];
-
-  const renderContainerTypeView = () => {
-    // Determine if we should show back button
-    // Show back if: coming from preview, or if multi-platform (can go back to platform select)
-    // Use openctiPlatforms since container creation is OpenCTI-only
-    const canGoBack = containerWorkflowOrigin === 'preview' || openctiPlatforms.length > 1;
-    
-    const handleBack = () => {
-      if (openctiPlatforms.length > 1) {
-        setPanelMode('platform-select' as PanelMode);
-      } else if (containerWorkflowOrigin === 'preview') {
-        setPanelMode('preview');
-      }
-      // If direct workflow with single platform, don't navigate (button won't be shown anyway)
-    };
-
-    return (
-      <Box sx={{ p: 2 }}>
-        {/* Stepper */}
-        <Stepper activeStep={openctiPlatforms.length > 1 ? 1 : 0} sx={{ mb: 3 }}>
-          {containerSteps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          {canGoBack && (
-            <IconButton size="small" onClick={handleBack}>
-              <ChevronLeftOutlined />
-            </IconButton>
-          )}
-          <Typography variant="h6" sx={{ fontSize: 16 }}>Select Container Type</Typography>
-        </Box>
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1.5 }}>
-        {[
-          { type: 'Report', color: '#4a148c', description: 'Threat intelligence report' },
-          { type: 'Grouping', color: '#689f38', description: 'Group related objects' },
-          { type: 'Case-Incident', color: '#ad1457', description: 'Security incident' },
-          { type: 'Case-Rfi', color: '#0c5c98', description: 'Request for information' },
-        ].map((item) => (
-          <Paper
-            key={item.type}
-            onClick={() => {
-              setContainerType(item.type);
-              setPanelMode('container-form');
-            }}
-            elevation={0}
-            sx={{
-              p: 2,
-              cursor: 'pointer',
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              transition: 'all 0.2s',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
-              '&:hover': { 
-                borderColor: item.color,
-                bgcolor: hexToRGB(item.color, 0.08),
-              },
-            }}
-          >
-            <Box sx={{ mb: 1 }}>
-              <ItemIcon type={item.type} color={item.color} size="medium" />
-            </Box>
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              {item.type.replace(/-/g, ' ')}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
-              {item.description}
-            </Typography>
-          </Paper>
-        ))}
-      </Box>
-
-      {entitiesToAdd.length > 0 && (
-        <Alert severity="success" sx={{ mt: 2, borderRadius: 1 }}>
-          {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} will be added to this container
-        </Alert>
-      )}
-    </Box>
-  );
-  };
-
-  const renderContainerFormView = () => (
-    <Box sx={{ p: 2 }}>
-      {/* Stepper - activeStep should be the last step (Configure Details) */}
-      <Stepper activeStep={containerSteps.length - 1} sx={{ mb: 3 }}>
-        {containerSteps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <IconButton size="small" onClick={() => setPanelMode('container-type')}>
-          <ChevronLeftOutlined />
-        </IconButton>
-        <ItemIcon type={containerType} size="small" />
-        <Typography variant="h6" sx={{ fontSize: 16 }}>
-          {containerType.replace(/-/g, ' ')} Details
-        </Typography>
-      </Box>
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <TextField
-          label="Name"
-          value={containerForm.name}
-          onChange={(e) => setContainerForm({ ...containerForm, name: e.target.value })}
-          fullWidth
-          required
-          size="small"
-          placeholder="Enter container name..."
-          helperText={updatingContainerId ? "Name from existing container (cannot be changed)" : "Pre-filled from page title"}
-          disabled={!!updatingContainerId}
-        />
-
-        {/* Report-specific: Report Types */}
-        {containerType === 'Report' && (
-          <Autocomplete
-            multiple
-            options={availableReportTypes}
-            getOptionLabel={(option) => option.name}
-            value={availableReportTypes.filter(r => containerSpecificFields.report_types.includes(r.name))}
-            onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-              ...prev, 
-              report_types: newValue.map(v => v.name) 
-            }))}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Report Types" size="small" placeholder="Select type..." />
-            )}
-            size="small"
-          />
-        )}
-
-        {/* Grouping-specific: Context (mandatory) */}
-        {containerType === 'Grouping' && (
-          <Autocomplete
-            options={availableContexts}
-            getOptionLabel={(option) => option.name}
-            value={availableContexts.find(c => c.name === containerSpecificFields.context) || null}
-            onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-              ...prev, 
-              context: newValue?.name || '' 
-            }))}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            renderInput={(params) => (
-              <TextField {...params} label="Context" size="small" required placeholder="Select context..." />
-            )}
-            size="small"
-          />
-        )}
-
-        {/* Case-specific: Severity, Priority, Response Types */}
-        {containerType.startsWith('Case') && (
-          <>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <Autocomplete
-                options={availableSeverities}
-                getOptionLabel={(option) => option.name}
-                value={availableSeverities.find(s => s.name === containerSpecificFields.severity) || null}
-                onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-                  ...prev, 
-                  severity: newValue?.name || '' 
-                }))}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                renderInput={(params) => (
-                  <TextField {...params} label="Severity" size="small" placeholder="Select..." />
-                )}
-                size="small"
-              />
-              <Autocomplete
-                options={availablePriorities}
-                getOptionLabel={(option) => option.name}
-                value={availablePriorities.find(p => p.name === containerSpecificFields.priority) || null}
-                onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-                  ...prev, 
-                  priority: newValue?.name || '' 
-                }))}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                renderInput={(params) => (
-                  <TextField {...params} label="Priority" size="small" placeholder="Select..." />
-                )}
-                size="small"
-              />
-            </Box>
-            {containerType === 'Case-Incident' && (
-              <Autocomplete
-                multiple
-                options={availableResponseTypes}
-                getOptionLabel={(option) => option.name}
-                value={availableResponseTypes.filter(r => containerSpecificFields.response_types.includes(r.name))}
-                onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-                  ...prev, 
-                  response_types: newValue.map(v => v.name) 
-                }))}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                renderInput={(params) => (
-                  <TextField {...params} label="Incident Types" size="small" placeholder="Select..." />
-                )}
-                size="small"
-              />
-            )}
-          </>
-        )}
-
-        {/* Author (createdBy) - for all container types */}
-        <Autocomplete
-          options={availableAuthors}
-          getOptionLabel={(option) => option.name}
-          value={availableAuthors.find(a => a.id === containerSpecificFields.createdBy) || null}
-          onChange={(_, newValue) => setContainerSpecificFields(prev => ({ 
-            ...prev, 
-            createdBy: newValue?.id || '' 
-          }))}
-          isOptionEqualToValue={(option, value) => option.id === value.id}
-          renderInput={(params) => (
-            <TextField {...params} label="Author" size="small" placeholder="Select author..." />
-          )}
-          renderOption={(props, option) => (
-            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <ItemIcon type={option.entity_type} size="small" />
-              <Typography variant="body2">{option.name}</Typography>
-            </Box>
-          )}
-          size="small"
-        />
-
-        {/* Description field with AI generate button */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <TextField
-            label="Description"
-            value={containerForm.description}
-            onChange={(e) => setContainerForm({ ...containerForm, description: e.target.value })}
-            multiline
-            rows={4}
-            fullWidth
-            size="small"
-            placeholder="Enter description..."
-            helperText="Extracted from article content"
-          />
-          {(() => {
-            // Check if AI is available for the container platform
-            const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
-            const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
-            const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-            const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
-            const aiColors = getAiColor(mode);
-            
-            let tooltipMessage = '';
-            if (!aiSettings.available) {
-              tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
-            } else if (!targetPlatform?.isEnterprise) {
-              tooltipMessage = 'AI features require Enterprise Edition. The selected platform is Community Edition.';
-            } else {
-              tooltipMessage = 'Use AI to generate a summary of the page content as description';
-            }
-            
-            return (
-              <Tooltip title={tooltipMessage} placement="top">
-                <span>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={handleGenerateAIDescription}
-                    disabled={!isAIAvailable || aiGeneratingDescription}
-                    startIcon={aiGeneratingDescription ? <CircularProgress size={14} /> : <AutoAwesomeOutlined />}
-                    sx={{ 
-                      alignSelf: 'flex-start',
-                      textTransform: 'none',
-                      opacity: !isAIAvailable ? 0.5 : 1,
-                      color: isAIAvailable ? aiColors.main : undefined,
-                      borderColor: isAIAvailable ? aiColors.main : undefined,
-                      '&:hover': {
-                        borderColor: isAIAvailable ? aiColors.dark : undefined,
-                        bgcolor: isAIAvailable ? hexToRGB(aiColors.main, 0.08) : undefined,
-                      },
-                    }}
-                  >
-                    {aiGeneratingDescription ? 'Generating...' : 'Generate with AI'}
-                  </Button>
-                </span>
-              </Tooltip>
-            );
-          })()}
-        </Box>
-
-        {/* Labels Autocomplete */}
-        <Autocomplete
-          multiple
-          options={availableLabels}
-          getOptionLabel={(option) => option.value}
-          value={selectedLabels}
-          onChange={(_, newValue) => setSelectedLabels(newValue)}
-          isOptionEqualToValue={(option, value) => option.id === value.id}
-          renderInput={(params) => (
-            <TextField 
-              {...params} 
-              label="Labels" 
-              size="small"
-              placeholder={selectedLabels.length === 0 ? "Select labels..." : ""}
-            />
-          )}
-          renderOption={(props, option) => (
-            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: option.color }} />
-              <Typography variant="body2">{option.value}</Typography>
-            </Box>
-          )}
-          ChipProps={{
-            size: 'small',
-            sx: { 
-              borderRadius: 0.5,
-              maxWidth: 80,
-              '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
-            }
-          }}
-          sx={{ 
-            '& .MuiAutocomplete-tag': { 
-              maxWidth: 80,
-            }
-          }}
-          limitTags={2}
-        />
-
-        {/* Markings Autocomplete */}
-        <Autocomplete
-          multiple
-          options={availableMarkings}
-          getOptionLabel={(option) => option.definition}
-          value={selectedMarkings}
-          onChange={(_, newValue) => setSelectedMarkings(newValue)}
-          isOptionEqualToValue={(option, value) => option.id === value.id}
-          renderInput={(params) => (
-            <TextField 
-              {...params} 
-              label="Marking Definitions" 
-              size="small"
-              placeholder={selectedMarkings.length === 0 ? "Select markings..." : ""}
-            />
-          )}
-          renderOption={(props, option) => (
-            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box 
-                sx={{ 
-                  width: 14, 
-                  height: 14, 
-                  borderRadius: 0.5, 
-                  bgcolor: (option as any).x_opencti_color || 'grey.500' 
-                }} 
-              />
-              <Typography variant="body2">{option.definition}</Typography>
-            </Box>
-          )}
-          ChipProps={{
-            size: 'small',
-            variant: 'outlined',
-            sx: { 
-              borderRadius: 0.5,
-              maxWidth: 80,
-              '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
-            }
-          }}
-          sx={{ 
-            '& .MuiAutocomplete-tag': { 
-              maxWidth: 80,
-            }
-          }}
-          limitTags={2}
-        />
-
-        {/* PDF Attachment Option */}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={attachPdf}
-              onChange={(e) => setAttachPdf(e.target.checked)}
-              color="primary"
-              size="small"
-            />
-          }
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PictureAsPdfOutlined fontSize="small" sx={{ color: attachPdf ? 'primary.main' : 'text.secondary' }} />
-              <Typography variant="body2">
-                Attach PDF snapshot of this page
-              </Typography>
-            </Box>
-          }
-          sx={{ ml: 0 }}
-        />
-
-        {/* Create as draft option - only show when creating, not updating */}
-        {!updatingContainerId && (
-          <FormControlLabel
-            control={
-              <Switch
-                checked={createAsDraft}
-                onChange={(e) => setCreateAsDraft(e.target.checked)}
-                size="small"
-              />
-            }
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="body2">Create as draft</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  (requires validation before publishing)
-                </Typography>
-              </Box>
-            }
-            sx={{ ml: 0 }}
-          />
-        )}
-
-        {/* Content field info */}
-        <Alert severity="info" sx={{ borderRadius: 1, py: 0.5 }}>
-          <Typography variant="caption">
-            Page HTML content will be saved to the container's "content" field for indexing.
-          </Typography>
-        </Alert>
-
-        {entitiesToAdd.length > 0 && (
-          <Alert severity="success" sx={{ borderRadius: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} will be added
-            </Typography>
-          </Alert>
-        )}
-
-        <Button
-          variant="contained"
-          onClick={handleCreateContainer}
-          disabled={!containerForm.name || submitting}
-          endIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <ArrowForwardOutlined />}
-          fullWidth
-          sx={{ mt: 1 }}
-        >
-          {generatingPdf ? 'Generating PDF...' : submitting ? (updatingContainerId ? 'Updating...' : 'Creating...') : (updatingContainerId ? 'Update Container' : 'Create Container')}
-        </Button>
-      </Box>
-    </Box>
-  );
 
   // State for investigation mode
   const [investigationEntities, setInvestigationEntities] = useState<Array<{
@@ -7985,145 +6831,6 @@ const App: React.FC = () => {
   const getOaevEntityColor = (entityClass: string): string => {
     const simpleName = entityClass.split('.').pop() || entityClass;
     return itemColor(`oaev-${simpleName}`, mode === 'dark');
-  };
-
-  const renderOAEVSearchView = () => {
-    const oaevPlatforms = availablePlatforms.filter(p => p.type === 'openaev');
-    const hasSearched = oaevSearchResults.length > 0 || (oaevSearchQuery.trim() && !oaevSearching);
-    
-    return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Search OpenAEV</Typography>
-
-        <TextField
-          placeholder="Search entities..."
-          value={oaevSearchQuery}
-          onChange={(e) => setOaevSearchQuery(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleOaevSearch()}
-          fullWidth
-          autoFocus
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={handleOaevSearch} edge="end" disabled={oaevSearching}>
-                  {oaevSearching ? <CircularProgress size={20} /> : <SearchOutlined />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
-        
-        {/* Results section */}
-        {oaevSearching ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 1 }}>
-            <CircularProgress size={32} />
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Searching across {oaevPlatforms.length} platform{oaevPlatforms.length > 1 ? 's' : ''}...
-            </Typography>
-          </Box>
-        ) : hasSearched && oaevSearchResults.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No results found for "{oaevSearchQuery}"
-            </Typography>
-          </Box>
-        ) : oaevSearchResults.length > 0 ? (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {oaevSearchResults.length} result{oaevSearchResults.length !== 1 ? 's' : ''} found
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {oaevSearchResults.map((result, i) => {
-                const entityClass = result._entityClass || '';
-                const oaevType = getOAEVTypeFromClass(entityClass);
-                const displayName = getOAEVEntityName(result, oaevType);
-                const platformInfo = result._platform;
-                const entityColor = getOaevEntityColor(entityClass);
-                const typeForIcon = `oaev-${oaevType}`;
-                
-                return (
-                  <Paper
-                    key={result.id || i}
-                    onClick={() => handleOaevSearchResultClick(result)}
-                    elevation={0}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      p: 1.5,
-                      mb: 1,
-                      cursor: 'pointer',
-                      borderRadius: 1,
-                      border: 1,
-                      borderColor: 'divider',
-                      transition: 'all 0.15s',
-                      '&:hover': { 
-                        bgcolor: hexToRGB(entityColor, 0.08),
-                        borderColor: entityColor,
-                      },
-                    }}
-                  >
-                    {/* Entity type icon with color */}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 36,
-                        height: 36,
-                        borderRadius: 1,
-                        bgcolor: hexToRGB(entityColor, 0.15),
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ItemIcon 
-                        type={typeForIcon} 
-                        size="small" 
-                        color={entityColor}
-                      />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                        {displayName}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            color: entityColor, 
-                            fontWeight: 500,
-                          }}
-                        >
-                          {oaevType.replace(/([A-Z])/g, ' $1').trim()}
-                        </Typography>
-                        {platformInfo && (
-                          <>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                              {platformInfo.name || platformInfo.url}
-                            </Typography>
-                          </>
-                        )}
-                      </Box>
-                    </Box>
-                    <ChevronRightOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </Paper>
-                );
-              })}
-            </Box>
-          </>
-        ) : (
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Enter a search term and press Enter or click the search icon
-            </Typography>
-          </Box>
-        )}
-      </Box>
-    );
   };
 
   // ============================================================================
@@ -10727,7 +9434,14 @@ const App: React.FC = () => {
           />
         );
       case 'add':
-        return renderAddView();
+        return (
+          <AddView
+            setPanelMode={setPanelMode}
+            entitiesToAdd={entitiesToAdd}
+            handleAddEntities={handleAddEntities}
+            submitting={submitting}
+          />
+        );
       case 'import-results':
         return (
           <ImportResultsView
@@ -10739,9 +9453,53 @@ const App: React.FC = () => {
           />
         );
       case 'preview':
-        return renderPreviewView();
+        return (
+          <PreviewView
+            mode={mode}
+            setPanelMode={setPanelMode}
+            entitiesToAdd={entitiesToAdd}
+            setEntitiesToAdd={setEntitiesToAdd}
+            setSelectedScanItems={setSelectedScanItems}
+            createIndicators={createIndicators}
+            setCreateIndicators={setCreateIndicators}
+            resolvedRelationships={resolvedRelationships}
+            setResolvedRelationships={setResolvedRelationships}
+            aiSettings={aiSettings}
+            aiResolvingRelationships={aiResolvingRelationships}
+            setAiResolvingRelationships={setAiResolvingRelationships}
+            availablePlatforms={availablePlatforms}
+            openctiPlatforms={openctiPlatforms}
+            selectedPlatformId={selectedPlatformId}
+            setSelectedPlatformId={setSelectedPlatformId}
+            setPlatformUrl={setPlatformUrl}
+            setContainerWorkflowOrigin={setContainerWorkflowOrigin}
+            setExistingContainers={setExistingContainers}
+            setCheckingExisting={setCheckingExisting}
+            currentPageUrl={currentPageUrl}
+            currentPageTitle={currentPageTitle}
+            scanPageContent={scanPageContent}
+            showToast={showToast}
+            handleAddEntities={handleAddEntities}
+            submitting={submitting}
+          />
+        );
       case 'platform-select':
-        return renderPlatformSelectView();
+        return (
+          <PlatformSelectView
+            mode={mode}
+            setPanelMode={setPanelMode}
+            openctiPlatforms={openctiPlatforms}
+            selectedPlatformId={selectedPlatformId}
+            setSelectedPlatformId={setSelectedPlatformId}
+            setPlatformUrl={setPlatformUrl}
+            containerWorkflowOrigin={containerWorkflowOrigin}
+            setContainerWorkflowOrigin={setContainerWorkflowOrigin}
+            containerSteps={containerSteps}
+            entitiesToAdd={entitiesToAdd}
+            handleAddEntities={handleAddEntities}
+            logoSuffix={logoSuffix}
+          />
+        );
       case 'existing-containers':
         return (
           <ExistingContainersView
@@ -10771,9 +9529,57 @@ const App: React.FC = () => {
           />
         );
       case 'container-type':
-        return renderContainerTypeView();
+        return (
+          <ContainerTypeView
+            mode={mode}
+            setPanelMode={setPanelMode}
+            setContainerType={setContainerType}
+            containerWorkflowOrigin={containerWorkflowOrigin}
+            openctiPlatformsCount={openctiPlatforms.length}
+            containerSteps={containerSteps}
+            entitiesToAdd={entitiesToAdd}
+          />
+        );
       case 'container-form':
-        return renderContainerFormView();
+        return (
+          <ContainerFormView
+            mode={mode}
+            setPanelMode={setPanelMode}
+            containerType={containerType}
+            containerSteps={containerSteps}
+            containerForm={containerForm}
+            setContainerForm={setContainerForm}
+            containerSpecificFields={containerSpecificFields}
+            setContainerSpecificFields={setContainerSpecificFields}
+            updatingContainerId={updatingContainerId}
+            availablePlatforms={availablePlatforms}
+            openctiPlatforms={openctiPlatforms}
+            selectedPlatformId={selectedPlatformId}
+            aiSettings={aiSettings}
+            aiGeneratingDescription={aiGeneratingDescription}
+            handleGenerateAIDescription={handleGenerateAIDescription}
+            availableLabels={availableLabels}
+            selectedLabels={selectedLabels}
+            setSelectedLabels={setSelectedLabels}
+            availableMarkings={availableMarkings}
+            selectedMarkings={selectedMarkings}
+            setSelectedMarkings={setSelectedMarkings}
+            availableReportTypes={availableReportTypes}
+            availableContexts={availableContexts}
+            availableSeverities={availableSeverities}
+            availablePriorities={availablePriorities}
+            availableResponseTypes={availableResponseTypes}
+            availableAuthors={availableAuthors}
+            attachPdf={attachPdf}
+            setAttachPdf={setAttachPdf}
+            createAsDraft={createAsDraft}
+            setCreateAsDraft={setCreateAsDraft}
+            entitiesToAdd={entitiesToAdd}
+            handleCreateContainer={handleCreateContainer}
+            submitting={submitting}
+            generatingPdf={generatingPdf}
+          />
+        );
       case 'investigation':
         return (
           <InvestigationView
@@ -10868,7 +9674,17 @@ const App: React.FC = () => {
           />
         );
       case 'oaev-search':
-        return renderOAEVSearchView();
+        return (
+          <OAEVSearchView
+            availablePlatforms={availablePlatforms}
+            oaevSearchQuery={oaevSearchQuery}
+            setOaevSearchQuery={setOaevSearchQuery}
+            oaevSearching={oaevSearching}
+            oaevSearchResults={oaevSearchResults}
+            handleOaevSearch={handleOaevSearch}
+            handleOaevSearchResultClick={handleOaevSearchResultClick}
+          />
+        );
       case 'unified-search':
         return (
           <UnifiedSearchView
@@ -10893,7 +9709,20 @@ const App: React.FC = () => {
           />
         );
       case 'add-selection':
-        return renderAddSelectionView();
+        return (
+          <AddSelectionView
+            setPanelMode={setPanelMode}
+            addSelectionText={addSelectionText}
+            setAddSelectionText={setAddSelectionText}
+            addSelectionEntityType={addSelectionEntityType}
+            setAddSelectionEntityType={setAddSelectionEntityType}
+            addSelectionFromContextMenu={addSelectionFromContextMenu}
+            setAddSelectionFromContextMenu={setAddSelectionFromContextMenu}
+            addingSelection={addingSelection}
+            handleAddSelection={handleAddSelection}
+            openctiPlatforms={openctiPlatforms}
+          />
+        );
       case 'scenario-overview':
         return renderScenarioOverviewView();
       case 'scenario-form':

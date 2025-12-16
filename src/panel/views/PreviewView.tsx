@@ -1,7 +1,7 @@
 /**
  * Preview View Component
- * 
- * Shows entities selected for import with options and AI relationship resolution.
+ *
+ * Displays selected entities for import with options for AI relationships and container creation.
  */
 
 import React from 'react';
@@ -9,32 +9,53 @@ import {
   Box,
   Typography,
   Paper,
-  Chip,
   Button,
+  Chip,
   IconButton,
   FormControlLabel,
   Switch,
-  CircularProgress,
   Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
   ArrowForwardOutlined,
+  DeleteOutlined,
   DescriptionOutlined,
   AutoAwesomeOutlined,
-  DeleteOutlined,
-  FileUploadOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
-import type { PreviewViewProps } from '../types/view-props';
-import type { PlatformInfo, ResolvedRelationship } from '../types';
+import { getAiColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
-import { getAiColor } from '../utils';
+import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, AISettings } from '../types';
 
 const log = loggers.panel;
 
-interface ExtendedPreviewViewProps extends Omit<PreviewViewProps, 'showToast'> {
+export interface PreviewViewProps {
+  mode: 'dark' | 'light';
+  setPanelMode: (mode: PanelMode) => void;
+  entitiesToAdd: EntityData[];
+  setEntitiesToAdd: (entities: EntityData[] | ((prev: EntityData[]) => EntityData[])) => void;
+  setSelectedScanItems: (items: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  createIndicators: boolean;
+  setCreateIndicators: (value: boolean) => void;
+  resolvedRelationships: ResolvedRelationship[];
+  setResolvedRelationships: (rels: ResolvedRelationship[] | ((prev: ResolvedRelationship[]) => ResolvedRelationship[])) => void;
+  aiSettings: AISettings;
+  aiResolvingRelationships: boolean;
+  setAiResolvingRelationships: (value: boolean) => void;
+  availablePlatforms: PlatformInfo[];
+  openctiPlatforms: PlatformInfo[];
+  selectedPlatformId: string;
+  setSelectedPlatformId: (id: string) => void;
+  setPlatformUrl: (url: string) => void;
+  setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
+  setExistingContainers: (containers: ContainerData[]) => void;
+  setCheckingExisting: (value: boolean) => void;
+  currentPageUrl: string;
+  currentPageTitle: string;
+  scanPageContent: string;
   showToast: (options: {
     type: 'success' | 'info' | 'warning' | 'error';
     message: string;
@@ -42,44 +63,63 @@ interface ExtendedPreviewViewProps extends Omit<PreviewViewProps, 'showToast'> {
     persistent?: boolean;
     duration?: number;
   }) => void;
-  openctiPlatforms: PlatformInfo[];
-  setExistingContainers: (containers: any[]) => void;
-  setCheckingExisting: (checking: boolean) => void;
+  handleAddEntities: () => void;
+  submitting: boolean;
 }
 
-export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
+export const PreviewView: React.FC<PreviewViewProps> = ({
   mode,
+  setPanelMode,
   entitiesToAdd,
   setEntitiesToAdd,
-  setPanelMode,
-  setContainerWorkflowOrigin,
+  setSelectedScanItems,
   createIndicators,
   setCreateIndicators,
+  resolvedRelationships,
+  setResolvedRelationships,
   aiSettings,
   aiResolvingRelationships,
   setAiResolvingRelationships,
-  resolvedRelationships,
-  setResolvedRelationships,
-  scanPageContent,
-  currentPageUrl,
-  currentPageTitle,
-  setSelectedScanItems,
-  setImportResults,
-  submitting,
-  setSubmitting,
   availablePlatforms,
-  selectedPlatformId,
+  openctiPlatforms,
+  selectedPlatformId: _selectedPlatformId,
   setSelectedPlatformId,
   setPlatformUrl,
-  showToast,
-  openctiPlatforms,
+  setContainerWorkflowOrigin,
   setExistingContainers,
   setCheckingExisting,
+  currentPageUrl,
+  currentPageTitle,
+  scanPageContent,
+  showToast,
+  handleAddEntities,
+  submitting,
 }) => {
-  const aiColors = getAiColor(mode);
+  // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
   const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
 
-  // Handle AI relationship resolution
+  const handleRemoveEntity = (index: number, entity: EntityData) => {
+    // Remove entity from the list
+    const newEntities = entitiesToAdd.filter((_, idx) => idx !== index);
+    setEntitiesToAdd(newEntities);
+
+    // Also update selection on page highlight
+    const entityValue = entity.value || entity.name;
+    if (entityValue) {
+      window.parent.postMessage({ type: 'XTM_DESELECT_ITEM', value: entityValue }, '*');
+      setSelectedScanItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entityValue);
+        return newSet;
+      });
+    }
+
+    // If no entities left, go back to scan results
+    if (newEntities.length === 0) {
+      setPanelMode('scan-results');
+    }
+  };
+
   const handleResolveRelationships = async () => {
     if (!aiSettings.available) return;
 
@@ -162,8 +202,8 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
     }
   };
 
-  // Handle creating container
   const handleCreateContainer = async () => {
+    // Mark this as coming from preview (has entities to add)
     setContainerWorkflowOrigin('preview');
     setExistingContainers([]);
 
@@ -191,9 +231,11 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
           }
 
           if (response?.success && response.data?.length > 0) {
+            // Found existing containers - show them first
             setExistingContainers(response.data);
             setPanelMode('existing-containers');
           } else {
+            // No existing containers - proceed to creation
             if (openctiPlatforms.length > 1) {
               setPanelMode('platform-select');
             } else {
@@ -207,6 +249,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
         }
       );
     } else {
+      // No page URL - go directly to creation flow
       if (openctiPlatforms.length > 1) {
         setPanelMode('platform-select');
       } else {
@@ -219,67 +262,20 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
     }
   };
 
-  // Handle import without container
-  const handleImportWithoutContainer = async () => {
-    if (entitiesToAdd.length === 0) {
-      showToast({ type: 'warning', message: 'No entities to import' });
-      return;
-    }
-
-    // If multiple OpenCTI platforms, need to select one
+  const handleImportWithoutContainer = () => {
+    // For import without container, check if multiple OpenCTI platforms
     if (openctiPlatforms.length > 1) {
+      // Need platform selection first
       setContainerWorkflowOrigin('import');
       setPanelMode('platform-select');
-      return;
-    }
-
-    // Auto-select single platform
-    const targetPlatformId = openctiPlatforms.length === 1 ? openctiPlatforms[0].id : selectedPlatformId;
-    if (!targetPlatformId) {
-      showToast({ type: 'error', message: 'No OpenCTI platform available' });
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const response = await new Promise<{ success: boolean; data?: any; error?: string }>((resolve) => {
-        chrome.runtime.sendMessage(
-          {
-            type: 'IMPORT_ENTITIES',
-            payload: {
-              entities: entitiesToAdd,
-              createIndicators,
-              relationships: resolvedRelationships,
-              platformId: targetPlatformId,
-            },
-          },
-          resolve
-        );
-      });
-
-      setSubmitting(false);
-
-      if (response?.success) {
-        const platform = openctiPlatforms.find(p => p.id === targetPlatformId);
-        setImportResults({
-          success: true,
-          total: entitiesToAdd.length,
-          created: response.data?.created || [],
-          failed: response.data?.failed || [],
-          platformName: platform?.name || 'OpenCTI',
-        });
-        setEntitiesToAdd([]);
-        setSelectedScanItems(new Set());
-        setResolvedRelationships([]);
-        setPanelMode('import-results');
-      } else {
-        showToast({ type: 'error', message: response?.error || 'Import failed' });
-      }
-    } catch (error) {
-      log.error('Import error:', error);
-      setSubmitting(false);
-      showToast({ type: 'error', message: 'Import failed' });
+    } else if (openctiPlatforms.length === 1) {
+      // Auto-select single platform and import
+      setSelectedPlatformId(openctiPlatforms[0].id);
+      setPlatformUrl(openctiPlatforms[0].url);
+      handleAddEntities();
+    } else {
+      // No OpenCTI platform - handleAddEntities will show error
+      handleAddEntities();
     }
   };
 
@@ -292,6 +288,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
           startIcon={<ChevronLeftOutlined />}
           onClick={() => {
             setPanelMode('scan-results');
+            // Clear resolved relationships when going back
             setResolvedRelationships([]);
           }}
           sx={{
@@ -346,24 +343,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
             />
             <IconButton
               size="small"
-              onClick={() => {
-                const newEntities = entitiesToAdd.filter((_, idx) => idx !== i);
-                setEntitiesToAdd(newEntities);
-
-                const entityValue = e.value || e.name;
-                if (entityValue) {
-                  window.parent.postMessage({ type: 'XTM_DESELECT_ITEM', value: entityValue }, '*');
-                  setSelectedScanItems((prev: Set<string>) => {
-                    const newSet = new Set(prev);
-                    newSet.delete(entityValue);
-                    return newSet;
-                  });
-                }
-
-                if (newEntities.length === 0) {
-                  setPanelMode('scan-results');
-                }
-              }}
+              onClick={() => handleRemoveEntity(i, e)}
               sx={{
                 color: 'text.secondary',
                 '&:hover': {
@@ -404,7 +384,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
         <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: resolvedRelationships.length > 0 ? 1.5 : 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AutoAwesomeOutlined sx={{ color: aiColors.main, fontSize: '1.2rem' }} />
+              <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.2rem' }} />
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 AI Relationships
               </Typography>
@@ -420,11 +400,11 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
                   sx={{
                     textTransform: 'none',
                     fontSize: '0.75rem',
-                    color: aiColors.main,
-                    borderColor: aiColors.main,
+                    color: getAiColor(mode).main,
+                    borderColor: getAiColor(mode).main,
                     '&:hover': {
-                      borderColor: aiColors.dark,
-                      bgcolor: hexToRGB(aiColors.main, 0.1),
+                      borderColor: getAiColor(mode).dark,
+                      bgcolor: hexToRGB(getAiColor(mode).main, 0.1),
                     },
                   }}
                 >
@@ -437,7 +417,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
           {/* Resolved relationships list */}
           {resolvedRelationships.length > 0 && (
             <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
-              {resolvedRelationships.map((rel: ResolvedRelationship, index: number) => {
+              {resolvedRelationships.map((rel, index) => {
                 const fromEntity = entitiesToAdd[rel.fromIndex];
                 const toEntity = entitiesToAdd[rel.toIndex];
                 if (!fromEntity || !toEntity) return null;
@@ -454,9 +434,9 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
                       gap: 1,
                       p: 1,
                       mb: 0.5,
-                      bgcolor: hexToRGB(aiColors.main, 0.05),
+                      bgcolor: hexToRGB(getAiColor(mode).main, 0.05),
                       border: 1,
-                      borderColor: hexToRGB(aiColors.main, 0.2),
+                      borderColor: hexToRGB(getAiColor(mode).main, 0.2),
                       borderRadius: 1,
                     }}
                   >
@@ -471,8 +451,8 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
                           sx={{
                             height: 18,
                             fontSize: '0.65rem',
-                            bgcolor: hexToRGB(aiColors.main, 0.2),
-                            color: aiColors.main,
+                            bgcolor: hexToRGB(getAiColor(mode).main, 0.2),
+                            color: getAiColor(mode).main,
                           }}
                         />
                         <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.primary' }}>
@@ -499,7 +479,7 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
                     <IconButton
                       size="small"
                       onClick={() => {
-                        setResolvedRelationships(resolvedRelationships.filter((_: ResolvedRelationship, i: number) => i !== index));
+                        setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
                       }}
                       sx={{
                         p: 0.25,
@@ -530,20 +510,16 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
           onClick={handleCreateContainer}
           startIcon={<DescriptionOutlined />}
           fullWidth
-          disabled={submitting}
         >
-          Create Container
+          Create Container{resolvedRelationships.length > 0 ? ` (${entitiesToAdd.length} entities, ${resolvedRelationships.length} relationships)` : ` with ${entitiesToAdd.length} entities`}
         </Button>
-
         <Button
           variant="outlined"
-          color="primary"
           onClick={handleImportWithoutContainer}
-          startIcon={submitting ? <CircularProgress size={16} /> : <FileUploadOutlined />}
-          fullWidth
           disabled={submitting}
+          fullWidth
         >
-          {submitting ? 'Importing...' : 'Import Without Container'}
+          {submitting ? 'Importing...' : 'Import without Container'}
         </Button>
       </Box>
     </Box>
@@ -551,4 +527,3 @@ export const PreviewView: React.FC<ExtendedPreviewViewProps> = ({
 };
 
 export default PreviewView;
-

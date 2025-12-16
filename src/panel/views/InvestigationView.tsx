@@ -26,7 +26,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
-import type { PanelMode, PlatformInfo } from '../types';
+import type { PlatformInfo } from '../types';
 import { useTheme } from '@mui/material/styles';
 
 export interface InvestigationEntity {

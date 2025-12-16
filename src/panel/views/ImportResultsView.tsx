@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
-import type { PanelMode, ImportResults } from '../types';
+import type { ImportResults } from '../types';
 
 export interface ImportResultsViewProps {
   mode: 'dark' | 'light';
@@ -34,7 +34,7 @@ export const ImportResultsView: React.FC<ImportResultsViewProps> = ({
   logoSuffix,
 }) => {
   // Group created entities by type for statistics
-  const { typeStats, sortedTypes } = useMemo(() => {
+  const { sortedTypes } = useMemo(() => {
     if (!importResults) return { typeStats: {}, sortedTypes: [] };
 
     const stats = importResults.created.reduce((acc, entity) => {

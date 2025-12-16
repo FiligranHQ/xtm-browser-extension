@@ -15,42 +15,18 @@ import {
   Typography,
   Button,
   Chip,
-  Divider,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Autocomplete,
   Paper,
-  Checkbox,
-  FormControlLabel,
   CircularProgress,
   Stepper,
   Step,
   StepLabel,
-  Tooltip,
-  IconButton,
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
-  AddOutlined,
-  DeleteOutlined,
-  AutoAwesomeOutlined,
-  ComputerOutlined,
-  LanOutlined,
-  PersonOutlined,
-  GroupsOutlined,
-  RefreshOutlined,
 } from '@mui/icons-material';
-import { Kayaking } from '@mui/icons-material';
-import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { PlatformInfo } from '../types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
-
-// Email injector contract ID (hardcoded in OpenAEV platform)
-const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
 
 export interface ScenarioOverviewViewProps extends ScenarioStateReturn {
   mode: 'dark' | 'light';
@@ -71,13 +47,13 @@ export const ScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (props)
   const {
     mode,
     availablePlatforms,
-    selectedPlatformId,
+    selectedPlatformId: _selectedPlatformId,
     setSelectedPlatformId,
     setPlatformUrl,
     setPanelMode,
-    showToast,
-    currentPageTitle,
-    currentPageUrl,
+    showToast: _showToast,
+    currentPageTitle: _currentPageTitle,
+    currentPageUrl: _currentPageUrl,
     // Scenario state from hook
     scenarioOverviewData,
     setScenarioOverviewData,

@@ -1,6 +1,6 @@
 /**
  * Platform Select View Component
- * 
+ *
  * Allows user to select a platform for container creation or entity import.
  */
 
@@ -9,15 +9,13 @@ import {
   Box,
   Typography,
   Paper,
-  Button,
+  IconButton,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
-import {
-  ChevronLeftOutlined,
-  ChevronRightOutlined,
-  CheckCircleOutlined,
-} from '@mui/icons-material';
-import { hexToRGB } from '../../shared/theme/colors';
-import type { PanelMode, PlatformInfo } from '../types';
+import { ChevronLeftOutlined } from '@mui/icons-material';
+import type { PanelMode, PlatformInfo, EntityData } from '../types';
 
 export interface PlatformSelectViewProps {
   mode: 'dark' | 'light';
@@ -27,144 +25,135 @@ export interface PlatformSelectViewProps {
   setSelectedPlatformId: (id: string) => void;
   setPlatformUrl: (url: string) => void;
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
+  setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
+  containerSteps: string[];
+  entitiesToAdd: EntityData[];
+  handleAddEntities: () => void;
   logoSuffix: string;
 }
 
 export const PlatformSelectView: React.FC<PlatformSelectViewProps> = ({
-  mode: _mode,
+  mode,
   setPanelMode,
   openctiPlatforms,
   selectedPlatformId,
   setSelectedPlatformId,
   setPlatformUrl,
   containerWorkflowOrigin,
+  setContainerWorkflowOrigin,
+  containerSteps,
+  entitiesToAdd,
+  handleAddEntities,
   logoSuffix,
 }) => {
-  const handleBack = () => {
-    if (containerWorkflowOrigin === 'preview' || containerWorkflowOrigin === 'import') {
-      setPanelMode('preview');
-    } else {
-      setPanelMode('scan-results');
-    }
-  };
-
-  const handleSelectPlatform = (platform: PlatformInfo) => {
-    setSelectedPlatformId(platform.id);
-    setPlatformUrl(platform.url);
-    
-    // Navigate based on workflow origin
-    if (containerWorkflowOrigin === 'import') {
-      // Import without container flow - just select platform
-      setPanelMode('preview');
-    } else {
-      // Container creation flow
-      setPanelMode('container-type');
-    }
-  };
+  // Determine if back button should be shown
+  // Show back if coming from preview mode (has entities selected) or from import workflow
+  const showBackButton = (containerWorkflowOrigin === 'preview' || containerWorkflowOrigin === 'import') && entitiesToAdd.length > 0;
+  const isImportWorkflow = containerWorkflowOrigin === 'import';
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Back button */}
-      <Box sx={{ mb: 1.5 }}>
-        <Button
-          size="small"
-          startIcon={<ChevronLeftOutlined />}
-          onClick={handleBack}
-          sx={{
-            color: 'text.secondary',
-            textTransform: 'none',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          Back
-        </Button>
+      {/* Stepper - only show for container creation, not import */}
+      {!isImportWorkflow && (
+        <Stepper activeStep={0} sx={{ mb: 3 }}>
+          {containerSteps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        {showBackButton && (
+          <IconButton size="small" onClick={() => setPanelMode('preview')}>
+            <ChevronLeftOutlined />
+          </IconButton>
+        )}
+        <Typography variant="h6" sx={{ fontSize: 16 }}>Select Platform</Typography>
       </Box>
 
-      <Typography variant="h6" sx={{ mb: 0.5 }}>
-        Select Platform
-      </Typography>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        Choose the OpenCTI platform for your {containerWorkflowOrigin === 'import' ? 'import' : 'container'}
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        {isImportWorkflow
+          ? 'Choose which OpenCTI platform to import entities into:'
+          : 'Choose which OpenCTI platform to create the container in:'
+        }
       </Typography>
 
-      {/* Platform options */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {openctiPlatforms.map((platform) => {
-          const isSelected = platform.id === selectedPlatformId;
-          
-          return (
-            <Paper
-              key={platform.id}
-              elevation={0}
-              onClick={() => handleSelectPlatform(platform)}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                p: 2,
-                cursor: 'pointer',
-                borderRadius: 1,
-                border: 2,
-                borderColor: isSelected ? 'primary.main' : 'divider',
-                bgcolor: isSelected ? hexToRGB('#1976d2', 0.05) : 'transparent',
-                transition: 'all 0.15s',
-                '&:hover': {
-                  bgcolor: isSelected ? hexToRGB('#1976d2', 0.08) : 'action.hover',
-                  borderColor: isSelected ? 'primary.main' : 'primary.light',
-                },
-              }}
-            >
-              {/* Platform logo */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 44,
-                  height: 44,
-                  borderRadius: 1,
-                  bgcolor: 'action.hover',
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
-                    ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
-                    : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
-                  }
-                  alt="OpenCTI"
-                  width={28}
-                  height={28}
-                />
-              </Box>
-              
-              {/* Content */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {openctiPlatforms.map((platform) => (
+          <Paper
+            key={platform.id}
+            onClick={() => {
+              setSelectedPlatformId(platform.id);
+              setPlatformUrl(platform.url);
+              if (isImportWorkflow) {
+                // Import workflow - proceed with entity creation
+                setContainerWorkflowOrigin(null);
+                handleAddEntities();
+              } else {
+                // Container workflow - go to type selection
+                setPanelMode('container-type');
+              }
+            }}
+            elevation={0}
+            sx={{
+              p: 2,
+              cursor: 'pointer',
+              border: 2,
+              borderColor: selectedPlatformId === platform.id ? 'primary.main' : 'divider',
+              borderRadius: 1,
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: 'action.hover',
+              },
+            }}
+          >
+            <img
+              src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
+                ? chrome.runtime.getURL(`assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`)
+                : `../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`
+              }
+              alt="OpenCTI"
+              style={{ width: 32, height: 32 }}
+            />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
                   {platform.name}
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', wordBreak: 'break-all' }}>
-                  {platform.url}
-                </Typography>
-                {platform.isEnterprise && (
-                  <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 500 }}>
-                    Enterprise Edition
-                  </Typography>
+                {platform.isEnterprise !== undefined && (
+                  <Box
+                    sx={{
+                      px: 0.5,
+                      py: 0.1,
+                      borderRadius: 0.5,
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      lineHeight: 1.3,
+                      bgcolor: platform.isEnterprise
+                        ? (mode === 'dark' ? '#00f1bd' : '#0c7e69')
+                        : '#616161',
+                      color: platform.isEnterprise ? '#000' : '#fff',
+                    }}
+                  >
+                    {platform.isEnterprise ? 'EE' : 'CE'}
+                  </Box>
                 )}
               </Box>
-              
-              {isSelected ? (
-                <CheckCircleOutlined sx={{ color: 'primary.main' }} />
-              ) : (
-                <ChevronRightOutlined sx={{ color: 'text.secondary' }} />
-              )}
-            </Paper>
-          );
-        })}
+              <Typography variant="caption" sx={{ color: 'text.secondary', wordBreak: 'break-all' }}>
+                {platform.url} {platform.version ? `• v${platform.version}` : ''}
+              </Typography>
+            </Box>
+          </Paper>
+        ))}
       </Box>
     </Box>
   );
 };
 
 export default PlatformSelectView;
-

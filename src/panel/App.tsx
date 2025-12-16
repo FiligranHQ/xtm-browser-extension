@@ -320,27 +320,40 @@ const App: React.FC = () => {
   // Sync entitiesToAdd with selectedScanItems when in preview mode
   React.useEffect(() => {
     if (panelMode === 'preview' && scanResultsEntitiesRef.current.length > 0) {
-      // Helper function to check if entity is importable (inlined to avoid dependency issues)
-      const checkImportable = (entity: ScanResultEntity): boolean => {
+      // Helper function to check if entity is selectable for OpenCTI (inlined to avoid dependency issues)
+      const checkSelectable = (entity: ScanResultEntity): boolean => {
+        // OpenAEV-specific types can't be added to OpenCTI containers
         if (entity.type.startsWith('oaev-')) return false;
+        return true;
+      };
+      
+      // Helper function to check if entity already exists in OpenCTI
+      const checkFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
         const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
-        return octiCount === 0;
+        return octiCount > 0;
       };
       
       // When in preview mode and selection changes, sync the entities list
       const selectedEntities = scanResultsEntitiesRef.current.filter(entity => {
         const entityValue = entity.value || entity.name;
-        return entityValue && selectedScanItems.has(entityValue) && checkImportable(entity);
+        return entityValue && selectedScanItems.has(entityValue) && checkSelectable(entity);
       });
       
-      // Convert to entitiesToAdd format
-      const updatedEntities = selectedEntities.map(entity => ({
-        type: entity.type,
-        value: entity.value,
-        name: entity.name || entity.value,
-        existsInPlatform: false,
-        discoveredByAI: entity.discoveredByAI,
-      }));
+      // Convert to entitiesToAdd format (mark existsInPlatform based on OpenCTI status)
+      const updatedEntities = selectedEntities.map(entity => {
+        const octiMatch = entity.platformMatches?.find(pm => pm.platformType === 'opencti');
+        const octiEntityId = octiMatch?.entityId;
+        return {
+          type: entity.type,
+          value: entity.value,
+          name: entity.name || entity.value,
+          existsInPlatform: checkFoundInOpenCTI(entity),
+          discoveredByAI: entity.discoveredByAI,
+          // Use 'id' field so container creation recognizes it as existing
+          id: octiEntityId,
+          octiEntityId: octiEntityId,
+        };
+      });
       
       // Only update if the selection actually changed
       setEntitiesToAdd(current => {
@@ -418,6 +431,17 @@ const App: React.FC = () => {
   const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
   // Store page content for AI discovery (set when scan completes)
   const [scanPageContent, setScanPageContent] = useState<string>('');
+  
+  // AI Relationship resolution state
+  const [aiResolvingRelationships, setAiResolvingRelationships] = useState(false);
+  const [resolvedRelationships, setResolvedRelationships] = useState<Array<{
+    fromIndex: number;
+    toIndex: number;
+    relationshipType: string;
+    confidence: 'high' | 'medium' | 'low';
+    reason: string;
+    excerpt?: string;
+  }>>([]);
 
   // Scenario creation state (OpenAEV)
   const [scenarioOverviewData, setScenarioOverviewData] = useState<{
@@ -2718,11 +2742,37 @@ const App: React.FC = () => {
     }
     
     // Separate entities that exist (have IDs) from those that need to be created
-    const existingEntityIds = entitiesToAdd.filter(e => e.id).map(e => e.id as string);
-    const entitiesToCreate = entitiesToAdd.filter(e => !e.id && (e.value || e.observable_value)).map(e => ({
-      type: e.type || e.entity_type || 'Unknown',
-      value: e.value || e.observable_value || e.name || '',
+    // Keep track of indices for relationship mapping
+    const existingEntitiesWithIndex = entitiesToAdd
+      .map((e, originalIndex) => ({ entity: e, originalIndex }))
+      .filter(({ entity }) => entity.id);
+    const entitiesToCreateWithIndex = entitiesToAdd
+      .map((e, originalIndex) => ({ entity: e, originalIndex }))
+      .filter(({ entity }) => !entity.id && (entity.value || entity.observable_value));
+    
+    const existingEntityIds = existingEntitiesWithIndex.map(({ entity }) => entity.id as string);
+    const entitiesToCreate = entitiesToCreateWithIndex.map(({ entity }) => ({
+      type: entity.type || entity.entity_type || 'Unknown',
+      value: entity.value || entity.observable_value || entity.name || '',
     }));
+    
+    // Build a mapping from original entity index to the combined array index
+    // Combined array = existingEntityIds + entitiesToCreate (in that order)
+    const indexMapping: Record<number, number> = {};
+    existingEntitiesWithIndex.forEach(({ originalIndex }, idx) => {
+      indexMapping[originalIndex] = idx;
+    });
+    entitiesToCreateWithIndex.forEach(({ originalIndex }, idx) => {
+      indexMapping[originalIndex] = existingEntityIds.length + idx;
+    });
+    
+    // Map resolved relationships to use combined array indices
+    const relationshipsToCreate = resolvedRelationships.map(rel => ({
+      fromEntityIndex: indexMapping[rel.fromIndex] ?? -1,
+      toEntityIndex: indexMapping[rel.toIndex] ?? -1,
+      relationship_type: rel.relationshipType,
+      description: rel.reason,
+    })).filter(rel => rel.fromEntityIndex >= 0 && rel.toEntityIndex >= 0);
     
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_CONTAINER',
@@ -2748,6 +2798,8 @@ const App: React.FC = () => {
         createdBy: containerSpecificFields.createdBy || undefined,
         // Draft mode
         createAsDraft: createAsDraft,
+        // Relationships from AI resolution
+        relationshipsToCreate: relationshipsToCreate.length > 0 ? relationshipsToCreate : undefined,
       },
     });
 
@@ -5181,7 +5233,11 @@ const App: React.FC = () => {
     );
   };
 
-  const renderPreviewView = () => (
+  const renderPreviewView = () => {
+    // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
+    const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
+    
+    return (
     <Box sx={{ p: 2 }}>
       {/* Back to scan results button */}
       <Box sx={{ mb: 1.5 }}>
@@ -5190,6 +5246,8 @@ const App: React.FC = () => {
           startIcon={<ChevronLeftOutlined />}
           onClick={() => {
             setPanelMode('scan-results');
+            // Clear resolved relationships when going back
+            setResolvedRelationships([]);
           }}
           sx={{ 
             color: 'text.secondary',
@@ -5268,7 +5326,6 @@ const App: React.FC = () => {
                 color: 'text.secondary',
                 '&:hover': { 
                   color: 'error.main',
-                  bgcolor: 'error.light',
                 },
               }}
             >
@@ -5299,6 +5356,203 @@ const App: React.FC = () => {
           sx={{ alignItems: 'flex-start', ml: 0 }}
         />
       </Box>
+
+      {/* AI Relationship Resolution */}
+      {entitiesToAdd.length >= 2 && (
+        <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: resolvedRelationships.length > 0 ? 1.5 : 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.2rem' }} />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                AI Relationships
+              </Typography>
+            </Box>
+            <Tooltip title={!aiSettings.available ? 'AI not configured' : !hasEnterprisePlatform ? 'Requires Enterprise platform' : 'Analyze page context to find relationships between entities'}>
+              <span>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform}
+                  onClick={async () => {
+                    if (!aiSettings.available) return;
+                    
+                    setAiResolvingRelationships(true);
+                    
+                    try {
+                      // Get page content for AI analysis
+                      let pageContent = scanPageContent;
+                      let pageTitle = currentPageTitle || '';
+                      let pageUrl = currentPageUrl || '';
+                      
+                      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
+                        try {
+                          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                          if (tab?.id) {
+                            const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
+                            if (contentResponse?.success) {
+                              pageContent = contentResponse.data?.content || '';
+                              pageTitle = contentResponse.data?.title || pageTitle;
+                              pageUrl = tab.url || pageUrl;
+                            }
+                          }
+                        } catch (error) {
+                          log.debug('Could not get page content for AI relationship resolution:', error);
+                        }
+                      }
+                      
+                      if (!pageContent) {
+                        log.error('No page content available for AI relationship resolution');
+                        setAiResolvingRelationships(false);
+                        return;
+                      }
+                      
+                      // Build entities array for AI
+                      const entities = entitiesToAdd.map(e => ({
+                        type: e.type,
+                        name: e.name || e.value || '',
+                        value: e.value,
+                        existsInPlatform: e.existsInPlatform || false,
+                        octiEntityId: (e as any).octiEntityId,
+                      }));
+                      
+                      // Call AI to resolve relationships
+                      chrome.runtime.sendMessage(
+                        {
+                          type: 'AI_RESOLVE_RELATIONSHIPS',
+                          payload: {
+                            pageTitle,
+                            pageUrl,
+                            pageContent,
+                            entities,
+                          },
+                        },
+                        (response) => {
+                          setAiResolvingRelationships(false);
+                          
+                          if (chrome.runtime.lastError) {
+                            log.error('AI relationship resolution error:', chrome.runtime.lastError);
+                            return;
+                          }
+                          
+                          if (response?.success && response.data?.relationships) {
+                            setResolvedRelationships(response.data.relationships);
+                            log.info(`AI resolved ${response.data.relationships.length} relationships`);
+                          } else {
+                            log.warn('AI relationship resolution failed:', response?.error);
+                          }
+                        }
+                      );
+                    } catch (error) {
+                      log.error('AI relationship resolution error:', error);
+                      setAiResolvingRelationships(false);
+                    }
+                  }}
+                  startIcon={aiResolvingRelationships ? <CircularProgress size={14} color="inherit" /> : <AutoAwesomeOutlined />}
+                  sx={{ 
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    color: getAiColor(mode).main,
+                    borderColor: getAiColor(mode).main,
+                    '&:hover': {
+                      borderColor: getAiColor(mode).dark,
+                      bgcolor: hexToRGB(getAiColor(mode).main, 0.1),
+                    },
+                  }}
+                >
+                  {aiResolvingRelationships ? 'Resolving...' : resolvedRelationships.length > 0 ? 'Re-analyze' : 'Resolve'}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+          
+          {/* Resolved relationships list */}
+          {resolvedRelationships.length > 0 && (
+            <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
+              {resolvedRelationships.map((rel, index) => {
+                const fromEntity = entitiesToAdd[rel.fromIndex];
+                const toEntity = entitiesToAdd[rel.toIndex];
+                if (!fromEntity || !toEntity) return null;
+                
+                const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
+                
+                return (
+                  <Paper
+                    key={index}
+                    elevation={0}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      p: 1,
+                      mb: 0.5,
+                      bgcolor: hexToRGB(getAiColor(mode).main, 0.05),
+                      border: 1,
+                      borderColor: hexToRGB(getAiColor(mode).main, 0.2),
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.primary' }}>
+                          {fromEntity.name || fromEntity.value}
+                        </Typography>
+                        <Chip 
+                          label={rel.relationshipType} 
+                          size="small" 
+                          sx={{ 
+                            height: 18, 
+                            fontSize: '0.65rem',
+                            bgcolor: hexToRGB(getAiColor(mode).main, 0.2),
+                            color: getAiColor(mode).main,
+                          }} 
+                        />
+                        <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.primary' }}>
+                          {toEntity.name || toEntity.value}
+                        </Typography>
+                      </Box>
+                      <Tooltip title={rel.reason} placement="bottom-start">
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }} noWrap>
+                          {rel.reason}
+                        </Typography>
+                      </Tooltip>
+                    </Box>
+                    <Chip 
+                      label={rel.confidence} 
+                      size="small" 
+                      sx={{ 
+                        height: 16, 
+                        fontSize: '0.6rem',
+                        color: confidenceColor,
+                        borderColor: confidenceColor,
+                      }} 
+                      variant="outlined"
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      sx={{ 
+                        p: 0.25,
+                        color: 'text.secondary',
+                        '&:hover': { color: 'error.main' },
+                      }}
+                    >
+                      <DeleteOutlined sx={{ fontSize: '0.9rem' }} />
+                    </IconButton>
+                  </Paper>
+                );
+              })}
+            </Box>
+          )}
+          
+          {resolvedRelationships.length === 0 && !aiResolvingRelationships && (
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Use AI to discover relationships between selected entities based on page context
+            </Typography>
+          )}
+        </Box>
+      )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Button
@@ -5372,7 +5626,7 @@ const App: React.FC = () => {
           startIcon={<DescriptionOutlined />}
           fullWidth
         >
-          Create Container with Entities
+          Create Container{resolvedRelationships.length > 0 ? ` (${entitiesToAdd.length} entities, ${resolvedRelationships.length} relationships)` : ` with ${entitiesToAdd.length} entities`}
         </Button>
         <Button
           variant="outlined"
@@ -5400,6 +5654,7 @@ const App: React.FC = () => {
       </Box>
     </Box>
   );
+  };
 
   const renderPlatformSelectView = () => {
     // Determine if back button should be shown
@@ -6942,22 +7197,26 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper to check if an entity can be imported to OpenCTI
-  // Entity is importable if: not an OpenAEV-specific type AND not already in OpenCTI
-  const isImportableToOpenCTI = (entity: ScanResultEntity): boolean => {
-    // OpenAEV-specific types can't be imported to OpenCTI
+  // Helper to check if an entity can be selected for OpenCTI container
+  // Entity is selectable if: not an OpenAEV-specific type (can be new or already existing)
+  const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {
+    // OpenAEV-specific types can't be added to OpenCTI containers
     if (entity.type.startsWith('oaev-')) return false;
-    // Check if NOT found in OpenCTI (octiCount === 0)
+    return true;
+  };
+
+  // Helper to check if entity already exists in OpenCTI
+  const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
     const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
-    return octiCount === 0;
+    return octiCount > 0;
   };
 
   // Handler for importing selected entities from scan results
   const handleImportSelectedScanResults = async () => {
-    // Get selected entities from scan results that can be imported to OpenCTI
+    // Get selected entities from scan results that can be added to OpenCTI containers
     const selectedEntities = scanResultsEntities.filter(entity => {
       const entityValue = entity.value || entity.name;
-      return selectedScanItems.has(entityValue) && isImportableToOpenCTI(entity);
+      return selectedScanItems.has(entityValue) && isSelectableForOpenCTI(entity);
     });
     
     if (selectedEntities.length === 0) {
@@ -6966,13 +7225,22 @@ const App: React.FC = () => {
     }
     
     // Build entities for import - use the same format as other import flows
-    const entitiesToImport = selectedEntities.map(entity => ({
-      type: entity.type,
-      value: entity.value,
-      name: entity.name || entity.value,
-      existsInPlatform: false,
-      discoveredByAI: entity.discoveredByAI,
-    }));
+    // Mark existsInPlatform based on whether entity is found in OpenCTI
+    const entitiesToImport = selectedEntities.map(entity => {
+      const octiMatch = entity.platformMatches?.find(pm => pm.platformType === 'opencti');
+      const octiEntityId = octiMatch?.entityId;
+      return {
+        type: entity.type,
+        value: entity.value,
+        name: entity.name || entity.value,
+        existsInPlatform: isFoundInOpenCTI(entity),
+        discoveredByAI: entity.discoveredByAI,
+        // Include the OpenCTI entity ID if it exists for linking
+        // Use 'id' field so container creation recognizes it as existing
+        id: octiEntityId,
+        octiEntityId: octiEntityId,
+      };
+    });
     
     log.debug('Importing selected scan results:', entitiesToImport.length, 'entities');
     
@@ -7207,22 +7475,29 @@ const App: React.FC = () => {
               );
             })()}
             
-            {/* Select All / Deselect All for entities importable to OpenCTI */}
+            {/* Select All / Deselect All for entities selectable for OpenCTI */}
             {(() => {
-              // Entities importable to OpenCTI: not oaev-* type AND not already in OpenCTI
-              const importableEntities = filteredScanResultsEntities.filter(e => isImportableToOpenCTI(e));
-              const importableValues = importableEntities.map(e => e.value || e.name);
-              const selectedImportableCount = importableValues.filter(v => selectedScanItems.has(v)).length;
-              const allSelected = selectedImportableCount === importableEntities.length && importableEntities.length > 0;
+              // Entities selectable for OpenCTI: not oaev-* type (includes both new and existing entities)
+              const selectableEntities = filteredScanResultsEntities.filter(e => isSelectableForOpenCTI(e));
+              const selectableValues = selectableEntities.map(e => e.value || e.name);
+              const selectedCount = selectableValues.filter(v => selectedScanItems.has(v)).length;
+              const allSelected = selectedCount === selectableEntities.length && selectableEntities.length > 0;
               
-              if (importableEntities.length === 0) return null;
+              // Count new vs existing entities among selected
+              const selectedNewCount = selectableEntities.filter(e => {
+                const entityValue = e.value || e.name;
+                return selectedScanItems.has(entityValue) && !isFoundInOpenCTI(e);
+              }).length;
+              const selectedExistingCount = selectedCount - selectedNewCount;
+              
+              if (selectableEntities.length === 0) return null;
               
               return (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {selectedImportableCount > 0 
-                      ? `${selectedImportableCount} of ${importableEntities.length} entities selected for OpenCTI`
-                      : `${importableEntities.length} entities available for OpenCTI import`
+                    {selectedCount > 0 
+                      ? `${selectedCount} selected (${selectedNewCount} new, ${selectedExistingCount} existing)`
+                      : `${selectableEntities.length} entities available for selection`
                     }
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
@@ -7235,9 +7510,9 @@ const App: React.FC = () => {
                           window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
                           setSelectedScanItems(new Set());
                         } else {
-                          // Select all importable entities
-                          window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: importableValues }, '*');
-                          setSelectedScanItems(new Set(importableValues));
+                          // Select all selectable entities
+                          window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: selectableValues }, '*');
+                          setSelectedScanItems(new Set(selectableValues));
                         }
                       }}
                       startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
@@ -7248,9 +7523,9 @@ const App: React.FC = () => {
                         minWidth: 'auto',
                       }}
                     >
-                      {allSelected ? 'Deselect all' : 'Select all new'}
+                      {allSelected ? 'Deselect all' : 'Select all'}
                     </Button>
-                    {selectedImportableCount > 0 && (
+                    {selectedCount > 0 && (
                       <Button
                         size="small"
                         variant="contained"
@@ -7263,7 +7538,7 @@ const App: React.FC = () => {
                           minWidth: 'auto',
                         }}
                       >
-                        Import ({selectedImportableCount})
+                        Import ({selectedCount})
                       </Button>
                     )}
                   </Box>
@@ -7319,8 +7594,8 @@ const App: React.FC = () => {
                       },
                     }}
                   >
-                    {/* Checkbox for entities importable to OpenCTI (not in OCTI, not oaev-* type) */}
-                    {isImportableToOpenCTI(entity) && (
+                    {/* Checkbox for entities selectable for OpenCTI (not oaev-* type, can be new or existing) */}
+                    {isSelectableForOpenCTI(entity) && (
                       <Checkbox
                         checked={isSelected}
                         onClick={(e) => {
@@ -7340,7 +7615,7 @@ const App: React.FC = () => {
                         sx={{ 
                           p: 0.5, 
                           mr: 0.5,
-                          '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : 'primary.main' },
+                          '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : (isFoundInOpenCTI(entity) ? 'success.main' : 'primary.main') },
                         }}
                       />
                     )}

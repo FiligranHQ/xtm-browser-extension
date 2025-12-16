@@ -2697,6 +2697,69 @@ export class OpenCTIClient {
   }
 
   /**
+   * Add objects (entities or relationships) to a container
+   */
+  async addObjectsToContainer(containerId: string, objectIds: string[]): Promise<void> {
+    if (objectIds.length === 0) return;
+    
+    const query = `
+      mutation ContainerEditObjectsAdd($id: ID!, $toIds: [String]!) {
+        containerEdit(id: $id) {
+          objectsAdd(toIds: $toIds) {
+            id
+          }
+        }
+      }
+    `;
+
+    await this.query(query, {
+      id: containerId,
+      toIds: objectIds,
+    });
+  }
+
+  /**
+   * Create a STIX Core Relationship between two entities
+   */
+  async createStixCoreRelationship(input: {
+    fromId: string;
+    toId: string;
+    relationship_type: string;
+    description?: string;
+    confidence?: number;
+    objectMarking?: string[];
+  }): Promise<{ id: string; standard_id: string }> {
+    const query = `
+      mutation StixCoreRelationshipAdd($input: StixCoreRelationshipAddInput!) {
+        stixCoreRelationshipAdd(input: $input) {
+          id
+          standard_id
+          entity_type
+          relationship_type
+          from {
+            ... on BasicObject {
+              id
+              entity_type
+            }
+          }
+          to {
+            ... on BasicObject {
+              id
+              entity_type
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await this.query<{
+      stixCoreRelationshipAdd: { id: string; standard_id: string };
+    }>(query, { input });
+
+    return data.stixCoreRelationshipAdd;
+  }
+
+  /**
    * Add entities to a workbench
    */
   async addEntitiesToWorkbench(workbenchId: string, entityIds: string[]): Promise<void> {

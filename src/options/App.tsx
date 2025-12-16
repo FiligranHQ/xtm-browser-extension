@@ -54,6 +54,7 @@ import {
   KeyOutlined,
   MovieFilterOutlined,
   TravelExploreOutlined,
+  HubOutlined,
 } from '@mui/icons-material';
 import ThemeDark, { THEME_DARK_AI } from '../shared/theme/ThemeDark';
 import ThemeLight, { THEME_LIGHT_AI } from '../shared/theme/ThemeLight';
@@ -1891,6 +1892,15 @@ const App: React.FC = () => {
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>Smart Entity Discovery</Typography>
                           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                             Discover additional entities that regex patterns might miss during page scans
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                        <HubOutlined sx={{ color: '#e91e63', mt: 0.3 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>Relationship Resolution</Typography>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            Automatically suggest STIX relationships between entities based on page context
                           </Typography>
                         </Box>
                       </Box>

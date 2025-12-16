@@ -7,7 +7,7 @@
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
 import { AIClient, isAIAvailable, parseAIJsonResponse } from '../shared/api/ai-client';
-import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest, EntityDiscoveryRequest } from '../shared/api/ai-client';
+import type { ContainerDescriptionRequest, ScenarioGenerationRequest, AtomicTestRequest, EntityDiscoveryRequest, RelationshipResolutionRequest } from '../shared/api/ai-client';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
@@ -2301,6 +2301,13 @@ async function handleMessage(
           createdBy?: string;
           // Draft mode
           createAsDraft?: boolean;
+          // Relationships to create (from AI resolution or manual)
+          relationshipsToCreate?: Array<{
+            fromEntityIndex: number; // Index in the combined entities array (existing + created)
+            toEntityIndex: number;
+            relationship_type: string;
+            description?: string;
+          }>;
         };
         
         try {
@@ -2347,7 +2354,46 @@ async function handleMessage(
             log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}`);
           }
           
-          // Step 1: Create external reference first if page URL is provided
+          // Step 1: Create relationships if provided (before container, so we can include them)
+          const createdRelationships: Array<{ id: string; relationship_type: string }> = [];
+          if (containerPayload.relationshipsToCreate && containerPayload.relationshipsToCreate.length > 0 && allEntityIds.length > 0) {
+            log.info(`Creating ${containerPayload.relationshipsToCreate.length} relationships...`);
+            
+            for (const rel of containerPayload.relationshipsToCreate) {
+              try {
+                // Get entity IDs from indices
+                const fromId = allEntityIds[rel.fromEntityIndex];
+                const toId = allEntityIds[rel.toEntityIndex];
+                
+                if (!fromId || !toId) {
+                  log.warn(`Invalid relationship indices: from=${rel.fromEntityIndex}, to=${rel.toEntityIndex}, available=${allEntityIds.length}`);
+                  continue;
+                }
+                
+                const relationship = await client.createStixCoreRelationship({
+                  fromId,
+                  toId,
+                  relationship_type: rel.relationship_type,
+                  description: rel.description,
+                });
+                
+                if (relationship?.id) {
+                  createdRelationships.push({
+                    id: relationship.id,
+                    relationship_type: rel.relationship_type,
+                  });
+                  log.debug(`Created relationship: ${fromId} --[${rel.relationship_type}]--> ${toId}`);
+                }
+              } catch (relError) {
+                log.warn(`Failed to create relationship: ${rel.relationship_type}`, relError);
+                // Continue with other relationships
+              }
+            }
+            
+            log.info(`Created ${createdRelationships.length} of ${containerPayload.relationshipsToCreate.length} relationships`);
+          }
+          
+          // Step 2: Create external reference if page URL is provided
           let externalReferenceId: string | undefined;
           if (containerPayload.pageUrl) {
             try {
@@ -2364,13 +2410,20 @@ async function handleMessage(
             }
           }
           
-          // Step 2: Create the container with all entity IDs (existing + newly created)
+          // Step 3: Create the container with ALL IDs (entities + relationships)
+          const allObjectIds = [
+            ...allEntityIds,
+            ...createdRelationships.map(r => r.id),
+          ];
+          
+          log.info(`Creating container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
+          
           const container = await client.createContainer({
             type: containerPayload.type as ContainerType,
             name: containerPayload.name,
             description: containerPayload.description,
             content: containerPayload.content,
-            objects: allEntityIds,
+            objects: allObjectIds,
             objectLabel: containerPayload.labels || [],
             objectMarking: containerPayload.markings || [],
             // Type-specific fields
@@ -2384,7 +2437,7 @@ async function handleMessage(
             createAsDraft: containerPayload.createAsDraft,
           });
           
-          // Step 3: Attach external reference to the container
+          // Step 4: Attach external reference to the container
           if (externalReferenceId && container.id) {
             try {
               await client.addExternalReferenceToEntity(container.id, externalReferenceId);
@@ -2395,7 +2448,7 @@ async function handleMessage(
             }
           }
           
-          // Step 4: Upload PDF attachment if provided
+          // Step 5: Upload PDF attachment if provided
           if (containerPayload.pdfAttachment && container.id) {
             try {
               // Convert base64 to ArrayBuffer
@@ -2417,7 +2470,14 @@ async function handleMessage(
             }
           }
           
-          sendResponse({ success: true, data: { ...container, _platformId: platformId } });
+          sendResponse({ 
+            success: true, 
+            data: { 
+              ...container, 
+              _platformId: platformId,
+              _createdRelationships: createdRelationships,
+            } 
+          });
         } catch (error) {
           sendResponse({
             success: false,
@@ -3892,6 +3952,71 @@ async function handleMessage(
           sendResponse({ 
             success: false, 
             error: error instanceof Error ? error.message : 'AI discovery failed' 
+          });
+        }
+        break;
+      }
+      
+      case 'AI_RESOLVE_RELATIONSHIPS': {
+        const settings = await getSettings();
+        if (!isAIAvailable(settings.ai)) {
+          sendResponse(errorResponse('AI not configured'));
+          break;
+        }
+        
+        try {
+          const aiClient = new AIClient(settings.ai!);
+          const request = message.payload as RelationshipResolutionRequest;
+          
+          log.debug('AI_RESOLVE_RELATIONSHIPS request:', {
+            pageTitle: request.pageTitle,
+            entityCount: request.entities?.length || 0,
+            contentLength: request.pageContent?.length || 0,
+          });
+          
+          const response = await aiClient.resolveRelationships(request);
+          
+          log.debug('AI relationship resolution response success:', response.success);
+          
+          if (response.success && response.content) {
+            const parsed = parseAIJsonResponse<{ relationships: Array<{
+              fromIndex: number;
+              toIndex: number;
+              relationshipType: string;
+              confidence: 'high' | 'medium' | 'low';
+              reason: string;
+              excerpt?: string;
+            }> }>(response.content);
+            
+            log.debug('Parsed AI relationship response:', parsed);
+            
+            if (!parsed || !parsed.relationships || !Array.isArray(parsed.relationships)) {
+              log.warn('AI relationship resolution returned invalid structure, returning empty');
+              sendResponse(successResponse({ relationships: [] }));
+              break;
+            }
+            
+            // Validate indices are within bounds
+            const entityCount = request.entities.length;
+            const validRelationships = parsed.relationships.filter(r => 
+              r.fromIndex >= 0 && r.fromIndex < entityCount &&
+              r.toIndex >= 0 && r.toIndex < entityCount &&
+              r.fromIndex !== r.toIndex &&
+              r.relationshipType && typeof r.relationshipType === 'string'
+            );
+            
+            log.info(`AI resolved ${validRelationships.length} relationships (${parsed.relationships.length} raw)`);
+            
+            sendResponse(successResponse({ relationships: validRelationships }));
+          } else {
+            log.error('AI relationship resolution failed:', response.error);
+            sendResponse({ success: false, error: response.error || 'Failed to resolve relationships' });
+          }
+        } catch (error) {
+          log.error('AI relationship resolution exception:', error);
+          sendResponse({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'AI relationship resolution failed' 
           });
         }
         break;

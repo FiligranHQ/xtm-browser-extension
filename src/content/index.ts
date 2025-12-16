@@ -1245,12 +1245,32 @@ const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     FOUND IN PLATFORM - Green with check icon on RIGHT
+     FOUND IN PLATFORM - Green with checkbox on LEFT and check icon on RIGHT
      ======================================== */
   .xtm-highlight.xtm-found {
     background: rgba(0, 200, 83, 0.25) !important;
     border: 2px solid #4caf50 !important;
     border-color: #4caf50 !important;
+    padding: 4px 26px 4px 30px !important;  /* Extra space on left for checkbox */
+  }
+  
+  /* Unchecked checkbox on LEFT for found entities */
+  .xtm-highlight.xtm-found::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 12px !important;
+    height: 12px !important;
+    border: 2px solid rgba(0, 200, 83, 0.9) !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 2147483641 !important;
   }
   
   /* Check icon on RIGHT for found */
@@ -1275,6 +1295,22 @@ const HIGHLIGHT_STYLES = `
     background: rgba(0, 200, 83, 0.4) !important;
     border-color: #2e7d32 !important;
     box-shadow: 0 0 8px rgba(0, 200, 83, 0.5) !important;
+  }
+  
+  /* Checked checkbox on LEFT when found entity is selected */
+  .xtm-highlight.xtm-found.xtm-selected::before {
+    background: #00c853 !important;
+    border-color: #00c853 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 10px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+  }
+  
+  /* Selected state for found entities - green glow */
+  .xtm-highlight.xtm-found.xtm-selected {
+    border-color: #00c853 !important;
+    box-shadow: 0 0 8px rgba(0, 200, 83, 0.6) !important;
   }
 
   /* ========================================
@@ -3563,6 +3599,9 @@ function handleHighlightHover(event: MouseEvent): void {
   } else if (found) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
     
+    // Check if this is a selectable type (not OpenAEV-specific)
+    const isSelectableType = !rawType.startsWith('oaev-');
+    
     // Check if found in multiple platforms
     if (isMultiPlatform) {
       try {
@@ -3575,14 +3614,32 @@ function handleHighlightHover(event: MouseEvent): void {
         // Combine primary platform with other platforms
         const allPlatformNames = [platformName, ...otherPlatformNames];
         statusText = `Found in ${allPlatformNames.join(' and ')}`;
-        actionText = 'Click to view details • Use arrows to navigate platforms';
+        if (isSelectableType) {
+          actionText = isSelected 
+            ? 'Click ☑ to deselect • Click elsewhere to view details'
+            : 'Click ☐ to select for container • Click elsewhere to view details';
+        } else {
+          actionText = 'Click to view details • Use arrows to navigate platforms';
+        }
       } catch {
         statusText = `Found in ${platformName}`;
-        actionText = 'Click to view details';
+        if (isSelectableType) {
+          actionText = isSelected 
+            ? 'Click ☑ to deselect • Click elsewhere to view details'
+            : 'Click ☐ to select for container • Click elsewhere to view details';
+        } else {
+          actionText = 'Click to view details';
+        }
       }
     } else {
       statusText = `Found in ${platformName}`;
-      actionText = 'Click to view details';
+      if (isSelectableType) {
+        actionText = isSelected 
+          ? 'Click ☑ to deselect • Click elsewhere to view details'
+          : 'Click ☐ to select for container • Click elsewhere to view details';
+      } else {
+        actionText = 'Click to view details';
+      }
     }
   } else if (isSdoNotAddable) {
     // CVE/Vulnerability not in platform - cannot be added
@@ -3800,6 +3857,21 @@ function handleHighlightClick(event: MouseEvent): void {
       selectedEntity = entity;
       
       if (found) {
+        // For found entities, check if click is on the left side (checkbox area) to toggle selection
+        // Otherwise open the entity details
+        const rect = target.getBoundingClientRect();
+        const clickX = event.clientX;
+        const leftAreaEnd = rect.left + 30; // Checkbox area is about 30px wide
+        
+        // Check if entity type is selectable (not OpenAEV-specific)
+        const isSelectableType = !entity.type?.startsWith('oaev-');
+        
+        if (clickX <= leftAreaEnd && isSelectableType) {
+          // Click on checkbox area - toggle selection
+          toggleSelection(target, value);
+          return;
+        }
+        
         // Build platformMatches for multi-platform navigation
         // IMPORTANT: Include platformType and type for proper navigation in the panel
         let platformMatches: Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: any }> | undefined;

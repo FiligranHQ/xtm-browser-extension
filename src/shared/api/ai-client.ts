@@ -155,6 +155,41 @@ export interface DiscoveredEntity {
 }
 
 // ============================================================================
+// Relationship Resolution Types
+// ============================================================================
+
+export interface RelationshipResolutionRequest {
+  pageTitle: string;
+  pageUrl: string;
+  pageContent: string;
+  /** Entities to find relationships between */
+  entities: Array<{
+    type: string;
+    name: string;
+    value?: string;
+    /** Whether this entity already exists in OpenCTI */
+    existsInPlatform: boolean;
+    /** OpenCTI entity ID if it exists */
+    octiEntityId?: string;
+  }>;
+}
+
+export interface ResolvedRelationship {
+  /** Index of the source entity in the entities array */
+  fromIndex: number;
+  /** Index of the target entity in the entities array */
+  toIndex: number;
+  /** STIX relationship type (e.g., 'uses', 'targets', 'indicates', 'related-to') */
+  relationshipType: string;
+  /** Confidence level: high, medium, low */
+  confidence: 'high' | 'medium' | 'low';
+  /** Explanation for why this relationship exists */
+  reason: string;
+  /** Text excerpt from the page supporting this relationship */
+  excerpt?: string;
+}
+
+// ============================================================================
 // AI Client Class
 // ============================================================================
 
@@ -763,6 +798,149 @@ If no additional entities are found, return: {"entities": []}
 Remember: Only include entities that are EXPLICITLY mentioned in the page content. Do not hallucinate or infer entities.`;
 
     return this.generate({ prompt, systemPrompt, maxTokens: 2000, temperature: 0.3 });
+  }
+
+  /**
+   * Resolve STIX relationships between entities using AI
+   * Based on the page context and the entities, suggests relevant relationships
+   */
+  async resolveRelationships(request: RelationshipResolutionRequest): Promise<AIGenerationResponse> {
+    const systemPrompt = `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling. Your task is to identify PRECISE and RELEVANT relationships between threat intelligence entities based on contextual evidence from the page content.
+
+CRITICAL REQUIREMENTS:
+1. PRECISION: Only suggest relationships with clear evidence in the text - NEVER hallucinate or assume
+2. RELEVANCE: Choose the most semantically accurate relationship type for each connection
+3. SPECIFICITY: Prefer specific relationship types over generic ones (avoid "related-to" unless no other type fits)
+4. EVIDENCE-BASED: Every relationship must be supported by explicit or strongly implied textual evidence
+5. DIRECTION MATTERS: Relationships are directional - ensure from/to entities are correct
+
+COMPLETE STIX 2.1 RELATIONSHIP TYPES (use the most precise type):
+
+ATTACK & THREAT RELATIONSHIPS:
+- "uses": Threat actors, intrusion sets, campaigns, or malware USE attack patterns, tools, malware, or infrastructure
+- "targets": Threat actors, intrusion sets, campaigns, or malware TARGET identity (organizations, sectors, individuals), locations, or vulnerabilities
+- "attributed-to": Intrusion sets or campaigns are ATTRIBUTED TO threat actors; threat actors ATTRIBUTED TO locations/countries
+- "impersonates": Threat actors or campaigns IMPERSONATE identities (organizations, individuals)
+
+MALWARE & TOOL RELATIONSHIPS:
+- "delivers": Malware DELIVERS other malware (e.g., dropper delivers payload)
+- "drops": Malware DROPS other malware or tools
+- "downloads": Malware or tools DOWNLOAD files, other malware, or tools
+- "exploits": Malware or tools EXPLOIT vulnerabilities
+- "variant-of": Malware is a VARIANT OF another malware family
+- "controls": Malware CONTROLS infrastructure
+- "authored-by": Malware or tools AUTHORED BY threat actors or identities
+
+INFRASTRUCTURE & OBSERVABLE RELATIONSHIPS:
+- "communicates-with": Malware or tools COMMUNICATE WITH infrastructure (IPs, domains, URLs)
+- "beacons-to": Malware BEACONS TO C2 infrastructure (specific periodic communication)
+- "exfiltrates-to": Malware EXFILTRATES data TO infrastructure
+- "hosts": Infrastructure HOSTS malware, tools, or other infrastructure
+- "owns": Identity OWNS infrastructure
+- "consists-of": Infrastructure CONSISTS OF other infrastructure components
+- "resolves-to": Domain RESOLVES TO IP addresses
+
+INDICATOR & DETECTION RELATIONSHIPS:
+- "indicates": Indicators INDICATE malware, attack patterns, threat actors, campaigns, or intrusion sets
+- "based-on": Indicators BASED ON observables (the observable evidence for the indicator)
+- "derived-from": Objects DERIVED FROM other objects (analysis products)
+
+DEFENSE & MITIGATION RELATIONSHIPS:
+- "mitigates": Courses of action MITIGATE attack patterns, malware, vulnerabilities, or tools
+- "remediates": Courses of action REMEDIATE vulnerabilities or malware
+- "investigates": Identities (analysts) INVESTIGATE incidents, campaigns, or intrusion sets
+
+LOCATION & IDENTITY RELATIONSHIPS:
+- "located-at": Identities, threat actors, or infrastructure LOCATED AT locations
+- "originates-from": Threat actors or malware ORIGINATE FROM locations/countries
+
+GENERAL RELATIONSHIPS:
+- "related-to": Use ONLY when no other relationship type accurately describes the connection
+- "duplicate-of": Object is a DUPLICATE OF another object
+- "part-of": Entity is PART OF another entity (e.g., sub-campaign)
+
+ENTITY TYPE COMPATIBILITY GUIDE:
+- Threat-Actor → uses → Malware, Tool, Attack-Pattern, Infrastructure
+- Threat-Actor → targets → Identity, Location, Vulnerability, Sector
+- Threat-Actor → attributed-to → Identity, Location
+- Threat-Actor → located-at/originates-from → Location, Country
+- Intrusion-Set → uses → Malware, Tool, Attack-Pattern
+- Intrusion-Set → targets → Identity, Location, Sector
+- Intrusion-Set → attributed-to → Threat-Actor
+- Campaign → uses → Malware, Tool, Attack-Pattern, Infrastructure
+- Campaign → targets → Identity, Location, Vulnerability, Sector
+- Campaign → attributed-to → Threat-Actor, Intrusion-Set
+- Malware → uses → Attack-Pattern, Tool
+- Malware → targets → Identity, Sector, Vulnerability
+- Malware → communicates-with/beacons-to → IPv4-Addr, IPv6-Addr, Domain-Name, Url
+- Malware → exploits → Vulnerability
+- Malware → drops/delivers/downloads → Malware, Tool
+- Malware → variant-of → Malware
+- Tool → targets → Identity, Location, Vulnerability
+- Tool → uses → Attack-Pattern
+- Indicator → indicates → Malware, Attack-Pattern, Threat-Actor, Campaign, Intrusion-Set, Tool
+- Indicator → based-on → Observable (IP, Domain, Hash, etc.)
+- Attack-Pattern → targets → Identity, Location, Vulnerability
+- Vulnerability → has → Course-of-Action (mitigation)
+- Infrastructure → hosts → Malware, Tool
+- Infrastructure → communicates-with → Infrastructure
+- Domain-Name → resolves-to → IPv4-Addr, IPv6-Addr
+- Observable ↔ Observable → related-to (only when contextually linked in the same attack/incident)
+
+Output ONLY valid JSON, no markdown, no explanation.`;
+
+    // Build the entity list with indices and types for better context
+    const entityList = request.entities.map((e, index) => 
+      `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
+    ).join('\n');
+
+    const prompt = `Analyze the page content and identify PRECISE STIX 2.1 relationships between the entities listed below.
+
+PAGE TITLE: ${request.pageTitle}
+PAGE URL: ${request.pageUrl}
+
+ENTITIES (use index numbers in your response):
+${entityList}
+
+PAGE CONTENT:
+${request.pageContent.substring(0, 10000)}
+
+INSTRUCTIONS:
+1. Carefully read the page content for evidence of relationships between the listed entities
+2. For each relationship found, select the MOST PRECISE relationship type from STIX 2.1
+3. Ensure the direction (from → to) is semantically correct
+4. Only include relationships with clear textual evidence
+5. Provide a specific reason citing the evidence
+6. Include the exact text excerpt that supports the relationship
+
+Return JSON in this EXACT format:
+{
+  "relationships": [
+    {
+      "fromIndex": 0,
+      "toIndex": 1,
+      "relationshipType": "uses",
+      "confidence": "high",
+      "reason": "The article explicitly states APT29 deployed SUNBURST in the SolarWinds attack",
+      "excerpt": "APT29 deployed the SUNBURST backdoor through compromised SolarWinds updates"
+    }
+  ]
+}
+
+CONFIDENCE LEVELS:
+- "high": Explicit statement in text (e.g., "APT29 uses Cobalt Strike")
+- "medium": Strongly implied by context (e.g., malware and C2 IP mentioned together in attack description)
+- "low": Reasonable inference from overall context (use sparingly)
+
+CRITICAL: 
+- Prefer specific relationship types over "related-to"
+- Verify entity type compatibility before suggesting a relationship
+- Direction matters: "Malware uses Attack-Pattern" NOT "Attack-Pattern uses Malware"
+- If no confident relationships exist, return: {"relationships": []}
+
+Quality over quantity - only include relationships you are confident about.`;
+
+    return this.generate({ prompt, systemPrompt, maxTokens: 4000, temperature: 0.2 });
   }
 
   // ============================================================================

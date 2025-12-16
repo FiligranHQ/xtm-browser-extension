@@ -1,7 +1,5 @@
 /**
- * Panel Header Component
- * 
- * The header bar displayed at the top of the panel.
+ * PanelHeader - Header component for the panel
  */
 
 import React from 'react';
@@ -13,9 +11,6 @@ interface PanelHeaderProps {
   onClose: () => void;
 }
 
-/**
- * Panel header with logo and close button
- */
 export const PanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
   const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
   
@@ -39,23 +34,12 @@ export const PanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
           height={28}
         />
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-          <Typography 
-            variant="h5" 
-            sx={{ 
-              fontWeight: 600, 
-              fontSize: 20, 
-              color: mode === 'dark' ? '#ffffff' : '#1a1a2e' 
-            }}
-          >
+          <Typography variant="h5" sx={{ fontWeight: 600, fontSize: 20, color: mode === 'dark' ? '#ffffff' : '#1a1a2e' }}>
             Filigran Threat Management
           </Typography>
         </Box>
       </Box>
-      <IconButton 
-        size="small" 
-        onClick={onClose} 
-        sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}
-      >
+      <IconButton size="small" onClick={onClose} sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}>
         <CloseOutlined fontSize="small" />
       </IconButton>
     </Box>
@@ -63,4 +47,3 @@ export const PanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
 };
 
 export default PanelHeader;
-

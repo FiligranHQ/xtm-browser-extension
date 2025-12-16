@@ -11,9 +11,6 @@ import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
 import {
-  PLATFORM_REGISTRY,
-  createPrefixedType,
-  getPlatformDefinition,
   type PlatformType,
 } from '../shared/platform';
 import {
@@ -23,7 +20,6 @@ import {
   CONTAINER_FETCH_TIMEOUT_MS,
   CACHE_REFRESH_TIMEOUT_MS,
   OPERATION_DELAY_MS,
-  RETRY_DELAY_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/utils/messaging';
 import { generateNativePDF, isNativePDFAvailable } from '../shared/extraction';
@@ -32,9 +28,7 @@ const log = loggers.background;
 import {
   getSettings,
   saveSettings,
-  getCachedTheme,
   cachePlatformTheme,
-  getSDOCache,
   saveSDOCache,
   shouldRefreshSDOCache,
   createEmptySDOCache,
@@ -48,7 +42,6 @@ import {
   saveOAEVCache,
   shouldRefreshOAEVCache,
   createEmptyOAEVCache,
-  getOAEVCacheStats,
   getMultiPlatformOAEVCache,
   clearOAEVCacheForPlatform,
   clearAllOAEVCaches,
@@ -56,15 +49,12 @@ import {
   type SDOCache,
   type CachedEntity,
   type OAEVCache,
-  type CachedOAEVEntity,
 } from '../shared/utils/storage';
 import type {
   ExtensionMessage,
   ExtensionSettings,
   ScanResultPayload,
   AddObservablePayload,
-  CreateContainerPayload,
-  PlatformConfig,
   ContainerType,
 } from '../shared/types';
 
@@ -95,22 +85,14 @@ const platformClients: PlatformClientRegistry = {
 };
 
 // Platform client registries
-let openCTIClients: Map<string, OpenCTIClient> = platformClients.opencti;
-let openAEVClients: Map<string, OpenAEVClient> = platformClients.openaev;
+const openCTIClients: Map<string, OpenCTIClient> = platformClients.opencti;
+const openAEVClients: Map<string, OpenAEVClient> = platformClients.openaev;
 // Primary OpenCTI client (first configured)
 let openCTIClient: OpenCTIClient | null = null;
 let detectionEngine: DetectionEngine | null = null;
 let isInitialized = false;
 let cacheRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Get all configured platforms of a specific type
- */
-function getPlatformsOfType(settings: ExtensionSettings, platformType: PlatformType): PlatformConfig[] {
-  const platformDef = PLATFORM_REGISTRY[platformType];
-  const settingsKey = platformDef.settingsKey as keyof ExtensionSettings;
-  return (settings[settingsKey] as PlatformConfig[] | undefined) || [];
-}
 
 // ============================================================================
 // Initialization
@@ -1226,7 +1208,7 @@ async function handleMessage(
               
               // Valid boundary: whitespace, punctuation, or start/end of string
               const isValidBoundary = (c: string) => 
-                /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+                /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
               
               // For names with hyphens/underscores, also check if the boundary char is NOT alphanumeric
               const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
@@ -1369,7 +1351,7 @@ async function handleMessage(
                   const charAfter = endIndex < originalText.length ? originalText[endIndex] : ' ';
                   
                   const isValidBoundary = (c: string) => 
-                    /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+                    /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
                   
                   const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
                   const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
@@ -1915,7 +1897,7 @@ async function handleMessage(
       }
       
       case 'CREATE_SCENARIO': {
-        const { name, description, subtitle, category, platformId, isAIGenerated } = message.payload as {
+        const { name, description, subtitle, category, platformId, isAIGenerated: _isAIGenerated } = message.payload as {
           name: string;
           description?: string;
           subtitle?: string;
@@ -1993,7 +1975,7 @@ async function handleMessage(
         // OpenAEV email injector contract ID (hardcoded in OpenAEV platform)
         const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
         
-        const { platformId, scenarioId, title, description, subject, body, delayMinutes, teamId, isAIGenerated } = message.payload as {
+        const { platformId, scenarioId, title, description, subject, body, delayMinutes, teamId, isAIGenerated: _isAIGenerated } = message.payload as {
           platformId: string;
           scenarioId: string;
           title: string;
@@ -2040,7 +2022,7 @@ async function handleMessage(
       }
       
       case 'ADD_TECHNICAL_INJECT_TO_SCENARIO': {
-        const { platformId, scenarioId, title, description, command, executor, platforms, delayMinutes, assetId, assetGroupId, isAIGenerated } = message.payload as {
+        const { platformId, scenarioId, title, description, command, executor, platforms, delayMinutes, assetId, assetGroupId, isAIGenerated: _isAIGenerated } = message.payload as {
           platformId: string;
           scenarioId: string;
           title: string;
@@ -2810,7 +2792,7 @@ async function handleMessage(
       }
       
       case 'GENERATE_SCENARIO': {
-        const { pageTitle, pageContent, pageUrl, platformId } = message.payload as {
+        const { pageTitle, pageContent: _pageContent, pageUrl, platformId } = message.payload as {
           pageTitle: string;
           pageContent: string;
           pageUrl: string;
@@ -3330,7 +3312,7 @@ async function handleMessage(
           break;
         }
         
-        const { entities, platformId, createIndicator } = message.payload as { 
+        const { entities, platformId, createIndicator: _createIndicator } = message.payload as { 
           entities: Array<{ type: string; value?: string; name?: string }>;
           platformId?: string;
           createIndicator?: boolean;

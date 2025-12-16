@@ -9,7 +9,7 @@
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
 import { getTextNodes } from '../shared/detection/detector';
-import { getPlatformFromEntity, getDisplayType, createPrefixedType, type PlatformType } from '../shared/platform';
+import { getPlatformFromEntity, getDisplayType } from '../shared/platform';
 
 // Module imports
 import { HIGHLIGHT_STYLES } from './styles';
@@ -54,8 +54,6 @@ import {
   getCurrentTheme,
   setIsPanelReady,
   setHighlightClickInProgress,
-  getHighlightClickInProgress,
-  getPanelFrame,
 } from './panel';
 
 const log = loggers.content;
@@ -65,7 +63,6 @@ const log = loggers.content;
 // ============================================================================
 
 let scanResults: ScanResultPayload | null = null;
-let selectedEntity: DetectedObservable | DetectedSDO | null = null;
 const selectedForImport: Set<string> = new Set();
 let currentScanMode: 'scan' | 'atomic' | 'scenario' | 'investigation' | null = null;
 let lastScanData: ScanResultPayload | null = null;
@@ -263,7 +260,7 @@ function handleHighlightAIEntities(entities: Array<{ type: string; value: string
 // Selection Management
 // ============================================================================
 
-function toggleSelection(element: HTMLElement, value: string): void {
+function toggleSelection(_element: HTMLElement, value: string): void {
   if (selectedForImport.has(value)) {
     selectedForImport.delete(value);
     document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`).forEach(el => {
@@ -486,8 +483,6 @@ function handleHighlightClick(event: MouseEvent): void {
         entity.type = highlightType;
       }
       
-      selectedEntity = entity;
-      
       if (found) {
         handleFoundEntityClick(event, target, entity, value, isMultiPlatform);
       } else if (isSdoNotAddable) {
@@ -572,8 +567,6 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
         _isNonDefaultPlatform: true,
         entityData: cacheData,
       };
-      
-      selectedEntity = entity;
       
       const seenPlatformIds = new Set<string>();
       const platformMatches = platformEntities
@@ -707,7 +700,6 @@ function handleHighlightRightClick(event: MouseEvent): void {
   if (entityData && !found && !isSdoNotAddable) {
     try {
       const entity = JSON.parse(entityData);
-      selectedEntity = entity;
       showAddPanel(entity);
     } catch (e) {
       log.error(' Failed to parse entity data:', e);

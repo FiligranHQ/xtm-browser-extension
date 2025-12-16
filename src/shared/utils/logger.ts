@@ -76,8 +76,7 @@ function shouldLog(level: LogLevel): boolean {
 /**
  * Format a log message with prefix and optional context
  */
-function formatMessage(level: LogLevel, context: string | undefined, message: string): string {
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+function formatMessage(_level: LogLevel, context: string | undefined, message: string): string {
   const contextStr = context ? ` [${context}]` : '';
   return `${currentConfig.prefix}${contextStr} ${message}`;
 }
@@ -138,6 +137,7 @@ export const loggers = {
   storage: createLogger('Storage'),
   popup: createLogger('Popup'),
   panel: createLogger('Panel'),
+  api: createLogger('API'),
 };
 
 export default logger;

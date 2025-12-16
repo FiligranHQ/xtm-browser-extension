@@ -16,7 +16,7 @@ import {
 } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
 import { CONNECTION_TIMEOUT_MS } from '../../shared/constants';
-import type { ExtensionSettings, PlatformConfig } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types';
 import type { PlatformType } from '../../shared/platform';
 import type { SendResponseFn } from './types';
 
@@ -232,7 +232,8 @@ export async function handleTestPlatformConnectionTemp(
           id: 'temp', 
           name: 'Temp', 
           url, 
-          apiToken 
+          apiToken,
+          enabled: true,
         });
         const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
         sendResponse(successResponse(info));

@@ -40,10 +40,6 @@ export interface ExtractedImage {
   dataUrl?: string;
 }
 
-// Minimum dimensions for content images (skip tiny icons)
-const MIN_IMAGE_WIDTH = 80;
-const MIN_IMAGE_HEIGHT = 80;
-
 // Elements to remove ONLY during post-processing (after Readability)
 // Keep this minimal to not interfere with Readability's content detection
 const POST_PROCESS_REMOVE = [

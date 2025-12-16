@@ -132,7 +132,7 @@ export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; full
  */
 export function isValidWordBoundary(char: string | undefined): boolean {
   if (!char || char === '') return true;
-  if (/[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t.]/.test(char)) return true;
+  if (/[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t.]/.test(char)) return true;
   return !/[a-zA-Z0-9]/.test(char);
 }
 

@@ -8,7 +8,7 @@ import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
 import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
-import type { ScanResultPayload, ExtensionSettings } from '../../shared/types';
+import type { ScanResultPayload } from '../../shared/types';
 import type { SendResponseFn } from './types';
 
 const log = loggers.background;
@@ -146,7 +146,7 @@ export function scanForOAEVEntities(
       
       // Valid boundary: whitespace, punctuation, or start/end of string
       const isValidBoundary = (c: string) => 
-        /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+        /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
       
       const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
       const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
@@ -213,7 +213,7 @@ export function mergeScanResults(
     ...openCTIResult,
     platformEntities: [
       ...(openCTIResult.platformEntities || []),
-      ...oaevEntities,
+      ...(oaevEntities || []),
     ],
   };
 }

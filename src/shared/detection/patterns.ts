@@ -85,7 +85,7 @@ export const DOMAIN_PATTERN = new RegExp(
 // URL: Full URL with protocol AND defanged versions
 // Matches: https://example.com/path?query=value
 // Defanged: hxxps://example[.]com/path, hxxp://evil[.]com
-export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=\[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()\[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=\[\]]*)/gi;
+export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=[\]]*)/gi;
 
 // ============================================================================
 // Email Pattern
@@ -149,7 +149,7 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // Matches: CVE-2021-44228, CVE-2022-0001
 // Also handles non-breaking hyphens (‑), en dashes (–), and other dash-like characters
 // that may appear in web content due to typography or copy-paste
-export const CVE_PATTERN = /CVE[\-\u2010\u2011\u2012\u2013]\d{4}[\-\u2010\u2011\u2012\u2013]\d{4,}/gi;
+export const CVE_PATTERN = /CVE[-\u2010\u2011\u2012\u2013]\d{4}[-\u2010\u2011\u2012\u2013]\d{4,}/gi;
 
 // ============================================================================
 // ASN Pattern

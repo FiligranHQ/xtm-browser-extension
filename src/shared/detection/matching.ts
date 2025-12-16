@@ -9,7 +9,7 @@
  * Check if a character is a valid word boundary
  */
 export function isValidBoundary(char: string): boolean {
-  return /[\s,;:!?()[\]"'<>\/\\@#$%^&*+=|`~\n\r\t]/.test(char) || char === '';
+  return /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(char) || char === '';
 }
 
 /**
@@ -86,7 +86,7 @@ export function isIpAddress(value: string): boolean {
  * Check if a value looks like a MAC address
  */
 export function isMacAddress(value: string): boolean {
-  return /^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$/i.test(value);
+  return /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(value);
 }
 
 /**

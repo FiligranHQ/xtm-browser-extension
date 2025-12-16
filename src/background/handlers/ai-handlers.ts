@@ -9,16 +9,15 @@
  * - Email generation
  */
 
-import type { MessageHandler } from './types';
-import { successResponse, errorResponse } from './types';
+import { type MessageHandler, successResponse, errorResponse } from './types';
 import { getSettings } from '../../shared/utils/storage';
-import { AIClient } from '../../shared/api/ai-client';
-import type {
-  ContainerDescriptionRequest,
-  ScenarioGenerationRequest,
-  EntityDiscoveryRequest,
-  RelationshipResolutionRequest,
-  AtomicTestRequest,
+import {
+  AIClient,
+  type ContainerDescriptionRequest,
+  type ScenarioGenerationRequest,
+  type EntityDiscoveryRequest,
+  type RelationshipResolutionRequest,
+  type AtomicTestRequest,
 } from '../../shared/api/ai-client';
 import { loggers } from '../../shared/utils/logger';
 

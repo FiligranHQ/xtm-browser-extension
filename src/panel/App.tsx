@@ -384,7 +384,7 @@ const App: React.FC = () => {
   const [currentPageTitle, setCurrentPageTitle] = useState('');
   // Existing containers found for current page
   const [existingContainers, setExistingContainers] = useState<ContainerData[]>([]);
-  const [checkingExisting, setCheckingExisting] = useState(false);
+  const [_checkingExisting, setCheckingExisting] = useState(false);
   // Container being updated (for upsert mode)
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
   // Original dates from container being updated (to avoid creating duplicates)
@@ -433,7 +433,7 @@ const App: React.FC = () => {
   const [aiFillingEmails, setAiFillingEmails] = useState(false);
   const [aiDiscoveringEntities, setAiDiscoveringEntities] = useState(false);
   // Store page content for AI discovery (set when scan completes)
-  const [scanPageContent, setScanPageContent] = useState<string>('');
+  const [scanPageContent, _setScanPageContent] = useState<string>('');
   
   // Toast notification helper - sends to content script
   const showToast = React.useCallback((options: {
@@ -743,8 +743,6 @@ const App: React.FC = () => {
           );
         });
         
-        // Combine all platforms
-        const allPlatforms = [...enabledPlatforms, ...enabledOAEVPlatforms];
         
         // Set first OpenCTI platform as default
         if (enabledPlatforms.length > 0) {
@@ -870,6 +868,7 @@ const App: React.FC = () => {
       setContainerSpecificFields(prev => ({ ...prev, createdBy: '' }));
       loadLabelsAndMarkings(selectedPlatformId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelMode, selectedPlatformId]);
 
   const handleMessage = (event: MessageEvent) => {
@@ -2909,27 +2908,6 @@ const App: React.FC = () => {
     } else {
       log.error(' Container creation failed:', response?.error);
       showToast({ type: 'error', message: response?.error || 'Container creation failed' });
-    }
-    setSubmitting(false);
-  };
-
-  const handleStartInvestigation = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    setSubmitting(true);
-    const response = await chrome.runtime.sendMessage({
-      type: 'CREATE_INVESTIGATION_WITH_ENTITIES',
-      payload: { entities: entitiesToAdd },
-    });
-
-    if (chrome.runtime.lastError) {
-      setSubmitting(false);
-      return;
-    }
-
-    if (response?.success) {
-      setPanelMode('empty');
-      handleOpenInPlatform(response.data?.id);
     }
     setSubmitting(false);
   };
@@ -7558,8 +7536,6 @@ const App: React.FC = () => {
   };
 
   const renderScanResultsView = () => {
-    const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
-    
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
@@ -8276,30 +8252,6 @@ const App: React.FC = () => {
     }
   };
   
-  // Reset atomic testing state
-  const resetAtomicTesting = () => {
-    setAtomicTestingTargets([]);
-    setSelectedAtomicTarget(null);
-    setAtomicTestingShowList(true);
-    setAtomicTestingPlatformId(null);
-    setAtomicTestingPlatformSelected(false);
-    setAtomicTestingAssets([]);
-    setAtomicTestingAssetGroups([]);
-    setAtomicTestingInjectorContracts([]);
-    setAtomicTestingSelectedAsset(null);
-    setAtomicTestingSelectedAssetGroup(null);
-    setAtomicTestingSelectedContract(null);
-    setAtomicTestingTitle('');
-    setPanelMode('empty');
-    
-    // Clear highlights
-    chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
-      }
-    });
-  };
-  
   // Handle selecting a target from the list
   const handleSelectAtomicTargetFromList = (target: typeof atomicTestingTargets[0]) => {
     setSelectedAtomicTarget(target);
@@ -8343,15 +8295,11 @@ const App: React.FC = () => {
       // Get page content for context
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       let pageContent = '';
-      let pageTitle = '';
-      let pageUrl = '';
       
       if (tab?.id) {
         const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
         if (contentResponse?.success) {
           pageContent = contentResponse.data?.content || '';
-          pageTitle = contentResponse.data?.title || '';
-          pageUrl = contentResponse.data?.url || '';
         }
       }
       
@@ -8634,7 +8582,6 @@ const App: React.FC = () => {
       // Apply filter using state variable
       const showAttackPatterns = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'attack-pattern';
       const showDomains = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'domain';
-      const showHostnames = atomicTestingTypeFilter === 'all' || atomicTestingTypeFilter === 'domain'; // Include hostnames with domains
       
       return (
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -9648,7 +9595,7 @@ const App: React.FC = () => {
               )}
             </Box>
             <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {mergedResults.map((merged, i) => {
+              {mergedResults.map((merged, _i) => {
                 const platformCount = merged.platforms.length;
                 const platformNames = merged.platforms.map(p => p.platformName).join(', ');
                 const entityColor = itemColor(merged.type, mode === 'dark');
@@ -12513,7 +12460,7 @@ const App: React.FC = () => {
                               />
                             </Box>
                             
-                            {emailsWithNoPhase.map((email, phaseIndex) => {
+                            {emailsWithNoPhase.map((email, _phaseIndex) => {
                               const aiEmail = scenarioEmails.find(e => e.attackPatternId === email.attackPatternId);
                               const emailSubject = aiEmail?.subject || `[Simulation] ${email.attackPatternName}`;
                               const emailBody = aiEmail?.body || '';

@@ -21,8 +21,7 @@ import {
   RestartAltOutlined,
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types';
-import type { CacheStats } from '../constants';
-import { OBSERVABLE_TYPES, ENTITY_TYPES, OAEV_ENTITY_TYPES } from '../constants';
+import { type CacheStats, OBSERVABLE_TYPES, ENTITY_TYPES, OAEV_ENTITY_TYPES } from '../constants';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor } from '../../shared/theme/colors';
 

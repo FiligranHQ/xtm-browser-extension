@@ -1,7 +1,5 @@
 /**
- * Loading View Component
- * 
- * Displays a centered loading spinner.
+ * LoadingView - Displayed when loading data
  */
 
 import React from 'react';
@@ -11,31 +9,21 @@ interface LoadingViewProps {
   message?: string;
 }
 
-/**
- * Loading view with centered spinner
- */
-export const LoadingView: React.FC<LoadingViewProps> = ({ message }) => {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100%',
-        minHeight: 200,
-        gap: 2,
-      }}
-    >
-      <CircularProgress size={40} />
-      {message && (
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {message}
-        </Typography>
-      )}
-    </Box>
-  );
-};
+export const LoadingView: React.FC<LoadingViewProps> = ({ message = 'Loading...' }) => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 200,
+    }}
+  >
+    <CircularProgress size={40} />
+    <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+      {message}
+    </Typography>
+  </Box>
+);
 
 export default LoadingView;
-

@@ -8,8 +8,7 @@
  * - Image fetching
  */
 
-import type { MessageHandler } from './types';
-import { successResponse, errorResponse } from './types';
+import { type MessageHandler, successResponse, errorResponse } from './types';
 import { loggers } from '../../shared/utils/logger';
 import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction';
 

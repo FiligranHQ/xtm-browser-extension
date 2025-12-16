@@ -107,6 +107,7 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const testPlatforms = useCallback((platforms: any[], platformType: 'opencti' | 'openaev') => {

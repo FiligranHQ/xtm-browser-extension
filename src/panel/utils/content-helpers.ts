@@ -1,14 +1,16 @@
 /**
  * Content Helpers
  * Utility functions for content processing in the panel
+ * 
+ * Note: cleanHtmlContent and generateDescription are in description-helpers.ts
  */
 
 import DOMPurify from 'dompurify';
 
 /**
- * Clean and sanitize HTML content for display/storage
+ * Sanitize HTML content using DOMPurify (stricter than cleanHtmlContent)
  */
-export const cleanHtmlContent = (html: string): string => {
+export const sanitizeHtml = (html: string): string => {
   if (!html) return '';
   
   // Use DOMPurify to sanitize HTML
@@ -22,31 +24,6 @@ export const cleanHtmlContent = (html: string): string => {
   });
   
   return clean;
-};
-
-/**
- * Generate a description from page content (first ~500 chars, clean)
- */
-export const generateDescription = (content: string, maxLength = 500): string => {
-  if (!content) return '';
-  
-  // Remove extra whitespace
-  const cleaned = content.replace(/\s+/g, ' ').trim();
-  
-  if (cleaned.length <= maxLength) {
-    return cleaned;
-  }
-  
-  // Find a good break point (end of sentence or word)
-  let breakPoint = cleaned.lastIndexOf('. ', maxLength);
-  if (breakPoint === -1 || breakPoint < maxLength / 2) {
-    breakPoint = cleaned.lastIndexOf(' ', maxLength);
-  }
-  if (breakPoint === -1) {
-    breakPoint = maxLength;
-  }
-  
-  return cleaned.substring(0, breakPoint) + '...';
 };
 
 /**

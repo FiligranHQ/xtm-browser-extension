@@ -7,8 +7,7 @@
  * - Cache clearing
  */
 
-import type { MessageHandler } from './types';
-import { successResponse, errorResponse } from './types';
+import { type MessageHandler, successResponse, errorResponse } from './types';
 import {
   getSettings,
   getSDOCacheStats,

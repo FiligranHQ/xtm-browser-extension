@@ -6,9 +6,6 @@
 
 import { loggers } from '../utils/logger';
 import {
-  MARKING_FRAGMENT,
-  LABEL_FRAGMENT,
-  IDENTITY_FRAGMENT,
   OBSERVABLE_PROPERTIES,
   SDO_PROPERTIES,
   ALL_FRAGMENTS,

@@ -305,7 +305,7 @@ export function extractFirstParagraph(textContent: string, maxLength = 500): str
       if (capitalizedWords.length > words.length * 0.5) {
         return false;
       }
-      if (/^(publié|published|par |by |le \d|on \d|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i.test(p)) {
+      if (/^(publié|published|par |by |le \d|on \d|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i.test(p)) {
         return false;
       }
       return true;

@@ -49,7 +49,7 @@ export interface UnifiedSearchViewProps {
   setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
   setPanelMode: (mode: PanelMode) => void;
   setEntity: (entity: EntityData | null) => void;
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   setCurrentPlatformIndex: (index: number) => void;
   currentPlatformIndexRef: React.MutableRefObject<number>;
@@ -189,8 +189,6 @@ export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
 
   // Handle result click
   const handleUnifiedSearchResultClick = async (result: UnifiedSearchResult) => {
-    log.debug('[UNIFIED-SEARCH-CLICK] Result clicked:', result.name, result.type, result.source);
-
     const platform = availablePlatforms.find(p => p.id === result.platformId);
     
     const baseEntityData = typeof result.entityData === 'object' && result.entityData !== null 

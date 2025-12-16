@@ -155,8 +155,6 @@ export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
 
   // Handle entity click - navigate to entity view
   const handleScanResultEntityClick = async (entity: ScanResultEntity) => {
-    log.debug('[SCAN-CLICK] Entity clicked:', entity.name, entity.type, entity.found);
-    
     // Build multi-platform results from platformMatches
     const results: MultiPlatformResult[] = [];
     
@@ -261,8 +259,8 @@ export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               pageUrl = contentResponse.data?.url || tab.url || pageUrl;
             }
           }
-        } catch (error) {
-          log.debug('Could not get page content for AI discovery:', error);
+        } catch {
+          // Silently handle page content retrieval errors
         }
       }
 
@@ -358,8 +356,6 @@ export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       } as EntityData;
     });
 
-    log.debug('Importing selected scan results:', entitiesToImport.length, 'entities');
-
     // Get page content for container form
     let pageTitle = currentPageTitle || document.title;
     let pageUrl = currentPageUrl || '';
@@ -378,8 +374,8 @@ export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             pageUrl = contentResponse.data?.url || pageUrl;
           }
         }
-      } catch (error) {
-        log.debug('Could not get page content for container form:', error);
+      } catch {
+        // Silently handle page content retrieval errors
       }
     }
 

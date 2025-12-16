@@ -166,11 +166,6 @@ export function createBackgroundMessageHandler(ctx: MessageHandlerContext) {
         sendResponse({ success: true });
         break;
         
-      case 'OPEN_OAEV_SEARCH_PANEL':
-        ctx.showOAEVSearchPanel('');
-        sendResponse({ success: true });
-        break;
-        
       case 'OPEN_UNIFIED_SEARCH_PANEL':
         ctx.showUnifiedSearchPanel('');
         sendResponse({ success: true });

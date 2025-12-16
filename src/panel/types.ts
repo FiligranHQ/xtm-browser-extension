@@ -326,16 +326,6 @@ export interface InvestigationEntity {
   standard_id?: string;
 }
 
-// OpenAEV search result
-export interface OAEVSearchResult {
-  id: string;
-  type: string;
-  name: string;
-  description?: string;
-  platformId?: string;
-  entityData?: unknown;
-}
-
 // Raw attack pattern from scan
 export interface RawAttackPattern {
   id: string;

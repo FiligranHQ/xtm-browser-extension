@@ -434,12 +434,10 @@ const App: React.FC = () => {
     // Get theme setting - strictly from configuration
     chrome.runtime.sendMessage({ type: 'GET_PLATFORM_THEME' }, (response) => {
       if (chrome.runtime.lastError) {
-        log.debug(' GET_PLATFORM_THEME error:', chrome.runtime.lastError);
         return;
       }
       if (response?.success) {
         const themeMode = response.data;
-        log.debug(' Theme from GET_PLATFORM_THEME:', themeMode);
         // Theme is strictly configuration-based - no auto detection
         setMode(themeMode === 'light' ? 'light' : 'dark');
       }
@@ -452,7 +450,6 @@ const App: React.FC = () => {
         // Also set theme from settings to ensure consistency
         if (response.data?.theme) {
           const themeMode = response.data.theme;
-          log.debug(' Theme from GET_SETTINGS:', themeMode);
           // Theme is strictly from settings - default to dark
           setMode(themeMode === 'light' ? 'light' : 'dark');
         }
@@ -491,8 +488,6 @@ const App: React.FC = () => {
           provider: ai?.provider,
           available: aiAvailable,
         });
-        log.debug(' AI settings loaded:', { available: aiAvailable, provider: ai?.provider });
-        
         // Fetch enterprise status for each OpenCTI platform in background
         enabledPlatforms.forEach((platform: PlatformInfo) => {
           chrome.runtime.sendMessage(
@@ -554,8 +549,6 @@ const App: React.FC = () => {
     // Signal to the content script that the panel is ready to receive messages
     // This ensures scan results aren't lost if sent before the panel loads
     window.parent.postMessage({ type: 'XTM_PANEL_READY' }, '*');
-    log.debug('Panel ready, sent XTM_PANEL_READY signal');
-
     // Get initial panel state
     chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
       if (chrome.runtime.lastError) return;
@@ -570,8 +563,6 @@ const App: React.FC = () => {
       if (areaName === 'local' && changes.settings) {
         const newSettings = changes.settings.newValue;
         if (newSettings) {
-          log.debug('Storage change detected, reloading platforms...');
-          
           // Reload OpenCTI platforms
           const openctiPlatforms = newSettings.openctiPlatforms || [];
           const enabledOpenCTI = openctiPlatforms
@@ -663,10 +654,6 @@ const App: React.FC = () => {
 
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;
-    log.debug('[HANDLE-MESSAGE] Received message type:', type);
-    if (type === 'SELECTION_UPDATED') {
-      log.debug('[HANDLE-MESSAGE] SELECTION_UPDATED payload:', payload);
-    }
     handlePanelState({ type, payload });
   };
 
@@ -735,9 +722,6 @@ const App: React.FC = () => {
   // Fetch containers for an entity
   const fetchEntityContainers = async (entityId: string, platformId?: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    log.debug(' fetchEntityContainers called:', { entityId, platformId });
-    
     if (!entityId) {
       log.warn(' fetchEntityContainers: No entityId provided');
       return;
@@ -750,9 +734,7 @@ const App: React.FC = () => {
         type: 'FETCH_ENTITY_CONTAINERS',
         payload: { entityId, limit: 10, platformId },
       });
-      log.debug(' fetchEntityContainers response:', response);
       if (response?.success && response.data) {
-        log.debug(' fetchEntityContainers: Found', response.data.length, 'containers');
         setEntityContainers(response.data);
       } else if (response?.error) {
         log.warn(' fetchEntityContainers failed:', response.error);
@@ -768,7 +750,6 @@ const App: React.FC = () => {
     // If theme is passed in payload, use it immediately
     if (data.payload?.theme && (data.payload.theme === 'dark' || data.payload.theme === 'light')) {
       if (data.payload.theme !== mode) {
-        log.debug(' Theme set from payload:', data.payload.theme);
         setMode(data.payload.theme);
       }
     } else {
@@ -780,7 +761,6 @@ const App: React.FC = () => {
             // Theme is strictly configuration-based - no auto detection
             const themeMode = response.data === 'light' ? 'light' : 'dark';
             if (themeMode !== mode) {
-              log.debug(' Theme updated on panel state change:', themeMode);
               setMode(themeMode);
             }
           }
@@ -792,16 +772,6 @@ const App: React.FC = () => {
       case 'SHOW_ENTITY':
       case 'SHOW_ENTITY_PANEL': {
         const payload = data.payload;
-        log.debug('[SHOW_ENTITY_PANEL] Received payload:', {
-          type: data.type,
-          entityId: payload?.entityId || payload?.id,
-          entityType: payload?.type || payload?.entity_type,
-          platformId: payload?.platformId,
-          hasPlatformMatches: !!(payload?.platformMatches || payload?.entityData?.platformMatches),
-          platformMatchesCount: (payload?.platformMatches || payload?.entityData?.platformMatches)?.length,
-          existsInPlatform: payload?.existsInPlatform,
-        });
-        
         setEntityContainers([]);
         setEntityFromSearchMode(null); // Not from search
         // If scan results exist, allow back navigation to them
@@ -816,10 +786,7 @@ const App: React.FC = () => {
         
         // Handle multi-platform results if entity is found in multiple platforms
         const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
-        log.debug('[SHOW_ENTITY_PANEL] platformMatches:', platformMatches);
-        
         if (platformMatches && platformMatches.length > 0) {
-          log.debug('[SHOW_ENTITY_PANEL] Building multiPlatformResults from', platformMatches.length, 'matches');
           // Build multi-platform results for navigation
           // IMPORTANT: Set entity data structure consistently for navigation to work
           const multiResults: Array<{ platformId: string; platformName: string; entity: EntityData }> = platformMatches.map((match: { platformId: string; platformType?: string; entityId: string; entityData?: any; type?: string }) => {
@@ -859,18 +826,10 @@ const App: React.FC = () => {
           });
           // Sort results: OpenCTI platforms first (knowledge base reference)
           const sortedResults = sortPlatformResults(multiResults);
-          log.debug('[SHOW_ENTITY_PANEL] sortedResults:', sortedResults.map(r => ({
-            platformId: r.platformId,
-            platformName: r.platformName,
-            entityId: r.entity.entityId || r.entity.id,
-            type: r.entity.type,
-            _platformType: r.entity._platformType,
-          })));
           setMultiPlatformResults(sortedResults);
           multiPlatformResultsRef.current = sortedResults; // Update ref synchronously
           setCurrentPlatformIndex(0);
           currentPlatformIndexRef.current = 0; // Update ref synchronously
-          log.debug('[SHOW_ENTITY_PANEL] Set multiPlatformResults, length:', sortedResults.length, 'ref length:', multiPlatformResultsRef.current.length);
         } else if (platformId) {
           // Single platform result - still set it for consistent display
           const platform = availablePlatforms.find(p => p.id === platformId);
@@ -1062,7 +1021,6 @@ const App: React.FC = () => {
         // Use ref to get latest platforms (avoid stale closure)
         const goToNextStep = () => {
           const platforms = openctiPlatformsRef.current;
-          log.debug(' goToNextStep - OpenCTI platforms:', platforms.length);
           if (platforms.length > 1) {
             setPanelMode('platform-select');
           } else {
@@ -1110,7 +1068,6 @@ const App: React.FC = () => {
         setInvestigationTypeFilter('all');
         // Use ref to get latest OpenCTI platforms (investigation is OpenCTI-only)
         const platforms = openctiPlatformsRef.current;
-        log.debug(' SHOW_INVESTIGATION_PANEL - OpenCTI platforms:', platforms.length);
         // If single OpenCTI platform, auto-select and start scanning
         // If multiple OpenCTI platforms, show platform selection first
         if (platforms.length <= 1) {
@@ -1181,16 +1138,11 @@ const App: React.FC = () => {
           target?.data?.entityId || 
           target?.data?.attack_pattern_id ||
           target?.data?.id;
-        
-        log.debug(' ATOMIC_TESTING_SELECT - target:', { target, entityId, platformId: atomicTestingPlatformId });
-        
         if (target?.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
-          log.debug(' Fetching injector contracts for attack pattern:', entityId);
           chrome.runtime.sendMessage({
             type: 'FETCH_INJECTOR_CONTRACTS',
             payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
           }).then((res: any) => {
-            log.debug(' Injector contracts response:', res);
             if (res?.success) {
               setAtomicTestingInjectorContracts(res.data || []);
             }
@@ -1267,7 +1219,6 @@ const App: React.FC = () => {
           const existing = entityMap.get(groupKey);
           if (existing) {
             // Merge: add this platform to existing entry ONLY if found
-            log.debug(` Merging entity "${entity.name}" (${entity.platformType}) with existing (${existing.platformType}), groupKey: "${groupKey}"`);
             if (entity.found && platformMatch) {
               if (!existing.platformMatches) {
                 existing.platformMatches = [];
@@ -1278,14 +1229,12 @@ const App: React.FC = () => {
               );
               if (!isDuplicate) {
                 existing.platformMatches.push(platformMatch);
-                log.debug(` Added platformMatch for ${entity.platformType}, total matches: ${existing.platformMatches.length}`);
               }
               // Mark the entity as found since at least one platform found it
               existing.found = true;
             }
           } else {
             // New entry - only add platformMatches if found
-            log.debug(` Adding new entity "${entity.name}" (${entity.platformType}), groupKey: "${groupKey}"`);
             entityMap.set(groupKey, {
               ...entity,
               platformMatches: platformMatch ? [platformMatch] : [],
@@ -1402,10 +1351,8 @@ const App: React.FC = () => {
       }
       case 'SELECTION_UPDATED': {
         // Sync selection state from content script (highlight checkbox clicks)
-        log.debug(' SELECTION_UPDATED received:', data.payload);
         const { selectedItems } = data.payload || {};
         if (Array.isArray(selectedItems)) {
-          log.debug(' Setting selectedScanItems to:', selectedItems);
           setSelectedScanItems(new Set(selectedItems));
         } else {
           log.warn(' SELECTION_UPDATED: selectedItems is not an array:', selectedItems);
@@ -1441,12 +1388,6 @@ const App: React.FC = () => {
       case 'SHOW_SCENARIO_PANEL': {
         // Initialize scenario creation with attack patterns from the page
         const { attackPatterns, pageTitle, pageUrl, pageDescription, theme: themeFromPayload } = data.payload || {};
-        
-        log.debug(' SHOW_SCENARIO_PANEL received:', {
-          attackPatternsCount: attackPatterns?.length || 0,
-          attackPatterns: attackPatterns?.slice(0, 3).map((ap: any) => ({ name: ap.name, platformId: ap.platformId })),
-        });
-        
         // Set theme if provided
         if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) {
           setMode(themeFromPayload);
@@ -1490,7 +1431,6 @@ const App: React.FC = () => {
         
         // If platforms haven't loaded yet, try to fetch them from settings
         if (currentPlatforms.length === 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-          log.debug(' Platforms not loaded yet, fetching from settings...');
           try {
             const settingsResponse = await new Promise<any>((resolve) => {
               chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
@@ -1525,8 +1465,6 @@ const App: React.FC = () => {
               // Update state and ref
               setAvailablePlatforms(currentPlatforms);
               availablePlatformsRef.current = currentPlatforms;
-              
-              log.debug(' Loaded platforms from settings:', currentPlatforms.map(p => ({ id: p.id, name: p.name, type: p.type })));
             }
           } catch (error) {
             log.warn(' Failed to fetch platforms:', error);
@@ -1534,9 +1472,6 @@ const App: React.FC = () => {
         }
         
         const oaevPlatforms = currentPlatforms.filter(p => p.type === 'openaev');
-        log.debug(' OpenAEV platforms:', oaevPlatforms.map(p => ({ id: p.id, name: p.name })));
-        log.debug(' All platforms:', currentPlatforms.map(p => ({ id: p.id, name: p.name, type: p.type })));
-        
         if (oaevPlatforms.length > 1) {
           // Multiple OpenAEV platforms - show platform selection first
           setScenarioPlatformSelected(false);
@@ -1550,33 +1485,16 @@ const App: React.FC = () => {
           setScenarioPlatformId(singlePlatformId);
           setSelectedPlatformId(singlePlatformId);
           setPlatformUrl(oaevPlatforms[0].url);
-          
-          log.debug(' Single platform selected:', singlePlatformId);
-          log.debug(' Attack patterns platformIds:', (attackPatterns || []).map((ap: any) => ap.platformId));
-          
           // Fetch assets, asset groups, and teams for target selection
           if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-            log.debug(' Starting fetch of scenario targets for platform:', singlePlatformId);
             Promise.all([
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }),
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId: singlePlatformId } }),
               chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId: singlePlatformId } }),
             ]).then(([assetsRes, assetGroupsRes, teamsRes]) => {
-              log.debug(' Scenario targets fetch responses:', {
-                assets: { success: assetsRes?.success, count: assetsRes?.data?.length, error: assetsRes?.error },
-                assetGroups: { success: assetGroupsRes?.success, count: assetGroupsRes?.data?.length, error: assetGroupsRes?.error },
-                teams: { success: teamsRes?.success, count: teamsRes?.data?.length, error: teamsRes?.error },
-              });
-              
               if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
               if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
               if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
-              
-              log.debug(' Scenario targets loaded (single platform):', {
-                assets: assetsRes?.data?.length || 0,
-                assetGroups: assetGroupsRes?.data?.length || 0,
-                teams: teamsRes?.data?.length || 0,
-              });
             }).catch((error) => {
               log.error(' Failed to fetch scenario targets:', error);
             });
@@ -1592,9 +1510,6 @@ const App: React.FC = () => {
           const filteredPatterns = (attackPatterns || []).filter(
             (ap: any) => !ap.platformId || ap.platformId === singlePlatformId
           );
-          
-          log.debug(' Filtered patterns count:', filteredPatterns.length);
-          
           // Fetch contracts for filtered attack patterns
           if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
             setScenarioLoading(true);
@@ -1645,9 +1560,6 @@ const App: React.FC = () => {
             killChainPhases: ap.killChainPhases || [],
             contracts: [], // No contracts available without platform
           }));
-          
-          log.debug(' Showing raw attack patterns (no platform):', rawPatternsForDisplay.length);
-          
           setScenarioOverviewData({
             attackPatterns: rawPatternsForDisplay,
             killChainPhases: [],
@@ -1890,7 +1802,6 @@ const App: React.FC = () => {
       
       if (response?.success && response.data) {
         setContainerForm(prev => ({ ...prev, description: response.data }));
-        log.debug(' AI generated description:', response.data.substring(0, 100) + '...');
         showToast({ type: 'success', message: 'AI generated description' });
       } else {
         log.error(' AI description generation failed:', response?.error);
@@ -1920,7 +1831,6 @@ const App: React.FC = () => {
           const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GENERATE_PDF' });
           if (pdfResponse?.success && pdfResponse.data) {
             pdfData = pdfResponse.data;
-            log.debug(' PDF generated:', pdfResponse.data.filename);
           } else {
             log.warn(' PDF generation failed:', pdfResponse?.error);
           }
@@ -2229,23 +2139,18 @@ const App: React.FC = () => {
                     <IconButton 
                       size="small" 
                       onClick={() => {
-                        log.debug('[HEADER-NAV] Prev clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
                         const idx = currentPlatformIndexRef.current;
                         const results = multiPlatformResultsRef.current;
                         if (idx > 0 && results.length > 1) {
                           const newIdx = idx - 1;
                           const target = results[newIdx];
                           const platform = availablePlatforms.find(p => p.id === target.platformId);
-                          log.debug('[HEADER-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
-                          
                           // Update ref FIRST, then state
                           currentPlatformIndexRef.current = newIdx;
                           setCurrentPlatformIndex(newIdx);
                           setEntity(target.entity);
                           setSelectedPlatformId(target.platformId);
                           if (platform) setPlatformUrl(platform.url);
-                          log.debug('[HEADER-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
-                          
                           // Fetch full entity details in background if needed
                           const entityObj = target.entity;
                           const platformType = entityObj?._platformType || 'opencti';
@@ -2299,23 +2204,18 @@ const App: React.FC = () => {
                     <IconButton 
                       size="small" 
                       onClick={() => {
-                        log.debug('[HEADER-NAV] Next clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
                         const idx = currentPlatformIndexRef.current;
                         const results = multiPlatformResultsRef.current;
                         if (idx < results.length - 1) {
                           const newIdx = idx + 1;
                           const target = results[newIdx];
                           const platform = availablePlatforms.find(p => p.id === target.platformId);
-                          log.debug('[HEADER-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
-                          
                           // Update ref FIRST, then state
                           currentPlatformIndexRef.current = newIdx;
                           setCurrentPlatformIndex(newIdx);
                           setEntity(target.entity);
                           setSelectedPlatformId(target.platformId);
                           if (platform) setPlatformUrl(platform.url);
-                          log.debug('[HEADER-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
-                          
                           // Fetch full entity details in background if needed
                           const entityObj = target.entity;
                           const platformType = entityObj?._platformType || 'opencti';
@@ -3127,7 +3027,6 @@ const App: React.FC = () => {
   };
 
   const renderEntityView = () => {
-    log.debug('[RENDER-ENTITY-VIEW] Called, entity:', entity);
     if (!entity) {
       log.warn('[RENDER-ENTITY-VIEW] Entity is null, returning null');
       return null;
@@ -3233,8 +3132,6 @@ const App: React.FC = () => {
       if (!entityId || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
       
       const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
-      log.debug('[ENTITY-NAV] Fetching full details for:', { messageType, entityId, platformType, platformId: targetPlatformId });
-      
       chrome.runtime.sendMessage({
         type: messageType,
         payload: { id: entityId, entityId, entityType, platformId: targetPlatformId },
@@ -3253,7 +3150,6 @@ const App: React.FC = () => {
             _platformType: platformType,
             _isNonDefaultPlatform: platformType !== 'opencti',
           };
-          log.debug('[ENTITY-NAV] Full entity fetched, updating...');
           setEntity(fullEntity);
           // Update cache for future navigation
           multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
@@ -3265,56 +3161,42 @@ const App: React.FC = () => {
 
     // Simple synchronous navigation - switch to cached data, fetch full details in background if needed
     const handlePrevPlatform = () => {
-      log.debug('[ENTITY-NAV] Prev clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
       const idx = currentPlatformIndexRef.current;
       const results = multiPlatformResultsRef.current;
       if (idx > 0 && results.length > 1) {
         const newIdx = idx - 1;
         const target = results[newIdx];
         const platform = availablePlatforms.find(p => p.id === target.platformId);
-        log.debug('[ENTITY-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
-        
         // Update ref FIRST, then state - all synchronously
         currentPlatformIndexRef.current = newIdx;
         setCurrentPlatformIndex(newIdx);
         setEntity(target.entity);
         setSelectedPlatformId(target.platformId);
         if (platform) setPlatformUrl(platform.url);
-        log.debug('[ENTITY-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
-        
         // Fetch full details in background if needed (non-blocking)
         if (needsEntityFetch(target.entity)) {
           fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
         }
-      } else {
-        log.debug('[ENTITY-NAV] Cannot go prev - already at index 0 or no results');
       }
     };
 
     const handleNextPlatform = () => {
-      log.debug('[ENTITY-NAV] Next clicked, idx:', currentPlatformIndexRef.current, 'results:', multiPlatformResultsRef.current.length);
       const idx = currentPlatformIndexRef.current;
       const results = multiPlatformResultsRef.current;
       if (idx < results.length - 1) {
         const newIdx = idx + 1;
         const target = results[newIdx];
         const platform = availablePlatforms.find(p => p.id === target.platformId);
-        log.debug('[ENTITY-NAV] Navigating to idx:', newIdx, 'platform:', target.platformId, 'entity:', target.entity?.entityId || target.entity?.id);
-        
         // Update ref FIRST, then state - all synchronously
         currentPlatformIndexRef.current = newIdx;
         setCurrentPlatformIndex(newIdx);
         setEntity(target.entity);
         setSelectedPlatformId(target.platformId);
         if (platform) setPlatformUrl(platform.url);
-        log.debug('[ENTITY-NAV] State updated, ref is now:', currentPlatformIndexRef.current);
-        
         // Fetch full details in background if needed (non-blocking)
         if (needsEntityFetch(target.entity)) {
           fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
         }
-      } else {
-        log.debug('[ENTITY-NAV] Cannot go next - already at last index');
       }
     };
 
@@ -4196,9 +4078,6 @@ const App: React.FC = () => {
     const entityIds = selectedEntities
       .map(e => e.id)
       .filter(id => id && id.length > 0);
-    
-    log.debug(' Creating workbench with', entityIds.length, 'entities:', entityIds);
-    
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_WORKBENCH',
       payload: {
@@ -4405,8 +4284,6 @@ const App: React.FC = () => {
       // Only process attack patterns from the selected platform - others won't have matching contracts
       if (allContractsRes?.success) {
         const allContracts = allContractsRes.data || [];
-        log.debug(' All contracts for atomic testing:', allContracts.length, 'for platform:', platformId);
-        
         // Update targets with contract availability
         setAtomicTestingTargets(prevTargets => {
           return prevTargets.map(target => {
@@ -4435,9 +4312,6 @@ const App: React.FC = () => {
                 availablePlatforms.add(p);
               }
             }
-            
-            log.debug(' Attack pattern', target.name, '(', targetId, ') has', matchingContracts.length, 'contracts, platforms:', Array.from(availablePlatforms));
-            
             return {
               ...target,
               data: {
@@ -4459,12 +4333,10 @@ const App: React.FC = () => {
           selectedAtomicTarget.data?.id;
         
         if (entityId) {
-          log.debug(' Platform selected, fetching injector contracts for:', entityId);
           const contractsRes = await chrome.runtime.sendMessage({
             type: 'FETCH_INJECTOR_CONTRACTS',
             payload: { attackPatternId: entityId, platformId },
           });
-          log.debug(' Injector contracts response:', contractsRes);
           if (contractsRes?.success) {
             setAtomicTestingInjectorContracts(contractsRes.data || []);
           }
@@ -4502,10 +4374,7 @@ const App: React.FC = () => {
                                   selectedAtomicTarget.type === 'hostname';
       
       if (isDomainOrHostname) {
-        log.debug(' Processing DNS resolution for:', selectedAtomicTarget.value);
-        
         // First, check if a DNS resolution payload already exists for this hostname
-        log.debug(' Checking for existing DNS resolution payload...');
         const existingPayloadRes = await chrome.runtime.sendMessage({
           type: 'FIND_DNS_RESOLUTION_PAYLOAD',
           payload: {
@@ -4518,11 +4387,9 @@ const App: React.FC = () => {
         
         if (existingPayloadRes?.success && existingPayloadRes.data) {
           // Reuse existing payload
-          log.debug(' Found existing DNS resolution payload:', existingPayloadRes.data.payload_id);
           payload = existingPayloadRes.data;
         } else {
           // Create new DNS resolution payload
-          log.debug(' No existing payload found, creating new one...');
           const payloadRes = await chrome.runtime.sendMessage({
             type: 'CREATE_OAEV_PAYLOAD',
             payload: {
@@ -4532,16 +4399,12 @@ const App: React.FC = () => {
               platformId: atomicTestingPlatformId,
             },
           });
-          
-          log.debug(' Payload creation response:', payloadRes);
-          
           if (!payloadRes?.success) {
             log.error(' Failed to create payload:', payloadRes?.error);
             return;
           }
           
           payload = payloadRes.data;
-          log.debug(' Created new payload:', payload);
         }
         
         // Try to get injector contract ID from various possible locations in the response
@@ -4551,8 +4414,6 @@ const App: React.FC = () => {
         
         // If not in response, search for the injector contract by payload ID
         if (!injectorContractId && payload?.payload_id) {
-          log.debug(' Injector contract not in response, searching by payload ID...');
-          
           // Use the API to find the injector contract for this payload
           const findContractRes = await chrome.runtime.sendMessage({
             type: 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD',
@@ -4561,9 +4422,6 @@ const App: React.FC = () => {
               platformId: atomicTestingPlatformId,
             },
           });
-          
-          log.debug(' Find injector contract response:', findContractRes);
-          
           if (findContractRes?.success && findContractRes.data) {
             injectorContractId = findContractRes.data.injector_contract_id;
           }
@@ -4573,8 +4431,6 @@ const App: React.FC = () => {
           log.error(' No injector contract found for payload. Payload:', payload);
           return;
         }
-        
-        log.debug(' Using injector contract ID:', injectorContractId);
       }
       
       if (!injectorContractId) {
@@ -4633,16 +4489,11 @@ const App: React.FC = () => {
       target.data?.entityId || 
       target.data?.attack_pattern_id ||
       target.data?.id;
-    
-    log.debug(' Selecting atomic target:', { target, entityId, platformId: atomicTestingPlatformId });
-    
     if (target.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
-      log.debug(' Fetching injector contracts for attack pattern:', entityId);
       chrome.runtime.sendMessage({
         type: 'FETCH_INJECTOR_CONTRACTS',
         payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
       }).then((res: any) => {
-        log.debug(' Injector contracts response:', res);
         if (res?.success) {
           setAtomicTestingInjectorContracts(res.data || []);
         }
@@ -4674,15 +4525,11 @@ const App: React.FC = () => {
       const MAX_PAGE_CONTENT = 6000;
       let contextContent = pageContent;
       if (contextContent.length > MAX_PAGE_CONTENT) {
-        log.debug(` Page content too large (${contextContent.length} chars), truncating to ${MAX_PAGE_CONTENT}`);
         contextContent = contextContent.substring(0, MAX_PAGE_CONTENT) + '\n\n[Page content truncated]';
       }
       
       // Build the context with page content and optional user context
       const fullContext = contextContent + (atomicTestingAIContext ? `\n\nAdditional context from user: ${atomicTestingAIContext}` : '');
-      
-      log.debug(` Generating AI payload, context length: ${fullContext.length} chars`);
-      
       // Call AI to generate atomic test payload
       const response = await chrome.runtime.sendMessage({
         type: 'AI_GENERATE_ATOMIC_TEST',
@@ -4715,7 +4562,6 @@ const App: React.FC = () => {
           platform: atomicTestingAIPlatform,
         });
         setAtomicTestingTitle(`Atomic Test - ${generatedTest.name || 'AI Generated'}`);
-        log.debug(' AI generated payload:', generatedTest);
       } else {
         const errorMessage = response?.error || 'Unknown error - AI did not return a response';
         log.error(' AI payload generation failed:', errorMessage);
@@ -4757,8 +4603,6 @@ const App: React.FC = () => {
     
     try {
       // Step 1: Create the Command payload on OpenAEV
-      log.debug(' Creating AI-generated Command payload on OpenAEV...');
-      
       const payloadData = {
         payload_type: 'Command',
         payload_name: atomicTestingAIGeneratedPayload.name,
@@ -4788,8 +4632,6 @@ const App: React.FC = () => {
         setAtomicTestingCreating(false);
         return;
       }
-      
-      log.debug(' AI payload created:', payloadRes.data);
       const createdPayload = payloadRes.data;
       
       // Step 2: Get the injector contract for this payload
@@ -4799,7 +4641,6 @@ const App: React.FC = () => {
       
       // If no contract ID in response, find the injector contract for this payload
       if (!injectorContractId) {
-        log.debug(' Searching for injector contract for created payload...');
         const findContractRes = await chrome.runtime.sendMessage({
           type: 'FIND_INJECTOR_CONTRACT_BY_PAYLOAD',
           payload: {
@@ -4810,7 +4651,6 @@ const App: React.FC = () => {
         
         if (findContractRes?.success && findContractRes.data) {
           injectorContractId = findContractRes.data.injector_contract_id;
-          log.debug(' Found injector contract:', injectorContractId);
         }
       }
       
@@ -4836,8 +4676,6 @@ const App: React.FC = () => {
       });
       
       if (response?.success && response.data) {
-        log.debug(' Atomic testing created from AI payload:', response.data);
-        
         // Close panel
         window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
         window.parent.postMessage({ type: 'XTM_CLEAR_HIGHLIGHTS' }, '*');
@@ -5921,10 +5759,6 @@ const App: React.FC = () => {
     
     // Use scenarioPlatformId if available, fallback to selectedPlatformId
     const targetPlatformId = scenarioPlatformId || selectedPlatformId;
-    log.debug(' Creating scenario with platformId:', targetPlatformId, '(scenarioPlatformId:', scenarioPlatformId, ', selectedPlatformId:', selectedPlatformId, ')');
-    log.debug(' Scenario type:', scenarioTypeAffinity);
-    log.debug(' Selected injects:', selectedInjects.length, selectedInjects);
-    
     if (!targetPlatformId) {
       log.error(' No platform ID available for scenario creation');
       setSubmitting(false);
@@ -6002,9 +5836,6 @@ const App: React.FC = () => {
             injectPayload.inject_asset_groups = [scenarioSelectedAssetGroup];
           }
         }
-        
-        log.debug(` Adding inject ${i + 1}/${selectedInjects.length}:`, injectPayload);
-        
         const injectResponse = await chrome.runtime.sendMessage({
           type: 'ADD_INJECT_TO_SCENARIO',
           payload: {
@@ -6014,9 +5845,7 @@ const App: React.FC = () => {
           },
         });
         
-        if (injectResponse?.success && injectResponse.data?.inject_id) {
-          log.debug(` Inject created:`, injectResponse.data.inject_id);
-        } else {
+        if (!injectResponse?.success || !injectResponse.data?.inject_id) {
           log.error(` Failed to create inject:`, injectResponse?.error);
         }
       }
@@ -6058,28 +5887,14 @@ const App: React.FC = () => {
     // Fetch assets, asset groups, and teams for target selection
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
-        log.debug(' Starting fetch of scenario targets for platform:', platformId);
         const [assetsRes, assetGroupsRes, teamsRes] = await Promise.all([
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId } }),
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId } }),
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId } }),
         ]);
-        
-        log.debug(' Scenario targets fetch responses:', {
-          assets: { success: assetsRes?.success, count: assetsRes?.data?.length, error: assetsRes?.error },
-          assetGroups: { success: assetGroupsRes?.success, count: assetGroupsRes?.data?.length, error: assetGroupsRes?.error },
-          teams: { success: teamsRes?.success, count: teamsRes?.data?.length, error: teamsRes?.error },
-        });
-        
         if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
         if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
         if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
-        
-        log.debug(' Scenario targets loaded:', {
-          assets: assetsRes?.data?.length || 0,
-          assetGroups: assetGroupsRes?.data?.length || 0,
-          teams: teamsRes?.data?.length || 0,
-        });
       } catch (error) {
         log.error(' Failed to fetch scenario targets:', error);
       }
@@ -6094,9 +5909,6 @@ const App: React.FC = () => {
     const filteredPatterns = scenarioRawAttackPatterns.filter(
       (ap) => ap.platformId === platformId
     );
-    
-    log.debug(' Filtered attack patterns for platform', platformId, ':', filteredPatterns.length, 'of', scenarioRawAttackPatterns.length);
-    
     // Fetch contracts for filtered attack patterns
     if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       setScenarioLoading(true);
@@ -6208,9 +6020,6 @@ const App: React.FC = () => {
             })) || [],
           },
         });
-        
-        log.debug(' AI scenario generation response:', response);
-        
         if (response?.success && response.data) {
           const generatedScenario = response.data;
           setScenarioAIGeneratedScenario({
@@ -6256,9 +6065,6 @@ const App: React.FC = () => {
             category: scenarioAIGeneratedScenario.category || (isTableTop ? 'table-top' : 'attack-scenario'),
           },
         });
-        
-        log.debug(' Scenario creation response:', scenarioResponse);
-        
         if (!scenarioResponse?.success || !scenarioResponse.data?.scenario_id) {
           log.error(' Failed to create scenario:', scenarioResponse?.error);
           setScenarioCreating(false);
@@ -7493,7 +7299,6 @@ const App: React.FC = () => {
                                 
                                 if (newSelectedInjects.length > 0) {
                                   setSelectedInjects(newSelectedInjects);
-                                  log.debug(' AI selected', newSelectedInjects.length, 'injects');
                                 }
                               }
                             } catch (error) {
@@ -8097,8 +7902,6 @@ const App: React.FC = () => {
                                 
                                 setAiFillingEmails(true);
                                 try {
-                                  log.debug(' Requesting AI email generation for attack patterns:', emailTimeline.map(e => ({ id: e.attackPatternId, name: e.attackPatternName, externalId: e.externalId })));
-                                  
                                   const response = await chrome.runtime.sendMessage({
                                     type: 'AI_GENERATE_EMAILS',
                                     payload: {
@@ -8115,9 +7918,6 @@ const App: React.FC = () => {
                                       })),
                                     },
                                   });
-                                
-                                log.debug(' AI email response:', response);
-                                
                                 if (response?.success && response.data?.emails) {
                                   // Map AI response to ensure attackPatternId matches
                                   // AI might return externalId instead of UUID, so we need to map back
@@ -8132,10 +7932,7 @@ const App: React.FC = () => {
                                       attackPatternId: matchingAp?.attackPatternId || aiEmail.attackPatternId,
                                     };
                                   });
-                                  
-                                  log.debug(' Mapped emails:', mappedEmails);
                                   setScenarioEmails(mappedEmails);
-                                  log.debug(' AI generated', mappedEmails.length, 'email contents');
                                 } else {
                                   log.error(' AI email generation failed - no emails in response:', response);
                                 }
@@ -8491,10 +8288,8 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
-    log.debug('[RENDER-CONTENT] panelMode:', panelMode, 'entity:', entity ? { id: entity.id, type: entity.type, name: entity.name } : null);
     switch (panelMode) {
       case 'entity':
-        log.debug('[RENDER-CONTENT] Rendering entity view, entity:', entity);
         return renderEntityView();
       case 'not-found':
         return (

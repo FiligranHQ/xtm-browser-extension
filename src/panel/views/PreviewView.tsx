@@ -82,7 +82,6 @@ export const PreviewView: React.FC<PreviewViewProps> = ({
   setAiResolvingRelationships,
   availablePlatforms,
   openctiPlatforms,
-  selectedPlatformId: _selectedPlatformId,
   setSelectedPlatformId,
   setPlatformUrl,
   setContainerWorkflowOrigin,
@@ -142,8 +141,8 @@ export const PreviewView: React.FC<PreviewViewProps> = ({
               pageUrl = contentResponse.data?.url || tab.url || pageUrl;
             }
           }
-        } catch (error) {
-          log.debug('Could not get page content for AI relationship resolution:', error);
+        } catch {
+          // Silently handle page content retrieval errors
         }
       }
 

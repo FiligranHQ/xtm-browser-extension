@@ -54,7 +54,7 @@ export interface SearchViewProps {
   setSearching: (searching: boolean) => void;
   setPanelMode: (mode: PanelMode) => void;
   setEntity: (entity: EntityData | null) => void;
-  setEntityFromSearchMode: (mode: 'search' | 'oaev-search' | 'unified-search' | null) => void;
+  setEntityFromSearchMode: (mode: 'search' | 'unified-search' | null) => void;
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   setCurrentPlatformIndex: (index: number) => void;
   currentPlatformIndexRef: React.MutableRefObject<number>;
@@ -79,7 +79,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
   currentPlatformIndexRef,
   multiPlatformResultsRef,
   openctiPlatforms,
-  availablePlatforms: _availablePlatforms,
 }) => {
   // Merge search results from same entity across platforms
   const getMergedSearchResults = (): MergedSearchResult[] => {
@@ -159,8 +158,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
   // Handle search result click
   const handleSearchResultClick = async (merged: MergedSearchResult) => {
-    log.debug('[SEARCH-CLICK] Result clicked:', merged.name, merged.type, merged.platforms.length, 'platforms');
-    
     // Build multi-platform results
     const results: MultiPlatformResult[] = merged.platforms.map(p => ({
       platformId: p.platformId,

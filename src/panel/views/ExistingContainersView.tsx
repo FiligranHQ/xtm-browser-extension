@@ -196,7 +196,6 @@ export const ExistingContainersView: React.FC<ExistingContainersViewProps> = ({
 
         if (response?.success && response.data) {
           const fullContainer = response.data;
-          log.debug(' handleRefreshContainer: Full container data:', fullContainer);
 
           // Pre-fill the form with the container's existing data (but keep new content from page)
           // Use callback form to ensure we get the latest content value

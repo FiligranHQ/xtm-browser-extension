@@ -39,7 +39,6 @@ export interface ContainerTypeViewProps {
 }
 
 export const ContainerTypeView: React.FC<ContainerTypeViewProps> = ({
-  mode: _mode,
   setPanelMode,
   setContainerType,
   containerWorkflowOrigin,

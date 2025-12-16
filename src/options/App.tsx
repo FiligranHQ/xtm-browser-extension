@@ -1284,30 +1284,35 @@ const App: React.FC = () => {
                           </Box>
                           {/* Type breakdown - always visible */}
                           {Object.keys(platform.byType).length > 0 && (
-                            <Box sx={{ pl: 3, pt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            <Box sx={{ pl: 3, pt: 0.5 }}>
                               {Object.entries(platform.byType)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([type, count]) => (
-                                  <Chip
+                                  <Box 
                                     key={type}
-                                    size="small"
-                                    icon={<ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />}
-                                    label={`${type.replace(/-/g, ' ')} (${count})`}
                                     sx={{ 
-                                      height: 24,
-                                      fontSize: '0.7rem',
-                                      bgcolor: mode === 'dark' 
-                                        ? `${itemColor(type, true)}20` 
-                                        : `${itemColor(type, false)}15`,
-                                      color: itemColor(type, mode === 'dark'),
-                                      borderColor: `${itemColor(type, mode === 'dark')}40`,
-                                      border: '1px solid',
-                                      '& .MuiChip-icon': {
-                                        marginLeft: '4px',
-                                        marginRight: '-4px',
-                                      },
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      py: 0.25,
                                     }}
-                                  />
+                                  >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                      <ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />
+                                      <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                          color: 'text.primary',
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        {type.replace(/-/g, ' ')}
+                                      </Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                                      {count}
+                                    </Typography>
+                                  </Box>
                                 ))}
                             </Box>
                           )}
@@ -1349,30 +1354,35 @@ const App: React.FC = () => {
                           </Box>
                           {/* Type breakdown - always visible */}
                           {Object.keys(platform.byType).length > 0 && (
-                            <Box sx={{ pl: 3, pt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            <Box sx={{ pl: 3, pt: 0.5 }}>
                               {Object.entries(platform.byType)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([type, count]) => (
-                                  <Chip
+                                  <Box 
                                     key={type}
-                                    size="small"
-                                    icon={<ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />}
-                                    label={`${type.replace(/-/g, ' ')} (${count})`}
                                     sx={{ 
-                                      height: 24,
-                                      fontSize: '0.7rem',
-                                      bgcolor: mode === 'dark' 
-                                        ? `${itemColor(type, true)}20` 
-                                        : `${itemColor(type, false)}15`,
-                                      color: itemColor(type, mode === 'dark'),
-                                      borderColor: `${itemColor(type, mode === 'dark')}40`,
-                                      border: '1px solid',
-                                      '& .MuiChip-icon': {
-                                        marginLeft: '4px',
-                                        marginRight: '-4px',
-                                      },
+                                      display: 'flex', 
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      py: 0.25,
                                     }}
-                                  />
+                                  >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                      <ItemIcon type={type.toLowerCase()} size="small" color={itemColor(type, mode === 'dark')} />
+                                      <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                          color: 'text.primary',
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        {type.replace(/-/g, ' ')}
+                                      </Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                                      {count}
+                                    </Typography>
+                                  </Box>
                                 ))}
                             </Box>
                           )}

@@ -147,7 +147,9 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 
 // CVE identifier
 // Matches: CVE-2021-44228, CVE-2022-0001
-export const CVE_PATTERN = /CVE-\d{4}-\d{4,}/gi;
+// Also handles non-breaking hyphens (‑), en dashes (–), and other dash-like characters
+// that may appear in web content due to typography or copy-paste
+export const CVE_PATTERN = /CVE[\-\u2010\u2011\u2012\u2013]\d{4}[\-\u2010\u2011\u2012\u2013]\d{4,}/gi;
 
 // ============================================================================
 // ASN Pattern

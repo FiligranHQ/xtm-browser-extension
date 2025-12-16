@@ -370,18 +370,29 @@ export class OpenCTIClient {
 
   /**
    * Execute a GraphQL query
+   * @param query - The GraphQL query string
+   * @param variables - Optional variables for the query
+   * @param draftId - Optional draft workspace ID to execute the query in draft context
    */
   private async query<T>(
     query: string,
-    variables?: Record<string, unknown>
+    variables?: Record<string, unknown>,
+    draftId?: string
   ): Promise<T> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiToken}`,
+      'User-Agent': USER_AGENT,
+    };
+    
+    // Add draft context header if provided
+    if (draftId) {
+      headers['opencti-draft-id'] = draftId;
+    }
+    
     const response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiToken}`,
-        'User-Agent': USER_AGENT,
-      },
+      headers,
       body: JSON.stringify({ query, variables }),
     });
 
@@ -2041,10 +2052,39 @@ export class OpenCTIClient {
   }
 
   /**
+   * Create a draft workspace
+   * Used to create entities in draft mode before validation
+   */
+  async createDraftWorkspace(name: string): Promise<{ id: string; name: string }> {
+    const query = `
+      mutation DraftWorkspaceAdd($input: DraftWorkspaceAddInput!) {
+        draftWorkspaceAdd(input: $input) {
+          id
+          name
+        }
+      }
+    `;
+    
+    const data = await this.query<{
+      draftWorkspaceAdd: { id: string; name: string };
+    }>(query, { input: { name } });
+    
+    return data.draftWorkspaceAdd;
+  }
+
+  /**
    * Create a new container (Report, Case, Grouping)
    * Each container type has its own mutation and input type
+   * If createAsDraft is true, creates a draft workspace first and adds the container to it
    */
-  async createContainer(input: ContainerCreateInput): Promise<StixDomainObject> {
+  async createContainer(input: ContainerCreateInput): Promise<StixDomainObject & { draftId?: string }> {
+    // If creating as draft, first create a draft workspace
+    let draftId: string | undefined;
+    if (input.createAsDraft) {
+      const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
+      draftId = draftWorkspace.id;
+    }
+    
     // Build container input based on type
     const containerInput: Record<string, unknown> = {
       name: input.name,
@@ -2165,11 +2205,19 @@ export class OpenCTIClient {
         throw new Error(`Unsupported container type: ${input.type}`);
     }
 
+    // Execute query with draft context if creating as draft
     const data = await this.query<{
       [key: string]: StixDomainObject;
-    }>(query, { input: containerInput });
+    }>(query, { input: containerInput }, draftId);
 
-    return data[mutationName];
+    const container = data[mutationName];
+    
+    // Return container with draftId if created in draft mode
+    if (draftId) {
+      return { ...container, draftId };
+    }
+    
+    return container;
   }
 
   /**

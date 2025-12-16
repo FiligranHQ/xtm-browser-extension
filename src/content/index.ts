@@ -3339,7 +3339,11 @@ function highlightResults(results: ScanResultPayload): void {
   // Find and highlight CVEs (Vulnerabilities)
   if (results.cves) {
     for (const cve of results.cves) {
-      highlightInText(fullText, cve.name, nodeMap, {
+      // Use matchedValue (the actual matched text) if available, otherwise use name
+      // This is important when CVEs contain special dash characters (non-breaking hyphens, en dashes)
+      // e.g., "CVE‑2024‑7954" (with non-breaking hyphens) -> name is "CVE-2024-7954" (normalized)
+      const textToHighlight = (cve as any).matchedValue || cve.name;
+      highlightInText(fullText, textToHighlight, nodeMap, {
         type: cve.type, // 'Vulnerability'
         found: cve.found,
         data: cve,

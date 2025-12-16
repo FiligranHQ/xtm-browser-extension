@@ -465,6 +465,8 @@ export interface ContainerCreateInput {
   objectLabel?: string[];
   createdBy?: string;
   externalReferences?: ExternalReferenceInput[];
+  // Draft mode - creates container in a new draft workspace
+  createAsDraft?: boolean;
 }
 
 export interface ExternalReferenceInput {

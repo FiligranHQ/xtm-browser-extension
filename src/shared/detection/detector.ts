@@ -188,9 +188,13 @@ export class DetectionEngine {
     
     let match;
     while ((match = pattern.exec(text)) !== null) {
+      // Normalize various dash characters to standard hyphen for consistent lookup
+      // Handles: hyphen-minus (-), hyphen (‐), non-breaking hyphen (‑), figure dash (‒), en dash (–)
+      const normalizedName = match[0].toUpperCase().replace(/[\u2010\u2011\u2012\u2013]/g, '-');
       detected.push({
         type: 'Vulnerability',
-        name: match[0].toUpperCase(),
+        name: normalizedName,
+        matchedValue: match[0], // Keep original for highlighting
         startIndex: match.index,
         endIndex: match.index + match[0].length,
         found: false,

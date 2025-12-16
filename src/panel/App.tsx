@@ -366,6 +366,8 @@ const App: React.FC = () => {
   // PDF attachment option
   const [attachPdf, setAttachPdf] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  // Create as draft option
+  const [createAsDraft, setCreateAsDraft] = useState(false);
   // Page URL for external reference and existing container lookup
   const [currentPageUrl, setCurrentPageUrl] = useState('');
   const [currentPageTitle, setCurrentPageTitle] = useState('');
@@ -2394,9 +2396,12 @@ const App: React.FC = () => {
     window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
   };
 
-  const handleOpenInPlatform = (entityId: string) => {
+  const handleOpenInPlatform = (entityId: string, draftId?: string) => {
     if (platformUrl && entityId) {
-      const url = `${platformUrl}/dashboard/id/${entityId}`;
+      // If entity was created as draft, navigate to draft workspace
+      const url = draftId 
+        ? `${platformUrl}/dashboard/data/import/draft/${draftId}`
+        : `${platformUrl}/dashboard/id/${entityId}`;
       window.open(url, '_blank');
     }
   };
@@ -2741,6 +2746,8 @@ const App: React.FC = () => {
         priority: containerSpecificFields.priority || undefined,
         response_types: containerSpecificFields.response_types.length > 0 ? containerSpecificFields.response_types : undefined,
         createdBy: containerSpecificFields.createdBy || undefined,
+        // Draft mode
+        createAsDraft: createAsDraft,
       },
     });
 
@@ -2781,6 +2788,7 @@ const App: React.FC = () => {
         _platformId: createdPlatformId,
         _platformType: 'opencti', // Explicitly mark as OpenCTI entity
         _isNonDefaultPlatform: false, // Not a non-default platform
+        _draftId: createdContainer.draftId, // Draft ID if created as draft
       });
       setEntityContainers([]);
       setPanelMode('entity');
@@ -2790,6 +2798,7 @@ const App: React.FC = () => {
       setEntitiesToAdd([]);
       setContainerWorkflowOrigin(null);
       setAttachPdf(true); // Reset PDF option
+      setCreateAsDraft(false); // Reset draft option
     } else {
       log.error(' Container creation failed:', response?.error);
     }
@@ -4253,9 +4262,24 @@ const App: React.FC = () => {
         </Box>
 
         {/* Name */}
-        <Typography variant="h6" sx={{ mb: 1, wordBreak: 'break-word', fontWeight: 600 }}>
-          {name}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+          <Typography variant="h6" sx={{ wordBreak: 'break-word', fontWeight: 600 }}>
+            {name}
+          </Typography>
+          {(entity as any)?._draftId && (
+            <Chip 
+              label="Draft" 
+              size="small" 
+              sx={{ 
+                bgcolor: '#ff9800', 
+                color: '#000', 
+                fontWeight: 700,
+                fontSize: '0.7rem',
+                height: 20,
+              }} 
+            />
+          )}
+        </Box>
 
         {isAttackPattern && xMitreId && (
           <Box sx={{ mb: 2 }}>
@@ -4770,10 +4794,10 @@ const App: React.FC = () => {
                   style={{ width: 18, height: 18 }} 
                 />
               }
-              onClick={() => handleOpenInPlatform(entityId)}
+              onClick={() => handleOpenInPlatform(entityId, (entity as any)?._draftId)}
               fullWidth
             >
-              Open in OpenCTI
+              {(entity as any)?._draftId ? 'Open Draft in OpenCTI' : 'Open in OpenCTI'}
             </Button>
           )}
           {(entity.value || name) && (
@@ -6195,6 +6219,26 @@ const App: React.FC = () => {
           </Alert>
         )}
 
+        {/* Create as draft option */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={createAsDraft}
+              onChange={(e) => setCreateAsDraft(e.target.checked)}
+              size="small"
+            />
+          }
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="body2">Create as draft</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                (requires validation before publishing)
+              </Typography>
+            </Box>
+          }
+          sx={{ ml: 0 }}
+        />
+
         <Button
           variant="contained"
           onClick={handleCreateContainer}
@@ -6909,7 +6953,7 @@ const App: React.FC = () => {
   };
 
   // Handler for importing selected entities from scan results
-  const handleImportSelectedScanResults = () => {
+  const handleImportSelectedScanResults = async () => {
     // Get selected entities from scan results that can be imported to OpenCTI
     const selectedEntities = scanResultsEntities.filter(entity => {
       const entityValue = entity.value || entity.name;
@@ -6932,10 +6976,41 @@ const App: React.FC = () => {
     
     log.debug('Importing selected scan results:', entitiesToImport.length, 'entities');
     
+    // Get page content for container form
+    let pageTitle = currentPageTitle || document.title;
+    let pageContent = '';
+    let pageHtmlContent = '';
+    
+    if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
+          if (contentResponse?.success) {
+            pageContent = contentResponse.data?.content || '';
+            pageHtmlContent = contentResponse.data?.htmlContent || pageContent;
+            pageTitle = contentResponse.data?.title || pageTitle;
+          }
+        }
+      } catch (error) {
+        log.debug('Could not get page content for container form:', error);
+      }
+    }
+    
+    // Generate description from page content
+    const description = pageContent ? generateDescription(pageContent) : '';
+    
+    // Set container form with page info
+    setContainerForm({
+      name: pageTitle,
+      description: description,
+      content: pageHtmlContent ? cleanHtmlContent(pageHtmlContent) : '',
+    });
+    
     // Set entities and go to preview view
     setEntitiesToAdd(entitiesToImport);
     setCurrentPageUrl(currentPageUrl || window.location.href);
-    setCurrentPageTitle(currentPageTitle || document.title);
+    setCurrentPageTitle(pageTitle);
     setPanelMode('preview');
   };
 

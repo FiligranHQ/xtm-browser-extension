@@ -2299,6 +2299,8 @@ async function handleMessage(
           priority?: string;
           response_types?: string[];
           createdBy?: string;
+          // Draft mode
+          createAsDraft?: boolean;
         };
         
         try {
@@ -2378,6 +2380,8 @@ async function handleMessage(
             priority: containerPayload.priority,
             response_types: containerPayload.response_types,
             createdBy: containerPayload.createdBy,
+            // Draft mode
+            createAsDraft: containerPayload.createAsDraft,
           });
           
           // Step 3: Attach external reference to the container

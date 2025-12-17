@@ -190,6 +190,8 @@ export interface ScenarioFormData {
   description: string;
   subtitle: string;
   category: string;
+  mainFocus: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
 // Selected inject for scenario

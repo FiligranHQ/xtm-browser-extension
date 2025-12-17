@@ -48,7 +48,6 @@ export interface ExtensionSettings {
   theme: 'light' | 'dark' | 'auto';
   autoScan: boolean;
   highlightColor?: string;
-  scanOnLoad: boolean;
   showNotifications: boolean;
   detection?: DetectionSettings;
   // AI configuration (available only with EE platforms)
@@ -63,7 +62,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   openaevPlatforms: [],
   theme: 'dark',
   autoScan: false,
-  scanOnLoad: false,
   showNotifications: true,
   detection: {
     // Entity types match the SDO cache structure (storage.ts SDOCache)
@@ -82,7 +80,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     },
   },
   ai: {
-    enabled: false,
+    // AI settings - no default provider/key
   },
 };
 

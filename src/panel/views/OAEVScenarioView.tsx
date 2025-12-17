@@ -52,6 +52,12 @@ import { loggers } from '../../shared/utils/logger';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils';
 import type { PlatformInfo, PanelMode } from '../types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
+import {
+  SCENARIO_CATEGORY_OPTIONS,
+  SCENARIO_MAIN_FOCUS_OPTIONS,
+  SCENARIO_SEVERITY_OPTIONS,
+  SCENARIO_DEFAULT_VALUES,
+} from '../../shared/types';
 
 const log = loggers.panel;
 
@@ -355,7 +361,9 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           name: scenarioForm.name || scenarioAIGeneratedScenario.name,
           description: scenarioAIGeneratedScenario.description,
           subtitle: scenarioAIGeneratedScenario.subtitle,
-          category: scenarioForm.category || scenarioAIGeneratedScenario.category || (isTableTop ? 'table-top' : 'attack-scenario'),
+          category: scenarioForm.category || scenarioAIGeneratedScenario.category || SCENARIO_DEFAULT_VALUES.category,
+          mainFocus: scenarioForm.mainFocus || SCENARIO_DEFAULT_VALUES.mainFocus,
+          severity: scenarioForm.severity || SCENARIO_DEFAULT_VALUES.severity,
         },
       });
       
@@ -472,6 +480,8 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           description: scenarioForm.description,
           subtitle: scenarioForm.subtitle,
           category: scenarioForm.category,
+          mainFocus: scenarioForm.mainFocus,
+          severity: scenarioForm.severity,
           platformId: targetPlatformId,
         },
       });
@@ -554,7 +564,14 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       showToast({ type: 'success', message: 'Scenario created successfully' });
       
       // Reset and close
-      setScenarioForm({ name: '', description: '', subtitle: '', category: 'attack-scenario' });
+      setScenarioForm({
+        name: '',
+        description: '',
+        subtitle: '',
+        category: SCENARIO_DEFAULT_VALUES.category,
+        mainFocus: SCENARIO_DEFAULT_VALUES.mainFocus,
+        severity: SCENARIO_DEFAULT_VALUES.severity,
+      });
       setSelectedInjects([]);
       setScenarioOverviewData(null);
       setScenarioEmails([]);
@@ -569,13 +586,6 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
 
   // Render scenario form view (step 2)
   if (panelMode === 'scenario-form') {
-    const categories = [
-      { value: 'attack-scenario', label: 'Attack Scenario' },
-      { value: 'incident-response', label: 'Incident Response' },
-      { value: 'detection-validation', label: 'Detection Validation' },
-      { value: 'red-team', label: 'Red Team' },
-      { value: 'purple-team', label: 'Purple Team' },
-    ];
     
     // For table-top, create email timeline from selected attack patterns only
     const emailTimeline = scenarioTypeAffinity === 'TABLE-TOP' && selectedInjects.length > 0
@@ -680,18 +690,52 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             sx={{ mb: 2 }}
           />
           
+          {/* Category and Main Focus side by side */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              select
+              label="Category"
+              value={scenarioForm.category}
+              onChange={(e) => setScenarioForm(prev => ({ ...prev, category: e.target.value }))}
+              fullWidth
+              size="small"
+            >
+              {SCENARIO_CATEGORY_OPTIONS.map((cat) => (
+                <MenuItem key={cat.value} value={cat.value}>
+                  {cat.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            
+            <TextField
+              select
+              label="Main Focus"
+              value={scenarioForm.mainFocus}
+              onChange={(e) => setScenarioForm(prev => ({ ...prev, mainFocus: e.target.value }))}
+              fullWidth
+              size="small"
+            >
+              {SCENARIO_MAIN_FOCUS_OPTIONS.map((focus) => (
+                <MenuItem key={focus.value} value={focus.value}>
+                  {focus.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+          
+          {/* Severity */}
           <TextField
             select
-            label="Category"
-            value={scenarioForm.category}
-            onChange={(e) => setScenarioForm(prev => ({ ...prev, category: e.target.value }))}
+            label="Severity"
+            value={scenarioForm.severity}
+            onChange={(e) => setScenarioForm(prev => ({ ...prev, severity: e.target.value as 'low' | 'medium' | 'high' | 'critical' }))}
             fullWidth
             size="small"
             sx={{ mb: 2 }}
           >
-            {categories.map((cat) => (
-              <MenuItem key={cat.value} value={cat.value}>
-                {cat.label}
+            {SCENARIO_SEVERITY_OPTIONS.map((sev) => (
+              <MenuItem key={sev.value} value={sev.value}>
+                {sev.label}
               </MenuItem>
             ))}
           </TextField>

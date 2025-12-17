@@ -549,7 +549,7 @@ Keep email bodies concise (2-4 sentences) but informative. ALL CONTENT MUST BE I
     const systemPrompt = `You are an expert cybersecurity threat intelligence analyst. Your task is to identify ONLY HIGH-VALUE, ACTIONABLE threat intelligence entities that regex patterns missed.
 
 CRITICAL RULES - READ CAREFULLY:
-1. BE EXTREMELY CONSERVATIVE - It is MUCH better to return an empty list than to include questionable entities
+1. BE HIGHLY CONSERVATIVE - It is MUCH better to return an empty list than to include questionable entities
 2. EXPLICIT MENTIONS ONLY - The entity must be EXPLICITLY and UNAMBIGUOUSLY mentioned in the text
 3. EXACT VALUES - The entity value must match EXACTLY what appears in the text
 4. CYBERSECURITY CONTEXT REQUIRED - The entity must be discussed in a threat/security context, not just mentioned casually
@@ -578,11 +578,18 @@ WHAT TO AVOID (DO NOT EXTRACT):
 
 Output ONLY valid JSON, no additional text.`;
 
-    const alreadyDetectedSummary = request.alreadyDetected.length > 0
-      ? request.alreadyDetected.map(e => {
+    const alreadyDetectedList = request.alreadyDetected || [];
+    const alreadyDetectedSummary = alreadyDetectedList.length > 0
+      ? alreadyDetectedList.map(e => {
           const parts = [`- ${e.type}: ${e.value || e.name}`];
+          // Include external ID (e.g., MITRE ATT&CK ID like T1059.001)
           if (e.externalId && e.externalId !== e.value && e.externalId !== e.name) {
-            parts.push(` (also known as: ${e.externalId})`);
+            parts.push(` (ID: ${e.externalId})`);
+          }
+          // Include aliases (alternative names)
+          if (e.aliases && Array.isArray(e.aliases) && e.aliases.length > 0) {
+            const aliasesStr = e.aliases.slice(0, 3).join(', ');
+            parts.push(` (aliases: ${aliasesStr}${e.aliases.length > 3 ? '...' : ''})`);
           }
           return parts.join('');
         }).join('\n')

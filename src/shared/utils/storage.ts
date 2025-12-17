@@ -22,7 +22,6 @@ export async function getSettings(): Promise<ExtensionSettings> {
     openaevPlatforms: [],
     theme: 'auto',
     autoScan: false,
-    scanOnLoad: false,
     showNotifications: true,
   };
   

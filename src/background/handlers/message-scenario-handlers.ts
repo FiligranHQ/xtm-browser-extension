@@ -25,8 +25,9 @@ export interface CreateScenarioPayload {
   description?: string;
   subtitle?: string;
   category?: string;
+  mainFocus?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
   platformId?: string;
-  isAIGenerated?: boolean;
 }
 
 export async function handleCreateScenario(
@@ -34,7 +35,7 @@ export async function handleCreateScenario(
   sendResponse: SendResponse,
   getClient: ClientGetter
 ): Promise<void> {
-  const { name, description, subtitle, category, platformId } = payload;
+  const { name, description, subtitle, category, mainFocus, severity, platformId } = payload;
   
   try {
     const client = getClient(platformId);
@@ -48,6 +49,8 @@ export async function handleCreateScenario(
       scenario_description: description,
       scenario_subtitle: subtitle,
       scenario_category: category,
+      scenario_main_focus: mainFocus,
+      scenario_severity: severity,
     });
     
     // Return with URL
@@ -118,7 +121,6 @@ export interface AddEmailInjectPayload {
   body: string;
   delayMinutes: number;
   teamId?: string;
-  isAIGenerated?: boolean;
 }
 
 export async function handleAddEmailInjectToScenario(
@@ -174,7 +176,6 @@ export interface AddTechnicalInjectPayload {
   delayMinutes: number;
   assetId?: string;
   assetGroupId?: string;
-  isAIGenerated?: boolean;
 }
 
 export async function handleAddTechnicalInjectToScenario(

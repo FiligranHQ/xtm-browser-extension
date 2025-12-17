@@ -92,7 +92,6 @@ export interface ExtensionSettings {
   theme: 'light' | 'dark' | 'auto';
   autoScan: boolean;
   highlightColor?: string;
-  scanOnLoad: boolean;
   showNotifications: boolean;
   detection?: DetectionSettings;
   // AI configuration (available only with EE platforms)
@@ -104,7 +103,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   openaevPlatforms: [],
   theme: 'dark',
   autoScan: false,
-  scanOnLoad: false,
   showNotifications: true,
   detection: {
     // Entity types match the OpenCTI entity cache structure (storage.ts OCTIEntityCache)
@@ -123,7 +121,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     },
   },
   ai: {
-    enabled: false,
+    // AI settings - no default provider/key
   },
 };
 
@@ -220,6 +218,9 @@ export interface DetectedOCTIEntity {
   // All platforms where this entity was found (for multi-platform navigation)
   platformMatches?: PlatformMatch[];
 }
+
+/** Type alias for DetectedOCTIEntity (STIX Domain Object) */
+export type DetectedSDO = DetectedOCTIEntity;
 
 // ============================================================================
 // Platform-Specific Entity Types
@@ -547,19 +548,36 @@ export interface OAEVScenarioInput {
 }
 
 /**
+ * Available category options for OpenAEV scenarios
+ * Matches OpenAEV scenarioCategories constant
+ */
+export const SCENARIO_CATEGORY_OPTIONS = [
+  { value: 'global-crisis', label: 'Global Crisis' },
+  { value: 'attack-scenario', label: 'Attack Scenario' },
+  { value: 'media-pressure', label: 'Media Pressure' },
+  { value: 'data-exfiltration', label: 'Data Exfiltration' },
+  { value: 'capture-the-flag', label: 'Capture The Flag' },
+  { value: 'vulnerability-exploitation', label: 'Vulnerability Exploitation' },
+  { value: 'lateral-movement', label: 'Lateral Movement' },
+  { value: 'url-filtering', label: 'URL Filtering' },
+] as const;
+
+/**
  * Available main focus options for OpenAEV scenarios
+ * Matches OpenAEV Scenario.MAIN_FOCUS_* constants
  */
 export const SCENARIO_MAIN_FOCUS_OPTIONS = [
   { value: 'incident-response', label: 'Incident Response' },
   { value: 'endpoint-protection', label: 'Endpoint Protection' },
   { value: 'web-filtering', label: 'Web Filtering' },
-  { value: 'standard-operating-procedure', label: 'Standard Operating Procedure' },
+  { value: 'standard-operating-procedure', label: 'Standard Operating Procedures' },
   { value: 'crisis-communication', label: 'Crisis Communication' },
   { value: 'strategic-reaction', label: 'Strategic Reaction' },
 ] as const;
 
 /**
  * Available severity options for OpenAEV scenarios
+ * Matches OpenAEV Scenario.SEVERITY enum
  */
 export const SCENARIO_SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -567,6 +585,15 @@ export const SCENARIO_SEVERITY_OPTIONS = [
   { value: 'high', label: 'High' },
   { value: 'critical', label: 'Critical' },
 ] as const;
+
+/**
+ * Default scenario form values matching OpenAEV defaults
+ */
+export const SCENARIO_DEFAULT_VALUES = {
+  category: 'attack-scenario',
+  mainFocus: 'incident-response',
+  severity: 'high' as const,
+};
 
 export interface OAEVScenario {
   scenario_id: string;

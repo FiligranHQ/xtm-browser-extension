@@ -20,6 +20,7 @@ import {
   Button,
   IconButton,
   Chip,
+  Divider,
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
@@ -34,6 +35,8 @@ import {
   DomainOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Kayaking } from 'mdi-material-ui';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { hexToRGB } from '../../shared/theme/colors';
 import { formatDateTime } from '../../shared/utils/formatters';
@@ -334,7 +337,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       </Box>
 
       {/* Name */}
-      <Typography variant="h6" sx={{ mb: 1.5, wordBreak: 'break-word', fontWeight: 600 }}>
+      <Typography variant="h6" sx={{ mb: 1, wordBreak: 'break-word', fontWeight: 600 }}>
         {name}
       </Typography>
 
@@ -352,6 +355,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
               color,
               fontWeight: 600,
               borderRadius: 1,
+              fontSize: '0.875rem',
             }} 
           />
         </Box>
@@ -362,11 +366,11 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
         <>
           {/* Hostname */}
           {(entityData.endpoint_hostname || entityData.asset_hostname) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Hostname
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {entityData.endpoint_hostname || entityData.asset_hostname}
               </Typography>
             </Box>
@@ -374,13 +378,13 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           
           {/* IPs */}
           {((entityData.endpoint_ips || entityData.asset_ips) && (entityData.endpoint_ips || entityData.asset_ips).length > 0) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 IP Addresses
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 {(entityData.endpoint_ips || entityData.asset_ips).map((ip: string, i: number) => (
-                  <Chip key={i} label={ip} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                  <Chip key={i} label={ip} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
                 ))}
               </Box>
             </Box>
@@ -388,45 +392,45 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           
           {/* Platform */}
           {(entityData.endpoint_platform || entityData.asset_platform) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Platform
               </Typography>
               <Chip 
                 label={entityData.endpoint_platform || entityData.asset_platform} 
                 size="small" 
-                sx={{ bgcolor: 'action.selected', borderRadius: 1 }}
+                sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }}
               />
             </Box>
           )}
           
           {/* Architecture */}
           {entityData.endpoint_arch && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Architecture
               </Typography>
-              <Chip label={entityData.endpoint_arch} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              <Chip label={entityData.endpoint_arch} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
             </Box>
           )}
           
           {/* Asset Type */}
           {(entityData.asset_type || entityData.endpoint_type) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Asset Type
               </Typography>
-              <Chip label={entityData.asset_type || entityData.endpoint_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              <Chip label={entityData.asset_type || entityData.endpoint_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
             </Box>
           )}
           
           {/* Last Seen */}
           {(entityData.asset_last_seen || entityData.endpoint_last_seen) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Last Seen
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {formatDateTime(entityData.asset_last_seen || entityData.endpoint_last_seen)}
               </Typography>
             </Box>
@@ -434,13 +438,13 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           
           {/* MACs */}
           {((entityData.endpoint_mac_addresses || entityData.asset_mac_addresses) && (entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).length > 0) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 MAC Addresses
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 {(entityData.endpoint_mac_addresses || entityData.asset_mac_addresses).map((mac: string, i: number) => (
-                  <Chip key={i} label={mac} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+                  <Chip key={i} label={mac} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
                 ))}
               </Box>
             </Box>
@@ -449,7 +453,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           {/* Tags */}
           {((entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags) && 
             (entityData.asset_tags_resolved || entityData.endpoint_tags_resolved || entityData.asset_tags || entityData.endpoint_tags).length > 0) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Tags
               </Typography>
@@ -462,6 +466,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
                     sx={{ 
                       bgcolor: 'action.selected', 
                       borderRadius: 1,
+                      fontWeight: 500,
                       maxWidth: '100%',
                       '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
                     }} 
@@ -477,11 +482,11 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       {oaevType === 'AssetGroup' && (
         <>
           {(entityData.asset_group_assets?.length > 0 || entityData.assets?.length > 0) && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Assets Count
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {entityData.asset_group_assets?.length || entityData.assets?.length || 0} assets
               </Typography>
             </Box>
@@ -493,21 +498,21 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       {(oaevType === 'Player' || oaevType === 'User') && (
         <>
           {entityData.user_email && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Email
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {entityData.user_email}
               </Typography>
             </Box>
           )}
           {entityData.user_phone && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Phone
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {entityData.user_phone}
               </Typography>
             </Box>
@@ -519,11 +524,11 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       {oaevType === 'Team' && (
         <>
           {entityData.team_users?.length > 0 && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Members
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {entityData.team_users.length} members
               </Typography>
             </Box>
@@ -535,19 +540,19 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       {oaevType === 'Finding' && (
         <>
           {entityData.finding_type && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Finding Type
               </Typography>
-              <Chip label={entityData.finding_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              <Chip label={entityData.finding_type} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
             </Box>
           )}
           {entityData.finding_created_at && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Found At
               </Typography>
-              <Typography variant="body2" sx={contentTextStyle}>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {formatDateTime(entityData.finding_created_at)}
               </Typography>
             </Box>
@@ -559,11 +564,11 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       {(oaevType === 'Scenario' || oaevType === 'Exercise') && (
         <>
           {entityData.scenario_category && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography variant="caption" sx={sectionTitleStyle}>
                 Category
               </Typography>
-              <Chip label={entityData.scenario_category} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1 }} />
+              <Chip label={entityData.scenario_category} size="small" sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} />
             </Box>
           )}
         </>
@@ -571,18 +576,27 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
 
       {/* Description */}
       {description && (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 2.5 }}>
           <Typography variant="caption" sx={sectionTitleStyle}>
             Description
           </Typography>
-          <Typography variant="body2" sx={{ ...contentTextStyle, whiteSpace: 'pre-wrap' }}>
-            {description}
-          </Typography>
+          <Box sx={{ 
+            ...contentTextStyle, 
+            '& p': { my: 0.5 }, 
+            '& ul, & ol': { pl: 2, my: 0.5 },
+            '& a': { color: 'primary.main' },
+          }}>
+            <Markdown remarkPlugins={[remarkGfm]}>
+              {description}
+            </Markdown>
+          </Box>
         </Box>
       )}
 
+      <Divider sx={{ my: 2 }} />
+
       {/* Actions */}
-      <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+      <Box sx={{ display: 'flex', gap: 1 }}>
         {entityUrl && (
           <Button
             variant="contained"

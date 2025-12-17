@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { SCENARIO_DEFAULT_VALUES } from '../../shared/types';
 
 export interface ScenarioOverviewData {
   attackPatterns: Array<{
@@ -194,12 +195,14 @@ export function useScenarioState(): ScenarioStateReturn {
   // Overview data
   const [scenarioOverviewData, setScenarioOverviewData] = useState<ScenarioOverviewData | null>(null);
   
-  // Form data
+  // Form data - use OpenAEV default values
   const [scenarioForm, setScenarioForm] = useState<ScenarioFormData>({
     name: '',
     description: '',
     subtitle: '',
-    category: 'ransomware',
+    category: SCENARIO_DEFAULT_VALUES.category,
+    mainFocus: SCENARIO_DEFAULT_VALUES.mainFocus,
+    severity: SCENARIO_DEFAULT_VALUES.severity,
   });
   
   // Selected injects
@@ -255,7 +258,14 @@ export function useScenarioState(): ScenarioStateReturn {
   
   // Reset function
   const resetScenarioState = () => {
-    setScenarioForm({ name: '', description: '', subtitle: '', category: 'ransomware' });
+    setScenarioForm({
+      name: '',
+      description: '',
+      subtitle: '',
+      category: SCENARIO_DEFAULT_VALUES.category,
+      mainFocus: SCENARIO_DEFAULT_VALUES.mainFocus,
+      severity: SCENARIO_DEFAULT_VALUES.severity,
+    });
     setSelectedInjects([]);
     setScenarioEmails([]);
     setScenarioLoading(false);

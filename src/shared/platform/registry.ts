@@ -96,7 +96,7 @@ const OPENCTI_DEFINITION: PlatformDefinition = {
   name: 'OpenCTI',
   shortName: 'OCTI',
   fullName: 'OpenCTI',
-  tagline: 'Threat Intelligence Platform',
+  tagline: 'Cyber Threat Intelligence',
   primaryColor: '#00bcd4', // Cyan
   secondaryColor: '#001e3c',
   logoSuffix: 'opencti',
@@ -163,7 +163,7 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
   name: 'OpenAEV',
   shortName: 'OAEV',
   fullName: 'OpenAEV',
-  tagline: 'Attack & Exposure Validation',
+  tagline: 'Adversarial Exposure Validation',
   primaryColor: '#9c27b0', // Purple
   secondaryColor: '#4a148c',
   logoSuffix: 'openaev',

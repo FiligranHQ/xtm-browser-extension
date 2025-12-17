@@ -50,11 +50,46 @@ jobs:
           zip -r ../filigran-xtm-edge-${{ steps.get_version.outputs.VERSION }}.zip edge/
           cd ..
 
-      - name: Generate Release Notes
-        id: release_notes
+      - name: Extract changelog for version
+        id: changelog
         run: |
-          cat << 'EOF' > release_notes.md
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Extract the section for this version from CHANGELOG.md
+          # Match from "## [VERSION]" until the next "## [" or end of file
+          CHANGELOG_CONTENT=$(awk -v ver="$VERSION" '
+            BEGIN { found=0; content="" }
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+            }
+            found { content = content $0 "\n" }
+            END { print content }
+          ' CHANGELOG.md)
+          
+          # If no changelog found for this version, use a default message
+          if [ -z "$CHANGELOG_CONTENT" ]; then
+            CHANGELOG_CONTENT="No changelog entry found for version $VERSION."
+          fi
+          
+          # Write to file for the release
+          echo "$CHANGELOG_CONTENT" > changelog_section.md
+
+      - name: Generate Release Notes
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          cat << 'HEADER' > release_notes.md
           ## Filigran XTM Browser Extension v${{ steps.get_version.outputs.VERSION }}
+          
+          HEADER
+          
+          # Append the changelog content
+          cat changelog_section.md >> release_notes.md
+          
+          cat << 'FOOTER' >> release_notes.md
+          
+          ---
           
           ### Downloads
           
@@ -72,17 +107,8 @@ jobs:
           4. Enable "Developer mode"
           5. Click "Load unpacked" and select the extracted folder
           
-          ### Features
-          
-          - 🔍 Detect threat indicators (IOCs, malware, threat actors, CVEs) on any web page
-          - 🎯 Visual highlighting with color-coded severity
-          - 📋 Create reports, cases, and investigations in OpenCTI
-          - 🎮 Generate attack scenarios in OpenAEV
-          - 🤖 AI-powered content analysis (Enterprise Edition)
-          - 📄 PDF generation for archiving threat reports
-          
           For full documentation, see the [README](https://github.com/FiligranHQ/xtm-browser-extension#readme).
-          EOF
+          FOOTER
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -97,4 +123,3 @@ jobs:
             filigran-xtm-edge-${{ steps.get_version.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

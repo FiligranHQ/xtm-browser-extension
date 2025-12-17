@@ -1014,12 +1014,6 @@ async function handleMessage(
               break;
             }
             
-            // Add new platform cases here:
-            // case 'opengrc': {
-            //   // Similar pattern for OpenGRC
-            //   break;
-            // }
-            
             default:
               sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
           }
@@ -2038,12 +2032,6 @@ async function handleMessage(
               break;
             }
             
-            // Add new platform cases here:
-            // case 'opengrc': {
-            //   // Similar pattern for OpenGRC entity details
-            //   break;
-            // }
-            
             default:
               sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
           }
@@ -2240,12 +2228,6 @@ async function handleMessage(
               sendResponse(successResponse(allOaevResults));
               break;
             }
-            
-            // Add new platform cases here:
-            // case 'opengrc': {
-            //   // Similar pattern for OpenGRC search
-            //   break;
-            // }
             
             default:
               sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
@@ -2549,11 +2531,6 @@ async function handleMessage(
                 await clearAllOAEVCaches();
               }
               break;
-            // Add new platform cases here:
-            // case 'opengrc': {
-            //   // Clear OpenGRC cache
-            //   break;
-            // }
             default:
               sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
               break;
@@ -3275,7 +3252,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   
   // Check if auto-scan is enabled
   const settings = await getSettings();
-  if (!settings.autoScan && !settings.scanOnLoad) {
+  if (!settings.autoScan) {
     return;
   }
   

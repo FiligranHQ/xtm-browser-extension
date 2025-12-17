@@ -90,7 +90,6 @@ const App: React.FC = () => {
         openaevPlatforms: [],
         theme: 'dark',
         autoScan: false,
-        scanOnLoad: false,
         showNotifications: true,
         detection: DEFAULT_DETECTION,
       });
@@ -488,7 +487,6 @@ const App: React.FC = () => {
       openaevPlatforms: [],
       theme: 'auto',
       autoScan: false,
-      scanOnLoad: false,
       showNotifications: true,
       detection: DEFAULT_DETECTION,
     };

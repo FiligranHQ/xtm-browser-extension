@@ -10,7 +10,7 @@ import { OpenAEVClient } from '../../shared/api/openaev-client';
 import { 
   getSettings, 
   saveSettings, 
-  cleanupOrphanedCaches,
+  cleanupOrphanedOCTICaches,
   cleanupOrphanedOAEVCaches,
 } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
@@ -64,7 +64,7 @@ export async function handleSaveSettings(
   const validOpenCTIPlatformIds = (payload.openctiPlatforms || [])
     .filter(p => p.url && p.apiToken)
     .map(p => p.id);
-  await cleanupOrphanedCaches(validOpenCTIPlatformIds);
+  await cleanupOrphanedOCTICaches(validOpenCTIPlatformIds);
   
   // Clean up orphaned caches for OpenAEV
   const validOpenAEVPlatformIds = (payload.openaevPlatforms || [])

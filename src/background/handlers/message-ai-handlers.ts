@@ -50,7 +50,6 @@ export async function handleAITestAndFetchModels(
 ): Promise<void> {
   try {
     const aiClient = new AIClient({
-      enabled: true,
       provider: payload.provider as 'openai' | 'anthropic' | 'gemini',
       apiKey: payload.apiKey,
     });
@@ -406,21 +405,27 @@ export async function handleAIDiscoverEntities(
       }
       
       // Filter out entities that were already detected (double-check)
-      // Include both value/name AND external IDs (like T1059.001) for comprehensive matching
+      // Include name, value, aliases, and external IDs for comprehensive matching
       const alreadyDetectedValues = new Set<string>();
       const alreadyDetectedList = payload.alreadyDetected || [];
       alreadyDetectedList.forEach(e => {
         // Add value and name (lowercase)
         if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
         if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
-        // Also add external ID if present (e.g., T1059.001 for attack patterns)
+        // Add external ID if present (e.g., T1059.001 for attack patterns)
         if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
+        // Add all aliases (alternative names for the same entity)
+        if (e.aliases && Array.isArray(e.aliases)) {
+          e.aliases.forEach((alias: string) => {
+            if (alias) alreadyDetectedValues.add(alias.toLowerCase());
+          });
+        }
       });
       
       const newEntities = parsed.entities.filter(e => {
         const valueLC = (e.value || '').toLowerCase();
         const nameLC = (e.name || '').toLowerCase();
-        // Entity is new if neither value nor name matches any already detected value
+        // Entity is new if neither value nor name matches any already detected value/name/alias/externalId
         return !alreadyDetectedValues.has(valueLC) && !alreadyDetectedValues.has(nameLC);
       });
       

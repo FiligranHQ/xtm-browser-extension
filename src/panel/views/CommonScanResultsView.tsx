@@ -4,7 +4,7 @@
  * Displays scan results with filtering, selection, and import functionality.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -19,6 +19,8 @@ import {
   Divider,
   CircularProgress,
   Tooltip,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
 import {
   TravelExploreOutlined,
@@ -110,6 +112,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   setCurrentPageTitle,
   scanPageContent,
 }) => {
+  // Local state for search query
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Calculate statistics
   const scanResultsFoundCount = useMemo(() => 
     scanResultsEntities.filter(e => e.found && !e.discoveredByAI).length,
@@ -151,8 +156,19 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       filtered = filtered.filter(e => e.type === scanResultsTypeFilter);
     }
     
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(e => {
+        const name = (e.name || '').toLowerCase();
+        const value = (e.value || '').toLowerCase();
+        const type = (e.type || '').toLowerCase().replace(/-/g, ' ');
+        return name.includes(query) || value.includes(query) || type.includes(query);
+      });
+    }
+    
     return filtered;
-  }, [scanResultsEntities, scanResultsFoundFilter, scanResultsTypeFilter]);
+  }, [scanResultsEntities, scanResultsFoundFilter, scanResultsTypeFilter, searchQuery]);
 
   // Handle entity click - navigate to entity view
   const handleScanResultEntityClick = async (entity: ScanResultEntity) => {
@@ -223,9 +239,75 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       value: entity.value,
       existsInPlatform: entity.found,
     };
-    setEntity(results[0]?.entity || fallbackEntity);
+    const initialEntity = results[0]?.entity || fallbackEntity;
+    setEntity(initialEntity);
     setEntityFromScanResults(true);
-    setPanelMode(results.length > 0 && results[0].entity.existsInPlatform !== false ? 'entity' : 'not-found');
+    
+    // Set panel mode
+    const isFound = results.length > 0 && results[0].entity.existsInPlatform !== false;
+    setPanelMode(isFound ? 'entity' : 'not-found');
+    
+    // If entity was found, fetch full details from the platform
+    if (isFound && results[0]) {
+      const firstResult = results[0];
+      const entityId = (firstResult.entity as any).entityId || (firstResult.entity as any).id;
+      const entityType = firstResult.entity.type || entity.type;
+      const platformId = firstResult.platformId;
+      const platformType = (firstResult.entity as any)._platformType || 'opencti';
+      
+      if (entityId && platformId) {
+        try {
+          // Fetch full entity details from platform
+          chrome.runtime.sendMessage({
+            type: 'GET_ENTITY_DETAILS',
+            payload: {
+              id: entityId,
+              entityType: entityType,
+              platformId: platformId,
+              platformType: platformType,
+            },
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              log.debug('Entity details fetch error:', chrome.runtime.lastError);
+              return;
+            }
+            
+            // Only update if we got a successful response with data
+            if (response?.success && response.data) {
+              const fullEntityData = response.data;
+              
+              // Update the entity with full details, preserving platform metadata
+              const updatedEntity: EntityData = {
+                ...fullEntityData,
+                _platformId: platformId,
+                _platformType: platformType,
+                _isNonDefaultPlatform: platformType !== 'opencti',
+                existsInPlatform: true,
+              };
+              
+              setEntity(updatedEntity);
+              
+              // Also update the multi-platform results
+              const updatedResults = [...results];
+              if (updatedResults[0]) {
+                updatedResults[0] = {
+                  ...updatedResults[0],
+                  entity: updatedEntity,
+                };
+                setMultiPlatformResults(updatedResults);
+                multiPlatformResultsRef.current = updatedResults;
+              }
+              
+              log.debug('Entity details fetched successfully for:', entityId);
+            } else {
+              log.debug('Entity details fetch failed or no data:', response?.error);
+            }
+          });
+        } catch (error) {
+          log.debug('Failed to fetch entity details:', error);
+        }
+      }
+    }
   };
 
   // Handle AI entity discovery
@@ -271,11 +353,23 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         return;
       }
 
-      // Get existing entities for context
-      const existingEntities = scanResultsEntities.map(e => ({
-        type: e.type,
-        value: e.value || e.name,
-      }));
+      // Get existing entities for context (use alreadyDetected as expected by handler)
+      // Include name, value, aliases, x_mitre_id, and externalId for comprehensive deduplication
+      const alreadyDetected = scanResultsEntities.map(e => {
+        const entityData = e.entityData as Record<string, unknown> | undefined;
+        return {
+          type: e.type,
+          value: e.value || e.name,
+          name: e.name || e.value,
+          // Include aliases from entityData if available
+          aliases: entityData?.aliases as string[] | undefined 
+            || entityData?.x_opencti_aliases as string[] | undefined,
+          // Include MITRE ATT&CK ID if available
+          externalId: entityData?.x_mitre_id as string | undefined
+            || entityData?.external_id as string | undefined
+            || (entityData?.externalReferences as Array<{ external_id?: string }> | undefined)?.[0]?.external_id,
+        };
+      });
 
       // Call AI discovery
       chrome.runtime.sendMessage(
@@ -285,7 +379,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             pageTitle,
             pageUrl,
             pageContent,
-            existingEntities,
+            alreadyDetected,
           },
         },
         (response) => {
@@ -312,6 +406,27 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             if (newEntities.length > 0) {
               setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
               showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
+              
+              // Highlight AI-discovered entities on the page
+              (async () => {
+                try {
+                  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                  if (tab?.id) {
+                    chrome.tabs.sendMessage(tab.id, {
+                      type: 'XTM_HIGHLIGHT_AI_ENTITIES',
+                      payload: {
+                        entities: newEntities.map(e => ({
+                          type: e.type,
+                          value: e.value,
+                          name: e.name,
+                        })),
+                      },
+                    });
+                  }
+                } catch {
+                  // Silently handle highlighting errors
+                }
+              })();
             } else {
               showToast({ type: 'info', message: 'AI found no additional entities' });
             }
@@ -511,10 +626,26 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             )}
           </Box>
 
-          {/* Type filter */}
-          {scanResultsEntityTypes.length > 1 && (
-            <Box sx={{ mb: 2 }}>
-              <FormControl fullWidth size="small">
+          {/* Search and Type filter */}
+          <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'flex-end' }}>
+            {/* Search field */}
+            <TextField
+              size="small"
+              placeholder="Search findings..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ flex: 1 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlined sx={{ fontSize: 18, color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            {/* Type filter */}
+            {scanResultsEntityTypes.length > 1 && (
+              <FormControl size="small" sx={{ flex: 1 }}>
                 <InputLabel id="scan-results-type-filter-label">Filter by type</InputLabel>
                 <Select
                   labelId="scan-results-type-filter-label"
@@ -538,8 +669,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   ))}
                 </Select>
               </FormControl>
-            </Box>
-          )}
+            )}
+          </Box>
 
           {/* Discover more with AI button */}
           {(() => {

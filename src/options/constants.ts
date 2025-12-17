@@ -54,17 +54,9 @@ export const OAEV_ENTITY_TYPES = [
   { value: 'Team', label: 'Teams' },
 ];
 
-// OpenGRC entity types - placeholder for future implementation
-// export const OPENGRC_ENTITY_TYPES = [
-//   { value: 'Control', label: 'Controls' },
-//   { value: 'Risk', label: 'Risks' },
-//   { value: 'Framework', label: 'Frameworks' },
-// ];
-
 // All platform entity type configurations - keyed by platform type
 export const PLATFORM_ENTITY_TYPES: Record<string, Array<{ value: string; label: string }>> = {
   openaev: OAEV_ENTITY_TYPES,
-  // opengrc: OPENGRC_ENTITY_TYPES,
 };
 
 export const DEFAULT_DETECTION = {
@@ -72,8 +64,6 @@ export const DEFAULT_DETECTION = {
   observableTypes: OBSERVABLE_TYPES.map(o => o.value),
   platformEntityTypes: {
     openaev: OAEV_ENTITY_TYPES.map(o => o.value),
-    // When adding new platforms, add their entity types here:
-    // opengrc: OPENGRC_ENTITY_TYPES.map(e => e.value),
   },
 };
 

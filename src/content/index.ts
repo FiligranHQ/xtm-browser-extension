@@ -1296,6 +1296,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ success: true });
       break;
     }
+    
+    case 'XTM_HIGHLIGHT_AI_ENTITIES': {
+      const { entities } = message.payload || {};
+      if (entities && Array.isArray(entities)) {
+        handleHighlightAIEntities(entities);
+      }
+      sendResponse({ success: true });
+      break;
+    }
       
     case 'HIDE_PANEL':
       hidePanel();

@@ -47,6 +47,7 @@ import {
   getOAEVTypeFromClass,
 } from '../shared/utils/entity';
 import { formatDate } from '../shared/utils/formatters';
+import { SCENARIO_DEFAULT_VALUES } from '../shared/types';
 import type {
   PanelMode,
   ScanResultEntity,
@@ -1329,12 +1330,14 @@ const App: React.FC = () => {
         setCurrentPageUrl(pageUrl || '');
         setCurrentPageTitle(pageTitle || '');
         
-        // Initialize scenario form with page info
+        // Initialize scenario form with page info and OpenAEV defaults
         setScenarioForm({
           name: pageTitle || 'New Scenario',
           description: pageDescription || '',
           subtitle: '',
-          category: 'attack-scenario',
+          category: SCENARIO_DEFAULT_VALUES.category,
+          mainFocus: SCENARIO_DEFAULT_VALUES.mainFocus,
+          severity: SCENARIO_DEFAULT_VALUES.severity,
         });
         
         // Reset scenario state
@@ -2217,14 +2220,6 @@ const App: React.FC = () => {
   //       handleCreateAtomicTestingWithAIPayload, handleGenerateAIPayload, handleSelectAtomicTargetFromList,
   //       and renderAtomicTestingView) have been moved to OAEVAtomicTestingView component.
   
-  // NOTE: Scenario functions (handleCreateScenario, handleSelectScenarioPlatform) have been moved
-  // to OAEVScenarioView component. See: src/panel/views/OAEVScenarioView.tsx
-
-  // NOTE: REMOVED handleCreateScenario function (moved to OAEVScenarioView)
-  // NOTE: renderScenarioOverviewView and renderScenarioFormView have been extracted
-  // to OAEVScenarioView component to reduce App.tsx file size.
-  // See: src/panel/views/OAEVScenarioView.tsx
-
   const renderContent = () => {
     switch (panelMode) {
       case 'entity': {

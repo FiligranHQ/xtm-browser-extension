@@ -144,13 +144,15 @@ export interface EntityDiscoveryRequest {
   pageUrl: string;
   pageContent: string;
   /** Already detected entities (known or unknown) - to avoid duplicates */
-  alreadyDetected: Array<{
+  alreadyDetected?: Array<{
     type: string;
     name: string;
     value?: string;
-    found: boolean;
+    found?: boolean;
     /** External ID for attack patterns (e.g., T1562.001) */
     externalId?: string;
+    /** Alternative names/aliases for the entity */
+    aliases?: string[];
   }>;
 }
 

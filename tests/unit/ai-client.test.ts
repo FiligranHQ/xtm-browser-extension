@@ -12,19 +12,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { 
   AIClient, 
   isAIAvailable, 
-  parseAIJsonResponse,
   type AIGenerationRequest,
   type ContainerDescriptionRequest,
   type ScenarioGenerationRequest,
   type AtomicTestRequest,
 } from '../../src/shared/api/ai-client';
+import { parseAIJsonResponse } from '../../src/shared/api/ai/json-parser';
 import type { AISettings } from '../../src/shared/types';
 
 describe('AIClient', () => {
   describe('Constructor', () => {
     it('should create client with valid OpenAI settings', () => {
       const settings: AISettings = {
-        enabled: true,
         provider: 'openai',
         apiKey: 'sk-test-key-12345',
       };
@@ -35,7 +34,6 @@ describe('AIClient', () => {
 
     it('should create client with valid Anthropic settings', () => {
       const settings: AISettings = {
-        enabled: true,
         provider: 'anthropic',
         apiKey: 'sk-ant-test-key-12345',
       };
@@ -46,7 +44,6 @@ describe('AIClient', () => {
 
     it('should create client with valid Gemini settings', () => {
       const settings: AISettings = {
-        enabled: true,
         provider: 'gemini',
         apiKey: 'test-gemini-key-12345',
       };
@@ -57,7 +54,6 @@ describe('AIClient', () => {
 
     it('should throw error when provider is missing', () => {
       const settings = {
-        enabled: true,
         apiKey: 'sk-test-key-12345',
       } as AISettings;
       
@@ -66,7 +62,6 @@ describe('AIClient', () => {
 
     it('should throw error when API key is missing', () => {
       const settings = {
-        enabled: true,
         provider: 'openai',
       } as AISettings;
       
@@ -75,7 +70,6 @@ describe('AIClient', () => {
 
     it('should throw error when XTM One is selected (not yet available)', () => {
       const settings: AISettings = {
-        enabled: true,
         provider: 'xtm-one',
         apiKey: 'test-key',
       };
@@ -88,7 +82,6 @@ describe('AIClient', () => {
 describe('isAIAvailable', () => {
   it('should return true when AI is fully configured', () => {
     const settings: AISettings = {
-      enabled: true,
       provider: 'openai',
       apiKey: 'sk-test-key',
       model: 'gpt-4',
@@ -97,9 +90,8 @@ describe('isAIAvailable', () => {
     expect(isAIAvailable(settings)).toBe(true);
   });
 
-  it('should return false when AI is disabled', () => {
+  it('should return false when model is missing', () => {
     const settings: AISettings = {
-      enabled: false,
       provider: 'openai',
       apiKey: 'sk-test-key',
     };
@@ -109,7 +101,6 @@ describe('isAIAvailable', () => {
 
   it('should return false when provider is missing', () => {
     const settings = {
-      enabled: true,
       apiKey: 'sk-test-key',
     } as AISettings;
     
@@ -118,7 +109,6 @@ describe('isAIAvailable', () => {
 
   it('should return false when API key is missing', () => {
     const settings = {
-      enabled: true,
       provider: 'openai',
     } as AISettings;
     
@@ -131,7 +121,6 @@ describe('isAIAvailable', () => {
 
   it('should return false when API key is empty string', () => {
     const settings: AISettings = {
-      enabled: true,
       provider: 'openai',
       apiKey: '',
     };
@@ -224,7 +213,6 @@ describe('AIClient Request Building', () => {
 
   beforeEach(() => {
     client = new AIClient({
-      enabled: true,
       provider: 'openai',
       apiKey: 'sk-test-key',
     });
@@ -386,7 +374,6 @@ describe('AIClient Request Building', () => {
     it('should handle unknown provider', async () => {
       // Force a client with an invalid provider (bypassing constructor check)
       const badClient = new AIClient({
-        enabled: true,
         provider: 'openai', // valid for construction
         apiKey: 'test-key',
       });
@@ -425,7 +412,6 @@ describe('Provider-specific API Calls', () => {
     });
 
     const client = new AIClient({
-      enabled: true,
       provider: 'openai',
       apiKey: 'sk-openai-key',
     });
@@ -443,7 +429,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['Authorization']).toBe('Bearer sk-openai-key');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('gpt-5.2');
+    expect(body.model).toBe('gpt-4o');
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[1].role).toBe('user');
   });
@@ -457,7 +443,6 @@ describe('Provider-specific API Calls', () => {
     });
 
     const client = new AIClient({
-      enabled: true,
       provider: 'anthropic',
       apiKey: 'sk-anthropic-key',
     });
@@ -476,7 +461,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('claude-sonnet-4-5');
+    expect(body.model).toBe('claude-sonnet-4-20250514');
     expect(body.system).toBe('You are a helpful assistant');
   });
 
@@ -489,7 +474,6 @@ describe('Provider-specific API Calls', () => {
     });
 
     const client = new AIClient({
-      enabled: true,
       provider: 'gemini',
       apiKey: 'gemini-api-key',
     });

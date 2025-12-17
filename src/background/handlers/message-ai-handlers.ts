@@ -1,8 +1,8 @@
 /**
- * AI Message Handlers - Extracted from background/index.ts
- * 
- * These handlers process AI-related messages.
- * They are called directly from the main message handler switch statement.
+ * AI Message Handlers
+ *
+ * Handles AI-related messages from the extension.
+ * Uses the AIClient for generation and parseAIJsonResponse for parsing.
  */
 
 import { getSettings } from '../../shared/utils/storage';
@@ -11,17 +11,18 @@ import { loggers } from '../../shared/utils/logger';
 import {
   AIClient,
   isAIAvailable,
-  parseAIJsonResponse,
   type ContainerDescriptionRequest,
   type ScenarioGenerationRequest,
   type AtomicTestRequest,
   type EntityDiscoveryRequest,
   type RelationshipResolutionRequest,
 } from '../../shared/api/ai-client';
+import { parseAIJsonResponse } from '../../shared/api/ai/json-parser';
+import type { SendResponseFn } from './types';
 
 const log = loggers.background;
 
-type SendResponse = (response: unknown) => void;
+type SendResponse = SendResponseFn;
 
 /**
  * AI_CHECK_STATUS handler
@@ -513,3 +514,43 @@ export async function handleAIResolveRelationships(
     });
   }
 }
+
+// ============================================================================
+// Handler Registry Export (for message dispatcher pattern)
+// ============================================================================
+
+import type { MessageHandler } from './types';
+
+/**
+ * AI handlers registry for the message dispatcher pattern.
+ * Wraps the typed handlers to match the generic MessageHandler signature.
+ */
+export const aiHandlers: Record<string, MessageHandler> = {
+  AI_CHECK_STATUS: async (_payload, sendResponse) => {
+    await handleAICheckStatus(sendResponse);
+  },
+  AI_TEST_AND_FETCH_MODELS: async (payload, sendResponse) => {
+    await handleAITestAndFetchModels(payload as { provider: string; apiKey: string }, sendResponse);
+  },
+  AI_GENERATE_DESCRIPTION: async (payload, sendResponse) => {
+    await handleAIGenerateDescription(payload as ContainerDescriptionRequest, sendResponse);
+  },
+  AI_GENERATE_SCENARIO: async (payload, sendResponse) => {
+    await handleAIGenerateScenario(payload as ScenarioGenerationRequest, sendResponse);
+  },
+  AI_GENERATE_FULL_SCENARIO: async (payload, sendResponse) => {
+    await handleAIGenerateFullScenario(payload as FullScenarioRequest, sendResponse);
+  },
+  AI_GENERATE_ATOMIC_TEST: async (payload, sendResponse) => {
+    await handleAIGenerateAtomicTest(payload as AtomicTestRequest, sendResponse);
+  },
+  AI_GENERATE_EMAILS: async (payload, sendResponse) => {
+    await handleAIGenerateEmails(payload as EmailGenerationRequest, sendResponse);
+  },
+  AI_DISCOVER_ENTITIES: async (payload, sendResponse) => {
+    await handleAIDiscoverEntities(payload as EntityDiscoveryRequest, sendResponse);
+  },
+  AI_RESOLVE_RELATIONSHIPS: async (payload, sendResponse) => {
+    await handleAIResolveRelationships(payload as RelationshipResolutionRequest, sendResponse);
+  },
+};

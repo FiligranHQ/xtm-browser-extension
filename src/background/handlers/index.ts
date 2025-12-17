@@ -7,7 +7,7 @@
 export * from './types';
 export { openctiHandlers } from './opencti-handlers';
 export { openaevHandlers } from './openaev-handlers';
-export { aiHandlers } from './ai-handlers';
+export { aiHandlers } from './message-ai-handlers';
 export { cacheHandlers } from './cache-handlers';
 export { scanHandlers, scanForOAEVEntities, mergeScanResults } from './scan-handlers';
 export { settingsHandlers, type SettingsHandlerDependencies } from './settings-handlers';
@@ -62,7 +62,7 @@ export {
   handleAIGenerateEmails,
   handleAIDiscoverEntities,
   handleAIResolveRelationships,
-} from './ai-handlers';
+} from './message-ai-handlers';
 
 export {
   handleClearOCTICache,
@@ -74,7 +74,7 @@ export {
  */
 import { openctiHandlers } from './opencti-handlers';
 import { openaevHandlers } from './openaev-handlers';
-import { aiHandlers } from './ai-handlers';
+import { aiHandlers } from './message-ai-handlers';
 import { cacheHandlers } from './cache-handlers';
 import { miscHandlers } from './misc-handlers';
 import type { MessageHandler } from './types';

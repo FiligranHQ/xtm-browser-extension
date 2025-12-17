@@ -18,7 +18,7 @@ import {
   type RelationshipResolutionRequest,
 } from '../../shared/api/ai-client';
 import { parseAIJsonResponse } from '../../shared/api/ai/json-parser';
-import type { SendResponseFn } from './types';
+import type { SendResponseFn, MessageHandler } from './types';
 
 const log = loggers.background;
 
@@ -518,8 +518,6 @@ export async function handleAIResolveRelationships(
 // ============================================================================
 // Handler Registry Export (for message dispatcher pattern)
 // ============================================================================
-
-import type { MessageHandler } from './types';
 
 /**
  * AI handlers registry for the message dispatcher pattern.

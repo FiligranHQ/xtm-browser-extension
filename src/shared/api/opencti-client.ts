@@ -1,15 +1,59 @@
 /**
  * OpenCTI GraphQL API Client
- * 
+ *
  * Handles all communication with the OpenCTI platform via GraphQL API.
  */
 
 import { loggers } from '../utils/logger';
 import {
-  OBSERVABLE_PROPERTIES,
-  SDO_PROPERTIES,
-  ALL_FRAGMENTS,
-} from './opencti/fragments';
+  TEST_CONNECTION_QUERY,
+  SEARCH_OBSERVABLE_QUERY,
+  SEARCH_FILE_BY_HASH_QUERY,
+  GET_OBSERVABLE_QUERY,
+  SEARCH_SDO_QUERY,
+  GET_SDO_QUERY,
+  FETCH_SDOS_FOR_CACHE_QUERY,
+  FETCH_LOCATIONS_QUERY,
+  FETCH_LABELS_QUERY,
+  FETCH_MARKING_DEFINITIONS_QUERY,
+  FETCH_VOCABULARY_QUERY,
+  FETCH_IDENTITIES_QUERY,
+  buildCreateObservableMutation,
+  CREATE_INTRUSION_SET_MUTATION,
+  CREATE_THREAT_ACTOR_MUTATION,
+  CREATE_MALWARE_MUTATION,
+  CREATE_TOOL_MUTATION,
+  CREATE_CAMPAIGN_MUTATION,
+  CREATE_VULNERABILITY_MUTATION,
+  CREATE_ATTACK_PATTERN_MUTATION,
+  CREATE_COUNTRY_MUTATION,
+  CREATE_SECTOR_MUTATION,
+  CREATE_EXTERNAL_REFERENCE_MUTATION,
+  ADD_EXTERNAL_REFERENCE_TO_ENTITY_MUTATION,
+  FIND_EXTERNAL_REFERENCES_QUERY,
+  FIND_CONTAINERS_BY_EXTERNAL_REFS_QUERY,
+  CREATE_DRAFT_WORKSPACE_MUTATION,
+  CREATE_REPORT_MUTATION,
+  CREATE_CASE_INCIDENT_MUTATION,
+  CREATE_CASE_RFI_MUTATION,
+  CREATE_CASE_RFT_MUTATION,
+  CREATE_GROUPING_MUTATION,
+  GLOBAL_SEARCH_QUERY,
+  CREATE_INVESTIGATION_MUTATION,
+  ADD_TO_INVESTIGATION_MUTATION,
+  FETCH_CONTAINERS_FOR_ENTITY_QUERY,
+  CREATE_WORKBENCH_MUTATION,
+  ADD_OBJECTS_TO_CONTAINER_MUTATION,
+  CREATE_RELATIONSHIP_MUTATION,
+  ADD_ENTITIES_TO_WORKBENCH_MUTATION,
+  buildValueFilter,
+  buildHashFilter,
+  buildNameFilter,
+  buildUrlFilter,
+  buildExternalRefFilter,
+  buildObjectsFilter,
+  ENTITY_TYPE_PATH_MAP,
+} from './opencti/queries';
 import {
   type SDOQueryResponse,
   type LocationQueryResponse,
@@ -43,6 +87,7 @@ const log = loggers.opencti;
 
 // User-Agent for API requests
 const USER_AGENT = 'xtm-browser-extension/0.0.5';
+const DEFAULT_PAGE_SIZE = 500;
 
 // ============================================================================
 // API Client Class
@@ -59,9 +104,6 @@ export class OpenCTIClient {
 
   /**
    * Execute a GraphQL query
-   * @param query - The GraphQL query string
-   * @param variables - Optional variables for the query
-   * @param draftId - Optional draft workspace ID to execute the query in draft context
    */
   private async query<T>(
     query: string,
@@ -73,12 +115,11 @@ export class OpenCTIClient {
       'Authorization': `Bearer ${this.apiToken}`,
       'User-Agent': USER_AGENT,
     };
-    
-    // Add draft context header if provided
+
     if (draftId) {
       headers['opencti-draft-id'] = draftId;
     }
-    
+
     const response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
       headers,
@@ -92,8 +133,7 @@ export class OpenCTIClient {
     const result: GraphQLResponse<T> = await response.json();
 
     if (result.errors && result.errors.length > 0) {
-      const error = result.errors[0];
-      throw new Error(error.message || 'GraphQL error');
+      throw new Error(result.errors[0].message || 'GraphQL error');
     }
 
     return result.data as T;
@@ -103,47 +143,21 @@ export class OpenCTIClient {
   // Platform Information
   // ==========================================================================
 
-  /**
-   * Test connection and get platform info
-   */
   async testConnection(): Promise<PlatformInfo> {
-    const query = `
-      query TestConnection {
-        about {
-          version
-        }
-        settings {
-          platform_title
-          platform_enterprise_edition {
-            license_enterprise
-          }
-        }
-        me {
-          name
-          user_email
-        }
-      }
-    `;
-
     const data = await this.query<{
       about: { version: string };
-      settings: { 
+      settings: {
         platform_title: string;
         platform_enterprise_edition?: { license_enterprise?: boolean };
       };
       me: { name?: string; user_email?: string };
-    }>(query);
+    }>(TEST_CONNECTION_QUERY);
 
     return {
       version: data.about.version,
       enterprise_edition: data.settings.platform_enterprise_edition?.license_enterprise ?? false,
-      me: {
-        name: data.me?.name,
-        user_email: data.me?.user_email,
-      },
-      settings: {
-        platform_title: data.settings.platform_title,
-      },
+      me: { name: data.me?.name, user_email: data.me?.user_email },
+      settings: { platform_title: data.settings.platform_title },
     };
   }
 
@@ -151,263 +165,93 @@ export class OpenCTIClient {
   // Observable Queries
   // ==========================================================================
 
-  /**
-   * Search for an observable by exact value
-   */
-  async searchObservableByValue(
-    value: string,
-    type?: ObservableType
-  ): Promise<StixCyberObservable | null> {
-    const query = `
-      ${ALL_FRAGMENTS}
-      query SearchObservable($filters: FilterGroup) {
-        stixCyberObservables(filters: $filters, first: 1) {
-          edges {
-            node {
-              ${OBSERVABLE_PROPERTIES}
-            }
-          }
-        }
-      }
-    `;
-
-    const filters: { mode: string; filters: object[]; filterGroups: object[] } = {
-      mode: 'and',
-      filters: [{ key: 'value', values: [value] }],
-      filterGroups: [],
-    };
-
-    if (type === 'Domain-Name' || type === 'Hostname') {
-      filters.filters.push({ key: 'entity_type', values: ['Domain-Name', 'Hostname'] });
-    } else if (type) {
-      filters.filters.push({ key: 'entity_type', values: [type] });
-    }
-
+  async searchObservableByValue(value: string, type?: ObservableType): Promise<StixCyberObservable | null> {
     const data = await this.query<{
-      stixCyberObservables: {
-        edges: Array<{ node: StixCyberObservable }>;
-      };
-    }>(query, { filters });
-
+      stixCyberObservables: { edges: Array<{ node: StixCyberObservable }> };
+    }>(SEARCH_OBSERVABLE_QUERY, { filters: buildValueFilter(value, type) });
     return data.stixCyberObservables.edges[0]?.node || null;
   }
 
-  /**
-   * Search for a file observable by hash
-   */
-  async searchObservableByHash(
-    hash: string,
-    hashType: HashType
-  ): Promise<StixCyberObservable | null> {
-    const query = `
-      ${ALL_FRAGMENTS}
-      query SearchFileByHash($filters: FilterGroup) {
-        stixCyberObservables(filters: $filters, first: 1) {
-          edges {
-            node {
-              ${OBSERVABLE_PROPERTIES}
-            }
-          }
-        }
-      }
-    `;
-
-    const filterKey = `hashes.${hashType}`;
-    const filters = {
-      mode: 'and',
-      filters: [{ key: filterKey, values: [hash] }],
-      filterGroups: [],
-    };
-
+  async searchObservableByHash(hash: string, hashType: HashType): Promise<StixCyberObservable | null> {
     const data = await this.query<{
-      stixCyberObservables: {
-        edges: Array<{ node: StixCyberObservable }>;
-      };
-    }>(query, { filters });
-
+      stixCyberObservables: { edges: Array<{ node: StixCyberObservable }> };
+    }>(SEARCH_FILE_BY_HASH_QUERY, { filters: buildHashFilter(hash, hashType) });
     return data.stixCyberObservables.edges[0]?.node || null;
   }
 
-  /**
-   * Batch search for multiple observables
-   */
   async batchSearchObservables(
     values: Array<{ value: string; type?: ObservableType; hashType?: HashType }>
   ): Promise<Map<string, StixCyberObservable>> {
     const results = new Map<string, StixCyberObservable>();
-    
     const batchSize = 20;
+
     for (let i = 0; i < values.length; i += batchSize) {
       const batch = values.slice(i, i + batchSize);
-      
       const promises = batch.map(async ({ value, type, hashType }) => {
         try {
-          let result: StixCyberObservable | null;
-          if (hashType) {
-            result = await this.searchObservableByHash(value, hashType);
-          } else {
-            result = await this.searchObservableByValue(value, type);
-          }
-          if (result) {
-            results.set(value, result);
-          }
+          const result = hashType
+            ? await this.searchObservableByHash(value, hashType)
+            : await this.searchObservableByValue(value, type);
+          if (result) results.set(value, result);
         } catch (error) {
           log.warn(`Failed to search for ${value}:`, error);
         }
       });
-      
       await Promise.all(promises);
     }
-    
     return results;
+  }
+
+  async getObservableById(id: string): Promise<StixCyberObservable | null> {
+    const data = await this.query<{ stixCyberObservable: StixCyberObservable | null }>(GET_OBSERVABLE_QUERY, { id });
+    return data.stixCyberObservable;
   }
 
   // ==========================================================================
   // SDO Queries
   // ==========================================================================
 
-  /**
-   * Search for SDO by name or alias
-   */
-  async searchSDOByNameOrAlias(
-    name: string,
-    types?: string[]
-  ): Promise<StixDomainObject | null> {
-    const query = `
-      ${ALL_FRAGMENTS}
-      query SearchSDO($types: [String], $filters: FilterGroup) {
-        stixDomainObjects(types: $types, filters: $filters, first: 1) {
-          edges {
-            node {
-              ${SDO_PROPERTIES}
-            }
-          }
-        }
-      }
-    `;
-
-    let filters = {
-      mode: 'and',
-      filters: [{ key: 'name', values: [name], operator: 'eq' }],
-      filterGroups: [],
-    };
-
+  async searchSDOByNameOrAlias(name: string, types?: string[]): Promise<StixDomainObject | null> {
+    // Try name first
     let data = await this.query<{
-      stixDomainObjects: {
-        edges: Array<{ node: StixDomainObject }>;
-      };
-    }>(query, { types, filters });
+      stixDomainObjects: { edges: Array<{ node: StixDomainObject }> };
+    }>(SEARCH_SDO_QUERY, { types, filters: buildNameFilter(name, false) });
 
     if (data.stixDomainObjects.edges[0]?.node) {
       return data.stixDomainObjects.edges[0].node;
     }
 
-    filters = {
-      mode: 'and',
-      filters: [{ key: 'aliases', values: [name], operator: 'eq' }],
-      filterGroups: [],
-    };
-
+    // Try aliases
     data = await this.query<{
-      stixDomainObjects: {
-        edges: Array<{ node: StixDomainObject }>;
-      };
-    }>(query, { types, filters });
+      stixDomainObjects: { edges: Array<{ node: StixDomainObject }> };
+    }>(SEARCH_SDO_QUERY, { types, filters: buildNameFilter(name, true) });
 
     return data.stixDomainObjects.edges[0]?.node || null;
   }
 
-  /**
-   * Get SDO by ID with full details
-   */
   async getSDOById(id: string): Promise<StixDomainObject | null> {
-    const query = `
-      ${ALL_FRAGMENTS}
-      query GetSDO($id: String!) {
-        stixDomainObject(id: $id) {
-          ${SDO_PROPERTIES}
-        }
-      }
-    `;
-
-    const data = await this.query<{
-      stixDomainObject: StixDomainObject | null;
-    }>(query, { id });
-
+    const data = await this.query<{ stixDomainObject: StixDomainObject | null }>(GET_SDO_QUERY, { id });
     return data.stixDomainObject;
-  }
-
-  /**
-   * Get observable by ID with full details
-   */
-  async getObservableById(id: string): Promise<StixCyberObservable | null> {
-    const query = `
-      ${ALL_FRAGMENTS}
-      query GetObservable($id: String!) {
-        stixCyberObservable(id: $id) {
-          ${OBSERVABLE_PROPERTIES}
-        }
-      }
-    `;
-
-    const data = await this.query<{
-      stixCyberObservable: StixCyberObservable | null;
-    }>(query, { id });
-
-    return data.stixCyberObservable;
   }
 
   // ==========================================================================
   // SDO Bulk Fetch for Caching
   // ==========================================================================
 
-  private static readonly DEFAULT_PAGE_SIZE = 500;
-
-  /**
-   * Fetch SDOs of a specific type for caching with full pagination
-   */
   async fetchSDOsForCache(
     entityType: string,
-    pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE
+    pageSize: number = DEFAULT_PAGE_SIZE
   ): Promise<Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>> {
-    const query = `
-      query FetchSDOsForCache($types: [String], $first: Int, $after: ID) {
-        stixDomainObjects(types: $types, first: $first, after: $after) {
-          edges {
-            node {
-              id
-              entity_type
-              ... on ThreatActorGroup { name aliases }
-              ... on ThreatActorIndividual { name aliases }
-              ... on IntrusionSet { name aliases }
-              ... on Campaign { name aliases }
-              ... on Incident { name aliases }
-              ... on Malware { name aliases }
-              ... on Vulnerability { name x_opencti_aliases }
-              ... on Sector { name x_opencti_aliases }
-              ... on Country { name x_opencti_aliases }
-              ... on Region { name x_opencti_aliases }
-              ... on City { name x_opencti_aliases }
-              ... on AdministrativeArea { name x_opencti_aliases }
-              ... on Position { name x_opencti_aliases }
-              ... on Organization { name x_opencti_aliases }
-              ... on Individual { name x_opencti_aliases }
-              ... on Event { name aliases }
-              ... on AttackPattern { name aliases x_mitre_id }
-            }
-          }
-          pageInfo { hasNextPage endCursor globalCount }
-        }
-      }
-    `;
-
     const allResults: Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
     let pageCount = 0;
 
     while (hasNextPage) {
-      const data: SDOQueryResponse = await this.query<SDOQueryResponse>(query, { types: [entityType], first: pageSize, after });
+      const data: SDOQueryResponse = await this.query<SDOQueryResponse>(
+        FETCH_SDOS_FOR_CACHE_QUERY,
+        { types: [entityType], first: pageSize, after }
+      );
 
       const pageResults = data.stixDomainObjects.edges
         .map((edge) => {
@@ -420,13 +264,12 @@ export class OpenCTIClient {
             x_mitre_id: node.x_mitre_id || undefined,
           };
         })
-        .filter(node => node.name) as Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>;
+        .filter(node => node.name);
 
       allResults.push(...pageResults);
       hasNextPage = data.stixDomainObjects.pageInfo.hasNextPage;
       after = data.stixDomainObjects.pageInfo.endCursor;
       pageCount++;
-
       log.debug(`[OpenCTI] Fetched page ${pageCount} for ${entityType}: ${pageResults.length} items`);
     }
 
@@ -453,145 +296,77 @@ export class OpenCTIClient {
   async fetchAdministrativeAreas() { return this.fetchSDOsForCache('Administrative-Area'); }
   async fetchPositions() { return this.fetchSDOsForCache('Position'); }
 
-  /**
-   * Fetch all locations for caching with full pagination
-   */
-  async fetchLocations(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
-    const query = `
-      query FetchLocations($first: Int, $after: ID) {
-        locations(first: $first, after: $after) {
-          edges {
-            node { id entity_type name x_opencti_aliases }
-          }
-          pageInfo { hasNextPage endCursor globalCount }
-        }
-      }
-    `;
-
+  async fetchLocations(pageSize: number = DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
     const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data: LocationQueryResponse = await this.query<LocationQueryResponse>(query, { first: pageSize, after });
-      const pageResults = data.locations.edges.map((edge) => ({
+      const data: LocationQueryResponse = await this.query<LocationQueryResponse>(FETCH_LOCATIONS_QUERY, { first: pageSize, after });
+      allResults.push(...data.locations.edges.map((edge) => ({
         id: edge.node.id,
         name: edge.node.name,
         aliases: edge.node.x_opencti_aliases,
-      }));
-      allResults.push(...pageResults);
+      })));
       hasNextPage = data.locations.pageInfo.hasNextPage;
       after = data.locations.pageInfo.endCursor;
     }
-
     return allResults;
   }
 
-  /**
-   * Fetch all labels with full pagination
-   */
-  async fetchLabels(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; value: string; color: string }>> {
-    const query = `
-      query FetchLabels($first: Int, $after: ID) {
-        labels(first: $first, after: $after) {
-          edges { node { id value color } }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-    `;
-
+  async fetchLabels(pageSize: number = DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; value: string; color: string }>> {
     const allResults: Array<{ id: string; value: string; color: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data: LabelQueryResponse = await this.query<LabelQueryResponse>(query, { first: pageSize, after });
+      const data: LabelQueryResponse = await this.query<LabelQueryResponse>(FETCH_LABELS_QUERY, { first: pageSize, after });
       allResults.push(...data.labels.edges.map((e) => e.node));
       hasNextPage = data.labels.pageInfo.hasNextPage;
       after = data.labels.pageInfo.endCursor;
     }
-
     return allResults;
   }
 
-  /**
-   * Fetch all marking definitions with full pagination
-   */
   async fetchMarkingDefinitions(pageSize: number = 100): Promise<Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }>> {
-    const query = `
-      query FetchMarkingDefinitions($first: Int, $after: ID) {
-        markingDefinitions(first: $first, after: $after) {
-          edges { node { id definition definition_type x_opencti_color } }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-    `;
-
     const allResults: Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data: MarkingQueryResponse = await this.query<MarkingQueryResponse>(query, { first: pageSize, after });
+      const data: MarkingQueryResponse = await this.query<MarkingQueryResponse>(FETCH_MARKING_DEFINITIONS_QUERY, { first: pageSize, after });
       allResults.push(...data.markingDefinitions.edges.map((e) => e.node));
       hasNextPage = data.markingDefinitions.pageInfo.hasNextPage;
       after = data.markingDefinitions.pageInfo.endCursor;
     }
-
     return allResults;
   }
 
-  /**
-   * Fetch open vocabulary values by category with full pagination
-   */
   async fetchVocabulary(category: string, pageSize: number = 100): Promise<Array<{ id: string; name: string; description?: string }>> {
-    const query = `
-      query FetchVocabulary($category: VocabularyCategory!, $first: Int, $after: ID) {
-        vocabularies(category: $category, first: $first, after: $after) {
-          edges { node { id name description } }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-    `;
-
     const allResults: Array<{ id: string; name: string; description?: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data: VocabularyQueryResponse = await this.query<VocabularyQueryResponse>(query, { category, first: pageSize, after });
+      const data: VocabularyQueryResponse = await this.query<VocabularyQueryResponse>(FETCH_VOCABULARY_QUERY, { category, first: pageSize, after });
       allResults.push(...data.vocabularies.edges.map((e) => e.node));
       hasNextPage = data.vocabularies.pageInfo.hasNextPage;
       after = data.vocabularies.pageInfo.endCursor;
     }
-
     return allResults;
   }
 
-  /**
-   * Fetch identities for the createdBy field with full pagination
-   */
-  async fetchIdentities(pageSize: number = OpenCTIClient.DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; entity_type: string }>> {
-    const query = `
-      query FetchIdentities($first: Int, $after: ID) {
-        identities(first: $first, after: $after, types: ["Organization", "Individual", "System"]) {
-          edges { node { id name entity_type } }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-    `;
-
+  async fetchIdentities(pageSize: number = DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; entity_type: string }>> {
     const allResults: Array<{ id: string; name: string; entity_type: string }> = [];
     let after: string | undefined = undefined;
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data: IdentityQueryResult = await this.query<IdentityQueryResult>(query, { first: pageSize, after });
+      const data: IdentityQueryResult = await this.query<IdentityQueryResult>(FETCH_IDENTITIES_QUERY, { first: pageSize, after });
       allResults.push(...data.identities.edges.map((e) => e.node));
       hasNextPage = data.identities.pageInfo.hasNextPage;
       after = data.identities.pageInfo.endCursor;
     }
-
     return allResults;
   }
 
@@ -599,9 +374,6 @@ export class OpenCTIClient {
   // Create Operations
   // ==========================================================================
 
-  /**
-   * Create a new observable
-   */
   async createObservable(input: {
     type: ObservableType;
     value: string;
@@ -616,30 +388,6 @@ export class OpenCTIClient {
     const gqlType = stixToGraphQLType(stixType);
     const observableInput = buildObservableInput(stixType, gqlType, input.value, input.hashType);
 
-    const query = `
-      mutation CreateObservable(
-        $type: String!,
-        $x_opencti_score: Int,
-        $x_opencti_description: String,
-        $createIndicator: Boolean,
-        $objectMarking: [String],
-        $objectLabel: [String],
-        $${gqlType}: ${gqlType}AddInput
-      ) {
-        stixCyberObservableAdd(
-          type: $type,
-          x_opencti_score: $x_opencti_score,
-          x_opencti_description: $x_opencti_description,
-          createIndicator: $createIndicator,
-          objectMarking: $objectMarking,
-          objectLabel: $objectLabel,
-          ${gqlType}: $${gqlType}
-        ) {
-          id standard_id entity_type observable_value
-        }
-      }
-    `;
-
     const variables = {
       type: stixType,
       x_opencti_score: input.score,
@@ -650,7 +398,10 @@ export class OpenCTIClient {
       [gqlType]: observableInput,
     };
 
-    const data = await this.query<{ stixCyberObservableAdd: StixCyberObservable }>(query, variables);
+    const data = await this.query<{ stixCyberObservableAdd: StixCyberObservable }>(
+      buildCreateObservableMutation(gqlType),
+      variables
+    );
     return data.stixCyberObservableAdd;
   }
 
@@ -659,102 +410,54 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async createIntrusionSet(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation IntrusionSetAdd($input: IntrusionSetAddInput!) {
-        intrusionSetAdd(input: $input) { id standard_id entity_type name aliases }
-      }
-    `;
-    const data = await this.query<{ intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
+    const data = await this.query<{ intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_INTRUSION_SET_MUTATION, { input });
     return data.intrusionSetAdd;
   }
 
   async createThreatActor(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation ThreatActorGroupAdd($input: ThreatActorGroupAddInput!) {
-        threatActorGroupAdd(input: $input) { id standard_id entity_type name aliases }
-      }
-    `;
-    const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, {
+    const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_MUTATION, {
       input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
     });
     return data.threatActorGroupAdd;
   }
 
   async createMalware(input: { name: string; description?: string; malware_types?: string[]; is_family?: boolean; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation MalwareAdd($input: MalwareAddInput!) {
-        malwareAdd(input: $input) { id standard_id entity_type name aliases }
-      }
-    `;
-    const data = await this.query<{ malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, {
+    const data = await this.query<{ malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_MALWARE_MUTATION, {
       input: { ...input, malware_types: input.malware_types || ['unknown'], is_family: input.is_family ?? true },
     });
     return data.malwareAdd;
   }
 
   async createTool(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation ToolAdd($input: ToolAddInput!) {
-        toolAdd(input: $input) { id standard_id entity_type name aliases }
-      }
-    `;
-    const data = await this.query<{ toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
+    const data = await this.query<{ toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_TOOL_MUTATION, { input });
     return data.toolAdd;
   }
 
   async createCampaign(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation CampaignAdd($input: CampaignAddInput!) {
-        campaignAdd(input: $input) { id standard_id entity_type name aliases }
-      }
-    `;
-    const data = await this.query<{ campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(query, { input });
+    const data = await this.query<{ campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CAMPAIGN_MUTATION, { input });
     return data.campaignAdd;
   }
 
   async createVulnerability(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation VulnerabilityAdd($input: VulnerabilityAddInput!) {
-        vulnerabilityAdd(input: $input) { id standard_id entity_type name }
-      }
-    `;
-    const data = await this.query<{ vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
+    const data = await this.query<{ vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_VULNERABILITY_MUTATION, { input });
     return data.vulnerabilityAdd;
   }
 
   async createAttackPattern(input: { name: string; description?: string; x_mitre_id?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation AttackPatternAdd($input: AttackPatternAddInput!) {
-        attackPatternAdd(input: $input) { id standard_id entity_type name x_mitre_id aliases }
-      }
-    `;
-    const data = await this.query<{ attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] } }>(query, { input });
+    const data = await this.query<{ attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] } }>(CREATE_ATTACK_PATTERN_MUTATION, { input });
     return data.attackPatternAdd;
   }
 
   async createCountry(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation CountryAdd($input: CountryAddInput!) {
-        countryAdd(input: $input) { id standard_id entity_type name }
-      }
-    `;
-    const data = await this.query<{ countryAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
+    const data = await this.query<{ countryAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_COUNTRY_MUTATION, { input });
     return data.countryAdd;
   }
 
   async createSector(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const query = `
-      mutation SectorAdd($input: SectorAddInput!) {
-        sectorAdd(input: $input) { id standard_id entity_type name }
-      }
-    `;
-    const data = await this.query<{ sectorAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(query, { input });
+    const data = await this.query<{ sectorAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_SECTOR_MUTATION, { input });
     return data.sectorAdd;
   }
 
-  /**
-   * Create any entity by type - dispatches to the appropriate creation method
-   */
   async createEntity(input: {
     type: string;
     value?: string;
@@ -765,7 +468,7 @@ export class OpenCTIClient {
   }): Promise<{ id: string; standard_id: string; entity_type: string; name?: string; observable_value?: string; aliases?: string[]; x_mitre_id?: string }> {
     const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
     const entityName = input.name || input.value || 'Unknown';
-    
+
     const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_mitre_id?: string }>> = {
       'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'threat-actor': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
@@ -788,7 +491,7 @@ export class OpenCTIClient {
     if (!input.value) {
       throw new Error(`Observable type "${input.type}" requires a value`);
     }
-    
+
     const observable = await this.createObservable({
       type: input.type as ObservableType,
       value: input.value,
@@ -810,34 +513,16 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async createExternalReference(input: { source_name: string; url?: string; external_id?: string; description?: string }): Promise<{ id: string; standard_id: string; url?: string }> {
-    const query = `
-      mutation ExternalReferenceAdd($input: ExternalReferenceAddInput!) {
-        externalReferenceAdd(input: $input) { id standard_id entity_type source_name description url external_id }
-      }
-    `;
-    const data = await this.query<{ externalReferenceAdd: { id: string; standard_id: string; url?: string } }>(query, { input });
+    const data = await this.query<{ externalReferenceAdd: { id: string; standard_id: string; url?: string } }>(CREATE_EXTERNAL_REFERENCE_MUTATION, { input });
     return data.externalReferenceAdd;
   }
 
   async addExternalReferenceToEntity(entityId: string, externalReferenceId: string): Promise<void> {
-    const query = `
-      mutation StixDomainObjectEditRelationAdd($id: ID!, $input: StixRefRelationshipAddInput!) {
-        stixDomainObjectEdit(id: $id) { relationAdd(input: $input) { id } }
-      }
-    `;
-    await this.query(query, { id: entityId, input: { toId: externalReferenceId, relationship_type: 'external-reference' } });
+    await this.query(ADD_EXTERNAL_REFERENCE_TO_ENTITY_MUTATION, { id: entityId, input: { toId: externalReferenceId, relationship_type: 'external-reference' } });
   }
 
   async findExternalReferencesByUrl(url: string): Promise<Array<{ id: string; url: string; source_name: string }>> {
-    const query = `
-      query ExternalReferences($filters: FilterGroup) {
-        externalReferences(filters: $filters, first: 10) {
-          edges { node { id standard_id source_name description url } }
-        }
-      }
-    `;
-    const filters = { mode: 'and', filters: [{ key: 'url', values: [url], operator: 'eq' }], filterGroups: [] };
-    const data = await this.query<{ externalReferences: { edges: Array<{ node: { id: string; url: string; source_name: string } }> } }>(query, { filters });
+    const data = await this.query<{ externalReferences: { edges: Array<{ node: { id: string; url: string; source_name: string } }> } }>(FIND_EXTERNAL_REFERENCES_QUERY, { filters: buildUrlFilter(url) });
     return data.externalReferences.edges.map(edge => edge.node);
   }
 
@@ -846,16 +531,7 @@ export class OpenCTIClient {
     if (externalRefs.length === 0) return [];
 
     const extRefIds = externalRefs.map(ref => ref.id);
-    const query = `
-      ${ALL_FRAGMENTS}
-      query FindContainersByExternalRefs($filters: FilterGroup) {
-        stixDomainObjects(types: ["Report", "Case-Incident", "Case-Rfi", "Case-Rft", "Grouping"], filters: $filters, first: 10, orderBy: modified, orderMode: desc) {
-          edges { node { ${SDO_PROPERTIES} } }
-        }
-      }
-    `;
-    const filters = { mode: 'and', filters: [{ key: 'externalReferences', values: extRefIds, operator: 'eq' }], filterGroups: [] };
-    const data = await this.query<{ stixDomainObjects: { edges: Array<{ node: StixDomainObject }> } }>(query, { filters });
+    const data = await this.query<{ stixDomainObjects: { edges: Array<{ node: StixDomainObject }> } }>(FIND_CONTAINERS_BY_EXTERNAL_REFS_QUERY, { filters: buildExternalRefFilter(extRefIds) });
     return data.stixDomainObjects.edges.map(edge => edge.node);
   }
 
@@ -864,12 +540,7 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async createDraftWorkspace(name: string): Promise<{ id: string; name: string }> {
-    const query = `
-      mutation DraftWorkspaceAdd($input: DraftWorkspaceAddInput!) {
-        draftWorkspaceAdd(input: $input) { id name }
-      }
-    `;
-    const data = await this.query<{ draftWorkspaceAdd: { id: string; name: string } }>(query, { input: { name } });
+    const data = await this.query<{ draftWorkspaceAdd: { id: string; name: string } }>(CREATE_DRAFT_WORKSPACE_MUTATION, { input: { name } });
     return data.draftWorkspaceAdd;
   }
 
@@ -879,7 +550,7 @@ export class OpenCTIClient {
       const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
       draftId = draftWorkspace.id;
     }
-    
+
     const containerInput: Record<string, unknown> = {
       name: input.name,
       description: input.description,
@@ -893,7 +564,6 @@ export class OpenCTIClient {
       containerInput.externalReferences = input.externalReferences;
     }
 
-    const containerFields = `id standard_id entity_type name description created modified createdBy { id name } objectLabel { id value color } objectMarking { id definition x_opencti_color }`;
     let query: string;
     let mutationName: string;
 
@@ -903,7 +573,7 @@ export class OpenCTIClient {
         containerInput.report_types = input.report_types || ['threat-report'];
         containerInput.content = input.content;
         mutationName = 'reportAdd';
-        query = `mutation CreateReport($input: ReportAddInput!) { reportAdd(input: $input) { ${containerFields} } }`;
+        query = CREATE_REPORT_MUTATION;
         break;
       case 'Case-Incident':
         containerInput.severity = input.severity || 'medium';
@@ -911,7 +581,7 @@ export class OpenCTIClient {
         if (input.response_types?.length) containerInput.response_types = input.response_types;
         if (input.created) containerInput.created = input.created;
         mutationName = 'caseIncidentAdd';
-        query = `mutation CreateCaseIncident($input: CaseIncidentAddInput!) { caseIncidentAdd(input: $input) { ${containerFields} } }`;
+        query = CREATE_CASE_INCIDENT_MUTATION;
         break;
       case 'Case-Rfi':
         containerInput.information_types = ['strategic'];
@@ -919,7 +589,7 @@ export class OpenCTIClient {
         containerInput.priority = input.priority || 'P3';
         if (input.created) containerInput.created = input.created;
         mutationName = 'caseRfiAdd';
-        query = `mutation CreateCaseRfi($input: CaseRfiAddInput!) { caseRfiAdd(input: $input) { ${containerFields} } }`;
+        query = CREATE_CASE_RFI_MUTATION;
         break;
       case 'Case-Rft':
         containerInput.takedown_types = ['content'];
@@ -927,13 +597,13 @@ export class OpenCTIClient {
         containerInput.priority = input.priority || 'P3';
         if (input.created) containerInput.created = input.created;
         mutationName = 'caseRftAdd';
-        query = `mutation CreateCaseRft($input: CaseRftAddInput!) { caseRftAdd(input: $input) { ${containerFields} } }`;
+        query = CREATE_CASE_RFT_MUTATION;
         break;
       case 'Grouping':
         containerInput.context = input.context || 'suspicious-activity';
         if (input.created) containerInput.created = input.created;
         mutationName = 'groupingAdd';
-        query = `mutation CreateGrouping($input: GroupingAddInput!) { groupingAdd(input: $input) { ${containerFields} } }`;
+        query = CREATE_GROUPING_MUTATION;
         break;
       default:
         throw new Error(`Unsupported container type: ${input.type}`);
@@ -968,37 +638,9 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async globalSearch(searchTerm: string, types?: string[], limit: number = 25): Promise<SearchResult[]> {
-    const query = `
-      query GlobalSearch($search: String!, $types: [String], $first: Int, $orderBy: StixCoreObjectsOrdering, $orderMode: OrderingMode) {
-        stixCoreObjects(search: $search, types: $types, first: $first, orderBy: $orderBy, orderMode: $orderMode) {
-          edges {
-            node {
-              id entity_type representative { main }
-              ... on ThreatActorGroup { name aliases }
-              ... on ThreatActorIndividual { name aliases }
-              ... on IntrusionSet { name aliases }
-              ... on Campaign { name aliases }
-              ... on Incident { name aliases }
-              ... on Malware { name aliases }
-              ... on Vulnerability { name x_opencti_cvss_base_score x_opencti_cvss_base_severity }
-              ... on Country { name }
-              ... on Region { name }
-              ... on City { name }
-              ... on Sector { name }
-              ... on Organization { name }
-              ... on Individual { name }
-              ... on Event { name }
-              ... on Report { name }
-              ... on Grouping { name }
-              ... on StixCyberObservable { observable_value x_opencti_score }
-            }
-          }
-        }
-      }
-    `;
-    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(query, { 
-      search: searchTerm, 
-      types, 
+    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(GLOBAL_SEARCH_QUERY, {
+      search: searchTerm,
+      types,
       first: limit,
       orderBy: '_score',
       orderMode: 'desc',
@@ -1007,15 +649,7 @@ export class OpenCTIClient {
   }
 
   getEntityUrl(entityId: string, entityType: string): string {
-    const typePathMap: Record<string, string> = {
-      'Intrusion-Set': 'threats/intrusion_sets', 'Malware': 'arsenal/malwares', 'Threat-Actor': 'threats/threat_actors_group',
-      'Campaign': 'threats/campaigns', 'Vulnerability': 'arsenal/vulnerabilities', 'Tool': 'arsenal/tools',
-      'Attack-Pattern': 'techniques/attack_patterns', 'Indicator': 'observations/indicators', 'Report': 'analyses/reports',
-      'Case-Incident': 'cases/incidents', 'Grouping': 'analyses/groupings', 'Investigation': 'workspaces/investigations',
-      'IPv4-Addr': 'observations/observables', 'IPv6-Addr': 'observations/observables', 'Domain-Name': 'observations/observables',
-      'Url': 'observations/observables', 'Email-Addr': 'observations/observables', 'StixFile': 'observations/observables', 'Artifact': 'observations/observables',
-    };
-    return `${this.baseUrl}/${typePathMap[entityType] || 'dashboard'}/${entityId}`;
+    return `${this.baseUrl}/${ENTITY_TYPE_PATH_MAP[entityType] || 'dashboard'}/${entityId}`;
   }
 
   // ==========================================================================
@@ -1023,24 +657,14 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async createInvestigation(input: InvestigationCreateInput): Promise<Investigation> {
-    const query = `
-      mutation CreateInvestigation($input: WorkspaceAddInput!) {
-        workspaceAdd(input: $input) { id name description type investigated_entities_ids created_at updated_at }
-      }
-    `;
-    const data = await this.query<{ workspaceAdd: Investigation }>(query, {
+    const data = await this.query<{ workspaceAdd: Investigation }>(CREATE_INVESTIGATION_MUTATION, {
       input: { type: 'investigation', name: input.name, description: input.description, investigated_entities_ids: input.investigated_entities_ids || [] },
     });
     return data.workspaceAdd;
   }
 
   async addEntitiesToInvestigation(investigationId: string, entityIds: string[]): Promise<Investigation> {
-    const query = `
-      mutation AddToInvestigation($id: ID!, $input: [EditInput!]!) {
-        workspaceFieldPatch(id: $id, input: $input) { id name investigated_entities_ids }
-      }
-    `;
-    const data = await this.query<{ workspaceFieldPatch: Investigation }>(query, {
+    const data = await this.query<{ workspaceFieldPatch: Investigation }>(ADD_TO_INVESTIGATION_MUTATION, {
       id: investigationId, input: [{ key: 'investigated_entities_ids', value: entityIds, operation: 'add' }],
     });
     return data.workspaceFieldPatch;
@@ -1077,31 +701,8 @@ export class OpenCTIClient {
   }
 
   async fetchContainersForEntity(entityId: string, limit: number = 10): Promise<Array<{ id: string; entity_type: string; name: string; created: string; modified: string; createdBy?: { id: string; name: string } }>> {
-    const query = `
-      query GetContainersForEntity($first: Int, $orderBy: ContainersOrdering, $orderMode: OrderingMode, $filters: FilterGroup) {
-        containers(first: $first, orderBy: $orderBy, orderMode: $orderMode, filters: $filters) {
-          edges {
-            node {
-              id entity_type created modified
-              createdBy { ... on Identity { id name } }
-              ... on Report { name }
-              ... on Grouping { name }
-              ... on Note { attribute_abstract content }
-              ... on Opinion { opinion }
-              ... on ObservedData { name first_observed last_observed }
-              ... on CaseIncident { name }
-              ... on CaseRfi { name }
-              ... on CaseRft { name }
-              ... on Task { name }
-            }
-          }
-        }
-      }
-    `;
-    const filters = { mode: 'and', filters: [{ key: 'objects', values: [entityId] }], filterGroups: [] };
-
     try {
-      const data = await this.query<ContainerQueryResult>(query, { first: limit, orderBy: 'created', orderMode: 'desc', filters });
+      const data = await this.query<ContainerQueryResult>(FETCH_CONTAINERS_FOR_ENTITY_QUERY, { first: limit, orderBy: 'created', orderMode: 'desc', filters: buildObjectsFilter(entityId) });
       return data.containers?.edges?.map(edge => {
         const node = edge.node;
         let name = node.name;
@@ -1125,42 +726,22 @@ export class OpenCTIClient {
   // ==========================================================================
 
   async createWorkbench(input: { name: string; description?: string }): Promise<{ id: string; name: string }> {
-    const query = `
-      mutation WorkbenchAdd($input: WorkspaceAddInput!) {
-        workspaceAdd(input: $input) { id name entity_type }
-      }
-    `;
-    const data = await this.query<{ workspaceAdd: { id: string; name: string; entity_type: string } }>(query, { input: { ...input, type: 'INVESTIGATION' } });
+    const data = await this.query<{ workspaceAdd: { id: string; name: string; entity_type: string } }>(CREATE_WORKBENCH_MUTATION, { input: { ...input, type: 'INVESTIGATION' } });
     return data.workspaceAdd;
   }
 
   async addObjectsToContainer(containerId: string, objectIds: string[]): Promise<void> {
     if (objectIds.length === 0) return;
-    const query = `
-      mutation ContainerEditObjectsAdd($id: ID!, $toIds: [String]!) {
-        containerEdit(id: $id) { objectsAdd(toIds: $toIds) { id } }
-      }
-    `;
-    await this.query(query, { id: containerId, toIds: objectIds });
+    await this.query(ADD_OBJECTS_TO_CONTAINER_MUTATION, { id: containerId, toIds: objectIds });
   }
 
   async createStixCoreRelationship(input: { fromId: string; toId: string; relationship_type: string; description?: string; confidence?: number; objectMarking?: string[] }): Promise<{ id: string; standard_id: string }> {
-    const query = `
-      mutation StixCoreRelationshipAdd($input: StixCoreRelationshipAddInput!) {
-        stixCoreRelationshipAdd(input: $input) { id standard_id entity_type relationship_type from { ... on BasicObject { id entity_type } } to { ... on BasicObject { id entity_type } } }
-      }
-    `;
-    const data = await this.query<{ stixCoreRelationshipAdd: { id: string; standard_id: string } }>(query, { input });
+    const data = await this.query<{ stixCoreRelationshipAdd: { id: string; standard_id: string } }>(CREATE_RELATIONSHIP_MUTATION, { input });
     return data.stixCoreRelationshipAdd;
   }
 
   async addEntitiesToWorkbench(workbenchId: string, entityIds: string[]): Promise<void> {
-    const query = `
-      mutation WorkspaceStixCoreObjectsAdd($id: ID!, $toIds: [String]!) {
-        workspaceEdit(id: $id) { relationAdd(input: { toIds: $toIds, relationship_type: "has" }) { id } }
-      }
-    `;
-    await this.query(query, { id: workbenchId, toIds: entityIds });
+    await this.query(ADD_ENTITIES_TO_WORKBENCH_MUTATION, { id: workbenchId, toIds: entityIds });
   }
 
   getWorkbenchUrl(workbenchId: string): string {
@@ -1174,24 +755,18 @@ export class OpenCTIClient {
 
 let clientInstance: OpenCTIClient | null = null;
 
-/**
- * Get or create the OpenCTI client instance
- */
 export async function getOpenCTIClient(): Promise<OpenCTIClient | null> {
   if (clientInstance) return clientInstance;
 
   const settings = await chrome.storage.local.get('settings') as { settings?: ExtensionSettings };
   const firstPlatform = settings.settings?.openctiPlatforms?.find(p => p.enabled && p.url && p.apiToken);
-  
+
   if (!firstPlatform) return null;
 
   clientInstance = new OpenCTIClient({ url: firstPlatform.url, apiToken: firstPlatform.apiToken });
   return clientInstance;
 }
 
-/**
- * Reset the client instance (useful when settings change)
- */
 export function resetOpenCTIClient(): void {
   clientInstance = null;
 }

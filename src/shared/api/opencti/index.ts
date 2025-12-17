@@ -8,6 +8,9 @@ export * from './types';
 // Export fragments
 export * from './fragments';
 
+// Export queries
+export * from './queries';
+
 // Export observable utilities
 export * from './observable-utils';
 

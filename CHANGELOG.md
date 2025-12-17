@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - AI client refactored: extracted prompts to separate module (`ai/prompts.ts`) for better maintainability
-- AI client reduced from 833 to ~300 lines by centralizing prompt templates
 - Consolidated duplicate AI handler files into single `message-ai-handlers.ts`
 - Updated default AI models: OpenAI `gpt-4o`, Anthropic `claude-sonnet-4-20250514`, Gemini `gemini-2.0-flash`
 

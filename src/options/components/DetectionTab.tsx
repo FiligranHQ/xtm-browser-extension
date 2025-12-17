@@ -21,7 +21,7 @@ import {
   RestartAltOutlined,
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types';
-import { type CacheStats, OBSERVABLE_TYPES, ENTITY_TYPES, OAEV_ENTITY_TYPES } from '../constants';
+import { type CacheStats, OBSERVABLE_TYPES, OPENCTI_TYPES, OPENAEV_TYPES } from '../constants';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor } from '../../shared/theme/colors';
 
@@ -289,14 +289,14 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
                 control={
                   <Checkbox
                     size="small"
-                    checked={settings.detection?.observableTypes?.includes(item.value) ?? true}
+                    checked={!settings.detection?.disabledObservableTypes?.includes(item.value)}
                     onChange={(e) => {
-                      const types = settings.detection?.observableTypes || [];
+                      const disabled = settings.detection?.disabledObservableTypes || [];
                       onUpdateSetting('detection', {
                         ...settings.detection,
-                        observableTypes: e.target.checked
-                          ? [...types, item.value]
-                          : types.filter((t) => t !== item.value),
+                        disabledObservableTypes: e.target.checked
+                          ? disabled.filter((t) => t !== item.value) // Remove from disabled = enable
+                          : [...disabled, item.value], // Add to disabled = disable
                       });
                     }}
                   />
@@ -307,24 +307,24 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
           </FormGroup>
         </Paper>
 
-        {/* OpenCTI Entity Types */}
+        {/* OpenCTI Types */}
         <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenCTI Entity Types</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenCTI Types</Typography>
           <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-            {ENTITY_TYPES.map((item) => (
+            {OPENCTI_TYPES.map((item) => (
               <FormControlLabel
                 key={item.value}
                 control={
                   <Checkbox
                     size="small"
-                    checked={settings.detection?.entityTypes?.includes(item.value) ?? true}
+                    checked={!settings.detection?.disabledOpenCTITypes?.includes(item.value)}
                     onChange={(e) => {
-                      const types = settings.detection?.entityTypes || [];
+                      const disabled = settings.detection?.disabledOpenCTITypes || [];
                       onUpdateSetting('detection', {
                         ...settings.detection,
-                        entityTypes: e.target.checked
-                          ? [...types, item.value]
-                          : types.filter((t) => t !== item.value),
+                        disabledOpenCTITypes: e.target.checked
+                          ? disabled.filter((t) => t !== item.value) // Remove from disabled = enable
+                          : [...disabled, item.value], // Add to disabled = disable
                       });
                     }}
                   />
@@ -335,27 +335,24 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
           </FormGroup>
         </Paper>
 
-        {/* OpenAEV Entity Types */}
+        {/* OpenAEV Types */}
         <Paper elevation={0} sx={{ p: 3, mb: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenAEV Entity Types</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>OpenAEV Types</Typography>
           <FormGroup sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-            {OAEV_ENTITY_TYPES.map((item) => (
+            {OPENAEV_TYPES.map((item) => (
               <FormControlLabel
                 key={item.value}
                 control={
                   <Checkbox
                     size="small"
-                    checked={settings.detection?.platformEntityTypes?.openaev?.includes(item.value) ?? true}
+                    checked={!settings.detection?.disabledOpenAEVTypes?.includes(item.value)}
                     onChange={(e) => {
-                      const types = settings.detection?.platformEntityTypes?.openaev || [];
+                      const disabled = settings.detection?.disabledOpenAEVTypes || [];
                       onUpdateSetting('detection', {
                         ...settings.detection,
-                        platformEntityTypes: {
-                          ...settings.detection?.platformEntityTypes,
-                          openaev: e.target.checked
-                            ? [...types, item.value]
-                            : types.filter((t) => t !== item.value),
-                        },
+                        disabledOpenAEVTypes: e.target.checked
+                          ? disabled.filter((t) => t !== item.value) // Remove from disabled = enable
+                          : [...disabled, item.value], // Add to disabled = disable
                       });
                     }}
                   />

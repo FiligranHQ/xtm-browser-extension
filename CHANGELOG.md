@@ -7,12 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6] - 2024-12-17
+
+### Added
+- Shadow DOM support for content extraction on sites like VirusTotal that use Web Components
+- Shadow DOM support for highlighting - styles are now injected into shadow roots
+- Recursive shadow root traversal for deeply nested Web Components
+
 ### Changed
 - AI client refactored: extracted prompts to separate module (`ai/prompts.ts`) for better maintainability
 - Consolidated duplicate AI handler files into single `message-ai-handlers.ts`
+- Harmonized all back navigation buttons across the app with consistent "Back to X" design pattern
+- Back buttons now use text buttons with descriptive labels instead of icon-only buttons
+- Removed legacy "Extracted from App.tsx" comments from all refactored hooks and handlers
+- Detection settings now use "disabled types" approach instead of "enabled types" - all entity types are enabled by default
+- Detection settings refactored with clearer naming: `disabledObservableTypes`, `disabledOpenCTITypes`, `disabledOpenAEVTypes`
+- Content extraction now only falls back to Shadow DOM when innerText is insufficient (<500 chars)
+- Aggressive URL filtering to reduce noise from CDN, social media, and framework URLs
 
 ### Fixed
+- **Critical**: Detection filtering was excluding all entities on fresh installs or when settings were not configured (empty enabled array filtered everything)
+- **Critical**: Scanning and highlighting not working on Shadow DOM-heavy sites like VirusTotal
 - Email pattern detection now validates TLDs to reduce false positives (e.g., `example@domain.svg` no longer detected as email)
+- Fixed undefined `log.error` reference in investigation actions hook
+- Container form, container type, platform selection, and add selection views now have properly aligned back buttons
+- Firefox: Removed unused sidebar panel that was showing empty "No entity selected" content
+
+### Removed
+- Deleted unused `handlers/types.ts` duplicate type definitions file
+- Removed Firefox `sidebar_action` from manifest (extension uses injected floating panel instead)
 
 ## [0.0.5] - 2024-12-17
 
@@ -99,7 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.2...v0.0.3

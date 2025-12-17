@@ -22,7 +22,6 @@ const log = loggers.options;
 // Import constants
 import {
   DEFAULT_DETECTION,
-  OAEV_ENTITY_TYPES,
   type TabType,
   type CacheStats,
   type TestResult,
@@ -145,12 +144,15 @@ const App: React.FC = () => {
       if (!loadedSettings.detection) {
         loadedSettings.detection = DEFAULT_DETECTION;
       }
-      if (!loadedSettings.detection.platformEntityTypes) {
-        loadedSettings.detection.platformEntityTypes = {
-          openaev: OAEV_ENTITY_TYPES.map(o => o.value),
-        };
-      } else if (!loadedSettings.detection.platformEntityTypes.openaev) {
-        loadedSettings.detection.platformEntityTypes.openaev = OAEV_ENTITY_TYPES.map(o => o.value);
+      // Ensure disabled arrays exist (empty = all enabled)
+      if (!loadedSettings.detection.disabledObservableTypes) {
+        loadedSettings.detection.disabledObservableTypes = [];
+      }
+      if (!loadedSettings.detection.disabledOpenCTITypes) {
+        loadedSettings.detection.disabledOpenCTITypes = [];
+      }
+      if (!loadedSettings.detection.disabledOpenAEVTypes) {
+        loadedSettings.detection.disabledOpenAEVTypes = [];
       }
       setSettings(loadedSettings);
       setSavedSettings(JSON.parse(JSON.stringify(loadedSettings)));

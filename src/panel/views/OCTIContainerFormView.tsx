@@ -11,7 +11,6 @@ import {
   Button,
   TextField,
   Autocomplete,
-  IconButton,
   Alert,
   FormControlLabel,
   Switch,
@@ -135,10 +134,24 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
         ))}
       </Stepper>
 
+      {/* Back button */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={() => setPanelMode('container-type')}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          Back to container type
+        </Button>
+      </Box>
+
+      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <IconButton size="small" onClick={() => setPanelMode('container-type')}>
-          <ChevronLeftOutlined />
-        </IconButton>
         <ItemIcon type={containerType} size="small" />
         <Typography variant="h6" sx={{ fontSize: 16 }}>
           {containerType.replace(/-/g, ' ')} Details

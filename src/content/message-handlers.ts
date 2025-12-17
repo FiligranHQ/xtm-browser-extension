@@ -6,6 +6,7 @@
 
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload, ObservableType } from '../shared/types';
+import { getPageContentForScanning } from './extraction';
 
 const log = loggers.content;
 
@@ -362,7 +363,7 @@ async function handleScanPage(ctx: MessageHandlerContext, isAutoScan: boolean): 
 async function handleScanOAEV(_ctx: MessageHandlerContext): Promise<void> {
   log.info('Scanning page for OpenAEV entities...');
   
-  const pageContent = document.body?.innerText || '';
+  const pageContent = getPageContentForScanning();
   const pageUrl = window.location.href;
   const pageTitle = document.title;
   
@@ -431,7 +432,7 @@ async function handleScanAtomicTesting(ctx: MessageHandlerContext): Promise<void
   ctx.clearHighlights();
   ctx.selectedForImport.clear();
   
-  const pageContent = document.body?.innerText || '';
+  const pageContent = getPageContentForScanning();
   const pageUrl = window.location.href;
   const pageTitle = document.title;
   
@@ -473,7 +474,7 @@ async function handleCreateScenarioFromPage(ctx: MessageHandlerContext): Promise
   ctx.clearHighlights();
   ctx.selectedForImport.clear();
   
-  const pageContent = document.body?.innerText || '';
+  const pageContent = getPageContentForScanning();
   const pageUrl = window.location.href;
   const pageTitle = document.title;
   
@@ -530,7 +531,7 @@ async function handleScanForInvestigation(ctx: MessageHandlerContext): Promise<v
 }
 
 async function handleCreateContainerFromPage(ctx: MessageHandlerContext): Promise<void> {
-  const pageContent = document.body?.innerText || '';
+  const pageContent = getPageContentForScanning();
   const { html: htmlContent } = ctx.getComprehensivePageContent();
   const pageUrl = window.location.href;
   const pageTitle = document.title;
@@ -540,7 +541,7 @@ async function handleCreateContainerFromPage(ctx: MessageHandlerContext): Promis
 }
 
 async function handleCreateInvestigation(ctx: MessageHandlerContext): Promise<void> {
-  const pageContent = document.body?.innerText || '';
+  const pageContent = getPageContentForScanning();
   const pageUrl = window.location.href;
   const pageTitle = document.title;
   const pageDescription = ctx.generateCleanDescription();

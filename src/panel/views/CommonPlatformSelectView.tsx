@@ -9,7 +9,7 @@ import {
   Box,
   Typography,
   Paper,
-  IconButton,
+  Button,
   Stepper,
   Step,
   StepLabel,
@@ -64,12 +64,26 @@ export const CommonPlatformSelectView: React.FC<PlatformSelectViewProps> = ({
         </Stepper>
       )}
 
+      {/* Back button */}
+      {showBackButton && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('preview')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to preview
+          </Button>
+        </Box>
+      )}
+
+      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        {showBackButton && (
-          <IconButton size="small" onClick={() => setPanelMode('preview')}>
-            <ChevronLeftOutlined />
-          </IconButton>
-        )}
         <Typography variant="h6" sx={{ fontSize: 16 }}>Select Platform</Typography>
       </Box>
 

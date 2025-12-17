@@ -2,7 +2,6 @@
  * Atomic Testing State Hook
  * 
  * Manages all state related to OpenAEV atomic testing creation.
- * Extracted from App.tsx to reduce file size.
  */
 
 import { useState } from 'react';

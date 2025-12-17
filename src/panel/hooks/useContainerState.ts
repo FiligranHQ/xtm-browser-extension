@@ -2,7 +2,6 @@
  * Container State Hook
  * 
  * Manages all container-related state for the panel.
- * Extracted from App.tsx to reduce file size.
  */
 
 import { useState } from 'react';

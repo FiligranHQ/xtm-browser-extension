@@ -10,8 +10,36 @@ import {
   createPrefixedType,
   type PlatformType,
 } from '../shared/platform';
+import { HIGHLIGHT_STYLES } from './styles';
 
 const log = loggers.content;
+
+// Track shadow roots that have had styles injected
+const styledShadowRoots = new WeakSet<ShadowRoot>();
+
+/**
+ * Ensure highlight styles are injected into a shadow root
+ * This is necessary because Shadow DOM has style encapsulation
+ */
+function ensureStylesInShadowRoot(node: Node): void {
+  // Find the shadow root this node belongs to, if any
+  let current: Node | null = node;
+  while (current) {
+    if (current instanceof ShadowRoot) {
+      if (!styledShadowRoots.has(current)) {
+        // Inject styles into this shadow root
+        const styleEl = document.createElement('style');
+        styleEl.setAttribute('data-xtm-highlight-styles', 'true');
+        styleEl.textContent = HIGHLIGHT_STYLES;
+        current.appendChild(styleEl);
+        styledShadowRoots.add(current);
+        log.debug('Injected highlight styles into shadow root');
+      }
+      return;
+    }
+    current = current.parentNode;
+  }
+}
 
 // ============================================================================
 // Types
@@ -30,9 +58,9 @@ export interface HighlightMeta {
   }>;
 }
 
-// OpenCTI entity types - these are detected from platform cache
+// OpenCTI Types - these are detected from platform cache
 // When not found, they can be added via AI discovery feature
-const OPENCTI_ENTITY_TYPES = new Set([
+const OPENCTI_TYPES_SET = new Set([
   'Intrusion-Set',
   'Malware',
   'Threat-Actor',
@@ -342,6 +370,9 @@ function highlightInText(
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
           try {
+            // Ensure styles are injected if this node is in a Shadow DOM
+            ensureStylesInShadowRoot(node);
+            
             const range = document.createRange();
             range.setStart(node, localStart);
             range.setEnd(node, localEnd);
@@ -354,7 +385,7 @@ function highlightInText(
             highlight.className = 'xtm-highlight';
             
             // Determine if this is an OpenCTI entity (check flag or type)
-            const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_ENTITY_TYPES.has(meta.type);
+            const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_TYPES_SET.has(meta.type);
             
             if (meta.found) {
               // Found in platform = green
@@ -487,6 +518,9 @@ function highlightForInvestigation(
       if (localEnd > nodeText.length) break;
       
       try {
+        // Ensure styles are injected if this node is in a Shadow DOM
+        ensureStylesInShadowRoot(node);
+        
         const range = document.createRange();
         range.setStart(node, localStart);
         range.setEnd(node, localEnd);
@@ -564,6 +598,9 @@ export function highlightForAtomicTesting(
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
           try {
+            // Ensure styles are injected if this node is in a Shadow DOM
+            ensureStylesInShadowRoot(node);
+            
             const range = document.createRange();
             range.setStart(node, localStart);
             range.setEnd(node, localEnd);
@@ -650,6 +687,9 @@ function highlightInTextForScenario(
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
           try {
+            // Ensure styles are injected if this node is in a Shadow DOM
+            ensureStylesInShadowRoot(node);
+            
             const range = document.createRange();
             range.setStart(node, localStart);
             range.setEnd(node, localEnd);
@@ -709,6 +749,9 @@ export function highlightAIEntities(
           searchIndex = index + lowerSearch.length;
           continue;
         }
+        
+        // Ensure styles are injected if this node is in a Shadow DOM
+        ensureStylesInShadowRoot(node);
         
         const range = document.createRange();
         range.setStart(node, index);

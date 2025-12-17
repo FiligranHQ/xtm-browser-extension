@@ -9,7 +9,7 @@ import {
   Box,
   Typography,
   Paper,
-  IconButton,
+  Button,
   Alert,
   Stepper,
   Step,
@@ -70,12 +70,26 @@ export const OCTIContainerTypeView: React.FC<ContainerTypeViewProps> = ({
         ))}
       </Stepper>
 
+      {/* Back button */}
+      {canGoBack && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={handleBack}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            {openctiPlatformsCount > 1 ? 'Back to platform selection' : 'Back to preview'}
+          </Button>
+        </Box>
+      )}
+
+      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        {canGoBack && (
-          <IconButton size="small" onClick={handleBack}>
-            <ChevronLeftOutlined />
-          </IconButton>
-        )}
         <Typography variant="h6" sx={{ fontSize: 16 }}>Select Container Type</Typography>
       </Box>
 

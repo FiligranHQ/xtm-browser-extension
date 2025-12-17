@@ -7,8 +7,6 @@
  * - Step 1: Inject selection (attack patterns and contracts)
  * - Step 2: Scenario form (name, description, targets, timeline)
  * - AI scenario generation support
- * 
- * Extracted from App.tsx to reduce file size and improve maintainability.
  */
 
 import React from 'react';

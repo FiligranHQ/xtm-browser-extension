@@ -24,7 +24,8 @@ import {
   extractArticleContent, 
   extractFirstParagraph, 
   generateArticlePDF, 
-  escapeHtml 
+  escapeHtml,
+  getPageContentForScanning,
 } from './extraction';
 import { 
   getComprehensivePageContent, 
@@ -934,7 +935,7 @@ async function scanPageForAtomicTesting(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    const content = document.body.innerText;
+    const content = getPageContentForScanning();
     const url = window.location.href;
     const pageTitle = document.title;
     
@@ -1026,7 +1027,7 @@ async function scanPageForScenario(): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    const content = document.body.innerText;
+    const content = getPageContentForScanning();
     const url = window.location.href;
     const pageTitle = document.title;
     
@@ -1107,7 +1108,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
     clearHighlights();
     selectedForImport.clear();
     
-    const content = document.body.innerText;
+    const content = getPageContentForScanning();
     const url = window.location.href;
     
     const response = await chrome.runtime.sendMessage({

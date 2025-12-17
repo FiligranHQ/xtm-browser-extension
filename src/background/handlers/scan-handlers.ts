@@ -40,15 +40,15 @@ export async function handleScanPage(
     const result = await detectionEngine.scan(payload.content);
     const settings = await getSettings();
     
-    const enabledObservableTypes = settings.detection?.observableTypes || [];
-    const enabledEntityTypes = settings.detection?.entityTypes || [];
+    const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
+    const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
     
-    // Filter by enabled types
+    // Filter - exclude disabled types (empty = all enabled)
     const filteredObservables = result.observables.filter(obs => 
-      enabledObservableTypes.includes(obs.type)
+      !disabledObservableTypes.includes(obs.type)
     );
     const filteredSdos = result.sdos.filter(sdo => 
-      enabledEntityTypes.includes(sdo.type)
+      !disabledOpenCTITypes.includes(sdo.type)
     );
     
     const scanResult: ScanResultPayload = {

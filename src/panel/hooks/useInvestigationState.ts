@@ -2,7 +2,6 @@
  * Investigation State Hook
  * 
  * Manages all state related to OpenCTI investigation mode.
- * Extracted from App.tsx to reduce file size.
  */
 
 import { useState, useMemo } from 'react';

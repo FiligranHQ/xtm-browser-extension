@@ -2,7 +2,6 @@
  * Scenario State Hook
  * 
  * Manages all state related to OpenAEV scenario creation and management.
- * Extracted from App.tsx to reduce file size.
  */
 
 import { useState } from 'react';

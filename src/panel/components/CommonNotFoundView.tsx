@@ -104,7 +104,7 @@ export const CommonNotFoundView: React.FC<NotFoundViewProps> = ({
         }}
         fullWidth
       >
-        Add to OpenCTI
+        Add to OpenCTI 
       </Button>
     </Box>
   );

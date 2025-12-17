@@ -961,7 +961,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
               '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            Back to list
+            Back to attack patterns
           </Button>
         </Box>
         
@@ -1239,7 +1239,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
               '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            Back to list
+            Back to attack patterns
           </Button>
         </Box>
       )}

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Filigran Threat Management",
   "short_name": "XTM",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Detect threat indicators and entities on web pages. Create reports and integrate with OpenCTI/OpenAEV.",
   "author": "Filigran",
   "homepage_url": "https://filigran.io",
@@ -32,14 +32,6 @@
       "32": "assets/icons/icon-32.svg",
       "48": "assets/icons/icon-48.svg",
       "128": "assets/icons/icon-128.svg"
-    },
-    "default_title": "Filigran Threat Management"
-  },
-  "sidebar_action": {
-    "default_panel": "panel/index.html",
-    "default_icon": {
-      "16": "assets/icons/icon-16.png",
-      "32": "assets/icons/icon-32.png"
     },
     "default_title": "Filigran Threat Management"
   },

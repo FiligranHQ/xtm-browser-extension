@@ -12,7 +12,6 @@ import {
   Button,
   TextField,
   Autocomplete,
-  IconButton,
   Alert,
   CircularProgress,
 } from '@mui/material';
@@ -74,12 +73,26 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
 
   return (
     <Box sx={{ p: 2 }}>
+      {/* Back button - only show if not from context menu */}
+      {!addSelectionFromContextMenu && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={handleCloseAddSelection}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to panel
+          </Button>
+        </Box>
+      )}
+
+      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        {!addSelectionFromContextMenu && (
-          <IconButton size="small" onClick={handleCloseAddSelection}>
-            <ChevronLeftOutlined />
-          </IconButton>
-        )}
         <Typography variant="h6" sx={{ fontSize: 16 }}>Add to OpenCTI</Typography>
       </Box>
 

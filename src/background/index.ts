@@ -1035,19 +1035,19 @@ async function handleMessage(
           if (detectionEngine) {
             const result = await detectionEngine.scan(payload.content);
             
-            // Get detection settings to filter results
+            // Get detection settings to filter results (using disabled arrays)
             const settings = await getSettings();
-            const enabledObservableTypes = settings.detection?.observableTypes || [];
-            const enabledEntityTypes = settings.detection?.entityTypes || [];
+            const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
+            const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
             
-            // Filter observables by enabled types
+            // Filter observables - exclude disabled types (empty = all enabled)
             const filteredObservables = result.observables.filter(obs => 
-              enabledObservableTypes.includes(obs.type)
+              !disabledObservableTypes.includes(obs.type)
             );
             
-            // Filter SDOs by enabled types
+            // Filter SDOs - exclude disabled types (empty = all enabled)
             const filteredSdos = result.sdos.filter(sdo => 
-              enabledEntityTypes.includes(sdo.type)
+              !disabledOpenCTITypes.includes(sdo.type)
             );
             
             // Return OpenCTI results - platformEntities from other platforms are handled by SCAN_ALL
@@ -1349,24 +1349,24 @@ async function handleMessage(
             log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
           }
           
-          // Get detection settings to filter results
+          // Get detection settings to filter results (using disabled arrays)
           // Note: Detection settings only affect global scan, NOT atomic testing or scenario generation
           const settings = await getSettings();
-          const enabledObservableTypes = settings.detection?.observableTypes || [];
-          const enabledEntityTypes = settings.detection?.entityTypes || [];
-          const enabledOaevTypes = settings.detection?.platformEntityTypes?.openaev || [];
+          const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
+          const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+          const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
           
-          // Filter OpenCTI results by enabled types
+          // Filter OpenCTI results - exclude disabled types (empty = all enabled)
           const filteredObservables = openctiResult.observables.filter(obs => 
-            enabledObservableTypes.includes(obs.type)
+            !disabledObservableTypes.includes(obs.type)
           );
           const filteredSdos = openctiResult.sdos.filter(sdo => 
-            enabledEntityTypes.includes(sdo.type)
+            !disabledOpenCTITypes.includes(sdo.type)
           );
           
-          // Filter OpenAEV entities by enabled types
+          // Filter OpenAEV entities - exclude disabled types (empty = all enabled)
           const filteredPlatformEntities = platformEntities.filter(entity => 
-            enabledOaevTypes.includes(entity.type)
+            !disabledOpenAEVTypes.includes(entity.type)
           );
           
           // Combine filtered results

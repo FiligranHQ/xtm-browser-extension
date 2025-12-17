@@ -517,6 +517,189 @@ export function getCleanVisibleText(): string {
   return text;
 }
 
+/**
+ * Minimum content length to consider innerText as "good enough"
+ * Below this threshold, we'll try Shadow DOM extraction
+ */
+const MIN_CONTENT_LENGTH = 500;
+
+/**
+ * Extract text from Shadow DOM for sites that use Web Components heavily
+ * Recursively traverses all nested Shadow DOM trees
+ */
+function extractTextFromShadowRootsOnly(): string {
+  const textParts: string[] = [];
+  const visitedRoots = new Set<ShadowRoot>();
+  
+  // Recursive function to extract text from a shadow root and its nested shadow roots
+  function extractFromShadowRoot(shadowRoot: ShadowRoot): void {
+    if (visitedRoots.has(shadowRoot)) return;
+    visitedRoots.add(shadowRoot);
+    
+    // Get text content from this shadow root
+    const shadowText = shadowRoot.textContent || '';
+    if (shadowText.trim()) {
+      textParts.push(shadowText);
+    }
+    
+    // Find all elements inside this shadow root that might have their own shadow roots
+    shadowRoot.querySelectorAll('*').forEach(el => {
+      if (el.shadowRoot) {
+        extractFromShadowRoot(el.shadowRoot);
+      }
+    });
+  }
+  
+  // Start by finding all elements in the main DOM that have shadow roots
+  document.querySelectorAll('*').forEach(el => {
+    if (el.shadowRoot) {
+      extractFromShadowRoot(el.shadowRoot);
+    }
+  });
+  
+  return textParts.join(' ');
+}
+
+/**
+ * Aggressively filter content to remove noise URLs and non-IOC patterns
+ */
+function filterContentAggressively(content: string): string {
+  let filtered = content;
+  
+  // ============================================================================
+  // URL Filtering - Remove common non-IOC URLs
+  // ============================================================================
+  
+  // Remove all URLs from common domains that are never IOCs
+  const nonIOCDomains = [
+    'googleapis', 'gstatic', 'google\\.com', 'googleusercontent',
+    'cloudflare', 'cloudflareinsights',
+    'jsdelivr', 'unpkg', 'cdnjs', 'npmjs',
+    'w3\\.org', 'schema\\.org',
+    'getbootstrap', 'bootstrap',
+    'github\\.com', 'githubusercontent',
+    'gitlab\\.com',
+    'stackoverflow\\.com',
+    'virustotal\\.com', // The VT site itself is not an IOC
+    'bazaar\\.abuse\\.ch', // Malware bazaar links are not IOCs themselves
+    'tria\\.ge',
+    'neiki\\.dev',
+    'jaffacakes118\\.dev',
+    'brighttalk\\.com',
+    'fontawesome', 'fonts\\.googleapis',
+    'jquery', 'reactjs', 'vuejs', 'angular',
+    'twitter\\.com', 'x\\.com', 'facebook\\.com', 'linkedin\\.com',
+    'youtube\\.com', 'instagram\\.com',
+    'amazon\\.com', 'amazonaws\\.com', 'aws\\.amazon',
+    'microsoft\\.com', 'azure\\.com', 'office\\.com',
+    'apple\\.com', 'icloud\\.com',
+    'slack\\.com', 'discord\\.com', 'telegram\\.org',
+    'wikipedia\\.org', 'wikimedia\\.org',
+    'archive\\.org', 'web\\.archive\\.org',
+  ];
+  const nonIOCPattern = new RegExp(
+    `https?://[^\\s"'<>)]*(?:${nonIOCDomains.join('|')})[^\\s"'<>)]*`,
+    'gi'
+  );
+  filtered = filtered.replace(nonIOCPattern, ' ');
+  
+  // Remove relative URLs and fragments
+  filtered = filtered.replace(/\/gui\/[^\s"'<>)]+/gi, ' ');
+  filtered = filtered.replace(/#[a-zA-Z][\w-]*/g, ' ');
+  
+  // Remove font file URLs
+  filtered = filtered.replace(/https?:\/\/[^\s"'<>)]+\.(woff2?|ttf|eot|otf|svg)(\?[^\s"'<>)]*)?/gi, ' ');
+  
+  // Remove image URLs
+  filtered = filtered.replace(/https?:\/\/[^\s"'<>)]+\.(png|jpg|jpeg|gif|webp|ico|bmp)(\?[^\s"'<>)]*)?/gi, ' ');
+  
+  // Remove CSS/JS asset URLs
+  filtered = filtered.replace(/https?:\/\/[^\s"'<>)]+\.(css|js|mjs)(\?[^\s"'<>)]*)?/gi, ' ');
+  
+  // Remove data: URLs
+  filtered = filtered.replace(/data:[^\s"'<>)]+/gi, ' ');
+  
+  // Remove blob: URLs
+  filtered = filtered.replace(/blob:[^\s"'<>)]+/gi, ' ');
+  
+  // Remove mailto: and tel: links
+  filtered = filtered.replace(/mailto:[^\s"'<>)]+/gi, ' ');
+  filtered = filtered.replace(/tel:[^\s"'<>)]+/gi, ' ');
+  
+  // Remove javascript: pseudo-URLs
+  filtered = filtered.replace(/javascript:[^\s"'<>)]+/gi, ' ');
+  
+  // ============================================================================
+  // CSS/UI Pattern Filtering
+  // ============================================================================
+  
+  // CSS class selectors (e.g., "form-control.is", "select.is-valid")
+  filtered = filtered.replace(/\b[\w-]+(?:\.[\w-]+)*\.is(?:-[\w-]+)?\b/g, ' ');
+  
+  // CSS class chains (e.g., "input.form-control.is-valid")
+  filtered = filtered.replace(/\b(?:input|textarea|select|button|div|span|form|a|label|ul|ol|li|table|tr|td|th|img|p|h[1-6])\.[\w.-]+/gi, ' ');
+  
+  // CSS pseudo-selectors (e.g., "::before", ":hover")
+  filtered = filtered.replace(/\b[a-z]{1,10}::/gi, ' ');
+  filtered = filtered.replace(/::[a-z-]+/gi, ' ');
+  filtered = filtered.replace(/:[a-z-]+(?:\([^)]*\))?/gi, ' ');
+  
+  // URL-encoded fragments (e.g., "2Fwww.w3.org")
+  filtered = filtered.replace(/[0-9][A-F][a-zA-Z0-9./-]+/g, ' ');
+  
+  // SVG path data
+  filtered = filtered.replace(/\bd="[^"]+"/gi, ' ');
+  filtered = filtered.replace(/\bM\d+[\s\d.LlHhVvCcSsQqTtAaZz,-]+/g, ' ');
+  
+  // Common UI text that's not useful
+  filtered = filtered.replace(/\b(Sign in|Sign up|Log in|Log out|Subscribe|Close|Cancel|Submit|Search|Loading|More|Less|Show|Hide|View|Edit|Delete|Save|Copy|Share|Download|Upload|Next|Previous|Back|Forward|Home|Menu|Settings|Help|About|Contact|Privacy|Terms|Cookie|Accept|Decline|Dismiss|Read more|Learn more|See more|Click here|Get started)\b/gi, ' ');
+  
+  // ============================================================================
+  // Final Cleanup
+  // ============================================================================
+  
+  filtered = filtered
+    .replace(/[\t\r]/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ ]{2,}/g, ' ')
+    .trim();
+  
+  return filtered;
+}
+
+/**
+ * Get page content for scanning - extracts visible text
+ * This is the main function to use for IOC/entity scanning
+ */
+export function getPageContentForScanning(): string {
+  // Get visible text using innerText (respects visibility, excludes script/style)
+  let content = document.body?.innerText || '';
+  
+  // Only do additional extraction if innerText is too short
+  // (Sites like VirusTotal have all content in Shadow DOM, so innerText is nearly empty)
+  if (content.length < MIN_CONTENT_LENGTH) {
+    // Try extracting from Shadow DOM (for sites like VirusTotal)
+    const shadowContent = extractTextFromShadowRootsOnly();
+    if (shadowContent.length > content.length) {
+      // Shadow DOM has more content, use it
+      content = shadowContent;
+    }
+    
+    // If still not enough content, fall back to textContent
+    if (content.length < MIN_CONTENT_LENGTH) {
+      const textContent = document.body?.textContent || '';
+      if (textContent.length > content.length) {
+        content = textContent;
+      }
+    }
+  }
+  
+  // Apply aggressive filtering to remove noise
+  content = filterContentAggressively(content);
+  
+  return content;
+}
+
 // ============================================================================
 // PDF Generation
 // ============================================================================

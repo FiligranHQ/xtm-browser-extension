@@ -1,8 +1,13 @@
 /**
  * Constants and type definitions for the Options page
+ * 
+ * Naming convention:
+ * - OBSERVABLE_TYPES: Observable types (IPs, domains, hashes, etc.)
+ * - OPENCTI_TYPES: OpenCTI entity types (Threat Actors, Malware, etc.)
+ * - OPENAEV_TYPES: OpenAEV entity types (Assets, Teams, Players, etc.)
  */
 
-// Observable types that can be detected - sorted alphabetically by label
+// Observable Types - sorted alphabetically by label
 export const OBSERVABLE_TYPES = [
   { value: 'Bank-Account', label: 'Bank Accounts (IBAN)' },
   { value: 'Cryptocurrency-Wallet', label: 'Cryptocurrency Wallets' },
@@ -18,9 +23,8 @@ export const OBSERVABLE_TYPES = [
   { value: 'User-Agent', label: 'User Agents' },
 ];
 
-// Entity types that can be detected - sorted alphabetically by label
-// These match the entity types that are cached for detection (see storage.ts SDOCache)
-export const ENTITY_TYPES = [
+// OpenCTI Types - sorted alphabetically by label
+export const OPENCTI_TYPES = [
   { value: 'Administrative-Area', label: 'Administrative Areas' },
   { value: 'Attack-Pattern', label: 'Attack Patterns' },
   { value: 'Campaign', label: 'Campaigns' },
@@ -39,13 +43,8 @@ export const ENTITY_TYPES = [
   { value: 'Threat-Actor-Individual', label: 'Threat Actor Individuals' },
 ];
 
-// ============================================================================
-// Platform Entity Types Configuration
-// When adding a new platform, add its entity types constant here
-// ============================================================================
-
-// OpenAEV entity types - sorted alphabetically by label
-export const OAEV_ENTITY_TYPES = [
+// OpenAEV Types - sorted alphabetically by label
+export const OPENAEV_TYPES = [
   { value: 'AssetGroup', label: 'Asset Groups' },
   { value: 'Asset', label: 'Assets (Endpoints)' },
   { value: 'AttackPattern', label: 'Attack Patterns' },
@@ -54,17 +53,11 @@ export const OAEV_ENTITY_TYPES = [
   { value: 'Team', label: 'Teams' },
 ];
 
-// All platform entity type configurations - keyed by platform type
-export const PLATFORM_ENTITY_TYPES: Record<string, Array<{ value: string; label: string }>> = {
-  openaev: OAEV_ENTITY_TYPES,
-};
-
 export const DEFAULT_DETECTION = {
-  entityTypes: ENTITY_TYPES.map(e => e.value),
-  observableTypes: OBSERVABLE_TYPES.map(o => o.value),
-  platformEntityTypes: {
-    openaev: OAEV_ENTITY_TYPES.map(o => o.value),
-  },
+  // Empty disabled arrays = all types enabled by default
+  disabledObservableTypes: [] as string[],
+  disabledOpenCTITypes: [] as string[],
+  disabledOpenAEVTypes: [] as string[],
 };
 
 // Settings navigation tabs - add new platform tabs here when integrating new platforms

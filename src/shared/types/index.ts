@@ -19,16 +19,21 @@ export interface PlatformConfig {
 }
 
 /**
- * Detection settings for entity scanning
- * Platform-agnostic - uses string arrays for entity type configuration
+ * Detection settings for scanning
+ * Uses "disabled" arrays (empty = all enabled by default)
+ * 
+ * Types are organized as:
+ * - Observable Types: IPs, domains, hashes, etc.
+ * - OpenCTI Types: Threat Actors, Malware, etc.
+ * - OpenAEV Types: Assets, Teams, Players, etc.
  */
 export interface DetectionSettings {
-  /** OpenCTI entity types to detect */
-  entityTypes?: string[];
-  /** OpenCTI observable types to detect */
-  observableTypes?: string[];
-  /** Entity types to detect by platform (keyed by platform type, e.g., 'openaev') */
-  platformEntityTypes?: Record<string, string[]>;
+  /** Observable Types to EXCLUDE from detection */
+  disabledObservableTypes?: string[];
+  /** OpenCTI Types to EXCLUDE from detection */
+  disabledOpenCTITypes?: string[];
+  /** OpenAEV Types to EXCLUDE from detection */
+  disabledOpenAEVTypes?: string[];
 }
 
 // ============================================================================
@@ -105,20 +110,10 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   autoScan: false,
   showNotifications: true,
   detection: {
-    // Entity types match the OpenCTI entity cache structure (storage.ts OCTIEntityCache)
-    entityTypes: [
-      'Administrative-Area', 'Attack-Pattern', 'Campaign', 'City', 'Country', 'Event',
-      'Incident', 'Individual', 'Intrusion-Set', 'Malware', 'Organization',
-      'Position', 'Region', 'Sector', 'Threat-Actor-Group', 'Threat-Actor-Individual'
-    ],
-    observableTypes: [
-      'Bank-Account', 'Cryptocurrency-Wallet', 'Domain-Name', 'Email-Addr',
-      'Hostname', 'IPv4-Addr', 'IPv6-Addr', 'Mac-Addr', 'Phone-Number',
-      'StixFile', 'Url', 'User-Agent'
-    ],
-    platformEntityTypes: {
-      openaev: ['Asset', 'AssetGroup', 'AttackPattern', 'Player', 'Team', 'Finding'],
-    },
+    // Empty disabled arrays = all types enabled by default
+    disabledObservableTypes: [],
+    disabledOpenCTITypes: [],
+    disabledOpenAEVTypes: [],
   },
   ai: {
     // AI settings - no default provider/key

@@ -132,13 +132,17 @@ export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (pr
         ))}
         
         <Button
-          variant="outlined"
           size="small"
           startIcon={<ChevronLeftOutlined />}
           onClick={() => setPanelMode('scan-results')}
-          sx={{ mt: 2 }}
+          sx={{ 
+            mt: 2,
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
         >
-          Back to Scan Results
+          Back to scan results
         </Button>
       </Box>
     );
@@ -218,12 +222,16 @@ export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (pr
         
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant="outlined"
             size="small"
             startIcon={<ChevronLeftOutlined />}
             onClick={handleBack}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
           >
-            Back
+            Back to scan results
           </Button>
           <Button
             variant="contained"
@@ -267,12 +275,16 @@ export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (pr
       
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Button
-          variant="outlined"
           size="small"
           startIcon={<ChevronLeftOutlined />}
           onClick={handleBack}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
         >
-          Back
+          {scenarioStep === 1 ? 'Back to configuration' : scenarioStep === 2 ? 'Back to injects' : 'Back to scan results'}
         </Button>
         {scenarioStep < 2 && (
           <Button

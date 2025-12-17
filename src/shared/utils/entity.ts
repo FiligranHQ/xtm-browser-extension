@@ -30,9 +30,9 @@ export const CONTAINER_TYPES = [
 ] as const;
 
 /**
- * OpenAEV entity types
+ * OpenAEV Types
  */
-export const OAEV_ENTITY_TYPES = [
+export const OPENAEV_TYPES = [
   'Asset', 'AssetGroup', 'Team', 'Player', 'User', 
   'Organization', 'Scenario', 'Exercise', 'AttackPattern', 'Finding'
 ] as const;

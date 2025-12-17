@@ -4,7 +4,7 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import { extractTextFromShadowDOM, getCleanVisibleText } from './extraction';
+import { getPageContentForScanning } from './extraction';
 
 const log = loggers.content;
 
@@ -14,45 +14,12 @@ const log = loggers.content;
 
 /**
  * Get comprehensive page content for scanning
- * Combines multiple sources to handle SPAs and dynamic content
+ * Uses the robust extraction from extraction.ts
  */
 export function getComprehensivePageContent(): string {
-  const contentParts: string[] = [];
-  
-  // 1. Get clean visible text content
-  const cleanText = getCleanVisibleText();
-  if (cleanText) {
-    contentParts.push(cleanText);
-  }
-  
-  // 2. Shadow DOM content (for Web Components like VirusTotal)
-  try {
-    const shadowText = extractTextFromShadowDOM(document);
-    if (shadowText.trim()) {
-      contentParts.push(shadowText);
-    }
-  } catch (e) {
-    log.debug(' Shadow DOM extraction failed:', e);
-  }
-  
-  // 3. URL path and query parameters (often contain hashes on VirusTotal, etc.)
-  try {
-    const url = new URL(window.location.href);
-    // Add path segments that look like IOCs
-    url.pathname.split('/').forEach(segment => {
-      if (segment.length >= 32 && /^[a-fA-F0-9]+$/.test(segment)) {
-        contentParts.push(segment);
-      }
-    });
-    // Add query parameters that look like IOCs
-    url.searchParams.forEach((value, key) => {
-      if (value.length >= 32 && /^[a-fA-F0-9]+$/.test(value)) {
-        contentParts.push(`${key}: ${value}`);
-      }
-    });
-  } catch { /* Skip URL parsing errors */ }
-  
-  return contentParts.join('\n\n');
+  const content = getPageContentForScanning();
+  log.debug(' Page content extracted, length:', content.length);
+  return content;
 }
 
 /**

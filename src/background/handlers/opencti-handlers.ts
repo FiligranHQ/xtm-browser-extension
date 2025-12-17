@@ -22,8 +22,8 @@ import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS 
 
 const log = loggers.background;
 
-// List of entity types that should be cached
-const CACHEABLE_ENTITY_TYPES = [
+// List of OpenCTI types that should be cached
+const CACHEABLE_OPENCTI_TYPES = [
   'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
   'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
   'Organization', 'Individual', 'Event', 'Country', 'Region',
@@ -253,7 +253,7 @@ export const handleCreateObservablesBulk: MessageHandler = async (payload, sendR
         });
 
         // Add created entities to cache
-        if (created?.id && created?.entity_type && CACHEABLE_ENTITY_TYPES.includes(created.entity_type)) {
+        if (created?.id && created?.entity_type && CACHEABLE_OPENCTI_TYPES.includes(created.entity_type)) {
           const cachedEntity: CachedEntity = {
             id: created.id,
             name: created.name || name || '',

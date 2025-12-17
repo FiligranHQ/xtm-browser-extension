@@ -2,7 +2,6 @@
  * AI State Hook
  * 
  * Manages all AI-related state for the panel.
- * Extracted from App.tsx to reduce file size.
  */
 
 import { useState } from 'react';

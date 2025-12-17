@@ -341,13 +341,21 @@ The scenario MUST focus on ${themeConfig.promptContext.toLowerCase()} themes. Ex
 Even if the page content mentions cyber-related topics, reframe the scenario to fit the ${themeConfig.promptContext.toLowerCase()} theme.\n`
         : '';
       
+      // Calculate exact timing intervals for injects
+      const duration = request.tableTopDuration || 60;
+      const numInjects = request.numberOfInjects;
+      const interval = numInjects > 1 ? Math.round(duration / (numInjects - 1)) : 0;
+      const timingExample = Array.from({ length: Math.min(numInjects, 5) }, (_, i) => 
+        i === 0 ? 0 : Math.round(i * interval)
+      ).join(', ');
+      
       prompt = `Generate a table-top exercise scenario based on the following:
 
 Scenario Name: ${request.scenarioName}
 Type: Table-Top Exercise
 Theme: ${themeConfig.promptContext}
-Duration: ${request.tableTopDuration || 60} minutes
-Number of Email Notifications: ${request.numberOfInjects}
+Total Duration: ${duration} minutes
+Number of Email Notifications: ${numInjects}
 EMAIL LANGUAGE: ${emailLanguage.toUpperCase()} - All email subjects and bodies MUST be written in ${emailLanguage}.
 ${themeInstruction}
 Source Intelligence:
@@ -359,6 +367,13 @@ ${hasAttackPatterns ? `Detected Topics/Patterns:\n${attackPatternsInfo}` : `No s
 ${truncatedContext ? `Additional Context:\n${truncatedContext}\n` : ''}
 Page Content:
 ${truncatedContent}
+
+CRITICAL TIMING REQUIREMENT:
+- Total exercise duration: ${duration} minutes
+- Number of injects: ${numInjects}
+- Time interval between injects: ${interval} minutes
+- First inject at minute 0, last inject at minute ${duration}
+- Expected delayMinutes values: ${timingExample}${numInjects > 5 ? '...' : ''} (evenly distributed)
 
 Generate a JSON response with this structure:
 {
@@ -373,14 +388,14 @@ Generate a JSON response with this structure:
       "type": "email",
       "subject": "[SIMULATION] realistic email subject line in ${emailLanguage}",
       "body": "Professional email body in ${emailLanguage} describing the simulated ${themeConfig.promptContext.toLowerCase()} event (2-4 sentences)",
-      "delayMinutes": minutes from scenario start (0 for first, then spaced based on duration)
+      "delayMinutes": 0 for first inject, then ${interval}, ${interval * 2}, etc. (MUST distribute across ${duration} minutes)
     }
   ]
 }
 
-Create exactly ${request.numberOfInjects} email notification injects that:
+Create exactly ${numInjects} email notification injects that:
 1. Build a coherent ${themeConfig.promptContext.toLowerCase()} narrative progressing through the incident
-2. Are spaced appropriately across the ${request.tableTopDuration || 60} minute duration
+2. MUST be evenly distributed across the ${duration} minute duration with ~${interval} minute intervals
 3. ${hasAttackPatterns ? 'Reference the detected topics where relevant, adapting them to the ' + themeConfig.promptContext + ' theme' : 'Create realistic scenarios based on ' + themeConfig.promptContext.toLowerCase() + ' topics derived from the page content'}
 4. Include realistic subject lines marked as [SIMULATION]
 5. Have professional, contextual email bodies suitable for training

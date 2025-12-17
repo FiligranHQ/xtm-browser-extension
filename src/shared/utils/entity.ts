@@ -48,7 +48,8 @@ export function isObservableType(type: string): boolean {
 }
 
 /**
- * Check if entity type is an SDO
+ * Check if entity type is an OpenCTI entity (SDO - STIX Domain Object)
+ * These entities can be created via the extension using AI discovery
  */
 export function isSDOType(type: string): boolean {
   return SDO_TYPES.some(t => 

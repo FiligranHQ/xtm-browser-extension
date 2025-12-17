@@ -2855,17 +2855,17 @@ async function handleMessage(
                 name,
               });
               
-              // Add created SDO entities to cache (not observables)
-              // SDO types that are cached: Threat-Actor-Group, Threat-Actor-Individual, Intrusion-Set, etc.
+              // Add created OpenCTI entities to cache (not observables)
+              // Entity types that are cached: Threat-Actor-Group, Threat-Actor-Individual, Intrusion-Set, etc.
               if (created?.id && created?.entity_type) {
-                const sdoTypes = [
+                const openctiEntityTypes = [
                   'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
                   'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
                   'Organization', 'Individual', 'Event', 'Country', 'Region',
                   'City', 'Administrative-Area', 'Position'
                 ];
                 
-                if (sdoTypes.includes(created.entity_type)) {
+                if (openctiEntityTypes.includes(created.entity_type)) {
                   const cachedEntity: CachedEntity = {
                     id: created.id,
                     name: created.name || name || '',

@@ -21,7 +21,7 @@ export interface HighlightMeta {
   type: string;
   found: boolean;
   data: DetectedObservable | DetectedSDO;
-  isSDO?: boolean; // Flag to indicate if this is an SDO (not addable when not found)
+  isOpenCTIEntity?: boolean; // Flag to indicate if this is an OpenCTI entity (can be added via AI discovery)
   foundInPlatforms?: Array<{
     platformType: string;
     type: string;
@@ -30,8 +30,9 @@ export interface HighlightMeta {
   }>;
 }
 
-// SDO types - these cannot be added via the extension when not found
-const SDO_TYPES = new Set([
+// OpenCTI entity types - these are detected from platform cache
+// When not found, they can be added via AI discovery feature
+const OPENCTI_ENTITY_TYPES = new Set([
   'Intrusion-Set',
   'Malware',
   'Threat-Actor',
@@ -255,7 +256,7 @@ export function highlightResults(
     }, handlers);
   }
   
-  // Highlight SDOs (these are not addable when not found)
+  // Highlight OpenCTI entities (can be added via AI discovery when not found)
   for (const sdo of results.sdos) {
     const textToHighlight = (sdo as { matchedValue?: string }).matchedValue || sdo.name;
     const valueLower = sdo.name.toLowerCase();
@@ -265,12 +266,12 @@ export function highlightResults(
       type: sdo.type,
       found: sdo.found,
       data: sdo,
-      isSDO: true, // SDOs cannot be added via the extension
+      isOpenCTIEntity: true, // OpenCTI entities can be added via AI discovery
       foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     }, handlers);
   }
   
-  // Highlight CVEs (these are SDOs, not addable when not found)
+  // Highlight CVEs (OpenCTI Vulnerability entities, can be added via AI discovery)
   if (results.cves) {
     for (const cve of results.cves) {
       const textToHighlight = (cve as { matchedValue?: string }).matchedValue || cve.name;
@@ -278,7 +279,7 @@ export function highlightResults(
         type: cve.type,
         found: cve.found,
         data: cve,
-        isSDO: true, // CVEs/Vulnerabilities are SDOs, cannot be added via the extension
+        isOpenCTIEntity: true, // CVEs are OpenCTI entities, can be added via AI discovery
       }, handlers);
     }
   }
@@ -353,17 +354,17 @@ function highlightInText(
             const highlight = document.createElement('span');
             highlight.className = 'xtm-highlight';
             
-            // Determine if this is an SDO (check flag or type)
-            const isSDO = meta.isSDO || SDO_TYPES.has(meta.type);
+            // Determine if this is an OpenCTI entity (check flag or type)
+            const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_ENTITY_TYPES.has(meta.type);
             
             if (meta.found) {
               // Found in platform = green
               highlight.classList.add('xtm-found');
-            } else if (isSDO) {
-              // SDO not found = gray (not addable)
+            } else if (isOpenCTIEntity) {
+              // OpenCTI entity not found = gray (can be added via AI discovery)
               highlight.classList.add('xtm-sdo-not-addable');
             } else {
-              // Observable not found = amber (can be added)
+              // Observable not found = amber (can be added directly)
               highlight.classList.add('xtm-not-found');
             }
             

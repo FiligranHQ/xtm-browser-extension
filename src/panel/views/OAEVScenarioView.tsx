@@ -48,7 +48,7 @@ import { LockPattern } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { loggers } from '../../shared/utils/logger';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils';
-import type { PlatformInfo } from '../types';
+import type { PlatformInfo, PanelMode } from '../types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
 
 const log = loggers.panel;
@@ -63,7 +63,7 @@ export interface OAEVScenarioViewProps extends ScenarioStateReturn {
   selectedPlatformId: string;
   setSelectedPlatformId: (id: string) => void;
   setPlatformUrl: (url: string) => void;
-  setPanelMode: (mode: string) => void;
+  setPanelMode: React.Dispatch<React.SetStateAction<PanelMode>>;
   showToast: (options: {
     type: 'success' | 'info' | 'warning' | 'error';
     message: string;
@@ -159,7 +159,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
     scenarioAIEmailLanguage,
     setScenarioAIEmailLanguage,
     scenarioAITheme,
-    setScenarioAITheme,
+    setScenarioAITheme: _setScenarioAITheme,
     scenarioAIContext,
     setScenarioAIContext,
     scenarioAIGeneratedScenario,

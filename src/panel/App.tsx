@@ -5,43 +5,15 @@ import {
   CssBaseline,
   Box,
   Typography,
-  TextField,
-  Button,
   IconButton,
-  Chip,
-  Paper,
-  CircularProgress,
-  Autocomplete,
-  Alert,
-  Stepper,
-  Step,
-  StepLabel,
-  Checkbox,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  Tooltip,
 } from '@mui/material';
 import {
   CloseOutlined,
-  ChevronLeftOutlined,
-  ChevronRightOutlined,
-  ArrowForwardOutlined,
-  RefreshOutlined,
-  ComputerOutlined,
-  LanOutlined,
-  GroupsOutlined,
-  MovieFilterOutlined,
-  EmailOutlined,
-  AutoAwesomeOutlined,
 } from '@mui/icons-material';
-import { LockPattern } from 'mdi-material-ui';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
-import { hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
-import { getAiColor, getPlatformIcon, getPlatformColor, cleanHtmlContent } from './utils';
+import { cleanHtmlContent, generateDescription } from './utils';
 import { CommonEmptyView, CommonLoadingView } from './components';
 import { useScenarioState, useAIState, useAtomicTestingState, useInvestigationState } from './hooks';
 import {
@@ -681,68 +653,6 @@ const App: React.FC = () => {
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;
     handlePanelState({ type, payload });
-  };
-
-  // Helper to generate clean description from HTML
-  const generateDescription = (html: string, maxLength = 500): string => {
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    
-    // Remove non-content elements aggressively
-    const selectorsToRemove = [
-      'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
-      'nav', 'footer', 'header', 'aside', 'menu', 'menuitem',
-      'form', 'input', 'button', 'select', 'textarea',
-      'figure', 'figcaption', 'picture', 'video', 'audio', 'source', 'track',
-      '[role="navigation"]', '[role="banner"]', '[role="complementary"]', '[role="contentinfo"]',
-      '[role="search"]', '[role="form"]', '[role="menu"]', '[role="menubar"]',
-      '.sidebar', '.navigation', '.menu', '.advertisement', '.ad', '.advert',
-      '.share', '.social', '.comments', '.comment', '.related', '.recommended',
-      '.newsletter', '.subscribe', '.popup', '.modal', '.cookie', '.banner',
-      '[class*="share"]', '[class*="social"]', '[class*="comment"]', '[class*="sidebar"]',
-      '[class*="advert"]', '[class*="cookie"]', '[class*="newsletter"]', '[class*="popup"]',
-      '[id*="share"]', '[id*="social"]', '[id*="comment"]', '[id*="sidebar"]',
-      '[id*="advert"]', '[id*="cookie"]', '[id*="newsletter"]', '[id*="popup"]',
-    ];
-    
-    selectorsToRemove.forEach(selector => {
-      try {
-        temp.querySelectorAll(selector).forEach(el => el.remove());
-      } catch { /* Skip invalid selectors */ }
-    });
-    
-    // Get text content and clean it
-    let text = temp.textContent || temp.innerText || '';
-    
-    // Clean up whitespace, tabs, and multiple newlines
-    text = text
-      .replace(/[\t\r]/g, ' ')           // Replace tabs/carriage returns with spaces
-      .replace(/\n{3,}/g, '\n\n')        // Max 2 newlines in a row
-      .replace(/[ ]{2,}/g, ' ')          // Max 1 space in a row
-      .replace(/\n /g, '\n')             // Remove spaces after newlines
-      .replace(/ \n/g, '\n')             // Remove spaces before newlines
-      .trim();
-    
-    // Get first meaningful paragraph (skip very short lines)
-    const lines = text.split('\n').filter(line => line.trim().length > 20);
-    if (lines.length > 0) {
-      text = lines.slice(0, 5).join(' ').replace(/\s+/g, ' ').trim();
-    }
-    
-    // Truncate and add ellipsis
-    if (text.length > maxLength) {
-      // Try to cut at a sentence or word boundary
-      let cutPoint = text.lastIndexOf('. ', maxLength);
-      if (cutPoint < maxLength / 2) {
-        cutPoint = text.lastIndexOf(' ', maxLength);
-      }
-      if (cutPoint < maxLength / 2) {
-        cutPoint = maxLength;
-      }
-      text = text.substring(0, cutPoint).trim() + '...';
-    }
-    
-    return text;
   };
 
   // Fetch containers for an entity
@@ -2307,201 +2217,11 @@ const App: React.FC = () => {
   // NOTE: All atomic testing functions (handleSelectAtomicTestingPlatform, handleCreateAtomicTesting,
   //       handleCreateAtomicTestingWithAIPayload, handleGenerateAIPayload, handleSelectAtomicTargetFromList,
   //       and renderAtomicTestingView) have been moved to OAEVAtomicTestingView component.
-  // Keeping placeholder to mark the boundary for now.
-  // OpenAEV email injector contract ID (hardcoded in OpenAEV platform)
-  const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
   
-  const handleCreateScenario = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    setSubmitting(true);
-    
-    // Use scenarioPlatformId if available, fallback to selectedPlatformId
-    const targetPlatformId = scenarioPlatformId || selectedPlatformId;
-    if (!targetPlatformId) {
-      log.error(' No platform ID available for scenario creation');
-      setSubmitting(false);
-      return;
-    }
-    
-    try {
-      // First create the scenario
-      const scenarioResponse = await chrome.runtime.sendMessage({
-        type: 'CREATE_SCENARIO',
-        payload: {
-          name: scenarioForm.name,
-          description: scenarioForm.description,
-          subtitle: scenarioForm.subtitle,
-          category: scenarioForm.category,
-          platformId: targetPlatformId,
-        },
-      });
-      
-      if (!scenarioResponse?.success || !scenarioResponse.data) {
-        log.error(' Scenario creation failed:', scenarioResponse?.error);
-        showToast({ type: 'error', message: scenarioResponse?.error || 'Scenario creation failed' });
-        setSubmitting(false);
-        return;
-      }
-      
-      const scenario = scenarioResponse.data;
-      log.info(' Scenario created:', scenario.scenario_id);
-      
-      // Add selected injects to the scenario
-      const isTableTop = scenarioTypeAffinity === 'TABLE-TOP';
-      
-      for (let i = 0; i < selectedInjects.length; i++) {
-        const inject = selectedInjects[i];
-        
-        // Build inject payload based on scenario type
-        // inject_depends_duration is the relative time from scenario start in seconds
-        // No inject_depends_on - injects are independent and only timed by duration
-        const injectPayload: any = {
-          inject_title: isTableTop 
-            ? `Email - ${inject.attackPatternName}`
-            : `${inject.attackPatternName} - ${inject.contractLabel}`,
-          inject_description: isTableTop
-            ? `Email notification for ${inject.attackPatternName}`
-            : `Inject for ${inject.attackPatternName}`,
-          inject_injector_contract: isTableTop 
-            ? EMAIL_INJECTOR_CONTRACT_ID  // Use email contract for TABLE-TOP
-            : inject.contractId,          // Use selected contract for technical
-          inject_depends_duration: i * scenarioInjectSpacing * 60, // Relative time from start in seconds
-        };
-        
-        // Add target based on scenario type
-        if (isTableTop) {
-          // For TABLE-TOP scenarios, target the selected team
-          if (scenarioSelectedTeam) {
-            injectPayload.inject_teams = [scenarioSelectedTeam];
-          }
-          
-          // Check if we have AI-generated content for this attack pattern
-          const aiContent = scenarioEmails.find((e: { attackPatternId: string; subject: string; body: string }) => e.attackPatternId === inject.attackPatternId);
-          
-          injectPayload.inject_content = {
-            subject: aiContent?.subject || `[SIMULATION] Security Alert: ${inject.attackPatternName}`,
-            body: aiContent?.body || `<p>This is a simulated security exercise notification.</p>
-<p><strong>Attack Pattern:</strong> ${inject.attackPatternName}</p>
-<p><strong>Description:</strong> A simulated ${inject.attackPatternName} attack has been detected in this exercise.</p>
-<p>Please follow your incident response procedures.</p>
-<p><em>This is a simulation exercise - no actual security incident has occurred.</em></p>`,
-          };
-        } else {
-          // For technical scenarios, target the selected asset or asset group
-          if (scenarioTargetType === 'asset' && scenarioSelectedAsset) {
-            injectPayload.inject_assets = [scenarioSelectedAsset];
-          } else if (scenarioTargetType === 'asset_group' && scenarioSelectedAssetGroup) {
-            injectPayload.inject_asset_groups = [scenarioSelectedAssetGroup];
-          }
-        }
-        const injectResponse = await chrome.runtime.sendMessage({
-          type: 'ADD_INJECT_TO_SCENARIO',
-          payload: {
-            scenarioId: scenario.scenario_id,
-            inject: injectPayload,
-            platformId: targetPlatformId,
-          },
-        });
-        
-        if (!injectResponse?.success || !injectResponse.data?.inject_id) {
-          log.error(` Failed to create inject:`, injectResponse?.error);
-        }
-      }
-      
-      log.info(` Scenario creation complete with ${selectedInjects.length} injects`);
-      
-      // Open the scenario in the platform
-      if (scenario.url) {
-        chrome.tabs.create({ url: scenario.url });
-      }
-      
-      showToast({ type: 'success', message: 'Scenario created successfully' });
-      
-      // Reset and close
-      setScenarioForm({ name: '', description: '', subtitle: '', category: 'attack-scenario' });
-      setSelectedInjects([]);
-      setScenarioOverviewData(null);
-      setScenarioEmails([]);
-      handleClose();
-    } catch (error) {
-      log.error(' Scenario creation error:', error);
-      showToast({ type: 'error', message: 'Scenario creation failed' });
-    }
-    
-    setSubmitting(false);
-  };
-  
-  // Handle platform selection for scenario creation
-  const handleSelectScenarioPlatform = async (platformId: string) => {
-    setScenarioPlatformId(platformId);
-    setScenarioPlatformSelected(true);
-    setSelectedPlatformId(platformId);
-    
-    const platform = availablePlatforms.find(p => p.id === platformId);
-    if (platform) {
-      setPlatformUrl(platform.url);
-    }
-    
-    // Fetch assets, asset groups, and teams for target selection
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      try {
-        const [assetsRes, assetGroupsRes, teamsRes] = await Promise.all([
-          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId } }),
-          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId } }),
-          chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId } }),
-        ]);
-        if (assetsRes?.success) setScenarioAssets(assetsRes.data || []);
-        if (assetGroupsRes?.success) setScenarioAssetGroups(assetGroupsRes.data || []);
-        if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
-      } catch (error) {
-        log.error(' Failed to fetch scenario targets:', error);
-      }
-    }
-    
-    // Reset target selections when platform changes
-    setScenarioSelectedAsset(null);
-    setScenarioSelectedAssetGroup(null);
-    setScenarioSelectedTeam(null);
-    
-    // Filter attack patterns to only those from the selected platform
-    const filteredPatterns = scenarioRawAttackPatterns.filter(
-      (ap) => ap.platformId === platformId
-    );
-    // Fetch contracts for filtered attack patterns
-    if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      setScenarioLoading(true);
-      
-      const attackPatternIds = filteredPatterns.map((ap) => ap.id || ap.entityId);
-      
-      chrome.runtime.sendMessage({
-        type: 'FETCH_SCENARIO_OVERVIEW',
-        payload: { attackPatternIds, platformId },
-      }, (response) => {
-        setScenarioLoading(false);
-        if (response?.success && response.data) {
-          setScenarioOverviewData({
-            ...response.data,
-            pageTitle: currentPageTitle || '',
-            pageUrl: currentPageUrl || '',
-            pageDescription: scenarioForm.description || '',
-          });
-          
-          // Don't auto-select contracts - let the user choose
-          setSelectedInjects([]);
-        }
-      });
-    } else {
-      setScenarioOverviewData({
-        attackPatterns: [],
-        killChainPhases: [],
-        pageTitle: currentPageTitle || '',
-        pageUrl: currentPageUrl || '',
-        pageDescription: scenarioForm.description || '',
-      });
-    }
-  };
+  // NOTE: Scenario functions (handleCreateScenario, handleSelectScenarioPlatform) have been moved
+  // to OAEVScenarioView component. See: src/panel/views/OAEVScenarioView.tsx
 
+  // NOTE: REMOVED handleCreateScenario function (moved to OAEVScenarioView)
   // NOTE: renderScenarioOverviewView and renderScenarioFormView have been extracted
   // to OAEVScenarioView component to reduce App.tsx file size.
   // See: src/panel/views/OAEVScenarioView.tsx

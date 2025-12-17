@@ -79,14 +79,16 @@ export const getPlatformColor = (platform: string): string => {
 };
 
 /**
- * Get platform type color for OpenCTI/OpenAEV chips and badges
+ * Get platform type color for OpenCTI/OpenAEV/OpenGRC chips and badges
  */
-export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | string): string => {
+export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'opengrc' | string): string => {
   switch (platformType) {
     case 'opencti':
       return '#0fbcff';
     case 'openaev':
       return '#ff9800';
+    case 'opengrc':
+      return '#4caf50';
     default:
       return '#757575';
   }
@@ -131,34 +133,35 @@ export const hasEnterprisePlatform = (platforms: PlatformInfo[]): boolean => {
 // Platform Display
 // ============================================================================
 
+import { 
+  getPlatformName as getRegistryPlatformName,
+  getPlatformLogoName,
+  type PlatformType 
+} from '../../shared/platform/registry';
+
 /**
  * Get platform display name
+ * @deprecated Use getPlatformName from registry instead
  */
-export const getPlatformDisplayName = (platformType: 'opencti' | 'openaev'): string => {
-  return platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI';
+export const getPlatformDisplayName = (platformType: PlatformType | string): string => {
+  return getRegistryPlatformName(platformType);
 };
 
 /**
- * Format platform name for display (alias for getPlatformDisplayName)
+ * Format platform name for display
  */
-export const formatPlatformName = (platformType: 'opencti' | 'openaev' | string): string => {
-  switch (platformType) {
-    case 'opencti':
-      return 'OpenCTI';
-    case 'openaev':
-      return 'OpenAEV';
-    default:
-      return platformType;
-  }
+export const formatPlatformName = (platformType: PlatformType | string): string => {
+  return getRegistryPlatformName(platformType);
 };
 
 /**
- * Get platform logo path based on platform type
+ * Get platform logo path based on platform type and theme
  */
 export const getPlatformLogoPath = (
-  platformType: 'opencti' | 'openaev',
-  logoSuffix: string
+  platformType: PlatformType | string,
+  themeSuffix: string
 ): string => {
-  return `../assets/logos/logo_${platformType}_${logoSuffix}_embleme_square.svg`;
+  const logoName = getPlatformLogoName(platformType);
+  return `../assets/logos/logo_${logoName}_${themeSuffix}_embleme_square.svg`;
 };
 

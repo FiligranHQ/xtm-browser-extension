@@ -774,23 +774,3 @@ export async function cleanupOrphanedOAEVCaches(validPlatformIds: string[]): Pro
     await chrome.storage.local.set({ [OAEV_CACHE_KEY]: multiCache });
   }
 }
-
-// ============================================================================
-// Theme Cache
-// ============================================================================
-
-/**
- * Get cached theme
- */
-export async function getCachedTheme(): Promise<'dark' | 'light' | null> {
-  const result = await chrome.storage.local.get('platformTheme');
-  return result.platformTheme || null;
-}
-
-/**
- * Cache platform theme
- */
-export async function cachePlatformTheme(theme: 'dark' | 'light'): Promise<void> {
-  await chrome.storage.local.set({ platformTheme: theme });
-}
-

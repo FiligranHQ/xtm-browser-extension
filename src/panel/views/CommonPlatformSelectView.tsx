@@ -32,7 +32,7 @@ export interface PlatformSelectViewProps {
   logoSuffix: string;
 }
 
-export const PlatformSelectView: React.FC<PlatformSelectViewProps> = ({
+export const CommonPlatformSelectView: React.FC<PlatformSelectViewProps> = ({
   mode,
   setPanelMode,
   openctiPlatforms,
@@ -156,4 +156,4 @@ export const PlatformSelectView: React.FC<PlatformSelectViewProps> = ({
   );
 };
 
-export default PlatformSelectView;
+export default CommonPlatformSelectView;

@@ -15,7 +15,6 @@ export interface PlatformInfo {
     user_email?: string;
   };
   settings?: {
-    platform_theme?: string;
     platform_title?: string;
   };
   user?: {
@@ -25,28 +24,9 @@ export interface PlatformInfo {
 }
 
 /**
- * OpenCTI theme settings
- */
-export interface OpenCTITheme {
-  id: string;
-  name: string;
-  theme_background?: string;
-  theme_paper?: string;
-  theme_nav?: string;
-  theme_primary?: string;
-  theme_secondary?: string;
-  theme_accent?: string;
-  theme_text_color?: string;
-  theme_logo?: string;
-  theme_logo_collapsed?: string;
-  theme_logo_login?: string;
-}
-
-/**
  * Platform settings
  */
 export interface PlatformSettings {
-  platform_theme?: OpenCTITheme | null;
   platform_title?: string;
   platform_enterprise_edition?: {
     license_enterprise?: boolean;

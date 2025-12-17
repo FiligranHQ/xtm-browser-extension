@@ -45,26 +45,31 @@ import ThemeLight from '../shared/theme/ThemeLight';
 import { hexToRGB } from '../shared/theme/colors';
 import { loggers } from '../shared/utils/logger';
 import { getAiColor, getPlatformIcon, getPlatformColor, cleanHtmlContent } from './utils';
-import { EmptyView, LoadingView } from './components';
+import { CommonEmptyView, CommonLoadingView } from './components';
 import { useScenarioState, useAIState } from './hooks';
 import {
-  ScanResultsView,
-  UnifiedSearchView,
-  PreviewView,
-  ImportResultsView,
-  ContainerTypeView,
-  PlatformSelectView,
-  AddView,
-  ExistingContainersView,
-  InvestigationView,
-  NotFoundView,
-  ContainerFormView,
-  AddSelectionView,
-  EntityView,
+  // Common views (cross-platform)
+  CommonScanResultsView,
+  CommonUnifiedSearchView,
+  CommonPreviewView,
+  CommonPlatformSelectView,
+  CommonNotFoundView,
+  // OpenCTI-specific views
+  OCTIEntityView,
+  OCTIImportResultsView,
+  OCTIContainerTypeView,
+  OCTIContainerFormView,
+  OCTIExistingContainersView,
+  OCTIInvestigationView,
+  OCTIAddView,
+  OCTIAddSelectionView,
+  // OpenAEV-specific views
   OAEVEntityView,
+  // OAEVScenarioOverviewView - Note: Scenario overview is currently rendered inline in renderScenarioOverviewView()
 } from './views';
 import {
   parsePrefixedType,
+  prefixEntityType,
 } from '../shared/platform';
 import {
   getOAEVEntityName,
@@ -1288,7 +1293,7 @@ const App: React.FC = () => {
               : entity.id) || '';
             addOrMergeEntity({
               id: oaevEntityId || `${platformType}-${entity.name}`,
-              type: platformType === 'openaev' ? `oaev-${entityType}` : entityType,
+              type: prefixEntityType(entityType, platformType as 'opencti' | 'openaev' | 'opengrc'),
               name: entity.name,
               value: entity.value || entity.name,
               found: entity.found ?? true,
@@ -6401,7 +6406,7 @@ const App: React.FC = () => {
         }
         
         return (
-          <EntityView
+          <OCTIEntityView
             mode={mode}
             entity={entity}
             setEntity={setEntity}
@@ -6430,7 +6435,7 @@ const App: React.FC = () => {
       }
       case 'not-found':
         return (
-          <NotFoundView
+          <CommonNotFoundView
             entity={entity}
             mode={mode}
             entityFromScanResults={entityFromScanResults}
@@ -6441,7 +6446,7 @@ const App: React.FC = () => {
         );
       case 'add':
         return (
-          <AddView
+          <OCTIAddView
             setPanelMode={setPanelMode}
             entitiesToAdd={entitiesToAdd}
             handleAddEntities={handleAddEntities}
@@ -6450,7 +6455,7 @@ const App: React.FC = () => {
         );
       case 'import-results':
         return (
-          <ImportResultsView
+          <OCTIImportResultsView
             mode={mode}
             importResults={importResults}
             setImportResults={setImportResults}
@@ -6460,7 +6465,7 @@ const App: React.FC = () => {
         );
       case 'preview':
         return (
-          <PreviewView
+          <CommonPreviewView
             mode={mode}
             setPanelMode={setPanelMode}
             entitiesToAdd={entitiesToAdd}
@@ -6491,7 +6496,7 @@ const App: React.FC = () => {
         );
       case 'platform-select':
         return (
-          <PlatformSelectView
+          <CommonPlatformSelectView
             mode={mode}
             setPanelMode={setPanelMode}
             openctiPlatforms={openctiPlatforms}
@@ -6508,7 +6513,7 @@ const App: React.FC = () => {
         );
       case 'existing-containers':
         return (
-          <ExistingContainersView
+          <OCTIExistingContainersView
             mode={mode}
             existingContainers={existingContainers}
             selectedPlatformId={selectedPlatformId}
@@ -6536,7 +6541,7 @@ const App: React.FC = () => {
         );
       case 'container-type':
         return (
-          <ContainerTypeView
+          <OCTIContainerTypeView
             mode={mode}
             setPanelMode={setPanelMode}
             setContainerType={setContainerType}
@@ -6548,7 +6553,7 @@ const App: React.FC = () => {
         );
       case 'container-form':
         return (
-          <ContainerFormView
+          <OCTIContainerFormView
             mode={mode}
             setPanelMode={setPanelMode}
             containerType={containerType}
@@ -6588,7 +6593,7 @@ const App: React.FC = () => {
         );
       case 'investigation':
         return (
-          <InvestigationView
+          <OCTIInvestigationView
             mode={mode}
             openctiPlatforms={openctiPlatforms}
             availablePlatforms={availablePlatforms}
@@ -6615,7 +6620,7 @@ const App: React.FC = () => {
         );
       case 'scan-results':
         return (
-          <ScanResultsView
+          <CommonScanResultsView
             mode={mode}
             handleClose={handleClose}
             scanResultsEntities={scanResultsEntities}
@@ -6659,7 +6664,7 @@ const App: React.FC = () => {
         return renderAtomicTestingView();
       case 'unified-search':
         return (
-          <UnifiedSearchView
+          <CommonUnifiedSearchView
             mode={mode}
             unifiedSearchQuery={unifiedSearchQuery}
             setUnifiedSearchQuery={setUnifiedSearchQuery}
@@ -6682,7 +6687,7 @@ const App: React.FC = () => {
         );
       case 'add-selection':
         return (
-          <AddSelectionView
+          <OCTIAddSelectionView
             setPanelMode={setPanelMode}
             addSelectionText={addSelectionText}
             setAddSelectionText={setAddSelectionText}
@@ -6700,9 +6705,9 @@ const App: React.FC = () => {
       case 'scenario-form':
         return renderScenarioFormView();
       case 'loading':
-        return <LoadingView />;
+        return <CommonLoadingView />;
       default:
-        return <EmptyView />;
+        return <CommonEmptyView />;
     }
   };
 

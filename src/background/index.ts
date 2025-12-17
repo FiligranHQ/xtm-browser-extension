@@ -2538,21 +2538,6 @@ async function handleMessage(
         break;
       }
       
-      case 'GET_PLATFORM_SETTINGS': {
-        if (!openCTIClient) {
-          sendResponse(errorResponse('Not connected to OpenCTI'));
-          break;
-        }
-        
-        try {
-          const settings = await openCTIClient.getPlatformSettings();
-          sendResponse(successResponse(settings));
-        } catch (error) {
-          sendResponse({ success: false, error: String(error) });
-        }
-        break;
-      }
-      
       case 'SEARCH_PLATFORM': {
         // Unified search handler for all platforms
         // platformType determines which platform(s) to search

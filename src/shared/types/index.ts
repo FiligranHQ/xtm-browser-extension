@@ -506,34 +506,8 @@ export interface PlatformInfo {
     user_email?: string;
   };
   settings?: {
-    platform_theme?: string;
     platform_title?: string;
   };
-}
-
-// ============================================================================
-// Theme Types (from OpenCTI platform)
-// ============================================================================
-
-export interface OpenCTITheme {
-  id: string;
-  name: string;
-  theme_background: string;
-  theme_paper: string;
-  theme_nav: string;
-  theme_primary: string;
-  theme_secondary: string;
-  theme_accent: string;
-  theme_text_color: string;
-  theme_logo?: string | null;
-  theme_logo_collapsed?: string | null;
-  theme_logo_login?: string | null;
-}
-
-export interface PlatformSettings {
-  platform_title?: string;
-  platform_theme?: OpenCTITheme;
-  platform_url?: string;
 }
 
 // ============================================================================
@@ -655,7 +629,6 @@ export type MessageType =
   | 'SEARCH_ASSETS'
   | 'GENERATE_SCENARIO'
   | 'GET_PLATFORM_THEME'
-  | 'GET_PLATFORM_SETTINGS'
   | 'REFRESH_OCTI_CACHE'
   | 'GET_OCTI_CACHE_STATS'
   | 'SELECTION_CHANGED'

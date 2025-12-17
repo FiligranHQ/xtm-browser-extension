@@ -26,7 +26,7 @@ export interface ImportResultsViewProps {
   logoSuffix: string;
 }
 
-export const ImportResultsView: React.FC<ImportResultsViewProps> = ({
+export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
   mode,
   importResults,
   setImportResults,
@@ -280,4 +280,4 @@ export const ImportResultsView: React.FC<ImportResultsViewProps> = ({
   );
 };
 
-export default ImportResultsView;
+export default OCTIImportResultsView;

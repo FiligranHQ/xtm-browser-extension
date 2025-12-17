@@ -80,7 +80,7 @@ interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showT
   logoSuffix: string;
 }
 
-export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
+export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   mode,
   scanResultsEntities,
   setScanResultsEntities,
@@ -805,5 +805,5 @@ export const ScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   );
 };
 
-export default ScanResultsView;
+export default CommonScanResultsView;
 

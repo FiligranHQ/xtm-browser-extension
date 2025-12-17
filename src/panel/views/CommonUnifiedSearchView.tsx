@@ -58,7 +58,7 @@ export interface UnifiedSearchViewProps {
   logoSuffix: string;
 }
 
-export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
+export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   mode,
   unifiedSearchQuery,
   setUnifiedSearchQuery,
@@ -426,5 +426,5 @@ export const UnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   );
 };
 
-export default UnifiedSearchView;
+export default CommonUnifiedSearchView;
 

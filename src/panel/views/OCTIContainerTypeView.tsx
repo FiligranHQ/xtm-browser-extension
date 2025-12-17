@@ -38,7 +38,7 @@ export interface ContainerTypeViewProps {
   entitiesToAdd: EntityData[];
 }
 
-export const ContainerTypeView: React.FC<ContainerTypeViewProps> = ({
+export const OCTIContainerTypeView: React.FC<ContainerTypeViewProps> = ({
   setPanelMode,
   setContainerType,
   containerWorkflowOrigin,
@@ -127,4 +127,4 @@ export const ContainerTypeView: React.FC<ContainerTypeViewProps> = ({
   );
 };
 
-export default ContainerTypeView;
+export default OCTIContainerTypeView;

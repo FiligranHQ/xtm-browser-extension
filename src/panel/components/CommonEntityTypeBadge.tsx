@@ -17,7 +17,7 @@ interface EntityTypeBadgeProps {
 /**
  * Entity type badge with icon
  */
-export const EntityTypeBadge: React.FC<EntityTypeBadgeProps> = ({
+export const CommonEntityTypeBadge: React.FC<EntityTypeBadgeProps> = ({
   type,
   color,
   icon,
@@ -52,5 +52,5 @@ export const EntityTypeBadge: React.FC<EntityTypeBadgeProps> = ({
   );
 };
 
-export default EntityTypeBadge;
+export default CommonEntityTypeBadge;
 

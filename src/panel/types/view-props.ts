@@ -97,13 +97,21 @@ export interface PlatformViewProps {
 }
 
 /**
- * Props for entity display views
+ * Props for OpenCTI entity display view
  */
-export interface EntityViewProps extends BaseViewProps, PlatformViewProps {
+export interface OCTIEntityViewProps {
+  /** Current theme mode */
+  mode: 'dark' | 'light';
   /** Current entity being displayed */
   entity: EntityData | null;
   /** Set current entity */
   setEntity: (entity: EntityData | null) => void;
+  /** Entity containers */
+  entityContainers: ContainerData[];
+  /** Loading containers state */
+  loadingContainers: boolean;
+  /** All available platforms */
+  availablePlatforms: PlatformInfo[];
   /** Multi-platform results for the current entity */
   multiPlatformResults: MultiPlatformResult[];
   /** Set multi-platform results */
@@ -116,6 +124,14 @@ export interface EntityViewProps extends BaseViewProps, PlatformViewProps {
   currentPlatformIndexRef: React.MutableRefObject<number>;
   /** Ref for multi-platform results */
   multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  /** Current platform URL */
+  platformUrl: string;
+  /** Set platform URL */
+  setPlatformUrl: (url: string) => void;
+  /** Selected platform ID */
+  selectedPlatformId: string;
+  /** Set selected platform ID */
+  setSelectedPlatformId: (id: string) => void;
   /** Whether entity view came from search */
   entityFromSearchMode: 'unified-search' | null;
   /** Set search mode origin */
@@ -126,14 +142,52 @@ export interface EntityViewProps extends BaseViewProps, PlatformViewProps {
   setEntityFromScanResults: (fromScan: boolean) => void;
   /** Set panel mode */
   setPanelMode: (mode: PanelMode) => void;
-  /** Logo suffix based on theme */
-  logoSuffix: string;
-  /** Entity containers */
-  entityContainers: ContainerData[];
-  /** Loading containers state */
-  loadingContainers: boolean;
-  /** Fetch containers for entity */
-  fetchEntityContainers: (entityId: string, platformId?: string) => void;
+  /** Copy value to clipboard */
+  handleCopyValue: (value: string) => void;
+  /** Open entity in platform */
+  handleOpenInPlatform: (entityId: string, draftId?: string) => void;
+}
+
+/**
+ * Props for OpenAEV entity display view
+ */
+export interface OAEVEntityViewProps {
+  /** Current theme mode */
+  mode: 'dark' | 'light';
+  /** Current entity being displayed */
+  entity: EntityData | null;
+  /** Set current entity */
+  setEntity: (entity: EntityData | null) => void;
+  /** All available platforms */
+  availablePlatforms: PlatformInfo[];
+  /** Multi-platform results for the current entity */
+  multiPlatformResults: MultiPlatformResult[];
+  /** Set multi-platform results */
+  setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
+  /** Current platform index in multi-platform navigation */
+  currentPlatformIndex: number;
+  /** Set current platform index */
+  setCurrentPlatformIndex: (index: number) => void;
+  /** Ref for current platform index */
+  currentPlatformIndexRef: React.MutableRefObject<number>;
+  /** Ref for multi-platform results */
+  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  /** Set platform URL */
+  setPlatformUrl: (url: string) => void;
+  /** Set selected platform ID */
+  setSelectedPlatformId: (id: string) => void;
+  /** Whether entity view came from search */
+  entityFromSearchMode: 'unified-search' | null;
+  /** Set search mode origin */
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
+  /** Whether entity view came from scan results */
+  entityFromScanResults: boolean;
+  /** Set scan results origin */
+  setEntityFromScanResults: (fromScan: boolean) => void;
+  /** Set panel mode */
+  setPanelMode: (mode: PanelMode) => void;
+  /** Copy value to clipboard */
+  handleCopyValue: (value: string) => void;
 }
 
 /**
@@ -375,6 +429,105 @@ export interface ScenarioViewProps extends BaseViewProps, PlatformViewProps {
   /** AI email language */
   scenarioAIEmailLanguage: string;
   setScenarioAIEmailLanguage: (language: string) => void;
+}
+
+/**
+ * Atomic testing target
+ */
+export interface AtomicTestingTarget {
+  type: string;
+  value: string;
+  name: string;
+  entityId?: string;
+  platformId?: string;
+  data: {
+    hasContracts?: boolean;
+    contractCount?: number;
+    availablePlatforms?: string[];
+    attack_pattern_external_id?: string;
+    entityId?: string;
+    attack_pattern_id?: string;
+    id?: string;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * AI Generated Payload for atomic testing
+ */
+export interface AtomicTestingAIPayload {
+  name: string;
+  description: string;
+  executor: string;
+  command: string;
+  cleanupCommand?: string;
+  cleanupExecutor?: string;
+  platform: string;
+}
+
+/**
+ * Props for atomic testing view
+ */
+export interface AtomicTestingViewProps {
+  mode: 'dark' | 'light';
+  availablePlatforms: PlatformInfo[];
+  openaevPlatforms: PlatformInfo[];
+  aiSettings: AISettings;
+  showToast: (options: {
+    type: 'success' | 'info' | 'warning' | 'error';
+    message: string;
+    action?: { label: string; type: 'scroll_to_first' | 'close_panel' | 'custom' };
+    persistent?: boolean;
+    duration?: number;
+  }) => void;
+  handleClose: () => void;
+  setPanelMode: (mode: PanelMode) => void;
+  // Atomic testing state
+  atomicTestingTargets: AtomicTestingTarget[];
+  setAtomicTestingTargets: (targets: AtomicTestingTarget[] | ((prev: AtomicTestingTarget[]) => AtomicTestingTarget[])) => void;
+  selectedAtomicTarget: AtomicTestingTarget | null;
+  setSelectedAtomicTarget: (target: AtomicTestingTarget | null) => void;
+  atomicTestingShowList: boolean;
+  setAtomicTestingShowList: (show: boolean) => void;
+  atomicTestingPlatformId: string | null;
+  setAtomicTestingPlatformId: (id: string | null) => void;
+  atomicTestingPlatformSelected: boolean;
+  setAtomicTestingPlatformSelected: (selected: boolean) => void;
+  atomicTestingTargetType: 'asset' | 'asset_group';
+  setAtomicTestingTargetType: (type: 'asset' | 'asset_group') => void;
+  atomicTestingAssets: unknown[];
+  setAtomicTestingAssets: (assets: unknown[]) => void;
+  atomicTestingAssetGroups: unknown[];
+  setAtomicTestingAssetGroups: (groups: unknown[]) => void;
+  atomicTestingTypeFilter: 'all' | 'attack-pattern' | 'domain';
+  setAtomicTestingTypeFilter: (filter: 'all' | 'attack-pattern' | 'domain') => void;
+  atomicTestingInjectorContracts: unknown[];
+  setAtomicTestingInjectorContracts: (contracts: unknown[]) => void;
+  atomicTestingSelectedAsset: string | null;
+  setAtomicTestingSelectedAsset: (id: string | null) => void;
+  atomicTestingSelectedAssetGroup: string | null;
+  setAtomicTestingSelectedAssetGroup: (id: string | null) => void;
+  atomicTestingSelectedContract: string | null;
+  setAtomicTestingSelectedContract: (id: string | null) => void;
+  atomicTestingTitle: string;
+  setAtomicTestingTitle: (title: string) => void;
+  atomicTestingCreating: boolean;
+  setAtomicTestingCreating: (creating: boolean) => void;
+  atomicTestingLoadingAssets: boolean;
+  setAtomicTestingLoadingAssets: (loading: boolean) => void;
+  // AI mode
+  atomicTestingAIMode: boolean;
+  setAtomicTestingAIMode: (mode: boolean) => void;
+  atomicTestingAIGenerating: boolean;
+  setAtomicTestingAIGenerating: (generating: boolean) => void;
+  atomicTestingAIPlatform: string;
+  setAtomicTestingAIPlatform: (platform: string) => void;
+  atomicTestingAIExecutor: string;
+  setAtomicTestingAIExecutor: (executor: string) => void;
+  atomicTestingAIContext: string;
+  setAtomicTestingAIContext: (context: string) => void;
+  atomicTestingAIGeneratedPayload: AtomicTestingAIPayload | null;
+  setAtomicTestingAIGeneratedPayload: (payload: AtomicTestingAIPayload | null) => void;
 }
 
 /**

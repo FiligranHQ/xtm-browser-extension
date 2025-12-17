@@ -6,7 +6,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { SearchOutlined } from '@mui/icons-material';
 
-export const EmptyView: React.FC = () => (
+export const CommonEmptyView: React.FC = () => (
   <Box
     sx={{
       display: 'flex',
@@ -27,4 +27,4 @@ export const EmptyView: React.FC = () => (
   </Box>
 );
 
-export default EmptyView;
+export default CommonEmptyView;

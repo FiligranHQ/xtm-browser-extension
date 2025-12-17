@@ -1,7 +1,7 @@
 /**
- * EntityView - Displays entity details for OpenCTI entities
+ * OCTIEntityView - Displays entity details for OpenCTI entities
  * 
- * Handles rendering of both SDOs and observables with proper styling,
+ * Handles rendering of both entities and observables with proper styling,
  * platform navigation for multi-platform results, and action buttons.
  */
 
@@ -27,6 +27,12 @@ import {
 } from '@mui/icons-material';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { 
+  inferPlatformTypeFromEntityType, 
+  getEntityDetailsMessageType,
+  getPlatformLogoName,
+  getPlatformName,
+} from '../../shared/platform/registry';
 
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -34,36 +40,10 @@ import { formatDate } from '../../shared/utils/formatters';
 import { parsePrefixedType } from '../../shared/platform';
 import { getCvssChipStyle, getSeverityColor, getMarkingColor } from '../utils';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
-import type { EntityData, ContainerData, PlatformInfo, MultiPlatformResult, PanelMode } from '../types';
+import type { EntityData } from '../types';
+import type { OCTIEntityViewProps } from '../types/view-props';
 
-// Export the interface for OAEVEntityView to use
-export interface EntityViewProps {
-  mode: 'dark' | 'light';
-  entity: EntityData | null;
-  setEntity: (entity: EntityData | null) => void;
-  entityContainers: ContainerData[];
-  loadingContainers: boolean;
-  availablePlatforms: PlatformInfo[];
-  multiPlatformResults: MultiPlatformResult[];
-  setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
-  currentPlatformIndex: number;
-  setCurrentPlatformIndex: (index: number) => void;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
-  platformUrl: string;
-  setPlatformUrl: (url: string) => void;
-  selectedPlatformId: string;
-  setSelectedPlatformId: (id: string) => void;
-  entityFromSearchMode: 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
-  entityFromScanResults: boolean;
-  setEntityFromScanResults: (fromScan: boolean) => void;
-  setPanelMode: (mode: PanelMode) => void;
-  handleCopyValue: (value: string) => void;
-  handleOpenInPlatform: (entityId: string, draftId?: string) => void;
-}
-
-export const EntityView: React.FC<EntityViewProps> = ({
+export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   mode,
   entity,
   setEntity,
@@ -170,13 +150,13 @@ export const EntityView: React.FC<EntityViewProps> = ({
   
   // Fire-and-forget fetch for entity details
   const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
-    const platformType = targetEntity._platformType || (targetEntity.type?.startsWith('oaev-') ? 'openaev' : 'opencti');
+    const platformType = targetEntity._platformType || inferPlatformTypeFromEntityType(targetEntity.type);
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
-    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace('oaev-', '');
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
     
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
-    const messageType = platformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
+    const messageType = getEntityDetailsMessageType(platformType);
     chrome.runtime.sendMessage({
       type: messageType,
       payload: { id: entityIdToFetch, entityId: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId },
@@ -254,8 +234,8 @@ export const EntityView: React.FC<EntityViewProps> = ({
 
   // Determine current platform type for logo display
   const currentPlatformType = currentPlatform?.type || 'opencti';
-  const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
-  const platformAlt = currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI';
+  const platformLogo = getPlatformLogoName(currentPlatformType);
+  const platformAlt = getPlatformName(currentPlatformType);
 
   return (
     <Box sx={{ p: 2, overflow: 'auto' }}>
@@ -885,4 +865,4 @@ export const EntityView: React.FC<EntityViewProps> = ({
   );
 };
 
-export default EntityView;
+export default OCTIEntityView;

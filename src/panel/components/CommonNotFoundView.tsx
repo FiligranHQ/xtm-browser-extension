@@ -31,7 +31,7 @@ export interface NotFoundViewProps {
 /**
  * View displayed when entity is not found in platform
  */
-export const NotFoundView: React.FC<NotFoundViewProps> = ({
+export const CommonNotFoundView: React.FC<NotFoundViewProps> = ({
   entity,
   mode,
   entityFromScanResults,
@@ -110,4 +110,4 @@ export const NotFoundView: React.FC<NotFoundViewProps> = ({
   );
 };
 
-export default NotFoundView;
+export default CommonNotFoundView;

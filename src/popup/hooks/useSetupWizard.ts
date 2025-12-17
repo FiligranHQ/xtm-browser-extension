@@ -4,6 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { loggers } from '../../shared/utils/logger';
+import { getPlatformName } from '../../shared/platform/registry';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
 const log = loggers.popup;
@@ -122,7 +123,7 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
       const platformId = `${platformType}-setup-${Date.now()}`;
       
       // Create platform with the final name
-      const finalName = setupName.trim() || remotePlatformName || (platformType === 'opencti' ? 'OpenCTI' : 'OpenAEV');
+      const finalName = setupName.trim() || remotePlatformName || getPlatformName(platformType);
       const newPlatform = {
         id: platformId,
         name: finalName,

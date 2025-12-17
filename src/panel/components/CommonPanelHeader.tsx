@@ -11,7 +11,7 @@ interface PanelHeaderProps {
   onClose: () => void;
 }
 
-export const PanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
+export const CommonPanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
   const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
   
   return (
@@ -46,4 +46,4 @@ export const PanelHeader: React.FC<PanelHeaderProps> = ({ mode, onClose }) => {
   );
 };
 
-export default PanelHeader;
+export default CommonPanelHeader;

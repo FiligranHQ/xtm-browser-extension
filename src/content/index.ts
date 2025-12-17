@@ -9,7 +9,13 @@
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
 import { getTextNodes } from '../shared/detection/detector';
-import { getPlatformFromEntity, getDisplayType } from '../shared/platform';
+import { 
+  getPlatformFromEntity, 
+  getDisplayType, 
+  getPlatformName,
+  inferPlatformTypeFromEntityType,
+  prefixEntityType,
+} from '../shared/platform';
 
 // Module imports
 import { HIGHLIGHT_STYLES } from './styles';
@@ -316,9 +322,7 @@ function handleHighlightHover(event: MouseEvent): void {
       const platformNames = platformEntities.map((p: { type: string; platformType?: string }) => {
         // First try to get name from platformType field
         if (p.platformType) {
-          return p.platformType === 'opencti' ? 'OpenCTI' : 
-                 p.platformType === 'openaev' ? 'OpenAEV' : 
-                 p.platformType.charAt(0).toUpperCase() + p.platformType.slice(1);
+          return getPlatformName(p.platformType);
         }
         // Fall back to extracting from type prefix
         const def = getPlatformFromEntity(p.type);
@@ -521,8 +525,10 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
       const entityType = rawData.type || platformEntity.type || 'Unknown';
       const platformType = rawData.platformType || platformEntity.platformType || 'openaev';
       
-      const prefixedType = entityType.startsWith('oaev-') ? entityType :
-        (platformType === 'openaev' ? `oaev-${entityType}` : entityType);
+      // Prefix entity type if not already prefixed
+      const prefixedType = entityType.startsWith('oaev-') || entityType.startsWith('ogrc-') 
+        ? entityType 
+        : prefixEntityType(entityType, platformType);
       const platformId = rawData.platformId || rawData._platformId || '';
       
       const cacheData = rawData.entityData || {};
@@ -553,8 +559,8 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
           const peData = pe.data || {};
           const peCacheData = (peData.entityData || {}) as Record<string, unknown>;
           const peType = pe.type || (peData.type as string) || (peCacheData.type as string) || '';
-          const peCleanType = peType.replace(/^oaev-/, '');
-          const pePlatformType = peType.startsWith('oaev-') ? 'openaev' : 'opencti';
+          const peCleanType = peType.replace(/^(oaev|ogrc)-/, '');
+          const pePlatformType = inferPlatformTypeFromEntityType(peType);
           const peId = (peData.entityId as string) || (peData.id as string) || (peCacheData.id as string) || '';
           const pePlatformId = (peData.platformId as string) || (peCacheData.platformId as string) || '';
           return {
@@ -596,9 +602,9 @@ function buildPlatformMatches(
 ): Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: unknown }> {
   try {
     const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-    const primaryPlatformType = entity.type?.startsWith('oaev-') ? 'openaev' : 'opencti';
+    const primaryPlatformType = inferPlatformTypeFromEntityType(entity.type);
     const primaryType = entity.type || '';
-    const primaryCleanType = primaryType.replace(/^oaev-/, '');
+    const primaryCleanType = primaryType.replace(/^(oaev|ogrc)-/, '');
     const primaryPlatformId = entity.platformId || 'primary';
     
     const seenPlatformIds = new Set<string>();
@@ -620,8 +626,8 @@ function buildPlatformMatches(
     for (const p of otherPlatformEntities) {
       const pData = p.data || {};
       const pType = p.type || pData.type || '';
-      const cleanType = pType.replace(/^oaev-/, '');
-      const pPlatformType = pType.startsWith('oaev-') ? 'openaev' : 'opencti';
+      const cleanType = pType.replace(/^(oaev|ogrc)-/, '');
+      const pPlatformType = inferPlatformTypeFromEntityType(pType);
       const pPlatformId = pData.platformId || 'unknown';
       
       if (seenPlatformIds.has(pPlatformId)) continue;

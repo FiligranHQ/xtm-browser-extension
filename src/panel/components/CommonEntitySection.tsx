@@ -16,7 +16,7 @@ interface EntitySectionProps {
 /**
  * Section with a title label
  */
-export const EntitySection: React.FC<EntitySectionProps> = ({
+export const CommonEntitySection: React.FC<EntitySectionProps> = ({
   title,
   children,
 }) => {
@@ -147,5 +147,5 @@ export const EntityLink: React.FC<EntityLinkProps> = ({ url, label }) => {
   );
 };
 
-export default EntitySection;
+export default CommonEntitySection;
 

@@ -9,7 +9,7 @@ interface LoadingViewProps {
   message?: string;
 }
 
-export const LoadingView: React.FC<LoadingViewProps> = ({ message = 'Loading...' }) => (
+export const CommonLoadingView: React.FC<LoadingViewProps> = ({ message = 'Loading...' }) => (
   <Box
     sx={{
       display: 'flex',
@@ -26,4 +26,4 @@ export const LoadingView: React.FC<LoadingViewProps> = ({ message = 'Loading...'
   </Box>
 );
 
-export default LoadingView;
+export default CommonLoadingView;

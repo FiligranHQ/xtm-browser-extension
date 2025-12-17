@@ -67,7 +67,7 @@ export interface PreviewViewProps {
   submitting: boolean;
 }
 
-export const PreviewView: React.FC<PreviewViewProps> = ({
+export const CommonPreviewView: React.FC<PreviewViewProps> = ({
   mode,
   setPanelMode,
   entitiesToAdd,
@@ -525,4 +525,4 @@ export const PreviewView: React.FC<PreviewViewProps> = ({
   );
 };
 
-export default PreviewView;
+export default CommonPreviewView;

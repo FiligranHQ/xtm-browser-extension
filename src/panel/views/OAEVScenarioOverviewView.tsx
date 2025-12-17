@@ -43,7 +43,7 @@ export interface ScenarioOverviewViewProps extends ScenarioStateReturn {
   currentPageUrl: string;
 }
 
-export const ScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (props) => {
+export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (props) => {
   const {
     mode,
     availablePlatforms,

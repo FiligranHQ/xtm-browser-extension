@@ -71,7 +71,7 @@ export interface ContainerFormViewProps {
   generatingPdf: boolean;
 }
 
-export const ContainerFormView: React.FC<ContainerFormViewProps> = ({
+export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
   mode,
   setPanelMode,
   containerType,
@@ -466,5 +466,5 @@ export const ContainerFormView: React.FC<ContainerFormViewProps> = ({
   );
 };
 
-export default ContainerFormView;
+export default OCTIContainerFormView;
 

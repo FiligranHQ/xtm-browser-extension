@@ -7,12 +7,13 @@
 import React from 'react';
 import { Box, IconButton, Typography } from '@mui/material';
 import { ChevronLeftOutlined, ChevronRightOutlined } from '@mui/icons-material';
+import { getPlatformLogoName, getPlatformName, type PlatformType } from '../../shared/platform/registry';
 
 interface PlatformNavigationProps {
   currentIndex: number;
   totalPlatforms: number;
   platformName: string;
-  platformType: 'opencti' | 'openaev';
+  platformType: PlatformType;
   logoSuffix: string;
   onPrevious: () => void;
   onNext: () => void;
@@ -21,7 +22,7 @@ interface PlatformNavigationProps {
 /**
  * Platform navigation bar with arrows
  */
-export const PlatformNavigation: React.FC<PlatformNavigationProps> = ({
+export const CommonPlatformNavigation: React.FC<PlatformNavigationProps> = ({
   currentIndex,
   totalPlatforms,
   platformName,
@@ -31,7 +32,8 @@ export const PlatformNavigation: React.FC<PlatformNavigationProps> = ({
   onNext,
 }) => {
   const hasMultiple = totalPlatforms > 1;
-  const logoName = platformType === 'openaev' ? 'openaev' : 'opencti';
+  const logoName = getPlatformLogoName(platformType);
+  const platformDisplayName = getPlatformName(platformType);
   
   const logoSrc = typeof chrome !== 'undefined' && chrome.runtime?.getURL
     ? chrome.runtime.getURL(`assets/logos/logo_${logoName}_${logoSuffix}_embleme_square.svg`)
@@ -64,7 +66,7 @@ export const PlatformNavigation: React.FC<PlatformNavigationProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <img
               src={logoSrc}
-              alt={platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
+              alt={platformDisplayName}
               width={18}
               height={18}
             />
@@ -88,7 +90,7 @@ export const PlatformNavigation: React.FC<PlatformNavigationProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <img
             src={logoSrc}
-            alt={platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
+            alt={platformDisplayName}
             width={18}
             height={18}
           />
@@ -101,5 +103,5 @@ export const PlatformNavigation: React.FC<PlatformNavigationProps> = ({
   );
 };
 
-export default PlatformNavigation;
+export default CommonPlatformNavigation;
 

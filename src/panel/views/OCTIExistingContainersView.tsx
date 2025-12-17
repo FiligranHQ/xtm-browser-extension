@@ -62,7 +62,7 @@ export interface ExistingContainersViewProps {
   formatDate: (dateStr?: string) => string;
 }
 
-export const ExistingContainersView: React.FC<ExistingContainersViewProps> = ({
+export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> = ({
   mode,
   existingContainers,
   selectedPlatformId,
@@ -389,5 +389,5 @@ export const ExistingContainersView: React.FC<ExistingContainersViewProps> = ({
   );
 };
 
-export default ExistingContainersView;
+export default OCTIExistingContainersView;
 

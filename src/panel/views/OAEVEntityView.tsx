@@ -43,29 +43,10 @@ import {
   getOAEVEntityUrl,
   getOAEVEntityColor,
 } from '../../shared/utils/entity';
+import { getPlatformLogoName } from '../../shared/platform/registry';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
-import type { EntityData, PlatformInfo, MultiPlatformResult, PanelMode } from '../types';
-
-export interface OAEVEntityViewProps {
-  mode: 'dark' | 'light';
-  entity: EntityData | null;
-  setEntity: (entity: EntityData | null) => void;
-  availablePlatforms: PlatformInfo[];
-  multiPlatformResults: MultiPlatformResult[];
-  setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
-  currentPlatformIndex: number;
-  setCurrentPlatformIndex: (index: number) => void;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
-  setPlatformUrl: (url: string) => void;
-  setSelectedPlatformId: (id: string) => void;
-  entityFromSearchMode: 'unified-search' | null;
-  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
-  entityFromScanResults: boolean;
-  setEntityFromScanResults: (fromScan: boolean) => void;
-  setPanelMode: (mode: PanelMode) => void;
-  handleCopyValue: (value: string) => void;
-}
+import type { EntityData } from '../types';
+import type { OAEVEntityViewProps } from '../types/view-props';
 
 export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   mode,
@@ -230,7 +211,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   const currentResult = multiPlatformResults[currentPlatformIndex];
   const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
   const currentPlatformType = currentResult?.entity?._platformType || currentPlatform?.type || 'openaev';
-  const platformLogo = currentPlatformType === 'openaev' ? 'openaev' : 'opencti';
+  const platformLogo = getPlatformLogoName(currentPlatformType);
   
   return (
     <Box sx={{ p: 2, overflow: 'auto' }}>

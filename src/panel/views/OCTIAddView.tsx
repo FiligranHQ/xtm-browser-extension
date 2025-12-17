@@ -21,7 +21,7 @@ export interface AddViewProps {
   submitting: boolean;
 }
 
-export const AddView: React.FC<AddViewProps> = ({
+export const OCTIAddView: React.FC<AddViewProps> = ({
   setPanelMode,
   entitiesToAdd,
   handleAddEntities,
@@ -79,4 +79,4 @@ export const AddView: React.FC<AddViewProps> = ({
   );
 };
 
-export default AddView;
+export default OCTIAddView;

@@ -12,7 +12,6 @@ import {
   saveSettings, 
   cleanupOrphanedCaches,
   cleanupOrphanedOAEVCaches,
-  cachePlatformTheme,
 } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
 import { CONNECTION_TIMEOUT_MS } from '../../shared/constants';
@@ -119,14 +118,6 @@ export async function handleTestConnection(
   
   try {
     const info = await openCTIClient.testConnection();
-    
-    // Cache the theme
-    if (info.settings?.platform_theme) {
-      await cachePlatformTheme(
-        info.settings.platform_theme === 'dark' ? 'dark' : 'light'
-      );
-    }
-    
     sendResponse(successResponse(info));
   } catch (error) {
     sendResponse({
@@ -263,31 +254,6 @@ export async function handleGetPlatformTheme(
 }
 
 /**
- * Handle GET_PLATFORM_SETTINGS
- */
-export async function handleGetPlatformSettings(
-  sendResponse: SendResponseFn,
-  deps: SettingsHandlerDependencies
-): Promise<void> {
-  const openCTIClient = deps.getPrimaryOpenCTIClient();
-  
-  if (!openCTIClient) {
-    sendResponse(errorResponse('Client not configured'));
-    return;
-  }
-  
-  try {
-    const info = await openCTIClient.testConnection();
-    sendResponse(successResponse(info.settings));
-  } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch platform settings',
-    });
-  }
-}
-
-/**
  * Registry of settings handlers
  */
 export const settingsHandlers = {
@@ -297,6 +263,5 @@ export const settingsHandlers = {
   TEST_PLATFORM_CONNECTION: handleTestPlatformConnection,
   TEST_PLATFORM_CONNECTION_TEMP: handleTestPlatformConnectionTemp,
   GET_PLATFORM_THEME: handleGetPlatformTheme,
-  GET_PLATFORM_SETTINGS: handleGetPlatformSettings,
 };
 

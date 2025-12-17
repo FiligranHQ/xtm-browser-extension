@@ -62,7 +62,7 @@ export interface InvestigationViewProps {
   handleCreateWorkbench: () => void;
 }
 
-export const InvestigationView: React.FC<InvestigationViewProps> = ({
+export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
   mode,
   openctiPlatforms,
   availablePlatforms,
@@ -353,5 +353,5 @@ export const InvestigationView: React.FC<InvestigationViewProps> = ({
   );
 };
 
-export default InvestigationView;
+export default OCTIInvestigationView;
 

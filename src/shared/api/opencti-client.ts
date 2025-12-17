@@ -35,8 +35,6 @@ import type {
   ContainerCreateInput,
   ObservableType,
   HashType,
-  OpenCTITheme,
-  PlatformSettings,
   Investigation,
   InvestigationCreateInput,
 } from '../types';
@@ -144,98 +142,9 @@ export class OpenCTIClient {
         user_email: data.me?.user_email,
       },
       settings: {
-        platform_theme: 'dark',
         platform_title: data.settings.platform_title,
       },
     };
-  }
-
-  /**
-   * Get platform theme setting (simple mode)
-   */
-  async getPlatformThemeMode(): Promise<'dark' | 'light'> {
-    const query = `
-      query GetTheme {
-        settings {
-          platform_theme {
-            name
-          }
-        }
-      }
-    `;
-
-    const data = await this.query<{
-      settings: { platform_theme: { name: string } | null };
-    }>(query);
-
-    const themeName = data.settings.platform_theme?.name?.toLowerCase() || 'dark';
-    return themeName.includes('light') ? 'light' : 'dark';
-  }
-
-  /**
-   * Get full platform theme with all colors
-   */
-  async getPlatformTheme(): Promise<OpenCTITheme | null> {
-    const query = `
-      query GetFullTheme {
-        settings {
-          platform_theme {
-            id
-            name
-            theme_background
-            theme_paper
-            theme_nav
-            theme_primary
-            theme_secondary
-            theme_accent
-            theme_text_color
-            theme_logo
-            theme_logo_collapsed
-            theme_logo_login
-          }
-        }
-      }
-    `;
-
-    const data = await this.query<{
-      settings: { platform_theme: OpenCTITheme | null };
-    }>(query);
-
-    return data.settings.platform_theme;
-  }
-
-  /**
-   * Get platform settings including theme and URL
-   */
-  async getPlatformSettings(): Promise<PlatformSettings> {
-    const query = `
-      query GetPlatformSettings {
-        settings {
-          platform_title
-          platform_url
-          platform_theme {
-            id
-            name
-            theme_background
-            theme_paper
-            theme_nav
-            theme_primary
-            theme_secondary
-            theme_accent
-            theme_text_color
-            theme_logo
-            theme_logo_collapsed
-            theme_logo_login
-          }
-        }
-      }
-    `;
-
-    const data = await this.query<{
-      settings: PlatformSettings;
-    }>(query);
-
-    return data.settings;
   }
 
   // ==========================================================================

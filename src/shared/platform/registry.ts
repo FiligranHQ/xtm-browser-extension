@@ -468,3 +468,85 @@ export function isPlatformType(value: string): value is PlatformType {
 export function isPlatformPrefix(value: string): value is PlatformPrefix {
   return value in PREFIX_TO_PLATFORM;
 }
+
+// ============================================================================
+// Platform Display Name Utilities
+// ============================================================================
+
+/**
+ * Get the human-readable name for a platform type
+ * Use this instead of ternary expressions like: platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'
+ */
+export function getPlatformName(platformType: PlatformType | string): string {
+  if (isPlatformType(platformType)) {
+    return PLATFORM_REGISTRY[platformType].name;
+  }
+  // Fallback: capitalize first letter
+  return platformType.charAt(0).toUpperCase() + platformType.slice(1);
+}
+
+/**
+ * Get the logo name suffix for a platform type
+ * Use this instead of: platformType === 'openaev' ? 'openaev' : 'opencti'
+ */
+export function getPlatformLogoName(platformType: PlatformType | string): string {
+  if (isPlatformType(platformType)) {
+    return PLATFORM_REGISTRY[platformType].logoSuffix;
+  }
+  return platformType;
+}
+
+/**
+ * Get the entity type prefix for a platform
+ * Returns 'oaev' for openaev, 'ogrc' for opengrc, empty string for opencti
+ */
+export function getEntityTypePrefix(platformType: PlatformType): string {
+  if (platformType === 'opencti') {
+    return ''; // OpenCTI entities are not prefixed
+  }
+  return PLATFORM_REGISTRY[platformType].prefix;
+}
+
+/**
+ * Prefix an entity type based on platform
+ * Returns prefixed type for non-opencti platforms (e.g., 'oaev-Asset')
+ * Returns the original type for opencti
+ */
+export function prefixEntityType(entityType: string, platformType: PlatformType): string {
+  if (platformType === 'opencti') {
+    return entityType;
+  }
+  const prefix = PLATFORM_REGISTRY[platformType].prefix;
+  return `${prefix}-${entityType}`;
+}
+
+/**
+ * Get the message type for fetching entity details based on platform
+ * Returns 'GET_OAEV_ENTITY_DETAILS' for openaev, 'GET_ENTITY_DETAILS' for opencti, etc.
+ */
+export function getEntityDetailsMessageType(platformType: PlatformType | string): string {
+  switch (platformType) {
+    case 'openaev':
+      return 'GET_OAEV_ENTITY_DETAILS';
+    case 'opengrc':
+      return 'GET_OGRC_ENTITY_DETAILS';
+    case 'opencti':
+    default:
+      return 'GET_ENTITY_DETAILS';
+  }
+}
+
+/**
+ * Infer platform type from entity type string
+ * Returns 'openaev' if type starts with 'oaev-', 'opengrc' if starts with 'ogrc-', etc.
+ */
+export function inferPlatformTypeFromEntityType(entityType: string | undefined): PlatformType {
+  if (!entityType) return 'opencti';
+  
+  for (const [prefix, platformType] of Object.entries(PREFIX_TO_PLATFORM)) {
+    if (entityType.startsWith(`${prefix}-`)) {
+      return platformType;
+    }
+  }
+  return 'opencti';
+}

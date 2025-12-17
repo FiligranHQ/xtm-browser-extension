@@ -54,7 +54,7 @@ export interface AddSelectionViewProps {
   openctiPlatforms: PlatformInfo[];
 }
 
-export const AddSelectionView: React.FC<AddSelectionViewProps> = ({
+export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
   setPanelMode,
   addSelectionText,
   setAddSelectionText,
@@ -149,5 +149,5 @@ export const AddSelectionView: React.FC<AddSelectionViewProps> = ({
   );
 };
 
-export default AddSelectionView;
+export default OCTIAddSelectionView;
 

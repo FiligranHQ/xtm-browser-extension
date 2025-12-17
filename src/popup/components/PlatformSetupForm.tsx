@@ -18,6 +18,7 @@ import {
   VisibilityOffOutlined,
   SkipNextOutlined,
 } from '@mui/icons-material';
+import { isDefaultPlatform, type PlatformType } from '../../shared/platform/registry';
 import type { PlatformSetupFormProps } from '../types';
 
 const PLATFORM_CONFIG = {
@@ -61,7 +62,8 @@ export const PlatformSetupForm: React.FC<PlatformSetupFormProps> = ({
           alt={config.name}
           width={28}
           height={28}
-          onError={platformType === 'openaev' ? (e) => {
+          onError={!isDefaultPlatform(platformType as PlatformType) ? (e) => {
+            // Fallback to Filigran logo for non-default platforms
             (e.target as HTMLImageElement).src = `../assets/logos/logo_filigran_${logoSuffix}_embleme_square.svg`;
           } : undefined}
         />

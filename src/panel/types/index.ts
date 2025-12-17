@@ -11,11 +11,15 @@ export * from '../types';
 export type {
   BaseViewProps,
   PlatformViewProps,
-  EntityViewProps,
+  OCTIEntityViewProps,
+  OAEVEntityViewProps,
   ScanResultsViewProps,
   UnifiedSearchViewProps,
   ContainerFormViewProps,
   ScenarioViewProps,
   PreviewViewProps,
+  AtomicTestingViewProps,
+  AtomicTestingTarget,
+  AtomicTestingAIPayload,
 } from './view-props';
 

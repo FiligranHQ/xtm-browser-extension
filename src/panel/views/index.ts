@@ -37,4 +37,5 @@ export { OCTIAddSelectionView } from './OCTIAddSelectionView';
 // OpenAEV-specific views (OAEV prefix)
 export { OAEVEntityView } from './OAEVEntityView';
 export { OAEVScenarioOverviewView } from './OAEVScenarioOverviewView';
+export { OAEVScenarioView } from './OAEVScenarioView';
 export { OAEVAtomicTestingView } from './OAEVAtomicTestingView';

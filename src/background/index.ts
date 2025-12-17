@@ -6,7 +6,40 @@
 
 import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client';
 import { OpenAEVClient } from '../shared/api/openaev-client';
-import { AIClient, isAIAvailable, parseAIJsonResponse, type ContainerDescriptionRequest, type ScenarioGenerationRequest, type AtomicTestRequest, type EntityDiscoveryRequest, type RelationshipResolutionRequest } from '../shared/api/ai-client';
+import {
+  handleAICheckStatus,
+  handleAITestAndFetchModels,
+  handleAIGenerateDescription,
+  handleAIGenerateScenario,
+  handleAIGenerateFullScenario,
+  handleAIGenerateAtomicTest,
+  handleAIGenerateEmails,
+  handleAIDiscoverEntities,
+  handleAIResolveRelationships,
+  type FullScenarioRequest,
+  type EmailGenerationRequest,
+} from './handlers/message-ai-handlers';
+import {
+  handleCreateScenario,
+  handleAddInjectToScenario,
+  handleAddEmailInjectToScenario,
+  handleAddTechnicalInjectToScenario,
+  type CreateScenarioPayload,
+  type AddInjectPayload,
+  type AddEmailInjectPayload,
+  type AddTechnicalInjectPayload,
+} from './handlers/message-scenario-handlers';
+import {
+  handleCreateContainer,
+  type CreateContainerPayload,
+} from './handlers/message-container-handlers';
+import type {
+  ContainerDescriptionRequest,
+  ScenarioGenerationRequest,
+  AtomicTestRequest,
+  EntityDiscoveryRequest,
+  RelationshipResolutionRequest,
+} from '../shared/api/ai-client';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
@@ -55,7 +88,6 @@ import type {
   ExtensionSettings,
   ScanResultPayload,
   AddObservablePayload,
-  ContainerType,
 } from '../shared/types';
 
 // ============================================================================
@@ -92,6 +124,13 @@ let openCTIClient: OpenCTIClient | null = null;
 let detectionEngine: DetectionEngine | null = null;
 let isInitialized = false;
 let cacheRefreshInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Helper to get OpenAEV client by platform ID or first available
+ */
+function getOpenAEVClient(platformId?: string): OpenAEVClient | undefined {
+  return platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
+}
 
 
 // ============================================================================
@@ -825,16 +864,6 @@ async function handleMessage(
               files: ['content/index.js'],
             });
             
-            // Also inject the CSS if needed
-            try {
-              await chrome.scripting.insertCSS({
-                target: { tabId },
-                files: ['assets/content.css'],
-              });
-            } catch {
-              // CSS might not exist or already be injected, ignore
-            }
-            
             log.debug(`Content script injected successfully into tab ${tabId}`);
             sendResponse({ success: true, injected: true });
           }
@@ -879,15 +908,6 @@ async function handleMessage(
                   target: { tabId: tab.id },
                   files: ['content/index.js'],
                 });
-                
-                try {
-                  await chrome.scripting.insertCSS({
-                    target: { tabId: tab.id },
-                    files: ['assets/content.css'],
-                  });
-                } catch {
-                  // Ignore CSS errors
-                }
                 
                 injectedCount++;
               }
@@ -1810,236 +1830,21 @@ async function handleMessage(
         break;
       }
       
-      case 'CREATE_SCENARIO': {
-        const { name, description, subtitle, category, platformId, isAIGenerated: _isAIGenerated } = message.payload as {
-          name: string;
-          description?: string;
-          subtitle?: string;
-          category?: string;
-          platformId?: string;
-          isAIGenerated?: boolean;
-        };
-        
-        try {
-          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
-          if (!client) {
-            sendResponse(errorResponse('OpenAEV not configured'));
-            break;
-          }
-          
-          const scenario = await client.createScenario({
-            scenario_name: name,
-            scenario_description: description,
-            scenario_subtitle: subtitle,
-            scenario_category: category,
-            // Note: scenario_tags expects tag IDs (UUIDs), not names
-            // Tags feature will be added when tag management is implemented
-          });
-          
-          // Return with URL
-          const url = client.getScenarioUrl(scenario.scenario_id);
-          sendResponse({ success: true, data: { ...scenario, url } });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to create scenario',
-          });
-        }
+      case 'CREATE_SCENARIO':
+        await handleCreateScenario(message.payload as CreateScenarioPayload, sendResponse, getOpenAEVClient);
         break;
-      }
       
-      case 'ADD_INJECT_TO_SCENARIO': {
-        const { scenarioId, inject, platformId } = message.payload as {
-          scenarioId: string;
-          inject: {
-            inject_title: string;
-            inject_description?: string;
-            inject_injector_contract: string;
-            inject_content?: Record<string, any>;
-            inject_depends_duration?: number; // Relative time from scenario start in seconds
-            inject_teams?: string[];
-            inject_assets?: string[];
-            inject_asset_groups?: string[];
-          };
-          platformId?: string;
-        };
-        
-        try {
-          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
-          if (!client) {
-            sendResponse(errorResponse('OpenAEV not configured'));
-            break;
-          }
-          
-          log.debug(` Adding inject to scenario ${scenarioId}:`, inject);
-          const result = await client.addInjectToScenario(scenarioId, inject);
-          log.debug(` Inject added result:`, result);
-          sendResponse(successResponse(result));
-        } catch (error) {
-          log.error(` Failed to add inject to scenario:`, error);
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to add inject to scenario',
-          });
-        }
+      case 'ADD_INJECT_TO_SCENARIO':
+        await handleAddInjectToScenario(message.payload as AddInjectPayload, sendResponse, getOpenAEVClient);
         break;
-      }
       
-      case 'ADD_EMAIL_INJECT_TO_SCENARIO': {
-        // OpenAEV email injector contract ID (hardcoded in OpenAEV platform)
-        const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
-        
-        const { platformId, scenarioId, title, description, subject, body, delayMinutes, teamId, isAIGenerated: _isAIGenerated } = message.payload as {
-          platformId: string;
-          scenarioId: string;
-          title: string;
-          description: string;
-          subject: string;
-          body: string;
-          delayMinutes: number;
-          teamId?: string;
-          isAIGenerated?: boolean;
-        };
-        
-        try {
-          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
-          if (!client) {
-            sendResponse(errorResponse('OpenAEV not configured'));
-            break;
-          }
-          
-          const injectPayload = {
-            inject_title: title,
-            inject_description: description,
-            inject_injector_contract: EMAIL_INJECTOR_CONTRACT_ID,
-            inject_depends_duration: delayMinutes * 60, // Convert to seconds
-            inject_content: {
-              subject: subject,
-              body: body.includes('<') ? body : `<p>${body.replace(/\n/g, '</p><p>')}</p>`, // Wrap in HTML if needed
-            },
-            inject_teams: teamId ? [teamId] : undefined,
-            // Note: inject_tags expects tag IDs (UUIDs), not names
-          };
-          
-          log.debug(` Adding email inject to scenario ${scenarioId}:`, injectPayload);
-          const result = await client.addInjectToScenario(scenarioId, injectPayload);
-          log.debug(` Email inject added:`, result);
-          sendResponse(successResponse(result));
-        } catch (error) {
-          log.error(` Failed to add email inject to scenario:`, error);
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to add email inject to scenario',
-          });
-        }
+      case 'ADD_EMAIL_INJECT_TO_SCENARIO':
+        await handleAddEmailInjectToScenario(message.payload as AddEmailInjectPayload, sendResponse, getOpenAEVClient);
         break;
-      }
       
-      case 'ADD_TECHNICAL_INJECT_TO_SCENARIO': {
-        const { platformId, scenarioId, title, description, command, executor, platforms, delayMinutes, assetId, assetGroupId, isAIGenerated: _isAIGenerated } = message.payload as {
-          platformId: string;
-          scenarioId: string;
-          title: string;
-          description: string;
-          command: string;
-          executor: string;
-          platforms: string[];
-          delayMinutes: number;
-          assetId?: string;
-          assetGroupId?: string;
-          isAIGenerated?: boolean;
-        };
-        
-        try {
-          const client = platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
-          if (!client) {
-            sendResponse(errorResponse('OpenAEV not configured'));
-            break;
-          }
-          
-          // Map executor names to OpenAEV API values
-          const executorMap: Record<string, string> = {
-            'powershell': 'psh',
-            'psh': 'psh',
-            'cmd': 'cmd',
-            'bash': 'bash',
-            'sh': 'sh',
-          };
-          
-          // Map platform names to OpenAEV API values (case-sensitive)
-          const platformMap: Record<string, string> = {
-            'windows': 'Windows',
-            'linux': 'Linux',
-            'macos': 'MacOS',
-          };
-          
-          // First, create a payload for this inject
-          const payloadData = {
-            payload_type: 'Command' as const,
-            payload_name: `AI Payload - ${title}`,
-            payload_description: description,
-            payload_platforms: platforms.map(p => platformMap[p.toLowerCase()] || p),
-            payload_source: 'MANUAL' as const,
-            payload_status: 'VERIFIED' as const,
-            payload_execution_arch: 'ALL_ARCHITECTURES' as const,
-            payload_expectations: ['PREVENTION', 'DETECTION'],
-            payload_attack_patterns: [] as string[],
-            // Note: payload_tags expects tag IDs (UUIDs), not names
-            command_executor: executorMap[executor.toLowerCase()] || executor,
-            command_content: command,
-          };
-          
-          log.debug(` Creating payload for technical inject:`, payloadData);
-          const payload = await client.createPayload(payloadData);
-          
-          if (!payload?.payload_id) {
-            log.error(` Failed to create payload, no payload_id returned`);
-            sendResponse(errorResponse('Failed to create payload'));
-            break;
-          }
-          
-          log.debug(` Payload created:`, payload.payload_id);
-          
-          // Find the injector contract for this payload
-          const contractRes = await client.findInjectorContractByPayloadId(payload.payload_id);
-          
-          if (!contractRes?.injector_contract_id) {
-            log.warn(` No injector contract found for payload ${payload.payload_id}, skipping inject`);
-            // Cannot create inject without a contract - payload was created but no inject added
-            sendResponse({ 
-              success: true, 
-              data: { 
-                warning: 'Payload created but no matching injector contract found',
-                payload_id: payload.payload_id 
-              } 
-            });
-            break;
-          }
-          
-          // Create inject with the contract
-          const injectPayload = {
-            inject_title: title,
-            inject_description: description,
-            inject_injector_contract: contractRes.injector_contract_id,
-            inject_depends_duration: delayMinutes * 60,
-            inject_assets: assetId ? [assetId] : undefined,
-            inject_asset_groups: assetGroupId ? [assetGroupId] : undefined,
-            // Note: inject_tags expects tag IDs (UUIDs), not names
-          };
-          
-          log.debug(` Adding technical inject to scenario ${scenarioId}:`, injectPayload);
-          const result = await client.addInjectToScenario(scenarioId, injectPayload);
-          log.debug(` Technical inject added:`, result);
-          sendResponse(successResponse(result));
-        } catch (error) {
-          log.error(` Failed to add technical inject to scenario:`, error);
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to add technical inject to scenario',
-          });
-        }
+      case 'ADD_TECHNICAL_INJECT_TO_SCENARIO':
+        await handleAddTechnicalInjectToScenario(message.payload as AddTechnicalInjectPayload, sendResponse, getOpenAEVClient);
         break;
-      }
       
       case 'GET_ENTITY_DETAILS': {
         // Unified entity details handler for all platforms
@@ -2303,231 +2108,9 @@ async function handleMessage(
         break;
       }
       
-      case 'CREATE_CONTAINER': {
-        if (openCTIClients.size === 0) {
-          sendResponse(errorResponse('Not configured'));
-          break;
-        }
-        
-        const containerPayload = message.payload as {
-          type: string;
-          name: string;
-          description?: string;
-          content?: string;
-          labels?: string[];
-          markings?: string[];
-          entities?: string[];
-          entitiesToCreate?: Array<{ type: string; value: string }>;
-          platformId?: string;
-          pdfAttachment?: { data: string; filename: string } | null;
-          pageUrl?: string;
-          pageTitle?: string;
-          // Type-specific fields
-          report_types?: string[];
-          context?: string;
-          severity?: string;
-          priority?: string;
-          response_types?: string[];
-          createdBy?: string;
-          // Draft mode
-          createAsDraft?: boolean;
-          // Relationships to create (from AI resolution or manual)
-          relationshipsToCreate?: Array<{
-            fromEntityIndex: number; // Index in the combined entities array (existing + created)
-            toEntityIndex: number;
-            relationship_type: string;
-            description?: string;
-          }>;
-          // Update mode: pass existing container ID and dates to avoid duplicates
-          updateContainerId?: string;
-          published?: string; // For Report type
-          created?: string; // For other container types
-        };
-        
-        try {
-          // Use specified platform or first available
-          const platformId = containerPayload.platformId || openCTIClients.keys().next().value as string | undefined;
-          
-          if (!platformId) {
-            sendResponse(errorResponse('No platform available'));
-            break;
-          }
-          
-          const client = openCTIClients.get(platformId);
-          
-          if (!client) {
-            sendResponse(errorResponse('Platform not found'));
-            break;
-          }
-          
-          // Step 0: Create any entities that don't exist yet
-          const allEntityIds: string[] = [...(containerPayload.entities || [])];
-          
-          if (containerPayload.entitiesToCreate && containerPayload.entitiesToCreate.length > 0) {
-            log.info(`Creating ${containerPayload.entitiesToCreate.length} new entities for container...`);
-            
-            for (const entityToCreate of containerPayload.entitiesToCreate) {
-              try {
-                // Refang the value before creating (OpenCTI stores clean values)
-                const cleanValue = refangIndicator(entityToCreate.value);
-                // Use createEntity instead of createObservable to handle both
-                // STIX Domain Objects (SDOs) like Vulnerability, Malware, Threat-Actor
-                // and STIX Cyber Observables (SCOs) like IP, Domain, Hash
-                const created = await client.createEntity({
-                  type: entityToCreate.type,
-                  value: cleanValue,
-                  name: cleanValue, // For SDOs that use name instead of value
-                });
-                
-                if (created?.id) {
-                  allEntityIds.push(created.id);
-                  log.debug(`Created entity: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
-                }
-              } catch (entityError) {
-                log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
-                // Continue with other entities
-              }
-            }
-            
-            log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}`);
-          }
-          
-          // Step 1: Create relationships if provided (before container, so we can include them)
-          const createdRelationships: Array<{ id: string; relationship_type: string }> = [];
-          if (containerPayload.relationshipsToCreate && containerPayload.relationshipsToCreate.length > 0 && allEntityIds.length > 0) {
-            log.info(`Creating ${containerPayload.relationshipsToCreate.length} relationships...`);
-            
-            for (const rel of containerPayload.relationshipsToCreate) {
-              try {
-                // Get entity IDs from indices
-                const fromId = allEntityIds[rel.fromEntityIndex];
-                const toId = allEntityIds[rel.toEntityIndex];
-                
-                if (!fromId || !toId) {
-                  log.warn(`Invalid relationship indices: from=${rel.fromEntityIndex}, to=${rel.toEntityIndex}, available=${allEntityIds.length}`);
-                  continue;
-                }
-                
-                const relationship = await client.createStixCoreRelationship({
-                  fromId,
-                  toId,
-                  relationship_type: rel.relationship_type,
-                  description: rel.description,
-                });
-                
-                if (relationship?.id) {
-                  createdRelationships.push({
-                    id: relationship.id,
-                    relationship_type: rel.relationship_type,
-                  });
-                  log.debug(`Created relationship: ${fromId} --[${rel.relationship_type}]--> ${toId}`);
-                }
-              } catch (relError) {
-                log.warn(`Failed to create relationship: ${rel.relationship_type}`, relError);
-                // Continue with other relationships
-              }
-            }
-            
-            log.info(`Created ${createdRelationships.length} of ${containerPayload.relationshipsToCreate.length} relationships`);
-          }
-          
-          // Step 2: Create external reference if page URL is provided
-          let externalReferenceId: string | undefined;
-          if (containerPayload.pageUrl) {
-            try {
-              const extRef = await client.createExternalReference({
-                source_name: 'Web Article',
-                description: containerPayload.pageTitle || 'Source article',
-                url: containerPayload.pageUrl,
-              });
-              externalReferenceId = extRef.id;
-              log.debug(`Created external reference: ${externalReferenceId}`);
-            } catch (extRefError) {
-              log.warn('Failed to create external reference:', extRefError);
-              // Continue without external reference
-            }
-          }
-          
-          // Step 3: Create the container with ALL IDs (entities + relationships)
-          const allObjectIds = [
-            ...allEntityIds,
-            ...createdRelationships.map(r => r.id),
-          ];
-          
-          log.info(`${containerPayload.updateContainerId ? 'Updating' : 'Creating'} container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
-          
-          const container = await client.createContainer({
-            type: containerPayload.type as ContainerType,
-            name: containerPayload.name,
-            description: containerPayload.description,
-            content: containerPayload.content,
-            objects: allObjectIds,
-            objectLabel: containerPayload.labels || [],
-            objectMarking: containerPayload.markings || [],
-            // Type-specific fields
-            report_types: containerPayload.report_types,
-            context: containerPayload.context,
-            severity: containerPayload.severity,
-            priority: containerPayload.priority,
-            response_types: containerPayload.response_types,
-            createdBy: containerPayload.createdBy,
-            // Draft mode
-            createAsDraft: containerPayload.createAsDraft,
-            // Update mode: pass original dates to avoid creating duplicates
-            // For Reports, use 'published'; for other containers, use 'created'
-            published: containerPayload.published,
-            created: containerPayload.created,
-          });
-          
-          // Step 4: Attach external reference to the container
-          if (externalReferenceId && container.id) {
-            try {
-              await client.addExternalReferenceToEntity(container.id, externalReferenceId);
-              log.debug('Attached external reference to container');
-            } catch (attachError) {
-              log.warn('Failed to attach external reference to container:', attachError);
-              // Continue - container was created successfully
-            }
-          }
-          
-          // Step 5: Upload PDF attachment if provided
-          if (containerPayload.pdfAttachment && container.id) {
-            try {
-              // Convert base64 to ArrayBuffer
-              const binaryString = atob(containerPayload.pdfAttachment.data);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              
-              await client.uploadFileToEntity(container.id, {
-                name: containerPayload.pdfAttachment.filename,
-                data: bytes.buffer,
-                mimeType: 'application/pdf',
-              });
-              log.debug(`PDF attached to container: ${containerPayload.pdfAttachment.filename}`);
-            } catch (pdfError) {
-              log.error('Failed to attach PDF to container:', pdfError);
-              // Don't fail the whole operation, container was created successfully
-            }
-          }
-          
-          sendResponse({ 
-            success: true, 
-            data: { 
-              ...container, 
-              _platformId: platformId,
-              _createdRelationships: createdRelationships,
-            } 
-          });
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to create container',
-          });
-        }
+      case 'CREATE_CONTAINER':
+        await handleCreateContainer(message.payload as CreateContainerPayload, sendResponse, openCTIClients);
         break;
-      }
       
       case 'GET_PLATFORM_THEME': {
         // Get user's theme setting - strictly from configuration
@@ -3525,453 +3108,44 @@ async function handleMessage(
       }
       
       // ========================================================================
-      // AI Feature Handlers
+      // AI Feature Handlers (extracted to handlers/message-ai-handlers.ts)
       // ========================================================================
       
-      case 'AI_CHECK_STATUS': {
-        const settings = await getSettings();
-        const available = isAIAvailable(settings.ai);
-        sendResponse({ 
-          success: true, 
-          data: { 
-            available,
-            provider: settings.ai?.provider,
-            enabled: available,
-          } 
-        });
+      case 'AI_CHECK_STATUS':
+        await handleAICheckStatus(sendResponse);
         break;
-      }
       
-      case 'AI_TEST_AND_FETCH_MODELS': {
-        // Test AI connection and fetch available models from provider
-        const { provider, apiKey } = message.payload as { provider: string; apiKey: string };
-        
-        try {
-          const aiClient = new AIClient({
-            enabled: true,
-            provider: provider as 'openai' | 'anthropic' | 'gemini',
-            apiKey,
-          });
-          
-          const result = await aiClient.testConnectionAndFetchModels();
-          
-          if (result.success) {
-            sendResponse({ 
-              success: true, 
-              data: { 
-                models: result.models,
-              } 
-            });
-          } else {
-            sendResponse({ success: false, error: result.error });
-          }
-        } catch (error) {
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Failed to test AI connection',
-          });
-        }
+      case 'AI_TEST_AND_FETCH_MODELS':
+        await handleAITestAndFetchModels(message.payload as { provider: string; apiKey: string }, sendResponse);
         break;
-      }
       
-      case 'AI_GENERATE_DESCRIPTION': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as ContainerDescriptionRequest;
-          const response = await aiClient.generateContainerDescription(request);
-          sendResponse({ success: response.success, data: response.content, error: response.error });
-        } catch (error) {
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed' 
-          });
-        }
+      case 'AI_GENERATE_DESCRIPTION':
+        await handleAIGenerateDescription(message.payload as ContainerDescriptionRequest, sendResponse);
         break;
-      }
       
-      case 'AI_GENERATE_SCENARIO': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as ScenarioGenerationRequest;
-          const response = await aiClient.generateScenario(request);
-          
-          if (response.success && response.content) {
-            const scenario = parseAIJsonResponse(response.content);
-            sendResponse(successResponse(scenario));
-          } else {
-            sendResponse({ success: false, error: response.error || 'Failed to parse scenario' });
-          }
-        } catch (error) {
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed' 
-          });
-        }
+      case 'AI_GENERATE_SCENARIO':
+        await handleAIGenerateScenario(message.payload as ScenarioGenerationRequest, sendResponse);
         break;
-      }
       
-      case 'AI_GENERATE_FULL_SCENARIO': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as {
-            pageTitle: string;
-            pageUrl: string;
-            pageContent: string;
-            scenarioName: string;
-            typeAffinity: string;
-            platformAffinity?: string[];
-            numberOfInjects: number;
-            payloadAffinity?: string;
-            tableTopDuration?: number;
-            additionalContext?: string;
-            detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
-          };
-          
-          log.debug('[AI_GENERATE_FULL_SCENARIO] Request:', {
-            typeAffinity: request.typeAffinity,
-            numberOfInjects: request.numberOfInjects,
-            payloadAffinity: request.payloadAffinity,
-            tableTopDuration: request.tableTopDuration,
-            attackPatterns: request.detectedAttackPatterns?.length || 0,
-          });
-          
-          // Truncate page content if too large
-          const MAX_CONTENT_LENGTH = 6000;
-          if (request.pageContent && request.pageContent.length > MAX_CONTENT_LENGTH) {
-            log.warn(`[AI_GENERATE_FULL_SCENARIO] Page content too large (${request.pageContent.length} chars), truncating`);
-            request.pageContent = request.pageContent.substring(0, MAX_CONTENT_LENGTH) + '\n\n[Content truncated due to size]';
-          }
-          
-          const response = await aiClient.generateFullScenario(request);
-          
-          log.debug('[AI_GENERATE_FULL_SCENARIO] AI response success:', response.success);
-          
-          if (response.success && response.content) {
-            const scenario = parseAIJsonResponse<{
-              name?: string;
-              description?: string;
-              subtitle?: string;
-              category?: string;
-              injects?: Array<{
-                title: string;
-                description: string;
-                type: string;
-                content?: string;
-                executor?: string;
-                subject?: string;
-                body?: string;
-                delayMinutes?: number;
-              }>;
-            }>(response.content);
-            
-            if (!scenario) {
-              log.error('[AI_GENERATE_FULL_SCENARIO] Failed to parse AI response. Raw (first 1000):', response.content.substring(0, 1000));
-              const contentPreview = response.content.substring(0, 200);
-              const hasJson = response.content.includes('{') && response.content.includes('}');
-              sendResponse({ 
-                success: false, 
-                error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
-              });
-            } else if (!scenario.injects || !Array.isArray(scenario.injects)) {
-              log.error('[AI_GENERATE_FULL_SCENARIO] Parsed scenario missing injects array:', scenario);
-              sendResponse({ 
-                success: false, 
-                error: 'AI generated scenario but injects array is missing. Please try again.' 
-              });
-            } else {
-              log.debug('[AI_GENERATE_FULL_SCENARIO] Parsed scenario with', scenario.injects.length, 'injects');
-              sendResponse(successResponse(scenario));
-            }
-          } else {
-            log.error('[AI_GENERATE_FULL_SCENARIO] AI generation failed:', response.error);
-            sendResponse({ success: false, error: response.error || 'AI failed to generate scenario' });
-          }
-        } catch (error) {
-          log.error('[AI_GENERATE_FULL_SCENARIO] Exception:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
-          });
-        }
+      case 'AI_GENERATE_FULL_SCENARIO':
+        await handleAIGenerateFullScenario(message.payload as FullScenarioRequest, sendResponse);
         break;
-      }
       
-      case 'AI_GENERATE_ATOMIC_TEST': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as AtomicTestRequest;
-          
-          // Log context size for debugging
-          const contextLength = request.context?.length || 0;
-          log.debug('[AI_GENERATE_ATOMIC_TEST] Context length:', contextLength);
-          
-          // Safeguard: Truncate very large contexts to prevent AI failures
-          const MAX_CONTEXT_LENGTH = 8000;
-          if (request.context && request.context.length > MAX_CONTEXT_LENGTH) {
-            log.warn(`[AI_GENERATE_ATOMIC_TEST] Context too large (${request.context.length} chars), truncating to ${MAX_CONTEXT_LENGTH}`);
-            request.context = request.context.substring(0, MAX_CONTEXT_LENGTH) + '\n\n[Content truncated due to size]';
-          }
-          
-          const response = await aiClient.generateAtomicTest(request);
-          
-          log.debug('[AI_GENERATE_ATOMIC_TEST] AI response success:', response.success, 'content length:', response.content?.length || 0);
-          
-          if (response.success && response.content) {
-            const atomicTest = parseAIJsonResponse(response.content);
-            
-            // Safeguard: Check if parsing was successful
-            if (!atomicTest) {
-              log.error('[AI_GENERATE_ATOMIC_TEST] Failed to parse AI response as JSON. Raw content (first 1000 chars):', response.content.substring(0, 1000));
-              // Provide more context about what was received
-              const contentPreview = response.content.substring(0, 200);
-              const hasJson = response.content.includes('{') && response.content.includes('}');
-              sendResponse({ 
-                success: false, 
-                error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
-              });
-            } else {
-              log.debug('[AI_GENERATE_ATOMIC_TEST] Parsed atomic test:', atomicTest);
-              sendResponse({ success: true, data: atomicTest });
-            }
-          } else {
-            log.error('[AI_GENERATE_ATOMIC_TEST] AI generation failed:', response.error);
-            sendResponse({ success: false, error: response.error || 'AI failed to generate content' });
-          }
-        } catch (error) {
-          log.error('[AI_GENERATE_ATOMIC_TEST] Exception:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
-          });
-        }
+      case 'AI_GENERATE_ATOMIC_TEST':
+        await handleAIGenerateAtomicTest(message.payload as AtomicTestRequest, sendResponse);
         break;
-      }
       
-      case 'AI_GENERATE_EMAILS': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as {
-            pageTitle: string;
-            pageUrl: string;
-            pageContent: string;
-            scenarioName: string;
-            attackPatterns: Array<{
-              id: string;
-              name: string;
-              externalId?: string;
-              killChainPhases?: string[];
-            }>;
-          };
-          
-          log.debug(' AI_GENERATE_EMAILS request:', {
-            attackPatterns: request.attackPatterns?.map(ap => ({ id: ap.id, name: ap.name, externalId: ap.externalId })),
-          });
-          
-          const response = await aiClient.generateEmails(request);
-          
-          log.debug(' AI raw response success:', response.success);
-          log.debug(' AI raw response content (first 500 chars):', response.content?.substring(0, 500));
-          
-          if (response.success && response.content) {
-            const parsed = parseAIJsonResponse<{ emails: Array<{ attackPatternId: string; subject: string; body: string }> }>(response.content);
-            log.debug(' Parsed AI response:', parsed);
-            
-            if (!parsed || !parsed.emails || !Array.isArray(parsed.emails)) {
-              log.error(' AI response parsing failed or invalid structure. Content:', response.content.substring(0, 1000));
-              const contentPreview = response.content.substring(0, 200);
-              const hasEmails = response.content.includes('"emails"');
-              sendResponse({ 
-                success: false, 
-                error: `AI response parsing failed. ${hasEmails ? 'Found "emails" but array is invalid.' : 'Missing "emails" array.'} Preview: "${contentPreview}..."` 
-              });
-              break;
-            }
-            
-            // The parsed response should be { emails: [...] }
-            // We send the whole object so response.data.emails works in the panel
-            sendResponse(successResponse(parsed));
-          } else {
-            log.error(' AI email generation failed:', response.error);
-            sendResponse({ success: false, error: response.error || 'Failed to parse emails' });
-          }
-        } catch (error) {
-          log.error(' AI email generation exception:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI generation failed' 
-          });
-        }
+      case 'AI_GENERATE_EMAILS':
+        await handleAIGenerateEmails(message.payload as EmailGenerationRequest, sendResponse);
         break;
-      }
       
-      case 'AI_DISCOVER_ENTITIES': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as EntityDiscoveryRequest;
-          
-          log.debug('AI_DISCOVER_ENTITIES request:', {
-            pageTitle: request.pageTitle,
-            alreadyDetectedCount: request.alreadyDetected?.length || 0,
-            contentLength: request.pageContent?.length || 0,
-          });
-          
-          const response = await aiClient.discoverEntities(request);
-          
-          log.debug('AI discovery response success:', response.success);
-          
-          if (response.success && response.content) {
-            const parsed = parseAIJsonResponse<{ entities: Array<{
-              type: string;
-              name: string;
-              value: string;
-              reason: string;
-              confidence: 'high' | 'medium' | 'low';
-              excerpt?: string;
-            }> }>(response.content);
-            
-            log.debug('Parsed AI discovery response:', parsed);
-            
-            if (!parsed || !parsed.entities || !Array.isArray(parsed.entities)) {
-              log.warn('AI discovery returned invalid structure, returning empty');
-              sendResponse(successResponse({ entities: [] }));
-              break;
-            }
-            
-            // Filter out entities that were already detected (double-check)
-            // Include both value/name AND external IDs (like T1059.001) for comprehensive matching
-            const alreadyDetectedValues = new Set<string>();
-            request.alreadyDetected.forEach(e => {
-              // Add value and name (lowercase)
-              if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
-              if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
-              // Also add external ID if present (e.g., T1059.001 for attack patterns)
-              if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
-            });
-            
-            const newEntities = parsed.entities.filter(e => {
-              const valueLC = (e.value || '').toLowerCase();
-              const nameLC = (e.name || '').toLowerCase();
-              // Entity is new if neither value nor name matches any already detected value
-              return !alreadyDetectedValues.has(valueLC) && !alreadyDetectedValues.has(nameLC);
-            });
-            
-            log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${request.alreadyDetected.length} already detected)`);
-            
-            sendResponse(successResponse({ entities: newEntities }));
-          } else {
-            log.error('AI entity discovery failed:', response.error);
-            sendResponse({ success: false, error: response.error || 'Failed to discover entities' });
-          }
-        } catch (error) {
-          log.error('AI entity discovery exception:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI discovery failed' 
-          });
-        }
+      case 'AI_DISCOVER_ENTITIES':
+        await handleAIDiscoverEntities(message.payload as EntityDiscoveryRequest, sendResponse);
         break;
-      }
       
-      case 'AI_RESOLVE_RELATIONSHIPS': {
-        const settings = await getSettings();
-        if (!isAIAvailable(settings.ai)) {
-          sendResponse(errorResponse('AI not configured'));
-          break;
-        }
-        
-        try {
-          const aiClient = new AIClient(settings.ai!);
-          const request = message.payload as RelationshipResolutionRequest;
-          
-          log.debug('AI_RESOLVE_RELATIONSHIPS request:', {
-            pageTitle: request.pageTitle,
-            entityCount: request.entities?.length || 0,
-            contentLength: request.pageContent?.length || 0,
-          });
-          
-          const response = await aiClient.resolveRelationships(request);
-          
-          log.debug('AI relationship resolution response success:', response.success);
-          
-          if (response.success && response.content) {
-            const parsed = parseAIJsonResponse<{ relationships: Array<{
-              fromIndex: number;
-              toIndex: number;
-              relationshipType: string;
-              confidence: 'high' | 'medium' | 'low';
-              reason: string;
-              excerpt?: string;
-            }> }>(response.content);
-            
-            log.debug('Parsed AI relationship response:', parsed);
-            
-            if (!parsed || !parsed.relationships || !Array.isArray(parsed.relationships)) {
-              log.warn('AI relationship resolution returned invalid structure, returning empty');
-              sendResponse(successResponse({ relationships: [] }));
-              break;
-            }
-            
-            // Validate indices are within bounds
-            const entityCount = request.entities.length;
-            const validRelationships = parsed.relationships.filter(r => 
-              r.fromIndex >= 0 && r.fromIndex < entityCount &&
-              r.toIndex >= 0 && r.toIndex < entityCount &&
-              r.fromIndex !== r.toIndex &&
-              r.relationshipType && typeof r.relationshipType === 'string'
-            );
-            
-            log.info(`AI resolved ${validRelationships.length} relationships (${parsed.relationships.length} raw)`);
-            
-            sendResponse(successResponse({ relationships: validRelationships }));
-          } else {
-            log.error('AI relationship resolution failed:', response.error);
-            sendResponse({ success: false, error: response.error || 'Failed to resolve relationships' });
-          }
-        } catch (error) {
-          log.error('AI relationship resolution exception:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'AI relationship resolution failed' 
-          });
-        }
+      case 'AI_RESOLVE_RELATIONSHIPS':
+        await handleAIResolveRelationships(message.payload as RelationshipResolutionRequest, sendResponse);
         break;
-      }
       
       case 'GENERATE_NATIVE_PDF': {
         // Generate PDF using Chrome's native print-to-PDF via Debugger API

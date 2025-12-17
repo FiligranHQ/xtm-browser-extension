@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scenario form now properly sends mainFocus and severity fields to OpenAEV API
 - OpenCTI and OpenAEV entity overviews now have consistent styling (spacing, fonts, margins)
 - Scenario and Atomic Testing not finding attack patterns from OpenAEV cache (missing SCAN_OAEV handler)
+- Highlighting now shows all occurrences of detected values on the page, not just the first one
 
 ### Changed
 - Version updated to 0.0.5 across all manifests and user-agent strings

@@ -132,6 +132,7 @@ describe('Observable Patterns', () => {
         'd41d8cd98f00b204e9800998ecf8427e',
         '098f6bcd4621d373cade4e832627b4f6',
         'e99a18c428cb38d5f260853678922e03',
+        '327a1f32572b4606ae19085769042e51', // User-reported hash
       ];
       
       validHashes.forEach(hash => {

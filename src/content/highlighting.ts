@@ -320,10 +320,9 @@ function highlightInText(
   
   const searchLower = searchValue.toLowerCase();
   let pos = 0;
-  let highlightedCount = 0;
-  const maxHighlightsPerValue = 1;
   
-  while ((pos = fullText.toLowerCase().indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
+  // Highlight ALL occurrences of the value on the page
+  while ((pos = fullText.toLowerCase().indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
     for (const { node, start, end } of nodeMap) {
@@ -397,7 +396,6 @@ function highlightInText(
             
             range.surroundContents(highlight);
             highlights.push(highlight);
-            highlightedCount++;
           } catch (e) {
             // Range might cross node boundaries
           }
@@ -536,10 +534,9 @@ export function highlightForAtomicTesting(
   const searchLower = searchValue.toLowerCase();
   const fullTextLower = fullText.toLowerCase();
   let pos = 0;
-  let highlightedCount = 0;
-  const maxHighlightsPerValue = 5;
   
-  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
+  // Highlight ALL occurrences
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
     const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
@@ -585,7 +582,6 @@ export function highlightForAtomicTesting(
             
             range.surroundContents(highlight);
             highlights.push(highlight);
-            highlightedCount++;
           } catch { /* Range might cross node boundaries */ }
         }
         break;
@@ -624,10 +620,9 @@ function highlightInTextForScenario(
   const searchLower = searchValue.toLowerCase();
   const fullTextLower = fullText.toLowerCase();
   let pos = 0;
-  let highlightedCount = 0;
-  const maxHighlightsPerValue = 5;
   
-  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1 && highlightedCount < maxHighlightsPerValue) {
+  // Highlight ALL occurrences
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
     const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
@@ -671,7 +666,6 @@ function highlightInTextForScenario(
             
             range.surroundContents(highlight);
             highlights.push(highlight);
-            highlightedCount++;
           } catch { /* Range might cross node boundaries */ }
         }
         break;

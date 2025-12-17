@@ -26,16 +26,11 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
-import type { PlatformInfo } from '../types';
+import type { PlatformInfo, InvestigationEntity } from '../types';
 import { useTheme } from '@mui/material/styles';
 
-export interface InvestigationEntity {
-  id: string;
-  type: string;
-  name?: string;
-  value?: string;
-  selected: boolean;
-}
+// Re-export for backward compatibility
+export type { InvestigationEntity };
 
 export interface InvestigationViewProps {
   mode: 'dark' | 'light';

@@ -22,7 +22,15 @@ import type {
   ResolvedRelationship,
   MultiPlatformResult,
   UnifiedSearchResult,
+  AtomicTestingTarget,
+  AIGeneratedPayload,
 } from '../types';
+
+// Re-export atomic testing types for convenience  
+export type { AtomicTestingTarget };
+
+// Alias for backward compatibility
+export type AtomicTestingAIPayload = AIGeneratedPayload;
 
 /**
  * Label option for autocomplete
@@ -429,40 +437,6 @@ export interface ScenarioViewProps extends BaseViewProps, PlatformViewProps {
   /** AI email language */
   scenarioAIEmailLanguage: string;
   setScenarioAIEmailLanguage: (language: string) => void;
-}
-
-/**
- * Atomic testing target
- */
-export interface AtomicTestingTarget {
-  type: string;
-  value: string;
-  name: string;
-  entityId?: string;
-  platformId?: string;
-  data: {
-    hasContracts?: boolean;
-    contractCount?: number;
-    availablePlatforms?: string[];
-    attack_pattern_external_id?: string;
-    entityId?: string;
-    attack_pattern_id?: string;
-    id?: string;
-    [key: string]: unknown;
-  };
-}
-
-/**
- * AI Generated Payload for atomic testing
- */
-export interface AtomicTestingAIPayload {
-  name: string;
-  description: string;
-  executor: string;
-  command: string;
-  cleanupCommand?: string;
-  cleanupExecutor?: string;
-  platform: string;
 }
 
 /**

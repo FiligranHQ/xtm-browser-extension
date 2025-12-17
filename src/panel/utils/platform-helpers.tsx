@@ -129,39 +129,5 @@ export const hasEnterprisePlatform = (platforms: PlatformInfo[]): boolean => {
   return platforms.some(p => p.isEnterprise);
 };
 
-// ============================================================================
-// Platform Display
-// ============================================================================
-
-import { 
-  getPlatformName as getRegistryPlatformName,
-  getPlatformLogoName,
-  type PlatformType 
-} from '../../shared/platform/registry';
-
-/**
- * Get platform display name
- * @deprecated Use getPlatformName from registry instead
- */
-export const getPlatformDisplayName = (platformType: PlatformType | string): string => {
-  return getRegistryPlatformName(platformType);
-};
-
-/**
- * Format platform name for display
- */
-export const formatPlatformName = (platformType: PlatformType | string): string => {
-  return getRegistryPlatformName(platformType);
-};
-
-/**
- * Get platform logo path based on platform type and theme
- */
-export const getPlatformLogoPath = (
-  platformType: PlatformType | string,
-  themeSuffix: string
-): string => {
-  const logoName = getPlatformLogoName(platformType);
-  return `../assets/logos/logo_${logoName}_${themeSuffix}_embleme_square.svg`;
-};
-
+// Note: For Filigran platform display (OpenCTI/OpenAEV names, logo paths),
+// use the functions from '../../shared/platform/registry' directly

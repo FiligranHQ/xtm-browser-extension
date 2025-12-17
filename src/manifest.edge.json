@@ -48,7 +48,6 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/index.js"],
-      "css": ["assets/content.css"],
       "run_at": "document_idle"
     }
   ],

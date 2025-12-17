@@ -236,7 +236,16 @@ export interface AtomicTestingTarget {
   name: string;
   entityId?: string;
   platformId?: string;
-  data?: unknown;
+  data: {
+    hasContracts?: boolean;
+    contractCount?: number;
+    availablePlatforms?: string[];
+    attack_pattern_external_id?: string;
+    entityId?: string;
+    attack_pattern_id?: string;
+    id?: string;
+    [key: string]: unknown;
+  };
 }
 
 // AI generated payload for atomic testing
@@ -319,8 +328,10 @@ export interface AuthorOption {
 export interface InvestigationEntity {
   id: string;
   type: string;
-  value: string;
   name?: string;
+  value?: string;
+  platformId?: string;
+  selected: boolean;
   standard_id?: string;
 }
 

@@ -53,12 +53,6 @@ export default defineConfig({
           });
         }
 
-        // Copy content.css
-        const contentCssSrc = resolve(__dirname, 'src/assets/content.css');
-        if (existsSync(contentCssSrc)) {
-          copyFileSync(contentCssSrc, resolve(distDir, 'assets/content.css'));
-        }
-
         console.log(`✓ Manifest and assets copied for ${browser}`);
       },
     },

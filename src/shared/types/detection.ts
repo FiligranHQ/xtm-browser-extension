@@ -100,12 +100,6 @@ export interface DetectedOCTIEntity {
   platformMatches?: PlatformMatch[];
 }
 
-// Legacy aliases for backward compatibility
-/** @deprecated Use OCTIEntityType instead */
-export type SDOType = OCTIEntityType;
-/** @deprecated Use DetectedOCTIEntity instead */
-export type DetectedSDO = DetectedOCTIEntity;
-
 // ============================================================================
 // Platform Entity Detection Types
 // ============================================================================

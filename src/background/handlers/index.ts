@@ -8,7 +8,7 @@ export * from './types';
 export { openctiHandlers } from './opencti-handlers';
 export { openaevHandlers } from './openaev-handlers';
 export { aiHandlers } from './ai-handlers';
-export { cacheHandlers, initializeCacheHandlers } from './cache-handlers';
+export { cacheHandlers } from './cache-handlers';
 export { scanHandlers, scanForOAEVEntities, mergeScanResults } from './scan-handlers';
 export { settingsHandlers, type SettingsHandlerDependencies } from './settings-handlers';
 export { miscHandlers } from './misc-handlers';
@@ -65,10 +65,7 @@ export {
 } from './ai-handlers';
 
 export {
-  handleRefreshSDOCache,
-  handleGetSDOCacheStats,
-  handleGetCacheRefreshStatus,
-  handleClearSDOCache,
+  handleClearOCTICache,
   handleClearOAEVCache,
 } from './cache-handlers';
 

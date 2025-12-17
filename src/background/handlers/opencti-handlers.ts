@@ -15,15 +15,15 @@ import {
   getPrimaryOpenCTIClient,
   hasOpenCTIClients,
 } from '../services/client-manager';
-import { addEntityToSDOCache, type CachedEntity } from '../../shared/utils/storage';
+import { addEntityToOCTICache, type CachedEntity } from '../../shared/utils/storage';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
 import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
 
 const log = loggers.background;
 
-// List of SDO types that should be cached
-const CACHEABLE_SDO_TYPES = [
+// List of entity types that should be cached
+const CACHEABLE_ENTITY_TYPES = [
   'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
   'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
   'Organization', 'Individual', 'Event', 'Country', 'Region',
@@ -252,8 +252,8 @@ export const handleCreateObservablesBulk: MessageHandler = async (payload, sendR
           name,
         });
 
-        // Add created SDO entities to cache
-        if (created?.id && created?.entity_type && CACHEABLE_SDO_TYPES.includes(created.entity_type)) {
+        // Add created entities to cache
+        if (created?.id && created?.entity_type && CACHEABLE_ENTITY_TYPES.includes(created.entity_type)) {
           const cachedEntity: CachedEntity = {
             id: created.id,
             name: created.name || name || '',
@@ -263,7 +263,7 @@ export const handleCreateObservablesBulk: MessageHandler = async (payload, sendR
             platformId: targetPlatformId,
           };
 
-          await addEntityToSDOCache(cachedEntity, targetPlatformId);
+          await addEntityToOCTICache(cachedEntity, targetPlatformId);
           log.debug(`Added ${created.entity_type} "${cachedEntity.name}" to cache`);
         }
 

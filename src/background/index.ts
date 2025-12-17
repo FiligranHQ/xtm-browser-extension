@@ -61,16 +61,16 @@ const log = loggers.background;
 import {
   getSettings,
   saveSettings,
-  // OpenCTI entity cache (new names with legacy aliases)
-  saveOCTICache as saveSDOCache,
-  shouldRefreshOCTICache as shouldRefreshSDOCache,
-  createEmptyOCTICache as createEmptySDOCache,
-  getOCTICacheStats as getSDOCacheStats,
+  // OpenCTI entity cache
+  saveOCTICache,
+  shouldRefreshOCTICache,
+  createEmptyOCTICache,
+  getOCTICacheStats,
   getMultiPlatformOCTICache,
-  clearOCTICacheForPlatform as clearSDOCacheForPlatform,
-  clearAllOCTICaches as clearAllSDOCaches,
-  cleanupOrphanedOCTICaches as cleanupOrphanedCaches,
-  addEntityToOCTICache as addEntityToSDOCache,
+  clearOCTICacheForPlatform,
+  clearAllOCTICaches,
+  cleanupOrphanedOCTICaches,
+  addEntityToOCTICache,
   // OpenAEV cache
   saveOAEVCache,
   shouldRefreshOAEVCache,
@@ -79,7 +79,7 @@ import {
   clearOAEVCacheForPlatform,
   clearAllOAEVCaches,
   cleanupOrphanedOAEVCaches,
-  type OCTIEntityCache as SDOCache,
+  type OCTIEntityCache,
   type CachedEntity,
   type OAEVCache,
 } from '../shared/utils/storage';
@@ -217,7 +217,7 @@ async function initializeClient(): Promise<void> {
   
   // Start cache refresh for OpenCTI clients
   if (openCTIClients.size > 0) {
-    startSDOCacheRefresh();
+    startOCTICacheRefresh();
   }
   
   // Start cache refresh for OpenAEV clients
@@ -228,7 +228,7 @@ async function initializeClient(): Promise<void> {
 }
 
 // ============================================================================
-// SDO Cache Management (Multi-Platform)
+// OpenCTI Entity Cache Management (Multi-Platform)
 // ============================================================================
 
 const CACHE_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes (after successful cache creation)
@@ -237,11 +237,11 @@ let isCacheRefreshing = false;
 let allCachesCreatedSuccessfully = false; // Track if all caches have been successfully created
 
 /**
- * Start periodic SDO cache refresh for all platforms
+ * Start periodic OpenCTI entity cache refresh for all platforms
  * Uses 5-minute interval until all caches are successfully created, then switches to 30 minutes
  */
-function startSDOCacheRefresh(): void {
-  log.info('Starting SDO cache refresh system...');
+function startOCTICacheRefresh(): void {
+  log.info('Starting OpenCTI entity cache refresh system...');
   
   // Clear existing interval if any
   if (cacheRefreshInterval) {
@@ -250,7 +250,7 @@ function startSDOCacheRefresh(): void {
   
   // Initial refresh check - force immediate refresh on startup
   log.debug('Triggering initial cache check...');
-  checkAndRefreshAllSDOCaches().then(() => {
+  checkAndRefreshAllOCTICaches().then(() => {
     scheduleNextCacheRefresh();
   });
 }
@@ -267,10 +267,10 @@ function scheduleNextCacheRefresh(): void {
   const interval = allCachesCreatedSuccessfully ? CACHE_REFRESH_INTERVAL : CACHE_RETRY_INTERVAL;
   const intervalMinutes = interval / 60000;
   
-  log.info(`SDO cache refresh scheduled (every ${intervalMinutes} minutes${!allCachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
+  log.info(`OpenCTI entity cache refresh scheduled (every ${intervalMinutes} minutes${!allCachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
   
   cacheRefreshInterval = setInterval(async () => {
-    await checkAndRefreshAllSDOCaches();
+    await checkAndRefreshAllOCTICaches();
     // Re-evaluate interval after each check (switch to 30 min if now successful)
     if (!allCachesCreatedSuccessfully) {
       // Still failing, keep current interval
@@ -289,7 +289,7 @@ function scheduleNextCacheRefresh(): void {
  * @param forceRefresh - If true, refresh all caches regardless of age (also bypasses in-progress check)
  * @returns true if all caches are successfully created/refreshed
  */
-async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promise<boolean> {
+async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false): Promise<boolean> {
   if (openCTIClients.size === 0) {
     log.debug('No OpenCTI clients configured, skipping cache refresh');
     allCachesCreatedSuccessfully = true; // No clients = nothing to fail
@@ -323,15 +323,15 @@ async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promi
   
   try {
     for (const [platformId, client] of openCTIClients) {
-      const needsRefresh = forceRefresh || await shouldRefreshSDOCache(platformId);
+      const needsRefresh = forceRefresh || await shouldRefreshOCTICache(platformId);
       if (needsRefresh) {
-        log.debug(`SDO cache for platform ${platformId} ${forceRefresh ? 'force' : 'needs'} refresh, starting...`);
-        const success = await refreshSDOCacheForPlatform(platformId, client);
+        log.debug(`OpenCTI cache for platform ${platformId} ${forceRefresh ? 'force' : 'needs'} refresh, starting...`);
+        const success = await refreshOCTICacheForPlatform(platformId, client);
         if (!success) {
           allSuccessful = false;
         }
       } else {
-        log.debug(`SDO cache for platform ${platformId} is fresh`);
+        log.debug(`OpenCTI cache for platform ${platformId} is fresh`);
       }
     }
   } finally {
@@ -352,13 +352,13 @@ async function checkAndRefreshAllSDOCaches(forceRefresh: boolean = false): Promi
 }
 
 /**
- * Refresh the SDO cache for a specific platform
+ * Refresh the OpenCTI entity cache for a specific platform
  * @returns true if cache was successfully created with at least some entities
  */
-async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTIClient): Promise<boolean> {
-  log.debug(`Refreshing SDO cache for platform ${platformId}...`);
+async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTIClient): Promise<boolean> {
+  log.debug(`Refreshing OpenCTI cache for platform ${platformId}...`);
   
-  const cache: SDOCache = createEmptySDOCache(platformId);
+  const cache: OCTIEntityCache = createEmptyOCTICache(platformId);
   let fetchErrors = 0;
   const totalFetchTypes = 16; // Number of entity types we fetch
   
@@ -450,8 +450,8 @@ async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTICli
       total += entities.length;
     }
     
-    await saveSDOCache(cache, platformId);
-    log.info(`[${platformId}] SDO cache refreshed: ${total} entities cached`);
+    await saveOCTICache(cache, platformId);
+    log.info(`[${platformId}] OpenCTI cache refreshed: ${total} entities cached`);
     
     // Consider success if we fetched at least some entities and didn't fail on all fetch types
     const success = total > 0 && fetchErrors < totalFetchTypes;
@@ -460,16 +460,16 @@ async function refreshSDOCacheForPlatform(platformId: string, client: OpenCTICli
     }
     return success;
   } catch (error) {
-    log.error(`[${platformId}] Failed to refresh SDO cache:`, error);
+    log.error(`[${platformId}] Failed to refresh OpenCTI cache:`, error);
     return false;
   }
 }
 
 /**
- * Force refresh the SDO cache for all platforms
+ * Force refresh the OpenCTI entity cache for all platforms
  */
-async function refreshSDOCache(): Promise<void> {
-  await checkAndRefreshAllSDOCaches(true);
+async function refreshOCTICache(): Promise<void> {
+  await checkAndRefreshAllOCTICaches(true);
 }
 
 // ============================================================================
@@ -803,7 +803,7 @@ async function handleMessage(
         const validOpenCTIPlatformIds = (settings.openctiPlatforms || [])
           .filter(p => p.url && p.apiToken)
           .map(p => p.id);
-        await cleanupOrphanedCaches(validOpenCTIPlatformIds);
+        await cleanupOrphanedOCTICaches(validOpenCTIPlatformIds);
         
         // Clean up orphaned caches for OpenAEV
         const validOpenAEVPlatformIds = (settings.openaevPlatforms || [])
@@ -819,9 +819,9 @@ async function handleMessage(
         
         // Force cache refresh if we have any OpenCTI clients
         if (openCTIClients.size > 0) {
-          log.debug('Forcing SDO cache refresh after settings save...');
-          refreshSDOCache().catch(err => {
-            log.error('SDO cache refresh failed:', err);
+          log.debug('Forcing OpenCTI cache refresh after settings save...');
+          refreshOCTICache().catch(err => {
+            log.error('OpenCTI cache refresh failed:', err);
           });
         }
         
@@ -2333,7 +2333,7 @@ async function handleMessage(
         break;
       }
       
-      case 'REFRESH_OCTI_CACHE': {
+      case 'REFRESH_CACHE': {
         if (openCTIClients.size === 0 && openAEVClients.size === 0) {
           sendResponse(errorResponse('Not configured'));
           break;
@@ -2343,14 +2343,14 @@ async function handleMessage(
           // Refresh both OpenCTI and OpenAEV caches
           const refreshPromises: Promise<void>[] = [];
           if (openCTIClients.size > 0) {
-            refreshPromises.push(refreshSDOCache());
+            refreshPromises.push(refreshOCTICache());
           }
           if (openAEVClients.size > 0) {
             refreshPromises.push(refreshOAEVCache());
           }
           await Promise.all(refreshPromises);
           
-          const stats = await getSDOCacheStats();
+          const stats = await getOCTICacheStats();
           sendResponse(successResponse(stats));
         } catch (error) {
           sendResponse({
@@ -2361,7 +2361,7 @@ async function handleMessage(
         break;
       }
       
-      case 'GET_OCTI_CACHE_STATS': {
+      case 'GET_CACHE_STATS': {
         try {
           const multiCache = await getMultiPlatformOCTICache();
           const oaevMultiCache = await getMultiPlatformOAEVCache();
@@ -2526,9 +2526,9 @@ async function handleMessage(
           switch (targetPlatformType) {
             case 'opencti':
               if (platformId) {
-                await clearSDOCacheForPlatform(platformId);
+                await clearOCTICacheForPlatform(platformId);
               } else {
-                await clearAllSDOCaches();
+                await clearAllOCTICaches();
               }
               break;
             case 'openaev':
@@ -2864,7 +2864,7 @@ async function handleMessage(
                     platformId: targetPlatformId,
                   };
                   
-                  await addEntityToSDOCache(cachedEntity, targetPlatformId);
+                  await addEntityToOCTICache(cachedEntity, targetPlatformId);
                   log.debug(`Added ${created.entity_type} "${cachedEntity.name}" to cache for platform ${targetPlatformId}`);
                 }
               }
@@ -2931,7 +2931,7 @@ async function handleMessage(
                       platformId: defaultPlatformId,
                     };
                     
-                    await addEntityToSDOCache(cachedEntity, defaultPlatformId);
+                    await addEntityToOCTICache(cachedEntity, defaultPlatformId);
                     log.debug(`Added ${created.entity_type} "${cachedEntity.name}" to cache for platform ${defaultPlatformId}`);
                   }
                 }

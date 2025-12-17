@@ -71,12 +71,3 @@ export interface OCTIEntityMatch {
   entityData?: StixDomainObject;
   platformId: string;
 }
-
-// Legacy aliases for backward compatibility during migration
-/** @deprecated Use OCTIEntityType instead */
-export type SDOType = OCTIEntityType;
-/** @deprecated Use DetectedOCTIEntity instead */
-export type DetectedSDO = DetectedOCTIEntity;
-/** @deprecated Use OCTIEntityMatch instead */
-export type SDOMatch = OCTIEntityMatch;
-

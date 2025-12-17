@@ -196,41 +196,21 @@ export interface MultiPlatformOCTICache {
   platforms: Record<string, OCTIEntityCache>;
 }
 
-// Legacy aliases for backward compatibility
-/** @deprecated Use OCTIEntityCache instead */
-export type SDOCache = OCTIEntityCache;
-/** @deprecated Use MultiPlatformOCTICache instead */
-export type MultiPlatformSDOCache = MultiPlatformOCTICache;
-
 const OCTI_CACHE_KEY = 'octiCacheMulti';
 const OCTI_CACHE_DURATION = 60 * 60 * 1000; // 1 hour default
 const OCTI_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
-
-// Legacy key for migration
-const LEGACY_SDO_CACHE_KEY = 'sdoCacheMulti';
 
 /**
  * Get the full multi-platform OpenCTI entity cache
  */
 export async function getMultiPlatformOCTICache(): Promise<MultiPlatformOCTICache> {
-  // Try new key first, fall back to legacy key for migration
-  let result = await chrome.storage.local.get(OCTI_CACHE_KEY);
-  let cache = result[OCTI_CACHE_KEY] as MultiPlatformOCTICache | undefined;
-  
-  if (!cache) {
-    // Try legacy key
-    result = await chrome.storage.local.get(LEGACY_SDO_CACHE_KEY);
-    cache = result[LEGACY_SDO_CACHE_KEY] as MultiPlatformOCTICache | undefined;
-  }
+  const result = await chrome.storage.local.get(OCTI_CACHE_KEY);
+  const cache = result[OCTI_CACHE_KEY] as MultiPlatformOCTICache | undefined;
   
   if (!cache) return { platforms: {} };
   
   return cache;
 }
-
-// Legacy alias
-/** @deprecated Use getMultiPlatformOCTICache instead */
-export const getMultiPlatformSDOCache = getMultiPlatformOCTICache;
 
 /**
  * Get OpenCTI entity cache for a specific platform
@@ -248,10 +228,6 @@ export async function getOCTICache(platformId?: string): Promise<OCTIEntityCache
   return multiCache.platforms[platformId] || null;
 }
 
-// Legacy alias
-/** @deprecated Use getOCTICache instead */
-export const getSDOCache = getOCTICache;
-
 /**
  * Check if OpenCTI entity cache is expired for a platform
  */
@@ -261,10 +237,6 @@ export async function isOCTICacheExpired(platformId?: string): Promise<boolean> 
   
   return Date.now() - cache.timestamp > OCTI_CACHE_DURATION;
 }
-
-// Legacy alias
-/** @deprecated Use isOCTICacheExpired instead */
-export const isSDOCacheExpired = isOCTICacheExpired;
 
 /**
  * Check if OpenCTI entity cache needs refresh for a platform
@@ -276,10 +248,6 @@ export async function shouldRefreshOCTICache(platformId?: string): Promise<boole
   return Date.now() - cache.lastRefresh > OCTI_REFRESH_INTERVAL;
 }
 
-// Legacy alias
-/** @deprecated Use shouldRefreshOCTICache instead */
-export const shouldRefreshSDOCache = shouldRefreshOCTICache;
-
 /**
  * Save OpenCTI entity cache for a specific platform
  */
@@ -289,10 +257,6 @@ export async function saveOCTICache(cache: OCTIEntityCache, platformId: string):
   multiCache.platforms[platformId] = cache;
   await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
 }
-
-// Legacy alias
-/** @deprecated Use saveOCTICache instead */
-export const saveSDOCache = saveOCTICache;
 
 /**
  * Update OpenCTI entity cache for a specific entity type on a platform
@@ -313,10 +277,6 @@ export async function updateOCTICacheForType(
   
   await saveOCTICache(cache, platformId);
 }
-
-// Legacy alias
-/** @deprecated Use updateOCTICacheForType instead */
-export const updateSDOCacheForType = updateOCTICacheForType;
 
 /**
  * Add a single entity to the OpenCTI entity cache for a specific platform
@@ -354,10 +314,6 @@ export async function addEntityToOCTICache(
   await saveOCTICache(cache, platformId);
 }
 
-// Legacy alias
-/** @deprecated Use addEntityToOCTICache instead */
-export const addEntityToSDOCache = addEntityToOCTICache;
-
 /**
  * Create empty OpenCTI entity cache structure
  */
@@ -386,10 +342,6 @@ export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntity
     },
   };
 }
-
-// Legacy alias
-/** @deprecated Use createEmptyOCTICache instead */
-export const createEmptySDOCache = createEmptyOCTICache;
 
 /**
  * Get all entity names and aliases for matching from ALL platforms (merged)
@@ -492,10 +444,6 @@ export async function getOCTICacheStats(platformId?: string): Promise<{
   };
 }
 
-// Legacy alias
-/** @deprecated Use getOCTICacheStats instead */
-export const getSDOCacheStats = getOCTICacheStats;
-
 /**
  * Clear OpenCTI entity cache for a specific platform
  */
@@ -505,20 +453,12 @@ export async function clearOCTICacheForPlatform(platformId: string): Promise<voi
   await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
 }
 
-// Legacy alias
-/** @deprecated Use clearOCTICacheForPlatform instead */
-export const clearSDOCacheForPlatform = clearOCTICacheForPlatform;
-
 /**
  * Clear all OpenCTI entity caches
  */
 export async function clearAllOCTICaches(): Promise<void> {
   await chrome.storage.local.set({ [OCTI_CACHE_KEY]: { platforms: {} } });
 }
-
-// Legacy alias
-/** @deprecated Use clearAllOCTICaches instead */
-export const clearAllSDOCaches = clearAllOCTICaches;
 
 /**
  * Clean up OpenCTI entity caches for platforms that no longer exist in settings
@@ -539,10 +479,6 @@ export async function cleanupOrphanedOCTICaches(validPlatformIds: string[]): Pro
     await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
   }
 }
-
-// Legacy alias
-/** @deprecated Use cleanupOrphanedOCTICaches instead */
-export const cleanupOrphanedCaches = cleanupOrphanedOCTICaches;
 
 // ============================================================================
 // OpenAEV Cache - Structured Entity Cache (Per-Platform)

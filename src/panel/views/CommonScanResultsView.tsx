@@ -51,7 +51,7 @@ const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
     if (entity.platformMatches && entity.platformMatches.length > 0) {
       return entity.platformMatches.some(pm => pm.platformType === 'opencti');
     }
-    // Legacy single-platform check
+    // Single-platform fallback check
     return entity.platformType === 'opencti' || !entity.platformType;
   }
   return false;
@@ -180,7 +180,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         }
       }
     } else if (entity.found && entity.platformId) {
-      // Legacy single-platform entity
+      // Single-platform entity (no multi-platform matches)
       const platform = availablePlatforms.find(p => p.id === entity.platformId);
       if (platform) {
         results.push({

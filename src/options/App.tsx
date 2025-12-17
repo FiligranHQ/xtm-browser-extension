@@ -174,7 +174,7 @@ const App: React.FC = () => {
   const loadCacheStats = async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
-    const response = await chrome.runtime.sendMessage({ type: 'GET_SDO_CACHE_STATS' });
+    const response = await chrome.runtime.sendMessage({ type: 'GET_CACHE_STATS' });
     if (chrome.runtime.lastError) return;
     if (response?.success && response.data) {
       setCacheStats({
@@ -598,7 +598,7 @@ const App: React.FC = () => {
     setIsRefreshingCache(true);
     
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_OCTI_CACHE' });
+      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_CACHE' });
       
       if (response?.success) {
         await loadCacheStats();

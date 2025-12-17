@@ -44,7 +44,6 @@ export interface AIModelInfo {
 }
 
 export interface AISettings {
-  enabled?: boolean; // Deprecated: now computed from provider + apiKey + model
   provider?: AIProvider;
   apiKey?: string;
   // Model selection (optional, uses provider defaults if not set)
@@ -221,12 +220,6 @@ export interface DetectedOCTIEntity {
   // All platforms where this entity was found (for multi-platform navigation)
   platformMatches?: PlatformMatch[];
 }
-
-// Legacy aliases for backward compatibility
-/** @deprecated Use OCTIEntityType instead */
-export type SDOType = OCTIEntityType;
-/** @deprecated Use DetectedOCTIEntity instead */
-export type DetectedSDO = DetectedOCTIEntity;
 
 // ============================================================================
 // Platform-Specific Entity Types
@@ -629,8 +622,8 @@ export type MessageType =
   | 'SEARCH_ASSETS'
   | 'GENERATE_SCENARIO'
   | 'GET_PLATFORM_THEME'
-  | 'REFRESH_OCTI_CACHE'
-  | 'GET_OCTI_CACHE_STATS'
+  | 'REFRESH_CACHE'
+  | 'GET_CACHE_STATS'
   | 'SELECTION_CHANGED'
   | 'SHOW_PREVIEW_PANEL'
   | 'PREVIEW_SELECTION'

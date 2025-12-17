@@ -1,13 +1,27 @@
 /**
  * useSetupWizard - Hook for managing setup wizard state and actions
+ * 
+ * Persists setup state to chrome.storage.local so users don't lose their
+ * input if the popup closes (e.g., when copying a token from another window).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { loggers } from '../../shared/utils/logger';
 import { getPlatformName } from '../../shared/platform/registry';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
 const log = loggers.popup;
+
+// Storage key for persisting setup state
+const SETUP_STATE_KEY = 'xtm_setup_wizard_state';
+
+interface PersistedSetupState {
+  setupStep: SetupStep;
+  isInSetupWizard: boolean;
+  setupUrl: string;
+  setupToken: string;
+  setupName: string;
+}
 
 interface UseSetupWizardProps {
   setStatus: React.Dispatch<React.SetStateAction<ConnectionStatus>>;
@@ -39,39 +53,111 @@ interface UseSetupWizardReturn {
 
 export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWizardReturn => {
   // Setup wizard state
-  const [setupStep, setSetupStep] = useState<SetupStep>('welcome');
-  const [isInSetupWizard, setIsInSetupWizard] = useState(false);
-  const [setupUrl, setSetupUrl] = useState('');
-  const [setupToken, setSetupToken] = useState('');
-  const [setupName, setSetupName] = useState('');
+  const [setupStep, setSetupStepInternal] = useState<SetupStep>('welcome');
+  const [isInSetupWizard, setIsInSetupWizardInternal] = useState(false);
+  const [setupUrl, setSetupUrlInternal] = useState('');
+  const [setupToken, setSetupTokenInternal] = useState('');
+  const [setupName, setSetupNameInternal] = useState('');
   const [showSetupToken, setShowSetupToken] = useState(false);
   const [setupTesting, setSetupTesting] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  // Load persisted state on mount
+  useEffect(() => {
+    chrome.storage.local.get(SETUP_STATE_KEY).then((result) => {
+      const saved = result[SETUP_STATE_KEY] as PersistedSetupState | undefined;
+      if (saved && saved.isInSetupWizard) {
+        log.debug('Restoring setup wizard state:', saved);
+        setSetupStepInternal(saved.setupStep);
+        setIsInSetupWizardInternal(saved.isInSetupWizard);
+        setSetupUrlInternal(saved.setupUrl || '');
+        setSetupTokenInternal(saved.setupToken || '');
+        setSetupNameInternal(saved.setupName || '');
+      }
+      setInitialized(true);
+    }).catch((error) => {
+      log.error('Failed to load setup state:', error);
+      setInitialized(true);
+    });
+  }, []);
+
+  // Save state to storage whenever it changes (after initialization)
+  useEffect(() => {
+    if (!initialized) return;
+    
+    const state: PersistedSetupState = {
+      setupStep,
+      isInSetupWizard,
+      setupUrl,
+      setupToken,
+      setupName,
+    };
+    
+    if (isInSetupWizard) {
+      chrome.storage.local.set({ [SETUP_STATE_KEY]: state }).catch((error) => {
+        log.error('Failed to save setup state:', error);
+      });
+    }
+  }, [initialized, setupStep, isInSetupWizard, setupUrl, setupToken, setupName]);
+
+  // Clear persisted state
+  const clearPersistedState = useCallback(() => {
+    chrome.storage.local.remove(SETUP_STATE_KEY).catch((error) => {
+      log.error('Failed to clear setup state:', error);
+    });
+  }, []);
+
+  // Wrapped setters that update both state and storage
+  const setSetupStep = useCallback((step: SetupStep) => {
+    setSetupStepInternal(step);
+  }, []);
+
+  const setIsInSetupWizard = useCallback((value: boolean) => {
+    setIsInSetupWizardInternal(value);
+    if (!value) {
+      clearPersistedState();
+    }
+  }, [clearPersistedState]);
+
+  const setSetupUrl = useCallback((value: string) => {
+    setSetupUrlInternal(value);
+  }, []);
+
+  const setSetupToken = useCallback((value: string) => {
+    setSetupTokenInternal(value);
+  }, []);
+
+  const setSetupName = useCallback((value: string) => {
+    setSetupNameInternal(value);
+  }, []);
 
   const resetSetupForm = useCallback(() => {
-    setSetupUrl('');
-    setSetupToken('');
-    setSetupName('');
+    setSetupUrlInternal('');
+    setSetupTokenInternal('');
+    setSetupNameInternal('');
     setSetupError(null);
     setSetupSuccess(false);
   }, []);
 
   const startSetupWizard = useCallback(() => {
-    setIsInSetupWizard(true);
-    setSetupStep('opencti');
+    setIsInSetupWizardInternal(true);
+    setSetupStepInternal('opencti');
   }, []);
 
   const handleSetupSkip = useCallback((currentStep: 'opencti' | 'openaev') => {
     resetSetupForm();
     
     if (currentStep === 'opencti') {
-      setSetupStep('openaev');
+      setSetupStepInternal('openaev');
     } else {
-      setIsInSetupWizard(false);
-      setSetupStep('welcome');
+      // Setup complete - clear persisted state
+      setIsInSetupWizardInternal(false);
+      setSetupStepInternal('welcome');
+      clearPersistedState();
     }
-  }, [resetSetupForm]);
+  }, [resetSetupForm, clearPersistedState]);
 
   const handleSetupTestAndSave = useCallback(async (platformType: 'opencti' | 'openaev') => {
     if (!setupUrl.trim() || !setupToken.trim()) return;
@@ -200,10 +286,12 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
         setSetupTesting(false);
         
         if (platformType === 'opencti') {
-          setSetupStep('openaev');
+          setSetupStepInternal('openaev');
         } else {
-          setIsInSetupWizard(false);
-          setSetupStep('welcome');
+          // Setup complete - clear persisted state
+          setIsInSetupWizardInternal(false);
+          setSetupStepInternal('welcome');
+          clearPersistedState();
         }
       }, 1000);
       
@@ -211,7 +299,7 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
       setSetupError(error instanceof Error ? error.message : 'Connection failed');
       setSetupTesting(false);
     }
-  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm]);
+  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm, clearPersistedState]);
 
   return {
     // State

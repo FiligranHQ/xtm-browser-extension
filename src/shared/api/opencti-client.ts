@@ -42,7 +42,7 @@ import type {
 const log = loggers.opencti;
 
 // User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.4';
+const USER_AGENT = 'xtm-browser-extension/0.0.5';
 
 // ============================================================================
 // API Client Class

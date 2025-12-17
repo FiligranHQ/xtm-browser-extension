@@ -124,7 +124,7 @@ export const PopupFooter: React.FC<PopupFooterProps> = ({ status, onClick }) => 
           variant="caption"
           sx={{ color: 'text.secondary', opacity: 0.7, fontSize: 10 }}
         >
-          v0.0.4 • Click for details
+          v0.0.5 • Click for details
         </Typography>
       </Box>
     </Box>

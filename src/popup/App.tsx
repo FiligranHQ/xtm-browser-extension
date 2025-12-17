@@ -22,6 +22,7 @@ import {
   DescriptionOutlined,
   TravelExploreOutlined,
   MovieFilterOutlined,
+  CloseOutlined,
 } from '@mui/icons-material';
 import { Target } from 'mdi-material-ui';
 
@@ -139,11 +140,20 @@ const App: React.FC = () => {
               </Box>
             </Box>
           </Box>
-          <Tooltip title="Settings" arrow>
-            <IconButton size="small" onClick={handleOpenSettings} sx={{ color: 'primary.main' }}>
-              <SettingsOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {/* Show close button during setup, settings button otherwise */}
+          {(isInSetupWizard || (!hasAnyPlatformConfigured && setupStep === 'welcome')) ? (
+            <Tooltip title="Close" arrow>
+              <IconButton size="small" onClick={() => window.close()} sx={{ color: 'text.secondary' }}>
+                <CloseOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <Tooltip title="Settings" arrow>
+              <IconButton size="small" onClick={handleOpenSettings} sx={{ color: 'primary.main' }}>
+                <SettingsOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
 
         <Divider />
@@ -422,7 +432,7 @@ const App: React.FC = () => {
             </Box>
             {/* Version */}
             <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, fontSize: 10 }}>
-              v0.0.4 • Click for details
+              v0.0.5 • Click for details
             </Typography>
           </Box>
         </Box>

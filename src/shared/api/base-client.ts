@@ -10,7 +10,7 @@ import { loggers } from '../utils/logger';
 const log = loggers.api;
 
 // User-Agent for API requests
-export const USER_AGENT = 'xtm-browser-extension/0.0.4';
+export const USER_AGENT = 'xtm-browser-extension/0.0.5';
 
 // Default timeouts (in ms)
 export const DEFAULT_TIMEOUT = 30000;

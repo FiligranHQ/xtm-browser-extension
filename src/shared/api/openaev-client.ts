@@ -9,7 +9,7 @@ import { loggers } from '../utils/logger';
 const log = loggers.openaev;
 
 // User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.4';
+const USER_AGENT = 'xtm-browser-extension/0.0.5';
 
 import type {
   PlatformConfig,

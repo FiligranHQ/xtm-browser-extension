@@ -408,7 +408,8 @@ export async function handleAIDiscoverEntities(
       // Filter out entities that were already detected (double-check)
       // Include both value/name AND external IDs (like T1059.001) for comprehensive matching
       const alreadyDetectedValues = new Set<string>();
-      payload.alreadyDetected.forEach(e => {
+      const alreadyDetectedList = payload.alreadyDetected || [];
+      alreadyDetectedList.forEach(e => {
         // Add value and name (lowercase)
         if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
         if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
@@ -423,7 +424,7 @@ export async function handleAIDiscoverEntities(
         return !alreadyDetectedValues.has(valueLC) && !alreadyDetectedValues.has(nameLC);
       });
       
-      log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${payload.alreadyDetected.length} already detected)`);
+      log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${alreadyDetectedList.length} already detected)`);
       
       sendResponse(successResponse({ entities: newEntities }));
     } else {

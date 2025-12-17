@@ -700,7 +700,7 @@ export class OpenCTIClient {
     return `${this.baseUrl}/dashboard/workspaces/investigations/${investigationId}`;
   }
 
-  async fetchContainersForEntity(entityId: string, limit: number = 10): Promise<Array<{ id: string; entity_type: string; name: string; created: string; modified: string; createdBy?: { id: string; name: string } }>> {
+  async fetchContainersForEntity(entityId: string, limit: number = 5): Promise<Array<{ id: string; entity_type: string; name: string; created: string; modified: string; createdBy?: { id: string; name: string } }>> {
     try {
       const data = await this.query<ContainerQueryResult>(FETCH_CONTAINERS_FOR_ENTITY_QUERY, { first: limit, orderBy: 'created', orderMode: 'desc', filters: buildObjectsFilter(entityId) });
       return data.containers?.edges?.map(edge => {

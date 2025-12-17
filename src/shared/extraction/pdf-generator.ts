@@ -327,7 +327,7 @@ async function generateWithJsPDF(
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content.content;
     
-    // Track images to add after their context (legacy, keeping for fallback)
+    // Track images to add after their context (for deferred rendering)
     const imagesToAdd: ExtractedImage[] = [];
     
     // Track all added image sources to avoid duplicates

@@ -1111,7 +1111,11 @@ async function handleMessage(
           
           const platformEntities: ScanResultPayload['platformEntities'] = [];
           const originalText = payload.content;
+          // Also create a refanged version of the text for searching
+          // This allows finding defanged indicators like honey[.]scanme[.]sh when cache has honey.scanme.sh
+          const refangedText = refangIndicator(originalText);
           const textLower = originalText.toLowerCase();
+          const refangedTextLower = refangedText.toLowerCase();
           const seenEntities = new Set<string>();
           const seenRanges = new Set<string>();
           
@@ -1127,74 +1131,81 @@ async function handleMessage(
             // Skip short names and already seen entities
             if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
             
-            // Use indexOf for simple, reliable matching (case-insensitive)
-            // This handles names with hyphens, underscores, dots etc. properly
-            let searchStart = 0;
-            let matchIndex = textLower.indexOf(nameLower, searchStart);
+            // Search in both original text and refanged text
+            // This allows finding both "honey.scanme.sh" and "honey[.]scanme[.]sh"
+            const searchTargets = [
+              { text: textLower, originalText: originalText, isRefanged: false },
+              { text: refangedTextLower, originalText: refangedText, isRefanged: true },
+            ];
             
-            while (matchIndex !== -1) {
-              const endIndex = matchIndex + nameLower.length;
+            let foundMatch = false;
+            for (const target of searchTargets) {
+              if (foundMatch) break;
               
-              // Check character boundaries to ensure exact word match
-              // (not part of a larger word)
-              const charBefore = matchIndex > 0 ? originalText[matchIndex - 1] : ' ';
-              const charAfter = endIndex < originalText.length ? originalText[endIndex] : ' ';
+              let searchStart = 0;
+              let matchIndex = target.text.indexOf(nameLower, searchStart);
               
-              // Valid boundary: whitespace, punctuation, or start/end of string
-              const isValidBoundary = (c: string) => 
-                /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
-              
-              // For names with hyphens/underscores, also check if the boundary char is NOT alphanumeric
-              const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
-              const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
-              
-              if (beforeOk && afterOk) {
-                // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
-                // This avoids detecting "T1566" when the text is "T1566.001" (sub-technique)
-                const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
-                if (isParentMitreId && charAfter === '.') {
-                  // This parent technique is followed by a dot, likely part of a sub-technique
-                  // Skip to next occurrence
-                  searchStart = matchIndex + 1;
-                  matchIndex = textLower.indexOf(nameLower, searchStart);
-                  continue;
-                }
+              while (matchIndex !== -1) {
+                const endIndex = matchIndex + nameLower.length;
                 
-                // Check for overlapping ranges (longer matches win)
-                const rangeKey = `${matchIndex}-${endIndex}`;
-                let hasOverlap = false;
-                for (const existingRange of seenRanges) {
-                  const [existStart, existEnd] = existingRange.split('-').map(Number);
-                  if (!(endIndex <= existStart || matchIndex >= existEnd)) {
-                    hasOverlap = true;
+                // Check character boundaries to ensure exact word match
+                const charBefore = matchIndex > 0 ? target.originalText[matchIndex - 1] : ' ';
+                const charAfter = endIndex < target.originalText.length ? target.originalText[endIndex] : ' ';
+                
+                // Valid boundary: whitespace, punctuation, or start/end of string
+                const isValidBoundary = (c: string) => 
+                  /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
+                
+                // For names with hyphens/underscores, also check if the boundary char is NOT alphanumeric
+                const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
+                const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
+                
+                if (beforeOk && afterOk) {
+                  // For parent MITRE techniques (e.g., T1566), skip if followed by a dot
+                  const isParentMitreId = /^t[as]?\d{4}$/i.test(nameLower);
+                  if (isParentMitreId && charAfter === '.') {
+                    searchStart = matchIndex + 1;
+                    matchIndex = target.text.indexOf(nameLower, searchStart);
+                    continue;
+                  }
+                  
+                  // For refanged text matches, we need to map back to original text position
+                  // This is approximate - we use the refanged position but display the original value
+                  const rangeKey = `${matchIndex}-${endIndex}`;
+                  let hasOverlap = false;
+                  for (const existingRange of seenRanges) {
+                    const [existStart, existEnd] = existingRange.split('-').map(Number);
+                    if (!(endIndex <= existStart || matchIndex >= existEnd)) {
+                      hasOverlap = true;
+                      break;
+                    }
+                  }
+                  
+                  if (!hasOverlap) {
+                    const matchedText = target.originalText.substring(matchIndex, endIndex);
+                    log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}${target.isRefanged ? ' (refanged search)' : ''}`);
+                    platformEntities.push({
+                      platformType: 'openaev',
+                      type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
+                      name: entity.name,
+                      value: matchedText,
+                      startIndex: matchIndex,
+                      endIndex: endIndex,
+                      found: true,
+                      entityId: entity.id,
+                      platformId: entity.platformId,
+                      entityData: entity,
+                    });
+                    seenEntities.add(entity.id);
+                    seenRanges.add(rangeKey);
+                    foundMatch = true;
                     break;
                   }
                 }
                 
-                if (!hasOverlap) {
-                  const matchedText = originalText.substring(matchIndex, endIndex);
-                  log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
-                  platformEntities.push({
-                    platformType: 'openaev',
-                    type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
-                    name: entity.name,
-                    value: matchedText,
-                    startIndex: matchIndex,
-                    endIndex: endIndex,
-                    found: true,
-                    entityId: entity.id,
-                    platformId: entity.platformId,
-                    entityData: entity,
-                  });
-                  seenEntities.add(entity.id);
-                  seenRanges.add(rangeKey);
-                  break; // Only first match per entity
-                }
+                searchStart = matchIndex + 1;
+                matchIndex = target.text.indexOf(nameLower, searchStart);
               }
-              
-              // Continue searching from after this position
-              searchStart = matchIndex + 1;
-              matchIndex = textLower.indexOf(nameLower, searchStart);
             }
           }
           
@@ -1518,7 +1529,7 @@ async function handleMessage(
       }
       
       case 'CREATE_OAEV_PAYLOAD': {
-        // Support both legacy DNS resolution format AND generic payload format
+        // Supports both simple DNS resolution format AND generic payload format
         const { hostname, name, platforms, attackPatternIds, platformId, payload: payloadData } = message.payload as {
           hostname?: string;
           name?: string;
@@ -1557,7 +1568,7 @@ async function handleMessage(
             // Use the new generic createPayload method
             createdPayload = await client.createPayload(payloadData);
           } else if (hostname && name && platforms) {
-            // Legacy DNS resolution format
+            // Simple DNS resolution format (shorthand)
             createdPayload = await client.createDnsResolutionPayload({
               hostname,
               name,

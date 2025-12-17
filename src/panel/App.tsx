@@ -839,15 +839,14 @@ const App: React.FC = () => {
           
           // Fetch full details in background - only update if user hasn't navigated
           const fetchStartIndex = currentPlatformIndexRef.current;
-          const messageType = entityPlatformType === 'openaev' ? 'GET_OAEV_ENTITY_DETAILS' : 'GET_ENTITY_DETAILS';
           
           chrome.runtime.sendMessage({
-            type: messageType,
+            type: 'GET_ENTITY_DETAILS',
             payload: { 
               id: entityId,
-              entityId: entityId,
               entityType: actualEntityType,
               platformId,
+              platformType: entityPlatformType,
             },
           }, (response) => {
             if (chrome.runtime.lastError) return;

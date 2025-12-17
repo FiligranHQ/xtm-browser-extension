@@ -91,6 +91,7 @@ export class DetectionEngine {
   detectObservables(text: string): DetectedObservable[] {
     const detected: DetectedObservable[] = [];
     const seenRanges = new Set<string>();
+    const seenRefangedValues = new Map<string, DetectedObservable>(); // Track by refanged value + type
 
     // Sort patterns by priority
     const sortedPatterns = [...OBSERVABLE_PATTERNS].sort(
@@ -115,10 +116,34 @@ export class DetectionEngine {
             (match.startIndex <= d.startIndex && match.endIndex >= d.endIndex)
         );
 
-        if (!overlaps) {
-          seenRanges.add(rangeKey);
-          detected.push(match);
+        if (overlaps) {
+          continue;
         }
+
+        // Deduplicate by refanged value + type (same indicator, different representation)
+        // Keep the non-defanged version if both exist (cleaner for display)
+        const dedupeKey = `${match.type}:${(match.refangedValue || match.value).toLowerCase()}`;
+        const existingByValue = seenRefangedValues.get(dedupeKey);
+        
+        if (existingByValue) {
+          // If existing is defanged but new one isn't, replace with the non-defanged version
+          if (existingByValue.isDefanged && !match.isDefanged) {
+            const existingIndex = detected.indexOf(existingByValue);
+            if (existingIndex !== -1) {
+              detected.splice(existingIndex, 1);
+              seenRanges.delete(createRangeKey(existingByValue.startIndex, existingByValue.endIndex));
+            }
+            seenRanges.add(rangeKey);
+            seenRefangedValues.set(dedupeKey, match);
+            detected.push(match);
+          }
+          // Otherwise skip (keep the first/non-defanged occurrence)
+          continue;
+        }
+
+        seenRanges.add(rangeKey);
+        seenRefangedValues.set(dedupeKey, match);
+        detected.push(match);
       }
     }
 

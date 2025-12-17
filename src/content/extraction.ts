@@ -549,8 +549,8 @@ export async function generateArticlePDF(): Promise<{ data: string; filename: st
       };
     }
     
-    log.warn(' Enhanced PDF generation failed, falling back to legacy method');
-    return generateLegacyPDF(extractedContent);
+    log.warn(' Enhanced PDF generation failed, falling back to basic method');
+    return generateFallbackPDF(extractedContent);
   } catch (error) {
     log.error(' Failed to generate PDF:', error);
     return generateSimpleTextPDF();
@@ -619,11 +619,11 @@ async function loadImageAsBase64(imgElement: HTMLImageElement): Promise<{ data: 
 }
 
 /**
- * Legacy PDF generation for fallback
+ * Fallback PDF generation when enhanced method fails
  */
-async function generateLegacyPDF(article: { title: string; content: string; textContent: string }): Promise<{ data: string; filename: string } | null> {
+async function generateFallbackPDF(article: { title: string; content: string; textContent: string }): Promise<{ data: string; filename: string } | null> {
   try {
-    log.debug(' Starting legacy PDF generation, article title:', article.title);
+    log.debug(' Starting fallback PDF generation, article title:', article.title);
     
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -905,14 +905,14 @@ async function generateLegacyPDF(article: { title: string; content: string; text
     const pdfOutput = pdf.output('datauristring');
     const base64Data = pdfOutput.split(',')[1];
     
-    log.debug(' Legacy PDF generated successfully, base64 length:', base64Data.length);
+    log.debug(' Fallback PDF generated successfully, base64 length:', base64Data.length);
     
     return {
       data: base64Data,
       filename: filename,
     };
   } catch (error) {
-    log.error(' Failed to generate legacy PDF:', error);
+    log.error(' Failed to generate fallback PDF:', error);
     return null;
   }
 }

@@ -146,8 +146,8 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     chrome.runtime.sendMessage({
-      type: 'GET_OAEV_ENTITY_DETAILS',
-      payload: { id: entityIdToFetch, entityId: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId },
+      type: 'GET_ENTITY_DETAILS',
+      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType: 'openaev' },
     }, (response) => {
       if (chrome.runtime.lastError) return;
       if (currentPlatformIndexRef.current !== targetIdx) return;

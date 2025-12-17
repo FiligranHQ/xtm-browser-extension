@@ -29,7 +29,6 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
   inferPlatformTypeFromEntityType, 
-  getEntityDetailsMessageType,
   getPlatformLogoName,
   getPlatformName,
 } from '../../shared/platform/registry';
@@ -156,10 +155,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
     
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
-    const messageType = getEntityDetailsMessageType(platformType);
     chrome.runtime.sendMessage({
-      type: messageType,
-      payload: { id: entityIdToFetch, entityId: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId },
+      type: 'GET_ENTITY_DETAILS',
+      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
     }, (response) => {
       if (chrome.runtime.lastError) return;
       if (currentPlatformIndexRef.current !== targetIdx) return;

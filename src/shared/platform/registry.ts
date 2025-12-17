@@ -521,22 +521,6 @@ export function prefixEntityType(entityType: string, platformType: PlatformType)
 }
 
 /**
- * Get the message type for fetching entity details based on platform
- * Returns 'GET_OAEV_ENTITY_DETAILS' for openaev, 'GET_ENTITY_DETAILS' for opencti, etc.
- */
-export function getEntityDetailsMessageType(platformType: PlatformType | string): string {
-  switch (platformType) {
-    case 'openaev':
-      return 'GET_OAEV_ENTITY_DETAILS';
-    case 'opengrc':
-      return 'GET_OGRC_ENTITY_DETAILS';
-    case 'opencti':
-    default:
-      return 'GET_ENTITY_DETAILS';
-  }
-}
-
-/**
  * Infer platform type from entity type string
  * Returns 'openaev' if type starts with 'oaev-', 'opengrc' if starts with 'ogrc-', etc.
  */

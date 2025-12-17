@@ -69,10 +69,21 @@ src/
 │   ├── index.html       # Options HTML
 │   └── main.tsx         # Options entry point
 ├── shared/              # Shared code
-│   ├── api/             # API clients
+│   ├── api/             # API clients (modular architecture)
+│   │   ├── ai-client.ts         # AI/LLM provider client
+│   │   ├── base-client.ts       # Base client (errors, pagination, retry)
 │   │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │   │   ├── openaev-client.ts    # OpenAEV REST client
-│   │   └── ai-client.ts         # AI/LLM provider client
+│   │   ├── ai/                  # AI modules
+│   │   │   ├── prompts.ts       # Prompt templates & builders
+│   │   │   ├── types.ts         # AI types
+│   │   │   └── json-parser.ts   # Response parsing
+│   │   ├── opencti/             # OpenCTI modules
+│   │   │   ├── queries.ts       # GraphQL queries & filters
+│   │   │   ├── fragments.ts     # GraphQL fragments
+│   │   │   └── types.ts         # Response types
+│   │   └── openaev/             # OpenAEV modules
+│   │       └── filters.ts       # Filter & payload builders
 │   ├── components/      # Shared React components
 │   ├── detection/       # Detection engine
 │   │   ├── detector.ts  # Entity and observable detection
@@ -193,6 +204,27 @@ localStorage.setItem('LOG_LEVEL', 'debug');
 
 ## API Clients
 
+### Modular Architecture
+
+API clients are organized into modular structures for maintainability:
+
+```
+src/shared/api/
+├── ai-client.ts          # Main AI client (imports from ai/)
+├── opencti-client.ts     # Main OpenCTI client (imports from opencti/)
+├── openaev-client.ts     # Main OpenAEV client (imports from openaev/)
+├── ai/
+│   ├── prompts.ts        # All prompt templates (~560 lines)
+│   ├── types.ts          # AI type definitions
+│   └── json-parser.ts    # Response parsing utilities
+├── opencti/
+│   ├── queries.ts        # GraphQL queries/mutations & filter builders (~350 lines)
+│   ├── fragments.ts      # Reusable GraphQL fragments
+│   └── types.ts          # Query response types
+└── openaev/
+    └── filters.ts        # Filter builders & payload utilities (~300 lines)
+```
+
 ### OpenCTI Client
 
 GraphQL client for OpenCTI platform:
@@ -202,17 +234,17 @@ import { OpenCTIClient } from './shared/api/opencti-client';
 
 const client = new OpenCTIClient({
   url: 'https://opencti.example.com',
-  token: 'your-api-token'
+  apiToken: 'your-api-token'
 });
 
 // Test connection
-const version = await client.testConnection();
+const info = await client.testConnection();
 
 // Search entities
-const results = await client.searchEntities('APT29');
+const results = await client.globalSearch('APT29');
 
 // Get SDOs for caching
-const sdos = await client.getSDOsByTypes(['Intrusion-Set', 'Malware'], 1000);
+const sdos = await client.fetchSDOsForCache('Intrusion-Set');
 ```
 
 ### OpenAEV Client
@@ -223,15 +255,35 @@ REST client for OpenAEV platform:
 import { OpenAEVClient } from './shared/api/openaev-client';
 
 const client = new OpenAEVClient({
+  id: 'platform-1',
+  name: 'My OpenAEV',
   url: 'https://openaev.example.com',
-  token: 'your-api-token'
+  apiToken: 'your-api-token'
 });
 
 // Get assets
-const assets = await client.getAssets();
+const assets = await client.getAllAssets();
 
 // Get attack patterns
-const patterns = await client.getAttackPatterns();
+const patterns = await client.getAllAttackPatterns();
+
+// Search with filters (using filter builders)
+const results = await client.searchAssets('server-01');
+```
+
+### Using Modular Components Directly
+
+You can import and use the modular components directly:
+
+```typescript
+// Import filter builders for custom queries
+import { buildAssetSearchFilter, buildSearchBody } from './shared/api/openaev/filters';
+
+// Import GraphQL queries for custom operations
+import { GLOBAL_SEARCH_QUERY, buildValueFilter } from './shared/api/opencti/queries';
+
+// Import prompt builders for AI customization
+import { buildScenarioPrompt, TABLE_TOP_THEMES } from './shared/api/ai/prompts';
 ```
 
 ## Detection Engine

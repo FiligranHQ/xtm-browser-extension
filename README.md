@@ -277,12 +277,24 @@ xtm-browser-extension/
 │   │
 │   └── shared/                  # Shared modules
 │       ├── api/                 # API clients
+│       │   ├── ai-client.ts         # AI provider client (unified interface)
+│       │   ├── base-client.ts       # Base client with common utilities
 │       │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │       │   ├── openaev-client.ts    # OpenAEV REST client
-│       │   ├── ai-client.ts         # AI provider client
-│       │   └── ai/                  # AI provider modules
-│       │       ├── types.ts         # AI type definitions
-│       │       └── json-parser.ts   # AI response parsing
+│       │   ├── ai/                  # AI provider modules
+│       │   │   ├── index.ts         # Barrel export
+│       │   │   ├── types.ts         # AI type definitions
+│       │   │   ├── prompts.ts       # AI prompt templates (system prompts, builders)
+│       │   │   └── json-parser.ts   # AI response parsing
+│       │   ├── opencti/             # OpenCTI GraphQL modules
+│       │   │   ├── index.ts         # Barrel export
+│       │   │   ├── types.ts         # OpenCTI type definitions
+│       │   │   ├── fragments.ts     # GraphQL fragments
+│       │   │   ├── queries.ts       # GraphQL queries & mutations
+│       │   │   └── observable-utils.ts # Observable helpers
+│       │   └── openaev/             # OpenAEV REST modules
+│       │       ├── index.ts         # Barrel export
+│       │       └── filters.ts       # Filter builders & payload utilities
 │       ├── detection/           # Detection engine
 │       │   ├── detector.ts          # Main detection orchestrator
 │       │   ├── patterns.ts          # Regex patterns

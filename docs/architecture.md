@@ -186,13 +186,24 @@ Common code shared across all components.
 ```
 src/shared/
 ├── api/                  # API clients
+│   ├── ai-client.ts      # AI provider client (unified interface)
+│   ├── base-client.ts    # Base client with common utilities (errors, pagination, retry)
 │   ├── opencti-client.ts # OpenCTI GraphQL client
 │   ├── openaev-client.ts # OpenAEV REST client
-│   ├── ai-client.ts      # AI provider client (unified interface)
-│   └── ai/               # AI provider modules
-│       ├── index.ts
-│       ├── types.ts      # AI request/response types
-│       └── json-parser.ts # AI response parsing utilities
+│   ├── ai/               # AI provider modules
+│   │   ├── index.ts      # Barrel export
+│   │   ├── types.ts      # AI request/response types
+│   │   ├── prompts.ts    # AI prompt templates (system prompts, theme configs, builders)
+│   │   └── json-parser.ts # AI response parsing utilities
+│   ├── opencti/          # OpenCTI GraphQL modules
+│   │   ├── index.ts      # Barrel export
+│   │   ├── types.ts      # OpenCTI-specific types (query responses, etc.)
+│   │   ├── fragments.ts  # Reusable GraphQL fragments
+│   │   ├── queries.ts    # GraphQL queries, mutations, and filter builders
+│   │   └── observable-utils.ts # Observable type mapping and input builders
+│   └── openaev/          # OpenAEV REST modules
+│       ├── index.ts      # Barrel export
+│       └── filters.ts    # Filter builders, payload builders, and type utilities
 ├── detection/            # Detection engine
 │   ├── detector.ts       # Main detection orchestrator
 │   ├── patterns.ts       # Regex patterns for entity types
@@ -227,6 +238,72 @@ src/shared/
     ├── entity.ts         # Entity helpers
     └── messaging.ts      # Message utilities
 ```
+
+## API Client Architecture
+
+### OpenCTI Client (`src/shared/api/opencti-client.ts`)
+
+The OpenCTI client is a GraphQL client with modular query organization:
+
+```
+src/shared/api/opencti/
+├── index.ts           # Barrel exports
+├── types.ts           # Query response types (SDOQueryResponse, etc.)
+├── fragments.ts       # Reusable GraphQL fragments (OBSERVABLE_PROPERTIES, SDO_PROPERTIES)
+├── queries.ts         # All GraphQL queries, mutations, and filter builders
+└── observable-utils.ts # Observable type mapping (STIX ↔ GraphQL)
+```
+
+**Key modules:**
+- **fragments.ts**: GraphQL fragments for consistent entity field selection
+- **queries.ts**: All queries/mutations extracted (~350 lines) with filter builder functions
+- **observable-utils.ts**: Maps observable types between STIX and GraphQL formats
+
+**Design pattern:**
+```typescript
+// queries.ts exports query strings and builder functions
+export const SEARCH_OBSERVABLE_QUERY = `...`;
+export function buildValueFilter(value: string, type?: string): object;
+
+// opencti-client.ts imports and uses them
+import { SEARCH_OBSERVABLE_QUERY, buildValueFilter } from './opencti/queries';
+const data = await this.query(SEARCH_OBSERVABLE_QUERY, { filters: buildValueFilter(value, type) });
+```
+
+### OpenAEV Client (`src/shared/api/openaev-client.ts`)
+
+The OpenAEV client is a REST API client with modular filter organization:
+
+```
+src/shared/api/openaev/
+├── index.ts     # Barrel exports
+└── filters.ts   # Filter builders, payload builders, and type utilities
+```
+
+**Key modules:**
+- **filters.ts**: Filter group builders, payload builders, atomic testing utilities (~300 lines)
+
+**Filter builder pattern:**
+```typescript
+// filters.ts exports builder functions
+export function buildAssetSearchFilter(searchTerm: string): FilterGroup;
+export function buildSearchBody(options: SearchOptions): SearchBody;
+export function buildPayloadBody(input: PayloadInput): Record<string, unknown>;
+
+// openaev-client.ts imports and uses them
+import { buildAssetSearchFilter, buildSearchBody } from './openaev/filters';
+const response = await this.request('/api/endpoints/search', {
+  method: 'POST',
+  body: JSON.stringify(buildSearchBody({ filterGroup: buildAssetSearchFilter(term) })),
+});
+```
+
+### Base Client (`src/shared/api/base-client.ts`)
+
+Shared utilities for all API clients:
+- Error classes: `APIError`, `RateLimitError`, `AuthError`
+- Pagination types: `PaginatedResponse`, `GraphQLResponse`
+- Utilities: `withTimeout`, `withRetry`, `fetchAllPages`
 
 ## State Management
 
@@ -812,6 +889,23 @@ User clicks "Discover more with AI"
 
 ## AI Integration
 
+### Module Architecture
+
+The AI client is modularized for maintainability:
+
+```
+src/shared/api/ai/
+├── index.ts       # Barrel exports
+├── types.ts       # AI request/response type definitions
+├── prompts.ts     # All prompt templates and builders (system prompts, themes, JSON schemas)
+└── json-parser.ts # Robust AI response parsing (code blocks, malformed JSON)
+```
+
+**Key design decisions:**
+- **Prompt separation**: All prompts extracted to `prompts.ts` (~560 lines) for easy maintenance
+- **Unified interface**: Single `AIClient` class handles OpenAI, Anthropic, and Gemini
+- **Type-safe builders**: Functions like `buildScenarioPrompt()` ensure consistent prompt structure
+
 ### Supported Providers
 
 | Provider | Client Class | Models |
@@ -831,12 +925,44 @@ User clicks "Discover more with AI"
 | Entity Discovery | `AI_DISCOVER_ENTITIES` | Discover entities pattern matching missed |
 | Relationship Resolution | `AI_RESOLVE_RELATIONSHIPS` | Identify relationships between entities |
 
-### Scenario Themes
+### Prompt Templates (in `ai/prompts.ts`)
 
-For table-top scenario generation, themes customize the AI prompt:
+All prompt templates are centralized for maintainability:
 
 ```typescript
-const themeConfigs = {
+// System prompts for different operations
+export const SYSTEM_PROMPTS = {
+  CONTAINER_DESCRIPTION: '...',
+  SCENARIO_GENERATION: '...',
+  ATOMIC_TEST: '...',
+  EMAIL_GENERATION: '...',
+  ENTITY_DISCOVERY: '...',
+  RELATIONSHIP_RESOLUTION: '...',
+};
+
+// Theme-specific configurations for table-top scenarios
+export const TABLE_TOP_THEMES = {
+  'cybersecurity': { /* ... */ },
+  'physical-security': { /* ... */ },
+  // ... other themes
+};
+
+// Prompt builder functions
+export function buildContainerDescriptionPrompt(request: ContainerDescriptionRequest): string;
+export function buildScenarioPrompt(request: ScenarioGenerationRequest): string;
+export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest): string;
+export function buildAtomicTestPrompt(request: AtomicTestRequest): string;
+export function buildEmailGenerationPrompt(request: EmailGenerationRequest): string;
+export function buildEntityDiscoveryPrompt(request: EntityDiscoveryRequest): string;
+export function buildRelationshipResolutionPrompt(request: RelationshipResolutionRequest): string;
+```
+
+### Scenario Themes
+
+For table-top scenario generation, themes customize the AI prompt. Defined in `ai/prompts.ts`:
+
+```typescript
+export const TABLE_TOP_THEMES = {
   'cybersecurity': {
     systemPromptSuffix: 'Focus on cyber attacks, data breaches, ransomware...',
     exampleTopics: 'cyber attacks, malware outbreaks, data breaches...',

@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - AI client refactored: extracted prompts to separate module (`ai/prompts.ts`) for better maintainability
 - Consolidated duplicate AI handler files into single `message-ai-handlers.ts`
-- Updated default AI models: OpenAI `gpt-4o`, Anthropic `claude-sonnet-4-20250514`, Gemini `gemini-2.0-flash`
 
 ### Fixed
 - Email pattern detection now validates TLDs to reduce false positives (e.g., `example@domain.svg` no longer detected as email)

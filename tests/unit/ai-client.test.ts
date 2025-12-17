@@ -429,7 +429,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['Authorization']).toBe('Bearer sk-openai-key');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('gpt-4o');
+    expect(body.model).toBe('gpt-5.2');
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[1].role).toBe('user');
   });
@@ -461,7 +461,7 @@ describe('Provider-specific API Calls', () => {
     expect(options.headers['anthropic-version']).toBe('2023-06-01');
     
     const body = JSON.parse(options.body);
-    expect(body.model).toBe('claude-sonnet-4-20250514');
+    expect(body.model).toBe('claude-sonnet-4-5');
     expect(body.system).toBe('You are a helpful assistant');
   });
 

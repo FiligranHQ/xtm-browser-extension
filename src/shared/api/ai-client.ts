@@ -68,9 +68,9 @@ const BASE_URLS = {
 } as const;
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-sonnet-4-20250514',
-  gemini: 'gemini-2.0-flash',
+  openai: 'gpt-5.2',
+  anthropic: 'claude-sonnet-4-5',
+  gemini: 'gemini-2.5-flash-lite',
   'xtm-one': '',
 };
 

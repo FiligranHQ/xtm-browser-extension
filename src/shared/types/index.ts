@@ -541,8 +541,32 @@ export interface OAEVScenarioInput {
   scenario_description?: string;
   scenario_subtitle?: string;
   scenario_category?: string;
+  scenario_main_focus?: string;
+  scenario_severity?: 'low' | 'medium' | 'high' | 'critical';
   scenario_tags?: string[];
 }
+
+/**
+ * Available main focus options for OpenAEV scenarios
+ */
+export const SCENARIO_MAIN_FOCUS_OPTIONS = [
+  { value: 'incident-response', label: 'Incident Response' },
+  { value: 'endpoint-protection', label: 'Endpoint Protection' },
+  { value: 'web-filtering', label: 'Web Filtering' },
+  { value: 'standard-operating-procedure', label: 'Standard Operating Procedure' },
+  { value: 'crisis-communication', label: 'Crisis Communication' },
+  { value: 'strategic-reaction', label: 'Strategic Reaction' },
+] as const;
+
+/**
+ * Available severity options for OpenAEV scenarios
+ */
+export const SCENARIO_SEVERITY_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'critical', label: 'Critical' },
+] as const;
 
 export interface OAEVScenario {
   scenario_id: string;

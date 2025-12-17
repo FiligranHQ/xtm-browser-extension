@@ -38,6 +38,8 @@ import {
   ArrowForwardOutlined,
   RefreshOutlined,
   ComputerOutlined,
+  CloudOutlined,
+  LanguageOutlined,
   LanOutlined,
   GroupsOutlined,
   MovieFilterOutlined,
@@ -159,7 +161,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
     scenarioAIEmailLanguage,
     setScenarioAIEmailLanguage,
     scenarioAITheme,
-    setScenarioAITheme: _setScenarioAITheme,
+    setScenarioAITheme,
     scenarioAIContext,
     setScenarioAIContext,
     scenarioAIGeneratedScenario,
@@ -353,7 +355,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           name: scenarioForm.name || scenarioAIGeneratedScenario.name,
           description: scenarioAIGeneratedScenario.description,
           subtitle: scenarioAIGeneratedScenario.subtitle,
-          category: scenarioAIGeneratedScenario.category || (isTableTop ? 'table-top' : 'attack-scenario'),
+          category: scenarioForm.category || scenarioAIGeneratedScenario.category || (isTableTop ? 'table-top' : 'attack-scenario'),
         },
       });
       
@@ -657,7 +659,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
         </Box>
         
         {/* Form */}
-        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
           <TextField
             label="Scenario Name"
             value={scenarioForm.name}
@@ -1263,6 +1265,21 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             
             {scenarioTypeAffinity === 'TABLE-TOP' ? (
               <>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Scenario Theme</InputLabel>
+                  <Select
+                    value={scenarioAITheme}
+                    label="Scenario Theme"
+                    onChange={(e) => setScenarioAITheme(e.target.value)}
+                  >
+                    <MenuItem value="cybersecurity">Cybersecurity & Technology</MenuItem>
+                    <MenuItem value="physical-security">Physical Security & Safety</MenuItem>
+                    <MenuItem value="business-continuity">Business Continuity</MenuItem>
+                    <MenuItem value="crisis-communication">Crisis Communication</MenuItem>
+                    <MenuItem value="health-safety">Health & Safety</MenuItem>
+                    <MenuItem value="geopolitical">Geopolitical & Economic</MenuItem>
+                  </Select>
+                </FormControl>
                 <TextField
                   label="Exercise Duration (minutes)"
                   type="number"
@@ -1354,39 +1371,45 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
         
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
           {[
-            { value: 'ENDPOINT', label: 'Endpoint', description: 'Technical endpoint testing' },
-            { value: 'CLOUD', label: 'Cloud', description: 'Technical cloud testing' },
-            { value: 'WEB', label: 'Web', description: 'Technical web testing' },
-            { value: 'TABLE-TOP', label: 'Table-top', description: 'Simulation with email notifications' },
-          ].map((option) => (
-            <Paper
-              key={option.value}
-              elevation={0}
-              onClick={() => {
-                setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity);
-                setScenarioInjectSpacing(option.value === 'TABLE-TOP' ? 5 : 1);
-              }}
-              sx={{
-                p: 1.5,
-                flex: '1 1 calc(50% - 4px)',
-                minWidth: 120,
-                border: 2,
-                borderColor: scenarioTypeAffinity === option.value ? 'primary.main' : 'divider',
-                borderRadius: 1,
-                cursor: 'pointer',
-                bgcolor: scenarioTypeAffinity === option.value ? 'action.selected' : 'transparent',
-                transition: 'all 0.2s',
-                '&:hover': { bgcolor: 'action.hover' },
-              }}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {option.label}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {option.description}
-              </Typography>
-            </Paper>
-          ))}
+            { value: 'ENDPOINT', label: 'Endpoint', description: 'Technical endpoint testing', icon: ComputerOutlined },
+            { value: 'CLOUD', label: 'Cloud', description: 'Technical cloud testing', icon: CloudOutlined },
+            { value: 'WEB', label: 'Web', description: 'Technical web testing', icon: LanguageOutlined },
+            { value: 'TABLE-TOP', label: 'Table-top', description: 'Simulation with email notifications', icon: GroupsOutlined },
+          ].map((option) => {
+            const IconComponent = option.icon;
+            return (
+              <Paper
+                key={option.value}
+                elevation={0}
+                onClick={() => {
+                  setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity);
+                  setScenarioInjectSpacing(option.value === 'TABLE-TOP' ? 5 : 1);
+                }}
+                sx={{
+                  p: 1.5,
+                  flex: '1 1 calc(50% - 4px)',
+                  minWidth: 120,
+                  border: 2,
+                  borderColor: scenarioTypeAffinity === option.value ? 'primary.main' : 'divider',
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  bgcolor: scenarioTypeAffinity === option.value ? 'action.selected' : 'transparent',
+                  transition: 'all 0.2s',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <IconComponent sx={{ fontSize: 20, color: scenarioTypeAffinity === option.value ? 'primary.main' : 'text.secondary' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {option.label}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', pl: 3.5 }}>
+                  {option.description}
+                </Typography>
+              </Paper>
+            );
+          })}
         </Box>
         
         {/* Platform Affinity - Only show for technical scenarios */}

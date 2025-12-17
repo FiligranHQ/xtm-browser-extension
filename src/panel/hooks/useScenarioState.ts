@@ -34,6 +34,8 @@ export interface ScenarioFormData {
   description: string;
   subtitle: string;
   category: string;
+  mainFocus: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export interface ScenarioEmail {
@@ -63,6 +65,8 @@ export interface AIGeneratedScenario {
   description: string;
   subtitle?: string;
   category?: string;
+  mainFocus?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
   injects: Array<{
     title: string;
     description: string;

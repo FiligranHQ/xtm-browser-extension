@@ -45,6 +45,7 @@ import {
   MovieFilterOutlined,
   EmailOutlined,
   AutoAwesomeOutlined,
+  SettingsInputSvideoOutlined,
 } from '@mui/icons-material';
 import { LockPattern } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
@@ -1827,13 +1828,148 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                           }
                         }}
                         sx={{ mt: 1 }}
+                        SelectProps={{
+                          renderValue: (value): React.ReactNode => {
+                            if (!value) return <em style={{ color: 'inherit', opacity: 0.5 }}>Skip this attack pattern</em>;
+                            const contract = filteredContracts.find((c: any) => c.injector_contract_id === value);
+                            if (!contract) return String(value);
+                            
+                            const label = contract.injector_contract_labels?.en || contract.injector_name || 'Unknown';
+                            const injectorName = contract.injector_name || contract.injector_type || '';
+                            const platforms = contract.injector_contract_platforms || [];
+                            
+                            const formatInjectorNameShort = (name: string) => {
+                              if (!name) return '';
+                              return name
+                                .replace(/_/g, ' ')
+                                .replace(/openaev/gi, 'OpenAEV')
+                                .replace(/caldera/gi, 'Caldera')
+                                .replace(/atomic/gi, 'Atomic')
+                                .split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+                            };
+                            
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden' }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                                  {label}
+                                </Typography>
+                                {injectorName && (
+                                  <Chip
+                                    label={formatInjectorNameShort(injectorName)}
+                                    size="small"
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.65rem',
+                                      bgcolor: 'action.selected',
+                                      flexShrink: 0,
+                                      '& .MuiChip-label': { px: 0.75 },
+                                    }}
+                                  />
+                                )}
+                                {platforms.length > 0 && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
+                                    {platforms.slice(0, 3).map((p: string) => (
+                                      <Box key={p} sx={{ display: 'flex', alignItems: 'center', color: getPlatformColor(p) }}>
+                                        {getPlatformIcon(p)}
+                                      </Box>
+                                    ))}
+                                    {platforms.length > 3 && (
+                                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
+                                        +{platforms.length - 3}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          },
+                        }}
                       >
                         <MenuItem value=""><em>Skip this attack pattern</em></MenuItem>
-                        {filteredContracts.map((contract: any) => (
-                          <MenuItem key={contract.injector_contract_id} value={contract.injector_contract_id}>
-                            {contract.injector_contract_labels?.en || contract.injector_name || 'Unknown'}
-                          </MenuItem>
-                        ))}
+                        {filteredContracts.map((contract: any) => {
+                          const label = contract.injector_contract_labels?.en || contract.injector_name || 'Unknown';
+                          const injectorName = contract.injector_name || contract.injector_type || '';
+                          const platforms = contract.injector_contract_platforms || [];
+                          
+                          // Format injector name for display (e.g., "openaev_implant" -> "OpenAEV Implant")
+                          const formatInjectorName = (name: string) => {
+                            if (!name) return '';
+                            return name
+                              .replace(/_/g, ' ')
+                              .replace(/openaev/gi, 'OpenAEV')
+                              .replace(/caldera/gi, 'Caldera')
+                              .replace(/atomic/gi, 'Atomic')
+                              .split(' ')
+                              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                              .join(' ');
+                          };
+                          
+                          return (
+                            <MenuItem 
+                              key={contract.injector_contract_id} 
+                              value={contract.injector_contract_id}
+                              sx={{ 
+                                py: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: 0.5,
+                              }}
+                            >
+                              <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.3 }}>
+                                {label}
+                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                                {injectorName && (
+                                  <Chip
+                                    icon={<SettingsInputSvideoOutlined sx={{ fontSize: 12 }} />}
+                                    label={formatInjectorName(injectorName)}
+                                    size="small"
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.65rem',
+                                      bgcolor: 'action.selected',
+                                      '& .MuiChip-icon': { ml: 0.5 },
+                                      '& .MuiChip-label': { px: 0.75 },
+                                    }}
+                                  />
+                                )}
+                                {platforms.length > 0 && platforms.slice(0, 3).map((platform: string) => (
+                                  <Chip
+                                    key={platform}
+                                    icon={getPlatformIcon(platform)}
+                                    label={platform}
+                                    size="small"
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.65rem',
+                                      bgcolor: `${getPlatformColor(platform)}22`,
+                                      color: getPlatformColor(platform),
+                                      borderColor: `${getPlatformColor(platform)}44`,
+                                      border: 1,
+                                      '& .MuiChip-icon': { ml: 0.5, color: 'inherit' },
+                                      '& .MuiChip-label': { px: 0.75 },
+                                    }}
+                                  />
+                                ))}
+                                {platforms.length > 3 && (
+                                  <Chip
+                                    label={`+${platforms.length - 3}`}
+                                    size="small"
+                                    sx={{
+                                      height: 18,
+                                      fontSize: '0.65rem',
+                                      bgcolor: 'action.selected',
+                                      '& .MuiChip-label': { px: 0.5 },
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </MenuItem>
+                          );
+                        })}
                       </TextField>
                     </Paper>
                   );

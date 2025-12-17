@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changelog-based release notes generation in GitHub workflow
 - Entity overview now always fetches full details from OpenCTI/OpenAEV when clicking on scan results
 - Scenario form fields (mainFocus, severity, category) now consistent with OpenAEV platform
+- Inject selection dropdown now displays injector name and supported platforms with colored chips
 
 ### Fixed
 - AI entity discovery error "Cannot read properties of undefined (reading 'length')"
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Entity overview empty when clicking on scan results after using AI discovery or filter changes
 - Scenario form now properly sends mainFocus and severity fields to OpenAEV API
 - OpenCTI and OpenAEV entity overviews now have consistent styling (spacing, fonts, margins)
+- Scenario and Atomic Testing not finding attack patterns from OpenAEV cache (missing SCAN_OAEV handler)
 
 ### Changed
 - Version updated to 0.0.5 across all manifests and user-agent strings

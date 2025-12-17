@@ -54,6 +54,7 @@ export type MessageType =
   | 'CLEAR_PLATFORM_CACHE'
   | 'CREATE_WORKBENCH'
   | 'SCAN_PLATFORM'
+  | 'SCAN_OAEV'
   // Atomic Testing
   | 'SCAN_ATOMIC_TESTING'
   | 'SHOW_ATOMIC_TESTING_PANEL'

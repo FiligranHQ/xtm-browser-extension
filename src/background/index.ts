@@ -1072,10 +1072,11 @@ async function handleMessage(
         break;
       }
       
-      // SCAN_PLATFORM scans for platform-specific entities
+      // SCAN_PLATFORM / SCAN_OAEV scans for platform-specific entities
       // For global scanning across all platforms, use SCAN_ALL instead
       // If includeAttackPatterns is true, also includes attack patterns (for atomic testing)
       // Currently only supports 'openaev' platformType (future: can be extended for other platforms)
+      case 'SCAN_OAEV':
       case 'SCAN_PLATFORM': {
         const payload = message.payload as { content: string; url: string; includeAttackPatterns?: boolean };
         try {

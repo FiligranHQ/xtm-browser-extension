@@ -6,18 +6,16 @@
  */
 
 import { loggers } from '../../shared/utils/logger';
-import {
-  createHandlerRegistry,
-  settingsHandlers,
-  scanHandlers,
-} from '../handlers';
+import { createHandlerRegistry } from '../handlers/index';
+import { settingsHandlers } from '../handlers/settings-handlers';
+import { scanHandlers } from '../handlers/scan-handlers';
 import {
   errorResponse,
   createHandlerContext,
   type MessageHandler,
   type SendResponseFn,
 } from '../handlers/types';
-import type { ExtensionMessage } from '../../shared/types';
+import type { ExtensionMessage } from '../../shared/types/messages';
 
 const log = loggers.background;
 

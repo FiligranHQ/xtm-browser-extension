@@ -8,7 +8,8 @@ import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
 import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
-import type { ScanResultPayload, DetectedObservable, DetectedOCTIEntity } from '../../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity } from '../../shared/types';
+import type { ScanResultPayload } from '../../shared/types/messages';
 import type { SendResponseFn } from './types';
 
 const log = loggers.background;

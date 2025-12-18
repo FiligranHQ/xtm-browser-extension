@@ -31,12 +31,12 @@ import {
   inferPlatformTypeFromEntityType, 
   getPlatformLogoName,
   getPlatformName,
+  parsePrefixedType,
 } from '../../shared/platform/registry';
 
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import { formatDate } from '../../shared/utils/formatters';
-import { parsePrefixedType } from '../../shared/platform/registry';
 import { getCvssChipStyle, getSeverityColor } from '../utils/cvss-helpers';
 import { getMarkingColor } from '../utils/marking-helpers';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';

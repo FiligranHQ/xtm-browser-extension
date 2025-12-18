@@ -4,7 +4,8 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedOCTIEntity, ScanResultPayload } from '../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity } from '../shared/types';
+import type { ScanResultPayload } from '../shared/types/messages';
 import { getTextNodes } from '../shared/detection/text-utils';
 import {
   createPrefixedType,

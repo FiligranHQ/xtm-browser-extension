@@ -81,15 +81,17 @@ import {
   type CachedOCTIEntity,
 } from '../shared/utils/storage';
 import type {
-  ExtensionMessage,
   ExtensionSettings,
-  ScanResultPayload,
-  AddObservablePayload,
   DetectedObservable,
   DetectedOCTIEntity,
   OCTILabel,
   OCTIMarkingDefinition,
 } from '../shared/types';
+import type {
+  ExtensionMessage,
+  ScanResultPayload,
+  AddObservablePayload,
+} from '../shared/types/messages';
 import type {
   OAEVKillChainPhase,
   OAEVInjectorContract,

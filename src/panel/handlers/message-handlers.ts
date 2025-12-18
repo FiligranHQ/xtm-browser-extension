@@ -107,24 +107,24 @@ export interface MessageHandlerContext {
   
   // Multi-platform
   availablePlatforms: PlatformInfo[];
-  availablePlatformsRef: React.MutableRefObject<PlatformInfo[]>;
+  availablePlatformsRef: React.RefObject<PlatformInfo[]>;
   setMultiPlatformResults: React.Dispatch<React.SetStateAction<MultiPlatformResult[]>>;
   updateMultiPlatformResultsRef: (results: MultiPlatformResult[]) => void;
   setCurrentPlatformIndex: React.Dispatch<React.SetStateAction<number>>;
   updateCurrentPlatformIndexRef: (index: number) => void;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   sortPlatformResults: (results: MultiPlatformResult[], platforms: PlatformInfo[]) => MultiPlatformResult[];
   
   // Platform selection
   setPlatformUrl: (url: string) => void;
   setSelectedPlatformId: (id: string) => void;
   openctiPlatforms: PlatformInfo[];
-  openctiPlatformsRef: React.MutableRefObject<PlatformInfo[]>;
+  openctiPlatformsRef: React.RefObject<PlatformInfo[]>;
   setAvailablePlatforms: React.Dispatch<React.SetStateAction<PlatformInfo[]>>;
   
   // Scan results
-  scanResultsEntitiesRef: React.MutableRefObject<ScanResultEntity[]>;
+  scanResultsEntitiesRef: React.RefObject<ScanResultEntity[]>;
   setScanResultsEntities: React.Dispatch<React.SetStateAction<ScanResultEntity[]>>;
   setScanResultsTypeFilter: (filter: string) => void;
   setScanResultsFoundFilter: (filter: 'all' | 'found' | 'not-found' | 'ai-discovered') => void;

@@ -144,15 +144,22 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
 
   // Fire-and-forget fetch for entity details
   const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
+    // Determine the correct platform type based on target entity or platform
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    const platformType = targetEntity.platformType || targetPlatform?.type || 'openaev';
+    const isNonDefault = platformType !== 'opencti';
+    
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
-    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace('oaev-', '');
+    // Remove prefix based on platform type
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '')
+      .replace(/^(oaev|ogrc)-/, '');
     
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
     setEntityDetailsLoading(true);
     chrome.runtime.sendMessage({
       type: 'GET_ENTITY_DETAILS',
-      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType: 'openaev' },
+      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
     }, (response) => {
       if (chrome.runtime.lastError) {
         setEntityDetailsLoading(false);
@@ -170,8 +177,8 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           entityData: response.data,
           existsInPlatform: true,
           platformId: targetPlatformId,
-          platformType: 'openaev',
-          isNonDefaultPlatform: true,
+          platformType: platformType,
+          isNonDefaultPlatform: isNonDefault,
         };
         setEntity(fullEntity);
         multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>

@@ -92,19 +92,19 @@ export interface PanelStateReturn {
   setAvailablePlatforms: (platforms: PlatformInfo[] | ((prev: PlatformInfo[]) => PlatformInfo[])) => void;
   selectedPlatformId: string;
   setSelectedPlatformId: (id: string) => void;
-  availablePlatformsRef: React.MutableRefObject<PlatformInfo[]>;
+  availablePlatformsRef: React.RefObject<PlatformInfo[]>;
   
   // OpenCTI Platforms (computed)
   openctiPlatforms: PlatformInfo[];
-  openctiPlatformsRef: React.MutableRefObject<PlatformInfo[]>;
+  openctiPlatformsRef: React.RefObject<PlatformInfo[]>;
   
   // Multi-platform Results
   multiPlatformResults: MultiPlatformResult[];
   setMultiPlatformResults: (results: MultiPlatformResult[] | ((prev: MultiPlatformResult[]) => MultiPlatformResult[])) => void;
   currentPlatformIndex: number;
   setCurrentPlatformIndex: (index: number) => void;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
   
   // Container Workflow
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
@@ -119,7 +119,7 @@ export interface PanelStateReturn {
   // Scan Results
   scanResultsEntities: ScanResultEntity[];
   setScanResultsEntities: (entities: ScanResultEntity[] | ((prev: ScanResultEntity[]) => ScanResultEntity[])) => void;
-  scanResultsEntitiesRef: React.MutableRefObject<ScanResultEntity[]>;
+  scanResultsEntitiesRef: React.RefObject<ScanResultEntity[]>;
   scanResultsTypeFilter: string;
   setScanResultsTypeFilter: (filter: string) => void;
   scanResultsFoundFilter: 'all' | 'found' | 'not-found' | 'ai-discovered';

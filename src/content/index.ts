@@ -1457,8 +1457,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       break;
     
     case 'XTM_SCROLL_TO_HIGHLIGHT': {
+      // Value can be a string or array of strings (entity name + matched strings)
       const scrollValue = message.payload?.value;
-      if (scrollValue) {
+      if (scrollValue && (typeof scrollValue === 'string' || (Array.isArray(scrollValue) && scrollValue.length > 0))) {
         const found = scrollToHighlightByValue(scrollValue);
         sendResponse({ success: true, found });
       } else {

@@ -21,12 +21,12 @@ export interface EntityStateReturn {
   // Multi-platform results for navigation
   multiPlatformResults: MultiPlatformResult[];
   setMultiPlatformResults: React.Dispatch<React.SetStateAction<MultiPlatformResult[]>>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   
   // Current platform index for navigation
   currentPlatformIndex: number;
   setCurrentPlatformIndex: React.Dispatch<React.SetStateAction<number>>;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
+  currentPlatformIndexRef: React.RefObject<number>;
   
   // Navigation tracking
   entityFromSearchMode: 'unified-search' | null;

@@ -105,9 +105,9 @@ export interface OCTIEntityViewProps {
   /** Set current platform index */
   setCurrentPlatformIndex: (index: number) => void;
   /** Ref for current platform index */
-  currentPlatformIndexRef: React.MutableRefObject<number>;
+  currentPlatformIndexRef: React.RefObject<number>;
   /** Ref for multi-platform results */
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   /** Current platform URL */
   platformUrl: string;
   /** Set platform URL */
@@ -157,9 +157,9 @@ export interface OAEVEntityViewProps {
   /** Set current platform index */
   setCurrentPlatformIndex: (index: number) => void;
   /** Ref for current platform index */
-  currentPlatformIndexRef: React.MutableRefObject<number>;
+  currentPlatformIndexRef: React.RefObject<number>;
   /** Ref for multi-platform results */
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   /** Set platform URL */
   setPlatformUrl: (url: string) => void;
   /** Set selected platform ID */
@@ -187,7 +187,7 @@ export interface ScanResultsViewProps extends BaseViewProps, PlatformViewProps {
   /** Set scanned entities */
   setScanResultsEntities: (entities: ScanResultEntity[] | ((prev: ScanResultEntity[]) => ScanResultEntity[])) => void;
   /** Ref for scan results */
-  scanResultsEntitiesRef: React.MutableRefObject<ScanResultEntity[]>;
+  scanResultsEntitiesRef: React.RefObject<ScanResultEntity[]>;
   /** Type filter for scan results */
   scanResultsTypeFilter: string;
   /** Set type filter */
@@ -217,8 +217,8 @@ export interface ScanResultsViewProps extends BaseViewProps, PlatformViewProps {
   /** Set entity from scan results flag */
   setEntityFromScanResults: (fromScan: boolean) => void;
   /** Refs for platform index */
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   /** AI settings */
   aiSettings: AISettings;
   /** AI discovering entities state */
@@ -260,8 +260,8 @@ export interface UnifiedSearchViewProps extends BaseViewProps, PlatformViewProps
   /** Set current platform index */
   setCurrentPlatformIndex: (index: number) => void;
   /** Refs */
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
 }
 
 /**

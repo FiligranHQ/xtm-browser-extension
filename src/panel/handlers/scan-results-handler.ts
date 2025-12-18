@@ -52,7 +52,7 @@ export function processScanResults(payload: {
   };
   
   // Helper to add entity or merge with existing entry
-  const addOrMergeEntity = (entity: ScanResultEntity) => {
+  const addOrMergeEntity = (entity: ScanResultEntity, matchedString?: string) => {
     const groupKey = getGroupKey(entity.name);
     
     // Only create a platform match if the entity was FOUND on this platform
@@ -84,14 +84,28 @@ export function processScanResults(payload: {
         }
         existing.found = true;
       }
+      // Merge matched strings
+      if (matchedString) {
+        if (!existing.matchedStrings) {
+          existing.matchedStrings = [];
+        }
+        // Add if not already present (case-insensitive check)
+        const matchLower = matchedString.toLowerCase();
+        if (!existing.matchedStrings.some(s => s.toLowerCase() === matchLower)) {
+          existing.matchedStrings.push(matchedString);
+        }
+      }
     } else {
       // New entry - use provided platformMatches if available, otherwise create from single platform
       const initialMatches = entity.platformMatches && entity.platformMatches.length > 0
         ? entity.platformMatches
         : (platformMatch ? [platformMatch] : []);
+      // Initialize matchedStrings with the provided matchedString if any
+      const initialMatchedStrings = matchedString ? [matchedString] : [];
       entityMap.set(groupKey, {
         ...entity,
         platformMatches: initialMatches,
+        matchedStrings: initialMatchedStrings.length > 0 ? initialMatchedStrings : undefined,
       });
     }
   };
@@ -99,6 +113,7 @@ export function processScanResults(payload: {
   // Add OpenCTI observables
   if (payload.observables) {
     for (const obs of payload.observables) {
+      // For observables, the matched string is the value itself
       addOrMergeEntity({
         id: obs.entityId || `obs-${obs.value}`,
         type: obs.type,
@@ -109,13 +124,15 @@ export function processScanResults(payload: {
         platformId: obs.platformId,
         platformType: 'opencti',
         entityData: obs,
-      });
+      }, obs.value);
     }
   }
   
   // Add OpenCTI entities
   if (payload.openctiEntities) {
     for (const entity of payload.openctiEntities) {
+      // Use matchedValue if different from name (e.g., matched via alias)
+      const matchedStr = entity.matchedValue || entity.name;
       addOrMergeEntity({
         id: entity.entityId || `entity-${entity.name}`,
         type: entity.type,
@@ -126,7 +143,7 @@ export function processScanResults(payload: {
         platformId: entity.platformId,
         platformType: 'opencti',
         entityData: entity,
-      });
+      }, matchedStr);
     }
   }
   
@@ -145,6 +162,9 @@ export function processScanResults(payload: {
       // Determine platform type from first platformMatch if available
       const firstPlatformType = platformMatches?.[0]?.platformType || 'opencti';
       
+      // For CVEs, the matched string is the CVE name itself (e.g., CVE-2024-1234)
+      const matchedStr = cve.matchedValue || cve.name;
+      
       addOrMergeEntity({
         id: cve.entityId || `cve-${cve.name}`,
         type: 'Vulnerability',
@@ -157,7 +177,7 @@ export function processScanResults(payload: {
         entityData: cve,
         // Pass the multi-platform matches if present
         platformMatches,
-      });
+      }, matchedStr);
     }
   }
   
@@ -169,6 +189,8 @@ export function processScanResults(payload: {
       const oaevEntityId = entity.entityId || (platformType === 'openaev' && entity.entityData
         ? getOAEVEntityId(entity.entityData, entityType)
         : '') || '';
+      // Use matchedValue if available, otherwise the value or name
+      const matchedStr = (entity as any).matchedValue || entity.value || entity.name;
       addOrMergeEntity({
         id: oaevEntityId || `${platformType}-${entity.name}`,
         type: prefixEntityType(entityType, platformType as 'opencti' | 'openaev' | 'opengrc'),
@@ -179,7 +201,7 @@ export function processScanResults(payload: {
         platformId: entity.platformId,
         platformType: platformType as 'opencti' | 'openaev',
         entityData: entity,
-      });
+      }, matchedStr);
     }
   }
   

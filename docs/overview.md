@@ -14,7 +14,7 @@ OpenCTI is an open-source platform for managing cyber threat intelligence (CTI).
 - Enrich threat intelligence workflows
 - Generate AI-powered descriptions and entity discovery (Enterprise Edition)
 
-### OpenAEV (Attack & Exposure Validation)
+### OpenAEV (Adversarial Exposure Validation)
 OpenAEV is a platform for attack simulation and exposure validation. The extension integrates with OpenAEV to:
 - Detect assets by name, hostname, IP addresses, and MAC addresses
 - Detect teams and players

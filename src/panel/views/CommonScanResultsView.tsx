@@ -26,12 +26,14 @@ import {
   TravelExploreOutlined,
   SearchOutlined,
   ChevronRightOutlined,
+  ChevronLeftOutlined,
   ArrowForwardOutlined,
   AutoAwesomeOutlined,
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
   LayersOutlined,
   GpsFixedOutlined,
+  InfoOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -668,6 +670,22 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
 
   return (
     <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Back to actions button */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={() => setPanelMode('empty')}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          Back to actions
+        </Button>
+      </Box>
+
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <TravelExploreOutlined sx={{ color: 'primary.main' }} />
@@ -1118,27 +1136,108 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                       )}
                     </Box>
                   </Box>
-                  {/* Status chip */}
-                  <Chip
-                    label={entity.found ? 'Found' : (entity.discoveredByAI ? 'AI' : 'New')}
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                      minWidth: 50,
-                      borderColor: entity.discoveredByAI ? aiColors.main : undefined,
-                      color: entity.discoveredByAI ? aiColors.main : undefined,
-                    }}
-                    color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
-                  />
+                  {/* Status chip with matched strings tooltip */}
+                  {(() => {
+                    const hasMatchedStrings = entity.matchedStrings && entity.matchedStrings.length > 0;
+                    const matchedStringsTooltip = hasMatchedStrings ? (
+                      <Box sx={{ p: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                          Matched in page:
+                        </Typography>
+                        {entity.matchedStrings!.map((str, idx) => (
+                          <Box 
+                            key={idx} 
+                            sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: 0.5,
+                              py: 0.25,
+                              '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
+                            }}
+                          >
+                            <Box 
+                              sx={{ 
+                                width: 6, 
+                                height: 6, 
+                                borderRadius: '50%', 
+                                bgcolor: entity.found ? 'success.main' : 'warning.main',
+                                flexShrink: 0,
+                              }} 
+                            />
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                fontFamily: 'monospace',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              "{str}"
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    ) : (entity.found ? 'Entity found in platform' : (entity.discoveredByAI ? 'Discovered by AI' : 'New entity not in platform'));
+
+                    return (
+                      <Tooltip 
+                        title={matchedStringsTooltip} 
+                        placement="left"
+                        arrow
+                        slotProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: 'background.paper',
+                              color: 'text.primary',
+                              boxShadow: 3,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              maxWidth: 280,
+                              '& .MuiTooltip-arrow': {
+                                color: 'background.paper',
+                                '&::before': {
+                                  border: '1px solid',
+                                  borderColor: 'divider',
+                                },
+                              },
+                            },
+                          },
+                        }}
+                      >
+                        <Chip
+                          icon={hasMatchedStrings ? <InfoOutlined sx={{ fontSize: '0.85rem !important' }} /> : undefined}
+                          label={entity.found ? 'Found' : (entity.discoveredByAI ? 'AI' : 'New')}
+                          size="small"
+                          variant="outlined"
+                          sx={{
+                            minWidth: hasMatchedStrings ? 65 : 50,
+                            cursor: 'help',
+                            borderColor: entity.discoveredByAI ? aiColors.main : undefined,
+                            color: entity.discoveredByAI ? aiColors.main : undefined,
+                            '& .MuiChip-icon': { 
+                              ml: 0.5, 
+                              mr: -0.25,
+                              color: 'inherit',
+                            },
+                          }}
+                          color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
+                        />
+                      </Tooltip>
+                    );
+                  })()}
                   {/* Scroll to highlight button */}
                   <Tooltip title="Scroll to highlight on page" placement="top">
                     <Box
                       onClick={(e) => {
                         e.stopPropagation();
-                        const scrollValue = entity.value || entity.name;
+                        // Include both the resolved name/value AND the original matched strings
+                        // This ensures we can find the highlight even when entity name differs from highlighted text
+                        const primaryValue = entity.value || entity.name;
+                        const allValues = entity.matchedStrings 
+                          ? [primaryValue, ...entity.matchedStrings.filter(s => s.toLowerCase() !== primaryValue.toLowerCase())]
+                          : [primaryValue];
                         sendToContentScript({ 
                           type: 'XTM_SCROLL_TO_HIGHLIGHT', 
-                          payload: { value: scrollValue } 
+                          payload: { value: allValues } 
                         });
                       }}
                       sx={{

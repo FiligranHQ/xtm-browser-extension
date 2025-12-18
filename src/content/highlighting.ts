@@ -1325,34 +1325,48 @@ export function scrollToFirstHighlight(event?: MouseEvent): void {
 /**
  * Scroll to a specific highlight by entity value/name
  */
-export function scrollToHighlightByValue(value: string): boolean {
-  if (!value) return false;
+/**
+ * Scroll to a highlight by value
+ * Accepts either a single value or an array of values to try (e.g., entity name + matched strings)
+ */
+export function scrollToHighlightByValue(value: string | string[]): boolean {
+  // Convert to array for uniform handling
+  const valuesToTry = Array.isArray(value) ? value : [value];
   
-  // Normalize the search value for comparison
-  const normalizedValue = value.toLowerCase().trim();
+  // Filter out empty values
+  const validValues = valuesToTry.filter(v => v && v.trim());
+  if (validValues.length === 0) return false;
   
   // Find all highlights
   const highlights = document.querySelectorAll('.xtm-highlight') as NodeListOf<HTMLElement>;
   
-  for (const highlight of highlights) {
-    // Check data attributes
-    const entityValue = highlight.dataset.entityValue?.toLowerCase().trim();
-    const dataValue = highlight.dataset.value?.toLowerCase().trim();
-    // Also check the text content
-    const textContent = highlight.textContent?.toLowerCase().trim();
+  // Try each value in order
+  for (const searchValue of validValues) {
+    const normalizedValue = searchValue.toLowerCase().trim();
     
-    if (entityValue === normalizedValue || dataValue === normalizedValue || textContent === normalizedValue) {
-      scrollToAndFlashHighlight(highlight);
-      return true;
+    // First pass: exact match on attributes or text content
+    for (const highlight of highlights) {
+      const entityValue = highlight.dataset.entityValue?.toLowerCase().trim();
+      const dataValue = highlight.dataset.value?.toLowerCase().trim();
+      const textContent = highlight.textContent?.toLowerCase().trim();
+      
+      if (entityValue === normalizedValue || dataValue === normalizedValue || textContent === normalizedValue) {
+        scrollToAndFlashHighlight(highlight);
+        return true;
+      }
     }
   }
   
-  // If exact match not found, try partial match
-  for (const highlight of highlights) {
-    const textContent = highlight.textContent?.toLowerCase().trim() || '';
-    if (textContent.includes(normalizedValue) || normalizedValue.includes(textContent)) {
-      scrollToAndFlashHighlight(highlight);
-      return true;
+  // Second pass: partial match on text content (try all values)
+  for (const searchValue of validValues) {
+    const normalizedValue = searchValue.toLowerCase().trim();
+    
+    for (const highlight of highlights) {
+      const textContent = highlight.textContent?.toLowerCase().trim() || '';
+      if (textContent.includes(normalizedValue) || normalizedValue.includes(textContent)) {
+        scrollToAndFlashHighlight(highlight);
+        return true;
+      }
     }
   }
   

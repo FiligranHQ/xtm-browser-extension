@@ -24,13 +24,13 @@ import type { PlatformSetupFormProps } from '../types';
 const PLATFORM_CONFIG = {
   opencti: {
     name: 'OpenCTI',
-    subtitle: 'Threat Intelligence Platform',
+    subtitle: 'Cyber Threat Intelligence',
     placeholder: 'https://your-opencti.domain.com',
     logoPrefix: 'opencti',
   },
   openaev: {
     name: 'OpenAEV',
-    subtitle: 'Attack & Exposure Validation',
+    subtitle: 'Adversarial Exposure Validation',
     placeholder: 'https://your-openaev.domain.com',
     logoPrefix: 'openaev',
   },

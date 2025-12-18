@@ -243,6 +243,60 @@ export const SDO_PROPERTIES = `
     severity
     priority
   }
+  ... on Sector {
+    name
+    description
+  }
+  ... on Organization {
+    name
+    description
+    x_opencti_organization_type
+    contact_information
+  }
+  ... on Individual {
+    name
+    description
+    contact_information
+  }
+  ... on Event {
+    name
+    description
+    event_types
+    start_time
+    stop_time
+  }
+  ... on Incident {
+    name
+    description
+    aliases
+    first_seen
+    last_seen
+    incident_type
+    severity
+    source
+  }
+  ... on Country {
+    name
+    description
+  }
+  ... on Region {
+    name
+    description
+  }
+  ... on City {
+    name
+    description
+  }
+  ... on AdministrativeArea {
+    name
+    description
+  }
+  ... on Position {
+    name
+    description
+    latitude
+    longitude
+  }
 `;
 
 // ============================================================================

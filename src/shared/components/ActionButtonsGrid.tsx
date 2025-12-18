@@ -148,7 +148,7 @@ export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
             OpenAEV
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: subtitleFontSize }}>
-            Attack & Exposure Validation
+            Adversarial Exposure Validation
           </Typography>
         </Box>
         <Box

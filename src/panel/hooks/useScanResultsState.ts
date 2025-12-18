@@ -11,7 +11,7 @@ export interface ScanResultsStateReturn {
   // Scan results entities
   scanResultsEntities: ScanResultEntity[];
   setScanResultsEntities: React.Dispatch<React.SetStateAction<ScanResultEntity[]>>;
-  scanResultsEntitiesRef: React.MutableRefObject<ScanResultEntity[]>;
+  scanResultsEntitiesRef: React.RefObject<ScanResultEntity[]>;
   
   // Filters
   scanResultsTypeFilter: string;

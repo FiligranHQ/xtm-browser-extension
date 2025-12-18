@@ -36,6 +36,7 @@ import type {
 } from '../types/panel-types';
 import { loggers } from '../../shared/utils/logger';
 import { getOAEVEntityName, getOAEVTypeFromClass } from '../../shared/utils/entity';
+import { getCanonicalTypeName } from '../../shared/platform/registry';
 
 const log = loggers.panel;
 
@@ -56,8 +57,8 @@ export interface UnifiedSearchViewProps {
   setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
   setCurrentPlatformIndex: (index: number) => void;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   availablePlatforms: PlatformInfo[];
   logoSuffix: string;
   /** Loading entity details state */
@@ -108,11 +109,13 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   const hasOpenAEV = openaevPlatforms.length > 0;
 
   // Get unique entity types from results (with counts)
+  // Uses canonical type names to deduplicate linked types (e.g., Attack-Pattern and oaev-AttackPattern)
   const entityTypesWithCounts = useMemo(() => {
     const typeCounts = new Map<string, number>();
     unifiedSearchResults.forEach(r => {
-      const type = r.type.replace('oaev-', '');
-      typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+      // Use canonical name to group linked types together
+      const canonicalType = getCanonicalTypeName(r.type);
+      typeCounts.set(canonicalType, (typeCounts.get(canonicalType) || 0) + 1);
     });
     return Array.from(typeCounts.entries())
       .sort((a, b) => b[1] - a[1]) // Sort by count descending
@@ -128,11 +131,11 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
       results = results.filter(r => r.source === unifiedSearchPlatformFilter);
     }
     
-    // Apply type filter
+    // Apply type filter (using canonical names to match linked types)
     if (unifiedSearchTypeFilter !== 'all') {
       results = results.filter(r => {
-        const type = r.type.replace('oaev-', '');
-        return type === unifiedSearchTypeFilter;
+        const canonicalType = getCanonicalTypeName(r.type);
+        return canonicalType === unifiedSearchTypeFilter;
       });
     }
     
@@ -455,7 +458,7 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
                 {entityTypesWithCounts.map(({ type, count }) => (
                   <MenuItem key={type} value={type}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <span>{type.replace(/-/g, ' ')}</span>
+                      <span>{type}</span>
                       <Chip label={count} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                     </Box>
                   </MenuItem>

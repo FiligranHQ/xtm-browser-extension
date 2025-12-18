@@ -48,6 +48,8 @@ export interface ScanResultEntity {
   discoveredByAI?: boolean;
   aiReason?: string;
   aiConfidence?: 'high' | 'medium' | 'low';
+  /** Strings that matched in the page to detect this entity (name, aliases, etc.) */
+  matchedStrings?: string[];
 }
 
 // Import results statistics

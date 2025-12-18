@@ -1,10 +1,21 @@
 /**
- * ActionButton component - A stylized button for popup actions
+ * ActionButton - Shared stylized button for actions
+ * Used in both popup and panel
  */
 
 import React from 'react';
 import { Box, Paper, Typography, Tooltip } from '@mui/material';
-import type { ActionButtonProps } from '../types';
+
+export interface ActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  subtitle: string;
+  tooltip: string;
+  onClick: () => void;
+  color: string;
+  disabled?: boolean;
+  compact?: boolean;
+}
 
 export const ActionButton: React.FC<ActionButtonProps> = ({ 
   icon, 
@@ -13,8 +24,8 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
   tooltip, 
   onClick, 
   color, 
-  disabled, 
-  compact = false 
+  disabled = false, 
+  compact = false,
 }) => (
   <Tooltip title={tooltip} arrow>
     <Paper

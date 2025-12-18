@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8] - 2024-12-18
+
+### Added
+- **Empty panel action buttons**: The empty/home panel view now displays the same action buttons as the popup (Scan, Search, Container, Investigate, Atomic Test, Scenario) organized by platform sections, providing a consistent experience and quick access to all features directly from the side panel
+- Clear highlights button in empty panel view for easy reset
+- **Scanning spinner**: The panel now shows a loading spinner with "Scanning page..." message while a scan is in progress, instead of the empty/home view
+- **Back to actions navigation**: All top-level entry point views (Search, Container, Investigation, Atomic Testing, Scenario) now have a "Back to actions" button at the top to return to the action buttons home view
+- **Unlimited storage**: Added `unlimitedStorage` permission to remove the 10MB storage limit. Entity cache limits increased from 5,000 to 50,000 per type for OpenCTI and from 2,000 to 20,000 for OpenAEV to support large platforms with thousands of entities
+
+### Changed
+- **Context menu rename**: "Search in OpenCTI" context menu item renamed to "Search across platforms" to accurately reflect its federated search functionality across all configured platforms
+- **Shared ActionButton component**: Extracted `ActionButton` and `ActionButtonsGrid` components to `src/shared/components/` for reuse between popup and panel, eliminating code duplication
+- **Centralized version constant**: `EXTENSION_VERSION` in `src/shared/constants.ts` is now the single source of truth for version numbers used in User-Agent headers, popup, options page, and popover
+
+### Fixed
+- **Clear highlights now clears scan results**: Clicking "Clear highlights" now also resets the panel's scan results view, returning it to the empty state instead of showing stale data
+- **Entity containers refresh on navigation**: Fixed issue where navigating between entity overviews would show stale "Latest Containers" data - containers are now refetched for each entity
+- **Unified search entity overview**: Fixed partial/empty entity overview when clicking on search results - now properly fetches full entity details and containers
+- **Context menu panel opening**: Fixed context menu actions (Search across platforms, Add to OpenCTI) not opening the panel reliably in both floating iframe and split screen modes
+- **Highlight click re-opens panel in split mode**: Fixed clicking on highlights not re-opening the native side panel if it was previously closed in split screen mode
+- **Critical: Storage quota crash loop**: Fixed extension crashing in a loop when OpenCTI/OpenAEV cache exceeds Chrome's storage quota (~10MB). The extension now gracefully handles quota errors by: trimming cache to fit limits (max 5000 entities per type), falling back to minimal cache (1000 entities with essential data only), disabling cache refresh after 3 consecutive failures. The extension continues to work without full cache - scanning and detection will still function, just without cached entity matching.
+- **Platform isolation**: One platform's failure during cache refresh no longer affects other platforms. Previously, a single platform error could prevent cache refresh for all configured platforms. Now each platform is handled independently - if Platform A fails, Platform B/C still get their caches refreshed successfully.
+
+### Removed
+- Deleted unused `src/popup/components/ActionButton.tsx` re-export file (components now import directly from shared)
+- Deleted unused `src/shared/types/ui.ts` type definitions file (interfaces were never imported)
+
 ## [0.0.7] - 2024-12-18
 
 ### Added
@@ -201,7 +228,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.4...v0.0.5

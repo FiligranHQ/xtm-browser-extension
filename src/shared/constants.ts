@@ -104,14 +104,14 @@ export const EE_TRIAL_URL = 'https://filigran.io/enterprise-editions-trial/';
 export const OPENCTI_DOCS_URL = 'https://docs.opencti.io';
 
 /** OpenAEV documentation */
-export const OPENAEV_DOCS_URL = 'https://docs.filigran.io/openaev';
+export const OPENAEV_DOCS_URL = 'https://docs.openaev.io';
 
 // ============================================================================
 // Extension Metadata
 // ============================================================================
 
-/** Extension version */
-export const EXTENSION_VERSION = '1.0.0';
+/** Extension version - SINGLE SOURCE OF TRUTH for version number */
+export const EXTENSION_VERSION = '0.0.8';
 
 /** Extension name */
 export const EXTENSION_NAME = 'XTM Browser Extension';

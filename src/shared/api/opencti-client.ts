@@ -5,6 +5,7 @@
  */
 
 import { loggers } from '../utils/logger';
+import { EXTENSION_VERSION } from '../constants';
 import {
   TEST_CONNECTION_QUERY,
   SEARCH_OBSERVABLE_QUERY,
@@ -85,7 +86,7 @@ import type {
 const log = loggers.opencti;
 
 // User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.5';
+const USER_AGENT = `xtm-browser-extension/${EXTENSION_VERSION}`;
 const DEFAULT_PAGE_SIZE = 500;
 
 // ============================================================================

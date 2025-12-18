@@ -1,29 +1,52 @@
 /**
  * EmptyView - Displayed when no entity is selected
+ * Shows action buttons similar to the popup for consistency
  */
 
 import React from 'react';
-import { Box, Typography } from '@mui/material';
-import { SearchOutlined } from '@mui/icons-material';
+import { Box } from '@mui/material';
+import { ActionButtonsGrid } from '../../shared/components/ActionButtonsGrid';
 
-export const CommonEmptyView: React.FC = () => (
-  <Box
-    sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 300,
-      color: 'text.secondary',
-      textAlign: 'center',
-      p: 3,
-    }}
-  >
-    <SearchOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-    <Typography variant="body1" sx={{ mb: 1 }}>No entity selected</Typography>
-    <Typography variant="body2">
-      Click on a highlighted entity or use the search to get started.
-    </Typography>
+export interface CommonEmptyViewProps {
+  logoSuffix: string;
+  hasOpenCTI: boolean;
+  hasOpenAEV: boolean;
+  onScan: () => void;
+  onSearch: () => void;
+  onCreateContainer: () => void;
+  onInvestigate: () => void;
+  onAtomicTesting: () => void;
+  onGenerateScenario: () => void;
+  onClearHighlights: () => void;
+}
+
+export const CommonEmptyView: React.FC<CommonEmptyViewProps> = ({
+  logoSuffix,
+  hasOpenCTI,
+  hasOpenAEV,
+  onScan,
+  onSearch,
+  onCreateContainer,
+  onInvestigate,
+  onAtomicTesting,
+  onGenerateScenario,
+  onClearHighlights,
+}) => (
+  <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <ActionButtonsGrid
+      logoSuffix={logoSuffix}
+      hasOpenCTI={hasOpenCTI}
+      hasOpenAEV={hasOpenAEV}
+      onScan={onScan}
+      onSearch={onSearch}
+      onCreateContainer={onCreateContainer}
+      onInvestigate={onInvestigate}
+      onAtomicTesting={onAtomicTesting}
+      onGenerateScenario={onGenerateScenario}
+      onClearHighlights={onClearHighlights}
+      compact={true}
+      dividerMarginX={0}
+    />
   </Box>
 );
 

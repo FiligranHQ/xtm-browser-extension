@@ -31,20 +31,6 @@ export interface ConnectionStatus {
 }
 
 /**
- * Props for the ActionButton component
- */
-export interface ActionButtonProps {
-  icon: React.ReactNode;
-  label: string;
-  subtitle: string;
-  tooltip: string;
-  onClick: () => void;
-  color: string;
-  disabled?: boolean;
-  compact?: boolean;
-}
-
-/**
  * Setup wizard step
  */
 export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'complete';

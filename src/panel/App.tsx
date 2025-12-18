@@ -58,6 +58,8 @@ const App: React.FC = () => {
   const [panelMode, setPanelMode] = useState<PanelMode>('empty');
   // Split screen mode - panel is in browser native side panel, not floating iframe
   const [isSplitScreenMode, setIsSplitScreenMode] = useState<boolean>(false);
+  // Scanning state - true when a scan is in progress
+  const [isScanning, setIsScanning] = useState<boolean>(false);
 
   // Platform state
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformInfo[]>([]);
@@ -363,6 +365,31 @@ const App: React.FC = () => {
     await handleUnifiedSearch(availablePlatforms, queryOverride);
   };
 
+  // Helper to send message to content script
+  const sendToContentScript = async (type: string, payload?: unknown) => {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { type, payload });
+      }
+    } catch (error) {
+      log.error(`Failed to send ${type} to content script:`, error);
+    }
+  };
+
+  // Empty view action handlers
+  const handleEmptyViewScan = () => {
+    setIsScanning(true);
+    sendToContentScript('SCAN_ALL');
+  };
+  const handleEmptyViewSearch = () => setPanelMode('unified-search');
+  const handleEmptyViewCreateContainer = () => sendToContentScript('CREATE_CONTAINER_FROM_PAGE');
+  const handleEmptyViewInvestigate = () => sendToContentScript('CREATE_INVESTIGATION');
+  const handleEmptyViewAtomicTesting = () => sendToContentScript('SCAN_ATOMIC_TESTING');
+  const handleEmptyViewGenerateScenario = () => sendToContentScript('CREATE_SCENARIO_FROM_PAGE');
+  const handleEmptyViewClearHighlights = () => sendToContentScript('CLEAR_HIGHLIGHTS');
+
   // Main initialization effect
   useEffect(() => {
     const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.sendMessage;
@@ -458,6 +485,19 @@ const App: React.FC = () => {
     
     chrome.runtime.onMessage.addListener(handleRuntimeMessage);
     
+    // Check for pending panel state from session storage (split screen mode)
+    // This handles the case where context menu was used but panel wasn't ready yet
+    chrome.storage.session.get('pendingPanelState').then((result) => {
+      if (result.pendingPanelState) {
+        log.debug('[PANEL] Found pending panel state:', result.pendingPanelState.type);
+        handlePanelState(result.pendingPanelState);
+        // Clear the pending state after processing
+        chrome.storage.session.remove('pendingPanelState');
+      }
+    }).catch((err) => {
+      log.debug('[PANEL] Could not check pending panel state:', err);
+    });
+    
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
@@ -551,7 +591,11 @@ const App: React.FC = () => {
       case 'INVESTIGATION_SCAN_RESULTS':
         handleInvestigationResults(data.payload);
         break;
+      case 'SCAN_STARTED':
+        setIsScanning(true);
+        break;
       case 'SCAN_RESULTS':
+        setIsScanning(false);
         handleScanResults(data.payload);
         break;
       case 'SCAN_RESULTS_WITH_FILTER':
@@ -564,6 +608,17 @@ const App: React.FC = () => {
         if (Array.isArray(data.payload?.selectedItems)) {
           setSelectedScanItems(new Set(data.payload.selectedItems));
         }
+        break;
+      case 'CLEAR_SCAN_RESULTS':
+        // Clear scan results and reset to empty state when highlights are cleared
+        setScanResultsEntities([]);
+        setScanResultsTypeFilter('all');
+        setScanResultsFoundFilter('all');
+        setSelectedScanItems(new Set());
+        setScanPageContent('');
+        setEntityFromScanResults(false);
+        setIsScanning(false);
+        setPanelMode('empty');
         break;
       case 'SHOW_UNIFIED_SEARCH_PANEL':
         handleShowUnifiedSearch(data.payload);
@@ -1331,14 +1386,16 @@ const App: React.FC = () => {
       case 'container-type': return <OCTIContainerTypeView mode={mode} setPanelMode={setPanelMode} setOCTIContainerType={setOCTIContainerType} containerWorkflowOrigin={containerWorkflowOrigin} openctiPlatformsCount={openctiPlatforms.length} containerSteps={containerSteps} entitiesToAdd={entitiesToAdd} />;
       case 'container-form': return <OCTIContainerFormView mode={mode} setPanelMode={setPanelMode} containerType={containerType} containerSteps={containerSteps} containerForm={containerForm} setContainerForm={setContainerForm} containerSpecificFields={containerSpecificFields} setContainerSpecificFields={setContainerSpecificFields} updatingContainerId={updatingContainerId} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} selectedPlatformId={selectedPlatformId} aiSettings={aiSettings} aiGeneratingDescription={aiGeneratingDescription} handleGenerateAIDescription={handleGenerateAIDescription} availableLabels={availableLabels} selectedLabels={selectedLabels} setSelectedLabels={setSelectedLabels} availableMarkings={availableMarkings} selectedMarkings={selectedMarkings} setSelectedMarkings={setSelectedMarkings} availableReportTypes={availableReportTypes} availableContexts={availableContexts} availableSeverities={availableSeverities} availablePriorities={availablePriorities} availableResponseTypes={availableResponseTypes} availableAuthors={availableAuthors} attachPdf={attachPdf} setAttachPdf={setAttachPdf} createAsDraft={createAsDraft} setCreateAsDraft={setCreateAsDraft} entitiesToAdd={entitiesToAdd} handleCreateContainer={handleCreateContainer} submitting={submitting} generatingPdf={generatingPdf} />;
       case 'investigation': return <OCTIInvestigationView mode={mode} openctiPlatforms={openctiPlatforms} availablePlatforms={availablePlatforms} investigationPlatformId={investigationPlatformId} investigationPlatformSelected={investigationPlatformSelected} setInvestigationPlatformSelected={setInvestigationPlatformSelected} investigationEntities={investigationEntities} setInvestigationEntities={setInvestigationEntities} investigationScanning={investigationScanning} investigationTypeFilter={investigationTypeFilter} setInvestigationTypeFilter={setInvestigationTypeFilter} investigationEntityTypes={investigationEntityTypes} filteredInvestigationEntities={filteredInvestigationEntities} selectedInvestigationCount={selectedInvestigationCount} submitting={submitting} resetInvestigation={resetInvestigation} handleSelectInvestigationPlatform={handleSelectInvestigationPlatform} handleInvestigationScan={handleInvestigationScan} toggleInvestigationEntity={toggleInvestigationEntity} selectAllInvestigationEntities={selectAllInvestigationEntities} clearInvestigationSelection={clearInvestigationSelection} handleCreateWorkbench={handleCreateWorkbench} />;
-      case 'scan-results': return <CommonScanResultsView mode={mode} handleClose={handleClose} scanResultsEntities={scanResultsEntities} setScanResultsEntities={setScanResultsEntities} scanResultsEntitiesRef={scanResultsEntitiesRef} scanResultsTypeFilter={scanResultsTypeFilter} setScanResultsTypeFilter={setScanResultsTypeFilter} scanResultsFoundFilter={scanResultsFoundFilter} setScanResultsFoundFilter={setScanResultsFoundFilter} selectedScanItems={selectedScanItems} setSelectedScanItems={setSelectedScanItems} setPanelMode={setPanelMode} setEntitiesToAdd={setEntitiesToAdd} setEntity={setEntity} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} setEntityFromScanResults={setEntityFromScanResults} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} aiSettings={aiSettings} aiDiscoveringEntities={aiDiscoveringEntities} setAiDiscoveringEntities={setAiDiscoveringEntities} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} openaevPlatforms={openaevPlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} showToast={showToast} setContainerForm={setContainerForm} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} setCurrentPageUrl={setCurrentPageUrl} setCurrentPageTitle={setCurrentPageTitle} scanPageContent={scanPageContent} logoSuffix={logoSuffix} setEntityDetailsLoading={setEntityDetailsLoading} />;
+      case 'scan-results': return <CommonScanResultsView mode={mode} handleClose={handleClose} scanResultsEntities={scanResultsEntities} setScanResultsEntities={setScanResultsEntities} scanResultsEntitiesRef={scanResultsEntitiesRef} scanResultsTypeFilter={scanResultsTypeFilter} setScanResultsTypeFilter={setScanResultsTypeFilter} scanResultsFoundFilter={scanResultsFoundFilter} setScanResultsFoundFilter={setScanResultsFoundFilter} selectedScanItems={selectedScanItems} setSelectedScanItems={setSelectedScanItems} setPanelMode={setPanelMode} setEntitiesToAdd={setEntitiesToAdd} setEntity={setEntity} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} setEntityFromScanResults={setEntityFromScanResults} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} aiSettings={aiSettings} aiDiscoveringEntities={aiDiscoveringEntities} setAiDiscoveringEntities={setAiDiscoveringEntities} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} openaevPlatforms={openaevPlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} showToast={showToast} setContainerForm={setContainerForm} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} setCurrentPageUrl={setCurrentPageUrl} setCurrentPageTitle={setCurrentPageTitle} scanPageContent={scanPageContent} logoSuffix={logoSuffix} setEntityDetailsLoading={setEntityDetailsLoading} fetchEntityContainers={fetchEntityContainers} />;
       case 'atomic-testing': return <OAEVAtomicTestingView mode={mode} availablePlatforms={availablePlatforms} aiSettings={aiSettings} setPanelMode={setPanelMode} showToast={showToast} atomicTestingTargets={atomicTestingTargets} setAtomicTestingTargets={setAtomicTestingTargets} selectedAtomicTarget={selectedAtomicTarget} setSelectedAtomicTarget={setSelectedAtomicTarget} atomicTestingShowList={atomicTestingShowList} setAtomicTestingShowList={setAtomicTestingShowList} atomicTestingPlatformId={atomicTestingPlatformId} setAtomicTestingPlatformId={setAtomicTestingPlatformId} atomicTestingPlatformSelected={atomicTestingPlatformSelected} setAtomicTestingPlatformSelected={setAtomicTestingPlatformSelected} atomicTestingTargetType={atomicTestingTargetType} setAtomicTestingTargetType={setAtomicTestingTargetType} atomicTestingAssets={atomicTestingAssets} setAtomicTestingAssets={setAtomicTestingAssets} atomicTestingAssetGroups={atomicTestingAssetGroups} setAtomicTestingAssetGroups={setAtomicTestingAssetGroups} atomicTestingTypeFilter={atomicTestingTypeFilter} setAtomicTestingTypeFilter={setAtomicTestingTypeFilter} atomicTestingInjectorContracts={atomicTestingInjectorContracts} setAtomicTestingInjectorContracts={setAtomicTestingInjectorContracts} atomicTestingSelectedAsset={atomicTestingSelectedAsset} setAtomicTestingSelectedAsset={setAtomicTestingSelectedAsset} atomicTestingSelectedAssetGroup={atomicTestingSelectedAssetGroup} setAtomicTestingSelectedAssetGroup={setAtomicTestingSelectedAssetGroup} atomicTestingSelectedContract={atomicTestingSelectedContract} setAtomicTestingSelectedContract={setAtomicTestingSelectedContract} atomicTestingTitle={atomicTestingTitle} setAtomicTestingTitle={setAtomicTestingTitle} atomicTestingCreating={atomicTestingCreating} setAtomicTestingCreating={setAtomicTestingCreating} atomicTestingLoadingAssets={atomicTestingLoadingAssets} setAtomicTestingLoadingAssets={setAtomicTestingLoadingAssets} atomicTestingAIMode={atomicTestingAIMode} setAtomicTestingAIMode={setAtomicTestingAIMode} atomicTestingAIGenerating={atomicTestingAIGenerating} setAtomicTestingAIGenerating={setAtomicTestingAIGenerating} atomicTestingAIPlatform={atomicTestingAIPlatform} setAtomicTestingAIPlatform={setAtomicTestingAIPlatform} atomicTestingAIExecutor={atomicTestingAIExecutor} setAtomicTestingAIExecutor={setAtomicTestingAIExecutor} atomicTestingAIContext={atomicTestingAIContext} setAtomicTestingAIContext={setAtomicTestingAIContext} atomicTestingAIGeneratedPayload={atomicTestingAIGeneratedPayload} setAtomicTestingAIGeneratedPayload={setAtomicTestingAIGeneratedPayload} resetAtomicTestingState={resetAtomicTestingState} />;
-      case 'unified-search': return <CommonUnifiedSearchView mode={mode} unifiedSearchQuery={unifiedSearchQuery} setUnifiedSearchQuery={setUnifiedSearchQuery} unifiedSearchResults={unifiedSearchResults} setUnifiedSearchResults={setUnifiedSearchResults} unifiedSearching={unifiedSearching} setUnifiedSearching={setUnifiedSearching} unifiedSearchPlatformFilter={unifiedSearchPlatformFilter} setUnifiedSearchPlatformFilter={setUnifiedSearchPlatformFilter} setPanelMode={setPanelMode} setEntity={setEntity} setEntityFromSearchMode={setEntityFromSearchMode} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} availablePlatforms={availablePlatforms} logoSuffix={logoSuffix} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} />;
+      case 'unified-search': return <CommonUnifiedSearchView mode={mode} unifiedSearchQuery={unifiedSearchQuery} setUnifiedSearchQuery={setUnifiedSearchQuery} unifiedSearchResults={unifiedSearchResults} setUnifiedSearchResults={setUnifiedSearchResults} unifiedSearching={unifiedSearching} setUnifiedSearching={setUnifiedSearching} unifiedSearchPlatformFilter={unifiedSearchPlatformFilter} setUnifiedSearchPlatformFilter={setUnifiedSearchPlatformFilter} setPanelMode={setPanelMode} setEntity={setEntity} setEntityFromSearchMode={setEntityFromSearchMode} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} availablePlatforms={availablePlatforms} logoSuffix={logoSuffix} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} fetchEntityContainers={fetchEntityContainers} />;
       case 'add-selection': return <OCTIAddSelectionView setPanelMode={setPanelMode} addSelectionText={addSelectionText} setAddSelectionText={setAddSelectionText} addSelectionEntityType={addSelectionEntityType} setAddSelectionEntityType={setAddSelectionEntityType} addSelectionFromContextMenu={addSelectionFromContextMenu} setAddSelectionFromContextMenu={setAddSelectionFromContextMenu} addingSelection={addingSelection} handleAddSelection={handleAddSelection} openctiPlatforms={openctiPlatforms} />;
       case 'scenario-overview':
       case 'scenario-form': return <OAEVScenarioView mode={mode} panelMode={panelMode as 'scenario-overview' | 'scenario-form'} availablePlatforms={availablePlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} setPlatformUrl={setPlatformUrl} setPanelMode={setPanelMode} showToast={showToast} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} aiSettings={aiSettings} submitting={submitting} setSubmitting={setSubmitting} aiSelectingInjects={aiSelectingInjects} setAiSelectingInjects={setAiSelectingInjects} aiFillingEmails={aiFillingEmails} setAiFillingEmails={setAiFillingEmails} handleClose={handleClose} scenarioOverviewData={scenarioOverviewData} setScenarioOverviewData={setScenarioOverviewData} scenarioForm={scenarioForm} setScenarioForm={setScenarioForm} selectedInjects={selectedInjects} setSelectedInjects={setSelectedInjects} scenarioEmails={scenarioEmails} setScenarioEmails={setScenarioEmails} scenarioLoading={scenarioLoading} setScenarioLoading={setScenarioLoading} scenarioStep={scenarioStep} setScenarioStep={setScenarioStep} scenarioTypeAffinity={scenarioTypeAffinity} setScenarioTypeAffinity={setScenarioTypeAffinity} scenarioPlatformsAffinity={scenarioPlatformsAffinity} setScenarioPlatformsAffinity={setScenarioPlatformsAffinity} scenarioInjectSpacing={scenarioInjectSpacing} setScenarioInjectSpacing={setScenarioInjectSpacing} scenarioPlatformSelected={scenarioPlatformSelected} setScenarioPlatformSelected={setScenarioPlatformSelected} scenarioPlatformId={scenarioPlatformId} setScenarioPlatformId={setScenarioPlatformId} scenarioRawAttackPatterns={scenarioRawAttackPatterns} setScenarioRawAttackPatterns={setScenarioRawAttackPatterns} scenarioTargetType={scenarioTargetType} setScenarioTargetType={setScenarioTargetType} scenarioAssets={scenarioAssets} setScenarioAssets={setScenarioAssets} scenarioAssetGroups={scenarioAssetGroups} setScenarioAssetGroups={setScenarioAssetGroups} scenarioTeams={scenarioTeams} setScenarioTeams={setScenarioTeams} scenarioSelectedAsset={scenarioSelectedAsset} setScenarioSelectedAsset={setScenarioSelectedAsset} scenarioSelectedAssetGroup={scenarioSelectedAssetGroup} setScenarioSelectedAssetGroup={setScenarioSelectedAssetGroup} scenarioSelectedTeam={scenarioSelectedTeam} setScenarioSelectedTeam={setScenarioSelectedTeam} scenarioCreating={scenarioCreating} setScenarioCreating={setScenarioCreating} scenarioAIMode={scenarioAIMode} setScenarioAIMode={setScenarioAIMode} scenarioAIGenerating={scenarioAIGenerating} setScenarioAIGenerating={setScenarioAIGenerating} scenarioAINumberOfInjects={scenarioAINumberOfInjects} setScenarioAINumberOfInjects={setScenarioAINumberOfInjects} scenarioAIPayloadAffinity={scenarioAIPayloadAffinity} setScenarioAIPayloadAffinity={setScenarioAIPayloadAffinity} scenarioAITableTopDuration={scenarioAITableTopDuration} setScenarioAITableTopDuration={setScenarioAITableTopDuration} scenarioAIEmailLanguage={scenarioAIEmailLanguage} setScenarioAIEmailLanguage={setScenarioAIEmailLanguage} scenarioAITheme={scenarioAITheme} setScenarioAITheme={setScenarioAITheme} scenarioAIContext={scenarioAIContext} setScenarioAIContext={setScenarioAIContext} scenarioAIGeneratedScenario={scenarioAIGeneratedScenario} setScenarioAIGeneratedScenario={setScenarioAIGeneratedScenario} resetScenarioState={resetScenarioState} />;
       case 'loading': return <CommonLoadingView />;
-      default: return <CommonEmptyView />;
+      default: return isScanning 
+        ? <CommonLoadingView message="Scanning page..." /> 
+        : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.length > 0} hasOpenAEV={openaevPlatforms.length > 0} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} />;
     }
   };
 

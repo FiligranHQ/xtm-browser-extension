@@ -5,6 +5,7 @@
 import React from 'react';
 import { Box, Typography, Divider, Popover } from '@mui/material';
 import { PlatformCard } from './PlatformCard';
+import { EXTENSION_VERSION } from '../../shared/constants';
 import type { ConnectionStatus } from '../types';
 
 interface PlatformDetailsPopoverProps {
@@ -125,7 +126,7 @@ export const PlatformDetailsPopover: React.FC<PlatformDetailsPopoverProps> = ({
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            XTM Browser Extension v0.0.1
+            XTM Browser Extension v{EXTENSION_VERSION}
           </Typography>
           <Typography
             component="a"

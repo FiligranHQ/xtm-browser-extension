@@ -248,13 +248,110 @@ export async function shouldRefreshOCTICache(platformId?: string): Promise<boole
 }
 
 /**
+ * Maximum entities per type
+ * With unlimitedStorage permission, the quota is much higher (100s of MB)
+ * Set to 50000 to handle large OpenCTI instances while still providing some protection
+ */
+const MAX_ENTITIES_PER_TYPE = 50000;
+
+/**
+ * Flag to track if we've already warned about quota issues
+ */
+let quotaWarningShown = false;
+
+/**
+ * Trim cache to fit within limits
+ */
+function trimOCTICache(cache: OCTIEntityCache): OCTIEntityCache {
+  for (const entityType of Object.keys(cache.entities) as (keyof OCTIEntityCache['entities'])[]) {
+    if (cache.entities[entityType].length > MAX_ENTITIES_PER_TYPE) {
+      // Keep only the most recent entities (assuming they're added in order)
+      cache.entities[entityType] = cache.entities[entityType].slice(-MAX_ENTITIES_PER_TYPE);
+    }
+  }
+  return cache;
+}
+
+/**
+ * Safe storage set with quota error handling
+ * Returns true if successful, false if quota exceeded
+ */
+async function safeStorageSet(data: Record<string, unknown>): Promise<boolean> {
+  try {
+    await chrome.storage.local.set(data);
+    return true;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('quota') || errorMessage.includes('QUOTA_BYTES')) {
+      if (!quotaWarningShown) {
+        console.warn('[Storage] Quota exceeded - cache will be limited. Extension continues to work without full cache.');
+        quotaWarningShown = true;
+      }
+      return false;
+    }
+    // Re-throw non-quota errors
+    throw error;
+  }
+}
+
+/**
  * Save OpenCTI cache for a specific platform
+ * Handles quota errors gracefully - the extension will still work without cache
  */
 export async function saveOCTICache(cache: OCTIEntityCache, platformId: string): Promise<void> {
   const multiCache = await getMultiPlatformOCTICache();
   cache.platformId = platformId;
-  multiCache.platforms[platformId] = cache;
-  await chrome.storage.local.set({ [OCTI_CACHE_KEY]: multiCache });
+  
+  // Trim cache to fit limits
+  const trimmedCache = trimOCTICache(cache);
+  multiCache.platforms[platformId] = trimmedCache;
+  
+  // Try to save
+  let success = await safeStorageSet({ [OCTI_CACHE_KEY]: multiCache });
+  
+  if (!success) {
+    // Quota exceeded - try with minimal cache (just entity names for detection)
+    console.warn(`[Storage] Quota exceeded for platform ${platformId}, reducing cache size...`);
+    
+    // Create minimal cache with only essential data
+    const minimalCache = createMinimalOCTICache(trimmedCache);
+    multiCache.platforms[platformId] = minimalCache;
+    
+    success = await safeStorageSet({ [OCTI_CACHE_KEY]: multiCache });
+    
+    if (!success) {
+      // Still failing - clear this platform's cache entirely
+      console.warn(`[Storage] Still exceeding quota, clearing cache for platform ${platformId}`);
+      delete multiCache.platforms[platformId];
+      await safeStorageSet({ [OCTI_CACHE_KEY]: multiCache });
+    }
+  }
+}
+
+/**
+ * Create minimal cache with only essential data for detection
+ * This is a fallback when even the unlimited storage hits extreme cases
+ */
+function createMinimalOCTICache(cache: OCTIEntityCache): OCTIEntityCache {
+  const minimal = createEmptyOCTICache(cache.platformId);
+  minimal.timestamp = cache.timestamp;
+  minimal.lastRefresh = cache.lastRefresh;
+  
+  // Keep only first 10000 entities per type with minimal data
+  const MINIMAL_LIMIT = 10000;
+  for (const entityType of Object.keys(cache.entities) as (keyof OCTIEntityCache['entities'])[]) {
+    minimal.entities[entityType] = cache.entities[entityType]
+      .slice(0, MINIMAL_LIMIT)
+      .map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        aliases: e.aliases?.slice(0, 5), // Limit aliases
+        // Omit description to save space
+      }));
+  }
+  
+  return minimal;
 }
 
 /**
@@ -568,13 +665,57 @@ export async function shouldRefreshOAEVCache(platformId?: string): Promise<boole
 }
 
 /**
+ * Maximum entities per type for OpenAEV
+ * With unlimitedStorage permission, we can handle larger datasets
+ */
+const MAX_OAEV_ENTITIES_PER_TYPE = 20000;
+
+/**
+ * Trim OpenAEV cache to fit within limits
+ */
+function trimOAEVCache(cache: OAEVCache): OAEVCache {
+  if (cache.entities.Asset && cache.entities.Asset.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.Asset = cache.entities.Asset.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  if (cache.entities.AssetGroup && cache.entities.AssetGroup.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.AssetGroup = cache.entities.AssetGroup.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  if (cache.entities.AttackPattern && cache.entities.AttackPattern.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.AttackPattern = cache.entities.AttackPattern.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  if (cache.entities.Finding && cache.entities.Finding.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.Finding = cache.entities.Finding.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  if (cache.entities.Player && cache.entities.Player.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.Player = cache.entities.Player.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  if (cache.entities.Team && cache.entities.Team.length > MAX_OAEV_ENTITIES_PER_TYPE) {
+    cache.entities.Team = cache.entities.Team.slice(-MAX_OAEV_ENTITIES_PER_TYPE);
+  }
+  return cache;
+}
+
+/**
  * Save OpenAEV cache for a specific platform
+ * Handles quota errors gracefully - the extension will still work without cache
  */
 export async function saveOAEVCache(cache: OAEVCache, platformId: string): Promise<void> {
   const multiCache = await getMultiPlatformOAEVCache();
   cache.platformId = platformId;
-  multiCache.platforms[platformId] = cache;
-  await chrome.storage.local.set({ [OAEV_CACHE_KEY]: multiCache });
+  
+  // Trim cache to fit limits
+  const trimmedCache = trimOAEVCache(cache);
+  multiCache.platforms[platformId] = trimmedCache;
+  
+  // Try to save
+  let success = await safeStorageSet({ [OAEV_CACHE_KEY]: multiCache });
+  
+  if (!success) {
+    // Quota exceeded - try clearing this platform's cache
+    console.warn(`[Storage] Quota exceeded for OpenAEV platform ${platformId}, clearing cache...`);
+    delete multiCache.platforms[platformId];
+    await safeStorageSet({ [OAEV_CACHE_KEY]: multiCache });
+  }
 }
 
 /**
@@ -736,4 +877,86 @@ export async function cleanupOrphanedOAEVCaches(validPlatformIds: string[]): Pro
   if (modified) {
     await chrome.storage.local.set({ [OAEV_CACHE_KEY]: multiCache });
   }
+}
+
+// ============================================================================
+// Storage Quota Management
+// ============================================================================
+
+/**
+ * Get storage usage information
+ */
+export async function getStorageUsage(): Promise<{ used: number; quota: number; percentage: number }> {
+  try {
+    // Get bytes in use
+    const bytesInUse = await chrome.storage.local.getBytesInUse();
+    // Chrome local storage quota is typically 10MB (10485760 bytes)
+    const quota = chrome.storage.local.QUOTA_BYTES || 10485760;
+    return {
+      used: bytesInUse,
+      quota,
+      percentage: Math.round((bytesInUse / quota) * 100),
+    };
+  } catch {
+    return { used: 0, quota: 10485760, percentage: 0 };
+  }
+}
+
+/**
+ * Clear all caches to recover from quota issues
+ * This should only be called as a last resort
+ */
+export async function clearAllCaches(): Promise<void> {
+  console.warn('[Storage] Clearing all caches to recover from quota issues');
+  quotaWarningShown = false;
+  
+  try {
+    // Clear OCTI cache
+    await chrome.storage.local.remove(OCTI_CACHE_KEY);
+  } catch (e) {
+    console.error('[Storage] Failed to clear OCTI cache:', e);
+  }
+  
+  try {
+    // Clear OAEV cache
+    await chrome.storage.local.remove(OAEV_CACHE_KEY);
+  } catch (e) {
+    console.error('[Storage] Failed to clear OAEV cache:', e);
+  }
+  
+  try {
+    // Clear entity names cache
+    await chrome.storage.local.remove('entityNames');
+  } catch (e) {
+    console.error('[Storage] Failed to clear entity names cache:', e);
+  }
+  
+  // Clear any scan caches (keys starting with 'scan_')
+  try {
+    const allStorage = await chrome.storage.local.get(null);
+    const scanKeys = Object.keys(allStorage).filter(k => k.startsWith('scan_'));
+    if (scanKeys.length > 0) {
+      await chrome.storage.local.remove(scanKeys);
+    }
+  } catch (e) {
+    console.error('[Storage] Failed to clear scan caches:', e);
+  }
+  
+  console.log('[Storage] All caches cleared');
+}
+
+/**
+ * Check if storage is near quota and warn
+ * Returns true if storage is critically low (>90% used)
+ */
+export async function isStorageNearQuota(): Promise<boolean> {
+  const usage = await getStorageUsage();
+  if (usage.percentage > 90) {
+    console.warn(`[Storage] Storage usage critical: ${usage.percentage}% (${Math.round(usage.used / 1024)}KB / ${Math.round(usage.quota / 1024)}KB)`);
+    return true;
+  }
+  if (usage.percentage > 75) {
+    console.log(`[Storage] Storage usage high: ${usage.percentage}%`);
+  }
+  return false;
 }

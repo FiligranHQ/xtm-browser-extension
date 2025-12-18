@@ -528,6 +528,22 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
   if (openaevPlatforms.length > 1 && !atomicTestingPlatformSelected) {
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Back to actions button */}
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('empty')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
+          </Button>
+        </Box>
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>
@@ -604,6 +620,22 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
 
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        {/* Back to actions button */}
+        <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('empty')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
+          </Button>
+        </Box>
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Atomic Testing</Typography>

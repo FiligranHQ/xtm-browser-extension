@@ -65,6 +65,7 @@ import {
   setHighlightClickInProgress,
   initializeSplitScreenMode,
   refreshSplitScreenMode,
+  getSplitScreenMode,
 } from './panel';
 
 const log = loggers.content;
@@ -152,6 +153,8 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     clearHighlights();
     currentScanMode = null;
     lastScanData = null;
+    // Notify panel to clear scan results and reset to empty state
+    sendPanelMessage('CLEAR_SCAN_RESULTS');
   } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
     // Update lastScanData with AI-discovered entities so they persist when panel re-opens
     const aiEntities = event.data.payload?.entities;
@@ -478,15 +481,38 @@ function handleHighlightClick(event: MouseEvent): void {
     event.returnValue = false;
   }
   
-  // Re-open panel if in scan mode and panel is closed
-  if (currentScanMode === 'scan' && isPanelHidden() && lastScanData) {
-    ensurePanelElements();
-    showPanelElements();
-    sendPanelMessage('SCAN_RESULTS', lastScanData);
-    sendPanelMessage('SELECTION_UPDATED', {
-      selectedCount: selectedForImport.size,
-      selectedItems: Array.from(selectedForImport),
-    });
+  // Re-open panel if in scan mode and panel is closed (or in split screen mode)
+  if (currentScanMode === 'scan' && lastScanData) {
+    if (getSplitScreenMode()) {
+      // In split screen mode, request background to open native side panel
+      // Then send the scan data through the forward mechanism
+      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).then(() => {
+        // Give the panel time to open before sending data
+        setTimeout(() => {
+          sendPanelMessage('SCAN_RESULTS', lastScanData);
+          sendPanelMessage('SELECTION_UPDATED', {
+            selectedCount: selectedForImport.size,
+            selectedItems: Array.from(selectedForImport),
+          });
+        }, 100);
+      }).catch(() => {
+        // Fallback: just send the message
+        sendPanelMessage('SCAN_RESULTS', lastScanData);
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
+      });
+    } else if (isPanelHidden()) {
+      // Floating mode - show the iframe panel
+      ensurePanelElements();
+      showPanelElements();
+      sendPanelMessage('SCAN_RESULTS', lastScanData);
+      sendPanelMessage('SELECTION_UPDATED', {
+        selectedCount: selectedForImport.size,
+        selectedItems: Array.from(selectedForImport),
+      });
+    }
   }
   
   // Block parent anchor navigation
@@ -923,6 +949,9 @@ async function scanPageForOAEV(): Promise<void> {
 async function scanAllPlatforms(): Promise<void> {
   currentScanMode = 'scan';
   
+  // Notify panel that scanning has started
+  sendPanelMessage('SCAN_STARTED');
+  
   showToast({ type: 'info', message: 'Scanning page across all platforms...', showSpinner: true, persistent: true });
   
   try {
@@ -1354,6 +1383,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'CLEAR_HIGHLIGHTS':
       clearHighlights();
       selectedForImport.clear();
+      currentScanMode = null;
+      lastScanData = null;
+      // Notify panel to clear scan results and reset to empty state
+      sendPanelMessage('CLEAR_SCAN_RESULTS');
       sendResponse({ success: true });
       break;
       

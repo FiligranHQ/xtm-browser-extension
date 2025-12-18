@@ -61,10 +61,8 @@ Automatically detect and highlight security-relevant content on any web page.
 - **Findings**: Security findings by value
 
 ### 🎯 Visual Highlighting
-- **Green highlight** with ✓ icon: Found in platform
-- **Amber highlight** with ⚠ icon: Detected but not in platform
-- **Red highlight**: Known threat (Malware, Threat Actor)
-- **Brown highlight** with 🔓 icon: Vulnerability (CVE)
+- **Green highlight**: Found in platform (OpenCTI or OpenAEV)
+- **Amber highlight**: Detected but not found in any platform
 - **Purple highlight**: AI-discovered entity
 - Click to select items for bulk operations
 

@@ -10,7 +10,6 @@ import {
   Typography,
   Paper,
   Button,
-  IconButton,
   Checkbox,
   FormControl,
   InputLabel,
@@ -21,8 +20,8 @@ import {
 } from '@mui/material';
 import {
   TravelExploreOutlined,
-  CloseOutlined,
   SearchOutlined,
+  ChevronLeftOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -86,12 +85,25 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
   if (openctiPlatforms.length > 1 && !investigationPlatformSelected) {
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Back to actions button */}
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={resetInvestigation}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
+          </Button>
+        </Box>
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <TravelExploreOutlined sx={{ color: 'primary.main' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
-          <IconButton size="small" onClick={resetInvestigation}>
-            <CloseOutlined fontSize="small" />
-          </IconButton>
         </Box>
 
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -164,12 +176,25 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
   // Step 2: Show scanning / results view
   return (
     <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Back to actions button */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={resetInvestigation}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          Back to actions
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <TravelExploreOutlined sx={{ color: 'primary.main' }} />
         <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
-        <IconButton size="small" onClick={resetInvestigation}>
-          <CloseOutlined fontSize="small" />
-        </IconButton>
       </Box>
 
       {/* Show selected platform only if multiple OpenCTI platforms */}

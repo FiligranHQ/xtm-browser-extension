@@ -150,7 +150,7 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
           onClick={handleAddSelection}
           disabled={!addSelectionText || !addSelectionEntityType || addingSelection || openctiPlatforms.length === 0}
           fullWidth
-          endIcon={addingSelection ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
+          startIcon={addingSelection ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
         >
           {addingSelection ? 'Adding...' : 'Add to OpenCTI'}
         </Button>

@@ -18,10 +18,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Button,
 } from '@mui/material';
 import {
   SearchOutlined,
   ChevronRightOutlined,
+  ChevronLeftOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -60,6 +62,8 @@ export interface UnifiedSearchViewProps {
   entityDetailsLoading?: boolean;
   /** Set loading entity details state */
   setEntityDetailsLoading?: (loading: boolean) => void;
+  /** Fetch containers for an entity (OpenCTI only) */
+  fetchEntityContainers?: (entityId: string, platformId?: string) => Promise<void>;
 }
 
 export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
@@ -83,6 +87,7 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   logoSuffix,
   entityDetailsLoading: _entityDetailsLoading,
   setEntityDetailsLoading,
+  fetchEntityContainers,
 }) => {
   // Get platform counts
   const openctiPlatforms = useMemo(() => 
@@ -283,6 +288,11 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
             setMultiPlatformResults(updatedResults);
             multiPlatformResultsRef.current = updatedResults;
             
+            // Fetch containers for OpenCTI entities
+            if (result.source === 'opencti' && fetchEntityContainers) {
+              fetchEntityContainers(entityId, result.platformId);
+            }
+            
             log.debug('Entity details fetched successfully for search result:', entityId);
           } else {
             log.debug('Entity details fetch failed or no data:', response?.error);
@@ -300,6 +310,22 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
 
   return (
     <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Back to actions button */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={() => setPanelMode('empty')}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          Back to actions
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h6">Search</Typography>
         <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>

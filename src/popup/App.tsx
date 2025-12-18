@@ -12,26 +12,20 @@ import {
   IconButton, 
   Divider,
   Tooltip,
-  Button,
   keyframes,
 } from '@mui/material';
 import {
   SettingsOutlined,
-  CenterFocusStrongOutlined,
-  SearchOutlined,
-  DescriptionOutlined,
-  TravelExploreOutlined,
-  MovieFilterOutlined,
   CloseOutlined,
 } from '@mui/icons-material';
-import { Target } from 'mdi-material-ui';
 
 // Theme
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 
 // Components
-import { ActionButton } from './components/ActionButton';
+import { ActionButtonsGrid } from '../shared/components/ActionButtonsGrid';
+import { EXTENSION_VERSION } from '../shared/constants';
 import { PlatformSetupForm } from './components/PlatformSetupForm';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { EETrialDialog } from './components/EETrialDialog';
@@ -205,158 +199,22 @@ const App: React.FC = () => {
 
         {/* Main Actions Section */}
         {hasAnyPlatformConfigured && !isInSetupWizard && (
-        <>
-          {/* Global Actions - Scan & Search across all platforms */}
-          <Box sx={{ p: 2, pb: 1 }}>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 1,
-              }}
-            >
-              <ActionButton
-                icon={<CenterFocusStrongOutlined />}
-                label="Scan"
-                subtitle="Find entities across all platforms"
-                tooltip="Scan page for entities in OpenCTI and OpenAEV"
-                onClick={handleUnifiedScan}
-                color="#2196f3"
-                compact
-              />
-              <ActionButton
-                icon={<SearchOutlined />}
-                label="Search"
-                subtitle="Query all platforms"
-                tooltip="Search across OpenCTI and OpenAEV"
-                onClick={handleUnifiedSearch}
-                color="#7c4dff"
-                disabled={!hasOpenCTI && !hasOpenAEV}
-                compact
-              />
-            </Box>
+          <Box sx={{ p: 2 }}>
+            <ActionButtonsGrid
+              logoSuffix={logoSuffix}
+              hasOpenCTI={hasOpenCTI}
+              hasOpenAEV={hasOpenAEV}
+              onScan={handleUnifiedScan}
+              onSearch={handleUnifiedSearch}
+              onCreateContainer={handleCreateContainer}
+              onInvestigate={handleInvestigate}
+              onAtomicTesting={handleAtomicTesting}
+              onGenerateScenario={handleGenerateScenario}
+              onClearHighlights={handleClear}
+              compact={true}
+              dividerMarginX={0}
+            />
           </Box>
-
-          <Divider sx={{ mx: 2 }} />
-
-          {/* OpenCTI Section */}
-          <Box sx={{ p: 2, pb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <img
-                src={`../assets/logos/logo_opencti_${logoSuffix}_embleme_square.svg`}
-                alt="OpenCTI"
-                width={18}
-                height={18}
-              />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
-                OpenCTI
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
-                Threat Intelligence
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 1,
-              }}
-            >
-              <ActionButton
-                icon={<DescriptionOutlined />}
-                label="Container"
-                subtitle="Create report"
-                tooltip="Create container from page content"
-                onClick={handleCreateContainer}
-                color="#4caf50"
-                disabled={!hasOpenCTI}
-                compact
-              />
-              <ActionButton
-                icon={<TravelExploreOutlined />}
-                label="Investigate"
-                subtitle="Start an investigation"
-                tooltip="Start investigation with entities"
-                onClick={handleInvestigate}
-                color="#5c6bc0"
-                disabled={!hasOpenCTI}
-                compact
-              />
-            </Box>
-          </Box>
-
-          <Divider sx={{ mx: 2 }} />
-
-          {/* OpenAEV Section */}
-          <Box sx={{ p: 2, pb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <img
-                src={`../assets/logos/logo_openaev_${logoSuffix}_embleme_square.svg`}
-                alt="OpenAEV"
-                width={18}
-                height={18}
-              />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
-                OpenAEV
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
-                Attack & Exposure Validation
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: 1,
-              }}
-            >
-              <ActionButton
-                icon={<Target />}
-                label="Atomic Test"
-                subtitle="Trigger a test"
-                tooltip="Create atomic testing from attack pattern or domain"
-                onClick={handleAtomicTesting}
-                color="#f44336"
-                disabled={!hasOpenAEV}
-                compact
-              />
-              <ActionButton
-                icon={<MovieFilterOutlined />}
-                label="Scenario"
-                subtitle="Generate attack"
-                tooltip="Generate attack scenario from page"
-                onClick={handleGenerateScenario}
-                color="#e91e63"
-                disabled={!hasOpenAEV}
-                compact
-              />
-            </Box>
-          </Box>
-
-          <Divider sx={{ mx: 2 }} />
-
-          {/* Clear Button */}
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={handleClear}
-              sx={{ 
-                height: 32,
-                borderRadius: 1,
-                borderColor: 'divider',
-                color: 'text.secondary',
-                fontSize: 12,
-                '&:hover': {
-                  borderColor: 'text.secondary',
-                  bgcolor: 'action.hover',
-                },
-              }}
-            >
-              Clear highlights
-            </Button>
-          </Box>
-        </>
         )}
 
         {/* Footer - Clickable with platform info */}
@@ -430,7 +288,7 @@ const App: React.FC = () => {
             </Box>
             {/* Version */}
             <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, fontSize: 10 }}>
-              v0.0.5 • Click for details
+              v{EXTENSION_VERSION} • Click for details
             </Typography>
           </Box>
         </Box>

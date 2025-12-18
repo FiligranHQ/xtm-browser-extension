@@ -22,12 +22,11 @@ This makes it easy to see entities that exist in multiple forms without clutteri
 
 ### Highlight Indicators
 
-| Color | Icon | Meaning |
-|-------|------|---------|
-| Green | ✓ | Found in OpenCTI |
-| Amber | ⚠ | Detected but not in OpenCTI |
-| Red | ⚠ | Known threat (Malware, Threat Actor) |
-| Brown | 🔓 | Vulnerability (CVE) |
+| Color | Meaning |
+|-------|---------|
+| Green | Found in platform (OpenCTI or OpenAEV) |
+| Amber | Detected but not found in any platform |
+| Purple | AI-discovered entity |
 
 ### Defanged IOC Detection
 

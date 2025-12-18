@@ -5,6 +5,7 @@
  */
 
 import { loggers } from '../utils/logger';
+import { EXTENSION_VERSION } from '../constants';
 import {
   buildAssetSearchFilter,
   buildAssetGroupSearchFilter,
@@ -39,7 +40,7 @@ import type {
 const log = loggers.openaev;
 
 // User-Agent for API requests
-const USER_AGENT = 'xtm-browser-extension/0.0.5';
+const USER_AGENT = `xtm-browser-extension/${EXTENSION_VERSION}`;
 const DEFAULT_PAGE_SIZE = 500;
 
 /**

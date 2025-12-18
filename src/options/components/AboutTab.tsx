@@ -17,6 +17,7 @@ import {
   DeleteOutlined,
   GitHub,
 } from '@mui/icons-material';
+import { EXTENSION_VERSION } from '../../shared/constants';
 
 interface AboutTabProps {
   mode: 'dark' | 'light';
@@ -50,7 +51,7 @@ const AboutTab: React.FC<AboutTabProps> = ({
               Threat Management
             </Typography>
           </Box>
-          <Chip label="v0.0.5" size="small" sx={{ ml: 1 }} />
+          <Chip label={`v${EXTENSION_VERSION}`} size="small" sx={{ ml: 1 }} />
         </Box>
 
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400, mx: 'auto' }}>

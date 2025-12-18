@@ -274,7 +274,7 @@ function setupContextMenu(): void {
   
   chrome.contextMenus.create({
     id: 'xtm-scan-selection',
-    title: 'Search in OpenCTI',
+    title: 'Search across platforms',
     contexts: ['selection'],
   });
   
@@ -344,6 +344,35 @@ async function openSidePanelIfEnabled(tabId: number): Promise<boolean> {
   return false;
 }
 
+/**
+ * Ensure content script is loaded and send message to it.
+ * If content script is not loaded, inject it first.
+ */
+async function ensureContentScriptAndSendMessage(
+  tabId: number, 
+  message: { type: string; payload?: unknown }
+): Promise<void> {
+  try {
+    // First try to send the message directly
+    await chrome.tabs.sendMessage(tabId, message);
+  } catch {
+    // Content script not loaded - inject it first
+    log.debug('Content script not loaded, injecting...');
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/index.js'],
+      });
+      // Wait a bit for the script to initialize
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Retry sending the message
+      await chrome.tabs.sendMessage(tabId, message);
+    } catch (injectError) {
+      log.error('Failed to inject content script:', injectError);
+    }
+  }
+}
+
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
@@ -353,12 +382,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   
   switch (info.menuItemId) {
     case 'xtm-scan-page':
-      chrome.tabs.sendMessage(tab.id, { type: 'SCAN_PAGE' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_PAGE' });
       break;
       
     case 'xtm-scan-selection':
       if (info.selectionText) {
-        chrome.tabs.sendMessage(tab.id, {
+        await ensureContentScriptAndSendMessage(tab.id, {
           type: 'SEARCH_SELECTION',
           payload: { text: info.selectionText },
         });
@@ -367,7 +396,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       
     case 'xtm-add-selection':
       if (info.selectionText) {
-        chrome.tabs.sendMessage(tab.id, {
+        await ensureContentScriptAndSendMessage(tab.id, {
           type: 'ADD_SELECTION',
           payload: { text: info.selectionText },
         });
@@ -375,11 +404,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       break;
       
     case 'xtm-create-container':
-      chrome.tabs.sendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
       break;
       
     case 'xtm-create-investigation':
-      chrome.tabs.sendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
       break;
   }
 });
@@ -2252,6 +2281,29 @@ async function handleMessage(
           sendResponse({ success: true, data: result.pendingPanelState });
         } else {
           sendResponse({ success: true, data: null });
+        }
+        break;
+      }
+      
+      case 'OPEN_SIDE_PANEL': {
+        // Open the native side panel (for split screen mode)
+        try {
+          const settings = await getSettings();
+          if (settings.splitScreenMode && chrome.sidePanel) {
+            // Get the active tab to open the side panel for
+            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (activeTab?.id) {
+              await chrome.sidePanel.open({ tabId: activeTab.id });
+              sendResponse(successResponse({ opened: true }));
+            } else {
+              sendResponse(successResponse({ opened: false, reason: 'No active tab' }));
+            }
+          } else {
+            sendResponse(successResponse({ opened: false, reason: 'Split screen mode not enabled' }));
+          }
+        } catch (error) {
+          log.debug('Failed to open side panel:', error);
+          sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
         }
         break;
       }

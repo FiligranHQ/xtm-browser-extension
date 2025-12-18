@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
-  ChevronRightOutlined,
+  ArrowForwardOutlined,
 } from '@mui/icons-material';
 import type { PlatformInfo } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
@@ -290,7 +290,7 @@ export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (pr
           <Button
             variant="contained"
             size="small"
-            endIcon={<ChevronRightOutlined />}
+            startIcon={<ArrowForwardOutlined />}
             onClick={() => setScenarioStep((scenarioStep + 1) as 0 | 1 | 2)}
             sx={{ flex: 1 }}
           >

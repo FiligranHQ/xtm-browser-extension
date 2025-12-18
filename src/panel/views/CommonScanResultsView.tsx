@@ -129,6 +129,8 @@ interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showT
   entityDetailsLoading?: boolean;
   /** Set loading entity details state */
   setEntityDetailsLoading?: (loading: boolean) => void;
+  /** Fetch containers for an entity (OpenCTI only) */
+  fetchEntityContainers?: (entityId: string, platformId?: string) => Promise<void>;
 }
 
 export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
@@ -161,6 +163,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   setCurrentPageTitle,
   scanPageContent,
   setEntityDetailsLoading,
+  fetchEntityContainers,
 }) => {
   // Local state for search query
   const [searchQuery, setSearchQuery] = useState('');
@@ -363,6 +366,11 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                 };
                 setMultiPlatformResults(updatedResults);
                 multiPlatformResultsRef.current = updatedResults;
+              }
+              
+              // Fetch containers for OpenCTI entities
+              if (platformType === 'opencti' && fetchEntityContainers) {
+                fetchEntityContainers(entityId, platformId);
               }
               
               log.debug('Entity details fetched successfully for:', entityId);

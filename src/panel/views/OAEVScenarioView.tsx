@@ -34,6 +34,7 @@ import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
   ArrowForwardOutlined,
+  AddOutlined,
   RefreshOutlined,
   ComputerOutlined,
   CloudOutlined,
@@ -1025,7 +1026,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             variant="contained"
             onClick={handleCreateScenario}
             disabled={!scenarioForm.name || submitting}
-            endIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <ArrowForwardOutlined />}
+            startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
             sx={{ flex: 1 }}
           >
             Create Scenario
@@ -1047,6 +1048,22 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
     
     return (
       <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Back to actions button */}
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('empty')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
+          </Button>
+        </Box>
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
           <Typography variant="h6" sx={{ fontSize: 16, flex: 1, fontWeight: 600 }}>Create Scenario</Typography>
@@ -1404,6 +1421,22 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
     
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
+        {/* Back to actions button */}
+        <Box sx={{ mb: 1.5, flexShrink: 0 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('empty')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
+          </Button>
+        </Box>
+
         {/* Type Affinity */}
         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
           Type Affinity
@@ -1998,7 +2031,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           <Button
             variant="contained"
             onClick={() => setPanelMode('scenario-form')}
-            endIcon={<ArrowForwardOutlined />}
+            startIcon={<ArrowForwardOutlined />}
             sx={{ flex: 1 }}
           >
             Next

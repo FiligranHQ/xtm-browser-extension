@@ -50,6 +50,7 @@ export type MessageType =
   | 'SHOW_CONTAINER_PANEL'
   | 'SHOW_INVESTIGATION_PANEL'
   | 'GET_PANEL_STATE'
+  | 'OPEN_SIDE_PANEL'
   | 'FORWARD_TO_PANEL'
   | 'PANEL_MESSAGE_BROADCAST'
   | 'BROADCAST_SPLIT_SCREEN_MODE_CHANGE'
@@ -109,6 +110,7 @@ export type MessageType =
   | 'CREATE_SCENARIO_FROM_PAGE'
   // Unified scan
   | 'SCAN_ALL'
+  | 'SCAN_STARTED'
   // AI model management
   | 'AI_TEST_AND_FETCH_MODELS'
   // PDF Generation

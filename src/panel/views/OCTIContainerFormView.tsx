@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
-  ArrowForwardOutlined,
+  AddOutlined,
   AutoAwesomeOutlined,
   PictureAsPdfOutlined,
 } from '@mui/icons-material';
@@ -468,7 +468,7 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           variant="contained"
           onClick={handleCreateContainer}
           disabled={!containerForm.name || submitting}
-          endIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <ArrowForwardOutlined />}
+          startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
           fullWidth
           sx={{ mt: 1 }}
         >

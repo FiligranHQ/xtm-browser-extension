@@ -283,18 +283,15 @@ xtm-browser-extension/
 │       │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │       │   ├── openaev-client.ts    # OpenAEV REST client
 │       │   ├── ai/                  # AI provider modules
-│       │   │   ├── index.ts         # Barrel export
 │       │   │   ├── types.ts         # AI type definitions
 │       │   │   ├── prompts.ts       # AI prompt templates (system prompts, builders)
 │       │   │   └── json-parser.ts   # AI response parsing
 │       │   ├── opencti/             # OpenCTI GraphQL modules
-│       │   │   ├── index.ts         # Barrel export
-│       │   │   ├── types.ts         # OpenCTI type definitions
+│       │   │   ├── types.ts         # OpenCTI query result types
 │       │   │   ├── fragments.ts     # GraphQL fragments
 │       │   │   ├── queries.ts       # GraphQL queries & mutations
 │       │   │   └── observable-utils.ts # Observable helpers
 │       │   └── openaev/             # OpenAEV REST modules
-│       │       ├── index.ts         # Barrel export
 │       │       └── filters.ts       # Filter builders & payload utilities
 │       ├── detection/           # Detection engine
 │       │   ├── detector.ts          # Main detection orchestrator
@@ -312,13 +309,10 @@ xtm-browser-extension/
 │       ├── components/          # Shared React components
 │       │   └── ItemIcon.tsx
 │       ├── types/               # TypeScript definitions
-│       │   ├── index.ts             # Main exports and re-exports
-│       │   ├── opencti.ts           # OpenCTI types (STIX, entities)
-│       │   ├── openaev.ts           # OpenAEV types (entities, scenarios)
-│       │   ├── messages.ts          # Message types
-│       │   ├── platform.ts          # Platform types
-│       │   ├── config.ts            # Configuration types
-│       │   └── ai.ts                # AI types
+│       │   ├── index.ts             # Common types (config, AI, observables, API responses)
+│       │   ├── opencti.ts           # OpenCTI types (STIX, entities, containers)
+│       │   ├── openaev.ts           # OpenAEV types (entities, scenarios, atomic testing)
+│       │   └── messages.ts          # Message types for extension communication
 │       └── utils/               # Utilities
 │           ├── logger.ts            # Logging
 │           ├── storage.ts           # Chrome storage wrapper

@@ -68,13 +68,14 @@ The background service worker is the central hub that:
 src/background/
 ├── index.ts                 # Main entry point, client initialization
 ├── handlers/                # Message handlers split by domain
-│   ├── index.ts            # Handler registry and exports
+│   ├── index.ts            # Handler registry (createHandlerRegistry function)
 │   ├── types.ts            # Handler type definitions
 │   ├── ai-handlers.ts      # AI-related message handlers
 │   ├── cache-handlers.ts   # Cache management handlers
 │   ├── misc-handlers.ts    # Miscellaneous handlers
 │   ├── openaev-handlers.ts # OpenAEV-specific handlers
 │   ├── opencti-handlers.ts # OpenCTI-specific handlers
+│   ├── platform-handlers.ts # Platform initialization handlers
 │   ├── scan-handlers.ts    # Page scanning handlers
 │   └── settings-handlers.ts # Settings management handlers
 └── services/

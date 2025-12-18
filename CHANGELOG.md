@@ -24,7 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reorganized panel types: consolidated `types.ts` and `types/` directory structure
 - OpenCTI STIX types now have both `OCTI*` prefixed names and GraphQL API-matching aliases
 - Reduced `background/index.ts` from 3238 lines to ~2850 lines through service extraction
-- **Type organization**: Created dedicated `types/openaev.ts` for OpenAEV types (matching `types/opencti.ts` structure for consistency)
+- **Type organization**: Complete reorganization of type files:
+  - Created dedicated `types/openaev.ts` for OpenAEV types (entities, scenarios, atomic testing)
+  - Created dedicated `types/opencti.ts` for OpenCTI types (STIX, entities, containers)
+  - Created `types/messages.ts` for extension communication types
+  - Consolidated common types (config, AI, observables) in `types/index.ts`
+  - Removed redundant type files (`config.ts`, `ai.ts`, `platform.ts`)
+  - Removed all barrel `index.ts` re-export files for direct imports
 - **Naming convention standardization**: Replaced generic terms with platform-specific naming throughout codebase:
   - `CachedEntity` → `CachedOCTIEntity`
   - `DetectedSDO` → `DetectedOCTIEntity` (removed alias)

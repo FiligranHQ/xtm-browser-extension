@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.7] - 2024-12-18
 
 ### Added
+- **Split screen mode**: Optional browser native side panel mode for Chrome, Edge, and Firefox. When enabled in Settings > Appearance, the extension panel uses the browser's built-in side panel instead of a floating iframe. The close button is automatically hidden as the browser controls the panel. Works across all three browsers (Chrome/Edge use `sidePanel` API, Firefox uses `sidebar_action`)
 - Loading spinner in entity overview while fetching full entity details from OpenCTI/OpenAEV (spinner replaces platform logo during load)
 - Multi-entity type support in scan results: entities like "Phishing" matching multiple types (Malware, Attack Pattern) now show combined counts with visual indicators (stacked icon, "N types" chip)
 - Compact multi-type entity display with tooltips showing all matched types
@@ -31,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Consolidated common types (config, AI, observables) in `types/index.ts`
   - Removed redundant type files (`config.ts`, `ai.ts`, `platform.ts`)
   - Removed all barrel `index.ts` re-export files for direct imports
+  - Created `api/openaev/types.ts` for REST API types (Filter, FilterGroup, SearchBody, builder params)
+  - Created `api/opencti/types.ts` for GraphQL query result types
+  - `PayloadCreateInput` now imports shared `PayloadType` from API types for consistency
 - **Naming convention standardization**: Replaced generic terms with platform-specific naming throughout codebase:
   - `CachedEntity` → `CachedOCTIEntity`
   - `DetectedSDO` → `DetectedOCTIEntity` (removed alias)
@@ -66,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Side panel width on certain websites**: Fixed issue where panel would open full-screen on sites with aggressive CSS (e.g., Malwarebytes) - panel now always respects its intended width using CSS isolation
 - **AI results lost on panel close**: Fixed issue where AI-discovered entities would disappear when closing and reopening the panel - results now persist until next scan or clear
 - **OpenAEV CVE overview empty**: Fixed issue where navigating to OpenAEV vulnerability overview showed incomplete/empty data
+- **Entity overview empty from unified search**: Fixed issue where clicking a search result showed incomplete/empty entity overview - unified search now fetches full entity details (same as scan results flow)
 
 ## [0.0.6] - 2024-12-17
 

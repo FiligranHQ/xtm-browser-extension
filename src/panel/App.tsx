@@ -56,6 +56,8 @@ const log = loggers.panel;
 const App: React.FC = () => {
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
   const [panelMode, setPanelMode] = useState<PanelMode>('empty');
+  // Split screen mode - panel is in browser native side panel, not floating iframe
+  const [isSplitScreenMode, setIsSplitScreenMode] = useState<boolean>(false);
 
   // Platform state
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformInfo[]>([]);
@@ -377,12 +379,24 @@ const App: React.FC = () => {
       }
     });
 
+    // Detect if we're in split screen mode (browser native side panel vs floating iframe)
+    // In browser side panel, window.parent === window (not in an iframe)
+    const isInSidePanel = window.parent === window;
+    setIsSplitScreenMode(isInSidePanel);
+
     // Get settings and platforms
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success) {
         if (response.data?.theme) {
           setMode(response.data.theme === 'light' ? 'light' : 'dark');
+        }
+        
+        // Update split screen mode from settings (fallback if detection fails)
+        if (response.data?.splitScreenMode !== undefined) {
+          // If in iframe but setting is true, we might be in transition - use detected value
+          // If not in iframe, we're definitely in side panel
+          setIsSplitScreenMode(isInSidePanel || response.data.splitScreenMode);
         }
         
         const platforms: PlatformConfig[] = response.data?.openctiPlatforms || [];
@@ -432,6 +446,18 @@ const App: React.FC = () => {
       if (response?.success && response.data) handlePanelState(response.data);
     });
     
+    // Listen for runtime messages (for split screen mode)
+    // In split screen mode, content script sends messages via chrome.runtime
+    const handleRuntimeMessage = (message: { type: string; payload?: unknown }) => {
+      if (message.type === 'PANEL_MESSAGE_BROADCAST' && message.payload) {
+        const panelMessage = message.payload as { type: string; payload?: unknown };
+        log.debug('[PANEL] Received broadcast message:', panelMessage.type);
+        handlePanelState(panelMessage);
+      }
+    };
+    
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+    
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
@@ -464,6 +490,7 @@ const App: React.FC = () => {
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1277,7 +1304,10 @@ const App: React.FC = () => {
         <img src={`../assets/logos/logo_filigran_${logoSuffix}_embleme_square.svg`} alt="XTM" width={28} height={28} />
         <Typography variant="h5" sx={{ fontWeight: 600, fontSize: 20, color: mode === 'dark' ? '#ffffff' : '#1a1a2e' }}>Filigran Threat Management</Typography>
       </Box>
-      <IconButton size="small" onClick={handleClose} sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}><CloseOutlined fontSize="small" /></IconButton>
+      {/* Hide close button in split screen mode - browser handles panel closing */}
+      {!isSplitScreenMode && (
+        <IconButton size="small" onClick={handleClose} sx={{ color: mode === 'dark' ? '#ffffff' : 'text.primary' }}><CloseOutlined fontSize="small" /></IconButton>
+      )}
     </Box>
   );
 

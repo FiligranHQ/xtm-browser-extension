@@ -182,6 +182,32 @@ If you don't have an Enterprise Edition license:
 - **Dark**: Force dark mode
 - **Light**: Force light mode
 
+### Panel Display Mode
+
+#### Split Screen Mode
+Enable the "Split Screen Mode" toggle to use your browser's native side panel instead of the floating iframe panel.
+
+**Benefits:**
+- Panel stays open when clicking elsewhere on the page
+- Consistent browser-native experience
+- Better integration with browser's window management
+- Panel width is controlled by the browser
+
+**Behavior when enabled:**
+- The close (X) button in the panel header is hidden
+- Panel is opened/closed via the browser's side panel controls
+- Chrome/Edge: Use the side panel icon in the toolbar or keyboard shortcut
+- Firefox: Use the sidebar button in the toolbar or View → Sidebar
+
+**Browser Support:**
+| Browser | API Used | Minimum Version |
+|---------|----------|-----------------|
+| Chrome | `chrome.sidePanel` | Chrome 114+ |
+| Edge | `chrome.sidePanel` | Edge 114+ |
+| Firefox | `browser.sidebarAction` | Firefox 109+ |
+
+> **Note**: When disabled (default), the extension uses a floating iframe panel that appears on the right side of the page. This mode allows closing the panel by clicking outside of it or using the X button.
+
 ## Advanced Actions
 
 ### Remove Platforms

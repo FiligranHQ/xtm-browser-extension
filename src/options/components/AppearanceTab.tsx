@@ -9,17 +9,21 @@ import {
   Button,
   Paper,
   Divider,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   LightModeOutlined,
   DarkModeOutlined,
   RestartAltOutlined,
+  VerticalSplitOutlined,
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types/settings';
 
 interface AppearanceTabProps {
   settings: ExtensionSettings;
   onSetTheme: (theme: 'auto' | 'dark' | 'light') => void;
+  onSetSplitScreenMode: (enabled: boolean) => void;
   onResetAppearance: () => void;
   onSave: () => void;
 }
@@ -27,6 +31,7 @@ interface AppearanceTabProps {
 const AppearanceTab: React.FC<AppearanceTabProps> = ({
   settings,
   onSetTheme,
+  onSetSplitScreenMode,
   onResetAppearance,
   onSave,
 }) => {
@@ -86,6 +91,30 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           
           <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
             Choose your preferred color theme for the extension panel.
+          </Typography>
+        </Paper>
+
+        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
+          </Box>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={settings.splitScreenMode ?? false}
+                onChange={(e) => onSetSplitScreenMode(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Enable split screen mode"
+            sx={{ mb: 1 }}
+          />
+          
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
+            When enabled, the panel will use your browser's native side panel instead of a floating window.
+            The panel will be controlled by the browser and remain open until you close it via the browser's UI.
           </Typography>
         </Paper>
       </Box>

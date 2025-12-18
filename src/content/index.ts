@@ -62,6 +62,7 @@ import {
   getCurrentTheme,
   setIsPanelReady,
   setHighlightClickInProgress,
+  initializeSplitScreenMode,
 } from './panel';
 
 const log = loggers.content;
@@ -104,7 +105,7 @@ function createTooltip(): HTMLElement | null {
   return tooltip;
 }
 
-function initialize(): void {
+async function initialize(): Promise<void> {
   if (!document.head || !document.body) {
     log.debug(' Not a valid HTML page, skipping initialization');
     return;
@@ -119,6 +120,10 @@ function initialize(): void {
   }
   
   createTooltip();
+  
+  // Initialize split screen mode early (before any panel operations)
+  const isSplitScreen = await initializeSplitScreenMode();
+  log.debug(' Split screen mode:', isSplitScreen);
   
   // Listen for messages from the panel iframe
   window.addEventListener('message', handlePanelMessage);
@@ -805,7 +810,7 @@ async function scanPage(): Promise<void> {
       const totalDetected = data.observables.length + data.openctiEntities.length + (data.cves?.length || 0) + (data.openaevEntities?.length || 0);
       
       if (totalDetected === 0) {
-        showToast({ type: 'info', message: 'No entities detected on this page' });
+        showToast({ type: 'info', message: 'No entities detected on this page. Use search or AI to find more.' });
       } else {
         const message = totalFound > 0 
           ? `Found ${totalDetected} entit${totalDetected === 1 ? 'y' : 'ies'} (${totalFound} in platform)`
@@ -815,10 +820,11 @@ async function scanPage(): Promise<void> {
           message,
           action: { label: 'Scroll to first', onClick: scrollToFirstHighlight }
         });
-        
-        ensurePanelElements();
-        showPanelElements();
       }
+      
+      // Always open panel (even with no results) so users can use search/AI features
+      ensurePanelElements();
+      showPanelElements();
       
       // Include page content in scan results for AI features (relationship resolution, etc.)
       sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });
@@ -879,17 +885,18 @@ async function scanPageForOAEV(): Promise<void> {
       }
       
       if (entities.length === 0) {
-        showToast({ type: 'info', message: 'No assets found on this page' });
+        showToast({ type: 'info', message: 'No assets found on this page. Use search or AI to find more.' });
       } else {
         showToast({ 
           type: 'success', 
           message: `Found ${entities.length} asset${entities.length === 1 ? '' : 's'}`,
           action: { label: 'Scroll to first', onClick: scrollToFirstHighlight }
         });
-        
-        ensurePanelElements();
-        showPanelElements();
       }
+      
+      // Always open panel (even with no results) so users can use search/AI features
+      ensurePanelElements();
+      showPanelElements();
       
       // Include page content in scan results for AI features
       sendPanelMessage('SCAN_RESULTS', { ...scanResults, pageContent: content, pageTitle: document.title, pageUrl: url });
@@ -959,7 +966,7 @@ async function scanAllPlatforms(): Promise<void> {
       const totalDetected = data.observables.length + data.openctiEntities.length + cves.length + (data.openaevEntities?.length || 0);
       
       if (totalDetected === 0) {
-        showToast({ type: 'info', message: 'No entities found on this page' });
+        showToast({ type: 'info', message: 'No entities found on this page. Use search or AI to find more.' });
       } else {
         const parts: string[] = [];
         if (octiFound > 0) parts.push(`${octiFound} in OpenCTI`);
@@ -970,10 +977,11 @@ async function scanAllPlatforms(): Promise<void> {
           message,
           action: { label: 'Scroll to first', onClick: scrollToFirstHighlight }
         });
-        
-        ensurePanelElements();
-        showPanelElements();
       }
+      
+      // Always open panel (even with no results) so users can use search/AI features
+      ensurePanelElements();
+      showPanelElements();
       
       // Include page content in scan results for AI features
       sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });

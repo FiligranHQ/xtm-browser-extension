@@ -1,6 +1,9 @@
 /**
  * Panel Management Module
  * Handles the side panel iframe and panel communication.
+ * Supports two modes:
+ * - Floating mode (default): Panel is an injected iframe, communication via postMessage
+ * - Split screen mode: Panel is browser's native side panel, communication via chrome.runtime
  */
 
 import { loggers } from '../shared/utils/logger';
@@ -20,6 +23,9 @@ let isPanelReady = false;
 const panelMessageQueue: Array<{ type: string; payload?: unknown }> = [];
 let documentClickHandlerInstalled = false;
 let highlightClickInProgress = false;
+// Split screen mode - uses browser's native side panel instead of floating iframe
+let splitScreenMode = false;
+let splitScreenModeChecked = false;
 
 // ============================================================================
 // Getters/Setters
@@ -49,15 +55,79 @@ export function getHighlightClickInProgress(): boolean {
   return highlightClickInProgress;
 }
 
+export function getSplitScreenMode(): boolean {
+  return splitScreenMode;
+}
+
+// ============================================================================
+// Split Screen Mode Detection
+// ============================================================================
+
+/**
+ * Check if split screen mode is enabled (cached after first check)
+ */
+async function checkSplitScreenMode(): Promise<boolean> {
+  if (splitScreenModeChecked) {
+    return splitScreenMode;
+  }
+  
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
+        if (chrome.runtime.lastError) {
+          splitScreenModeChecked = true;
+          resolve(false);
+          return;
+        }
+        splitScreenMode = response?.success && response.data?.splitScreenMode === true;
+        splitScreenModeChecked = true;
+        log.debug('[PANEL] Split screen mode:', splitScreenMode);
+        resolve(splitScreenMode);
+      });
+    } else {
+      splitScreenModeChecked = true;
+      resolve(false);
+    }
+  });
+}
+
+/**
+ * Force refresh of split screen mode setting (call when settings change)
+ */
+export function refreshSplitScreenMode(): void {
+  splitScreenModeChecked = false;
+}
+
+/**
+ * Initialize split screen mode check (call early in content script lifecycle)
+ */
+export async function initializeSplitScreenMode(): Promise<boolean> {
+  return checkSplitScreenMode();
+}
+
 // ============================================================================
 // Panel Communication
 // ============================================================================
 
 /**
- * Send a message to the panel iframe.
- * If the panel is not ready yet, the message is queued.
+ * Send a message to the panel.
+ * In floating mode: sends via postMessage to iframe
+ * In split screen mode: sends via chrome.runtime to native side panel
  */
 export function sendPanelMessage(type: string, payload?: unknown): void {
+  // In split screen mode, send via chrome.runtime to the native side panel
+  if (splitScreenMode) {
+    log.debug(` sendPanelMessage [SPLIT]: Sending '${type}' via runtime`);
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ 
+        type: 'FORWARD_TO_PANEL', 
+        payload: { type, payload } 
+      });
+    }
+    return;
+  }
+  
+  // Floating mode - send via postMessage to iframe
   if (!panelFrame?.contentWindow) {
     log.debug(`Cannot send panel message '${type}': panel not available`);
     return;
@@ -97,9 +167,16 @@ export function flushPanelMessageQueue(): void {
 // ============================================================================
 
 /**
- * Ensure panel elements exist
+ * Ensure panel elements exist (only in floating mode)
+ * In split screen mode, the browser handles the panel
  */
 export function ensurePanelElements(): void {
+  // In split screen mode, don't create floating iframe elements
+  if (splitScreenMode) {
+    log.debug('[PANEL] Split screen mode - skipping floating panel elements');
+    return;
+  }
+  
   // Create overlay
   if (!panelOverlay) {
     panelOverlay = document.createElement('div');
@@ -126,9 +203,16 @@ export function ensurePanelElements(): void {
 }
 
 /**
- * Show panel elements
+ * Show panel elements (only in floating mode)
+ * In split screen mode, the browser handles showing the panel
  */
 export function showPanelElements(): void {
+  // In split screen mode, don't show floating panel elements
+  if (splitScreenMode) {
+    log.debug('[SHOW-PANEL-ELEMENTS] Split screen mode - skipping floating panel show');
+    return;
+  }
+  
   log.debug('[SHOW-PANEL-ELEMENTS] Called, panelOverlay:', !!panelOverlay, 'panelFrame:', !!panelFrame);
   
   // Check if styles are injected
@@ -172,8 +256,14 @@ export function hidePanel(): void {
 
 /**
  * Check if panel is hidden
+ * In split screen mode, always returns false (browser manages panel visibility)
  */
 export function isPanelHidden(): boolean {
+  // In split screen mode, the panel is managed by the browser
+  // We return false to prevent the content script from trying to re-open it
+  if (splitScreenMode) {
+    return false;
+  }
   return panelFrame?.classList.contains('hidden') ?? true;
 }
 
@@ -249,6 +339,9 @@ export async function showPanel(
   entity: DetectedObservable | DetectedOCTIEntity,
   platformMatches?: Array<{ platformId: string; entityId: string; entityData?: unknown }>
 ): Promise<void> {
+  // Ensure split screen mode is checked first
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -265,7 +358,9 @@ export async function showPanel(
 /**
  * Show add panel for non-existing entities
  */
-export function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): void {
+export async function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -278,6 +373,8 @@ export function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): v
 export async function showPreviewPanel(
   selectedEntities: Array<DetectedObservable | DetectedOCTIEntity>
 ): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -303,6 +400,8 @@ export async function showPreviewPanel(
  * Show container creation panel
  */
 export async function showContainerPanel(): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -327,6 +426,8 @@ export async function showContainerPanel(): Promise<void> {
  * Show investigation panel
  */
 export async function showInvestigationPanel(): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -339,6 +440,8 @@ export async function showInvestigationPanel(): Promise<void> {
  * Show search panel
  */
 export async function showSearchPanel(): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -351,6 +454,8 @@ export async function showSearchPanel(): Promise<void> {
  * Show unified search panel
  */
 export async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   
@@ -363,6 +468,8 @@ export async function showUnifiedSearchPanel(initialQuery?: string): Promise<voi
  * Show add selection panel (context menu)
  */
 export async function showAddSelectionPanel(selectedText: string): Promise<void> {
+  await checkSplitScreenMode();
+  
   ensurePanelElements();
   showPanelElements();
   

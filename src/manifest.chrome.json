@@ -17,7 +17,8 @@
     "activeTab",
     "scripting",
     "contextMenus",
-    "debugger"
+    "debugger",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -39,6 +40,9 @@
   "options_ui": {
     "page": "options/index.html",
     "open_in_tab": true
+  },
+  "side_panel": {
+    "default_path": "panel/index.html"
   },
   "content_scripts": [
     {

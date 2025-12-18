@@ -294,6 +294,7 @@ src/shared/api/openaev/
 ```
 
 **Key modules:**
+- **types.ts**: API request types (`Filter`, `FilterGroup`, `SearchBody`) and builder params
 - **filters.ts**: Filter group builders, payload builders, atomic testing utilities (~300 lines)
 
 **Filter builder pattern:**
@@ -561,12 +562,19 @@ The panel operates as a state machine with the following modes and transitions:
 │   Script    │ ◄──────────────────────────────── │   Worker    │
 └─────────────┘         sendResponse               └─────────────┘
        │                                                  │
-       │ window.postMessage                               │
+       │ window.postMessage (floating mode only)          │
        ▼                                                  │
-┌─────────────┐     chrome.runtime.sendMessage           │
-│    Panel    │ ──────────────────────────────────────►  │
-│   (iframe)  │ ◄──────────────────────────────────────  │
-└─────────────┘                                          │
+┌─────────────────────────────────────────────────────────┤
+│    Panel (two modes):                                   │
+│    ┌─────────────┐     window.postMessage              │
+│    │   Floating  │ ◄───────────────────────────        │
+│    │   (iframe)  │ ◄── via Content Script              │
+│    └─────────────┘                                     │
+│    ┌─────────────┐     chrome.runtime.sendMessage      │
+│    │ Split Screen│ ──────────────────────────────────► │
+│    │ (side panel)│ ◄───────────────────────────────── │
+│    └─────────────┘         (direct to BG)              │
+└─────────────────────────────────────────────────────────┤
                                                          │
 ┌─────────────┐     chrome.runtime.sendMessage           │
 │   Options   │ ──────────────────────────────────────►  │
@@ -1022,9 +1030,34 @@ import {
 | `description-helpers.ts` | `generateDescription`, `cleanHtmlContent`, `escapeHtml` | HTML content processing for descriptions |
 | `marking-helpers.ts` | `getMarkingColor`, `getMarkingChipStyle` | TLP/PAP marking colors |
 
-## Panel Positioning
+## Panel Display Modes
 
-The side panel iframe uses multiple defensive CSS strategies to prevent host page interference:
+The extension supports two panel display modes, configurable in Settings > Appearance:
+
+### 1. Floating Panel Mode (Default)
+
+The panel is rendered as an injected iframe in the content script:
+- Managed by `content/panel.ts`
+- Uses `postMessage` for communication between content script and panel
+- Panel can be closed via X button or clicking outside
+- CSS isolation protects against host page interference
+
+### 2. Split Screen Mode (Browser Native Side Panel)
+
+When enabled, the panel uses the browser's native side panel APIs:
+- **Chrome/Edge**: Uses `chrome.sidePanel.open()` API (Chrome 114+)
+- **Firefox**: Uses `browser.sidebarAction` API (Firefox 109+)
+- Panel persists until closed via browser's UI
+- Close button in panel header is hidden (browser controls closing)
+- Better integration with browser's window management
+
+The panel application (`src/panel/App.tsx`) detects which mode it's running in by checking `window.parent === window`:
+- **In iframe**: `window.parent !== window` (floating mode)
+- **In side panel**: `window.parent === window` (split screen mode)
+
+## Panel Positioning (Floating Mode)
+
+In floating mode, the side panel iframe uses multiple defensive CSS strategies to prevent host page interference:
 
 1. **Fixed Positioning**: `position: fixed` with explicit `top`, `right`, `left`, `bottom`
 2. **Transform Reset**: `translate: none`, `rotate: none`, `scale: none` prevent centering transforms

@@ -46,6 +46,8 @@ export interface ExtensionSettings {
   autoScan: boolean;
   highlightColor?: string;
   showNotifications: boolean;
+  /** Enable browser native split screen panel instead of floating panel */
+  splitScreenMode?: boolean;
   detection?: DetectionSettings;
   ai?: AISettings;
 }
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   theme: 'dark',
   autoScan: false,
   showNotifications: true,
+  splitScreenMode: false,
   detection: {
     disabledObservableTypes: [],
     disabledOpenCTITypes: [],

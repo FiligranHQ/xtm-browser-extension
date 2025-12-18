@@ -39,6 +39,14 @@
     "page": "options/index.html",
     "open_in_tab": true
   },
+  "sidebar_action": {
+    "default_panel": "panel/index.html",
+    "default_title": "Filigran XTM",
+    "default_icon": {
+      "16": "assets/icons/icon-16.svg",
+      "32": "assets/icons/icon-32.svg"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

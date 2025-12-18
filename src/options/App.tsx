@@ -140,6 +140,9 @@ const App: React.FC = () => {
       if (!loadedSettings.openaevPlatforms) {
         loadedSettings.openaevPlatforms = [];
       }
+      if (!loadedSettings.theme) {
+        loadedSettings.theme = 'dark';
+      }
       if (!loadedSettings.detection) {
         loadedSettings.detection = DEFAULT_DETECTION;
       }
@@ -568,6 +571,22 @@ const App: React.FC = () => {
   const handleResetAppearance = () => {
     if (!settings) return;
     setTheme('auto');
+    setSplitScreenMode(false);
+  };
+
+  const setSplitScreenMode = async (enabled: boolean) => {
+    if (!settings) return;
+    
+    const updatedSettings = { ...settings, splitScreenMode: enabled };
+    setSettings(updatedSettings);
+    
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      await chrome.runtime.sendMessage({
+        type: 'SAVE_SETTINGS',
+        payload: updatedSettings,
+      });
+      setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
+    }
   };
 
   const handleClearAI = () => {
@@ -839,6 +858,7 @@ const App: React.FC = () => {
             <AppearanceTab
               settings={settings}
               onSetTheme={setTheme}
+              onSetSplitScreenMode={setSplitScreenMode}
               onResetAppearance={handleResetAppearance}
               onSave={handleSave}
             />

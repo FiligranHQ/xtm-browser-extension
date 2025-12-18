@@ -36,8 +36,23 @@ export const usePopupActions = ({
   setShowEETrialDialog,
 }: UsePopupActionsProps): UsePopupActionsReturn => {
   
+  // Helper function to open side panel if split screen mode is enabled
+  const openSidePanelIfEnabled = useCallback(async (tabId: number): Promise<void> => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      if (response?.success && response.data?.splitScreenMode && chrome.sidePanel) {
+        await chrome.sidePanel.open({ tabId });
+      }
+    } catch (error) {
+      log.debug('Side panel open failed or not supported:', error);
+    }
+  }, []);
+
   // Helper function to ensure content script is loaded before sending messages
   const ensureContentScriptAndSendMessage = useCallback(async (tabId: number, message: { type: string; payload?: unknown }) => {
+    // Open side panel if split screen mode is enabled (before sending message)
+    await openSidePanelIfEnabled(tabId);
+    
     try {
       // First try to send the message directly
       await chrome.tabs.sendMessage(tabId, message);
@@ -58,7 +73,7 @@ export const usePopupActions = ({
         log.error('Failed to inject content script or send message:', error);
       }
     }
-  }, []);
+  }, [openSidePanelIfEnabled]);
 
   // Unified scan across ALL platforms
   const handleUnifiedScan = useCallback(async () => {

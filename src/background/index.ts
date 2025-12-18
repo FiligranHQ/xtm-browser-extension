@@ -326,9 +326,30 @@ if (!isInitialized) {
   initializeClient().catch((err) => log.error('Failed to initialize client:', err));
 }
 
+/**
+ * Open the side panel if split screen mode is enabled
+ * Returns true if side panel was opened, false otherwise
+ */
+async function openSidePanelIfEnabled(tabId: number): Promise<boolean> {
+  try {
+    const settings = await getSettings();
+    if (settings.splitScreenMode && chrome.sidePanel) {
+      // Open the browser's native side panel
+      await chrome.sidePanel.open({ tabId });
+      return true;
+    }
+  } catch (error) {
+    log.debug('Side panel open failed or not supported:', error);
+  }
+  return false;
+}
+
 // Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
+  
+  // Open side panel if split screen mode is enabled
+  await openSidePanelIfEnabled(tab.id);
   
   switch (info.menuItemId) {
     case 'xtm-scan-page':
@@ -2205,6 +2226,24 @@ async function handleMessage(
         } else {
           sendResponse({ success: true, data: null });
         }
+        break;
+      }
+      
+      case 'FORWARD_TO_PANEL': {
+        // Forward messages to the native side panel in split screen mode
+        // Store the message for the panel to retrieve
+        const panelMessage = message.payload as { type: string; payload?: unknown };
+        if (panelMessage) {
+          await chrome.storage.session.set({ pendingPanelState: panelMessage });
+          // Broadcast to any open extension pages (including the side panel)
+          chrome.runtime.sendMessage({ 
+            type: 'PANEL_MESSAGE_BROADCAST', 
+            payload: panelMessage 
+          }).catch(() => {
+            // Ignore - no listeners (panel might not be open yet)
+          });
+        }
+        sendResponse(successResponse(null));
         break;
       }
       

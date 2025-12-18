@@ -13,6 +13,7 @@ import {
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import { loggers } from '../shared/utils/logger';
+import { sessionStorage } from '../shared/utils/storage';
 import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
 import { CommonEmptyView } from './components/CommonEmptyView';
 import { CommonLoadingView } from './components/CommonLoadingView';
@@ -486,18 +487,35 @@ const App: React.FC = () => {
     
     chrome.runtime.onMessage.addListener(handleRuntimeMessage);
     
-    // Check for pending panel state from session storage (split screen mode)
+    // Check for pending panel state from session storage (split screen mode in Chrome/Edge)
     // This handles the case where context menu was used but panel wasn't ready yet
-    chrome.storage.session.get('pendingPanelState').then((result) => {
-      if (result.pendingPanelState) {
-        log.debug('[PANEL] Found pending panel state:', result.pendingPanelState.type);
-        handlePanelState(result.pendingPanelState);
-        // Clear the pending state after processing
-        chrome.storage.session.remove('pendingPanelState');
+    const checkPendingState = () => {
+      sessionStorage.get<{ type: string; payload?: unknown }>('pendingPanelState').then((pendingState) => {
+        if (pendingState) {
+          log.debug('[PANEL] Found pending panel state:', pendingState.type);
+          handlePanelState(pendingState);
+          // Clear the pending state after processing
+          sessionStorage.remove('pendingPanelState');
+        }
+      }).catch((err) => {
+        log.debug('[PANEL] Could not check pending panel state:', err);
+      });
+    };
+    
+    // Initial check
+    checkPendingState();
+    
+    // Poll for pending state a few times (for split screen mode in Chrome/Edge)
+    let pollCount = 0;
+    const maxPolls = 3;
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        return;
       }
-    }).catch((err) => {
-      log.debug('[PANEL] Could not check pending panel state:', err);
-    });
+      checkPendingState();
+    }, 500);
     
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
@@ -533,6 +551,7 @@ const App: React.FC = () => {
       window.removeEventListener('message', handleMessage);
       chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
       chrome.storage.onChanged.removeListener(handleStorageChange);
+      clearInterval(pollInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

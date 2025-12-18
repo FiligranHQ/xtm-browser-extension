@@ -86,6 +86,8 @@ import {
   clearAllOAEVCaches,
   cleanupOrphanedOAEVCaches,
   type CachedOCTIEntity,
+  // Cross-browser session storage
+  sessionStorage,
 } from '../shared/utils/storage';
 import type { ExtensionSettings } from '../shared/types/settings';
 import type { DetectedObservable } from '../shared/types/observables';
@@ -436,6 +438,10 @@ async function handleMessage(
         // Debug: Log platform EE status when settings are requested
         log.debug('GET_SETTINGS: OpenCTI platforms EE status:', 
           settings.openctiPlatforms?.map(p => ({ id: p.id, name: p.name, isEnterprise: p.isEnterprise })));
+        // Firefox: Force splitScreenMode to false (no native side panel, use iframe)
+        if (!chrome.sidePanel) {
+          settings.splitScreenMode = false;
+        }
         sendResponse(successResponse(settings));
         break;
       }
@@ -2264,23 +2270,21 @@ async function handleMessage(
       case 'SHOW_INVESTIGATION_PANEL':
       case 'SHOW_BULK_IMPORT_PANEL': {
         // Store in session storage for panel to retrieve
-        await chrome.storage.session.set({ 
-          pendingPanelState: {
-            type: message.type,
-            payload: message.payload,
-            timestamp: Date.now(),
-          }
+        await sessionStorage.set('pendingPanelState', {
+          type: message.type,
+          payload: message.payload,
+          timestamp: Date.now(),
         });
         sendResponse(successResponse(null));
         break;
       }
       
       case 'GET_PANEL_STATE': {
-        const result = await chrome.storage.session.get('pendingPanelState');
-        if (result.pendingPanelState) {
+        const pendingState = await sessionStorage.get('pendingPanelState');
+        if (pendingState) {
           // Clear after retrieving
-          await chrome.storage.session.remove('pendingPanelState');
-          sendResponse({ success: true, data: result.pendingPanelState });
+          await sessionStorage.remove('pendingPanelState');
+          sendResponse({ success: true, data: pendingState });
         } else {
           sendResponse({ success: true, data: null });
         }
@@ -2288,20 +2292,23 @@ async function handleMessage(
       }
       
       case 'OPEN_SIDE_PANEL': {
-        // Open the native side panel (for split screen mode)
+        // Open the native side panel (Chrome/Edge only)
+        // NOTE: Firefox sidebar must be opened from popup (requires user gesture context)
         try {
+          // Chrome/Edge: Use chrome.sidePanel.open()
           const settings = await getSettings();
           if (settings.splitScreenMode && chrome.sidePanel) {
             // Get the active tab to open the side panel for
             const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (activeTab?.id) {
               await chrome.sidePanel.open({ tabId: activeTab.id });
-              sendResponse(successResponse({ opened: true }));
+              sendResponse(successResponse({ opened: true, browser: 'chrome' }));
             } else {
               sendResponse(successResponse({ opened: false, reason: 'No active tab' }));
             }
           } else {
-            sendResponse(successResponse({ opened: false, reason: 'Split screen mode not enabled' }));
+            // Firefox or split screen mode not enabled
+            sendResponse(successResponse({ opened: false, reason: 'Not applicable' }));
           }
         } catch (error) {
           log.debug('Failed to open side panel:', error);
@@ -2315,7 +2322,7 @@ async function handleMessage(
         // Store the message for the panel to retrieve
         const panelMessage = message.payload as { type: string; payload?: unknown };
         if (panelMessage) {
-          await chrome.storage.session.set({ pendingPanelState: panelMessage });
+          await sessionStorage.set('pendingPanelState', panelMessage);
           // Broadcast to any open extension pages (including the side panel)
           chrome.runtime.sendMessage({ 
             type: 'PANEL_MESSAGE_BROADCAST', 

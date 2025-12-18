@@ -2,7 +2,7 @@
  * Appearance Tab Component
  * Configuration for theme and visual settings
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -20,6 +20,15 @@ import {
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types/settings';
 
+/**
+ * Detect if running in Firefox
+ * Firefox doesn't support programmatic control of sidebar opening,
+ * so split screen mode is Chrome/Edge only
+ */
+const isFirefox = (): boolean => {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Firefox');
+};
+
 interface AppearanceTabProps {
   settings: ExtensionSettings;
   onSetTheme: (theme: 'auto' | 'dark' | 'light') => void;
@@ -35,6 +44,9 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
   onResetAppearance,
   onSave,
 }) => {
+  // Split screen mode is only available on Chrome/Edge (not Firefox)
+  const isSplitScreenSupported = useMemo(() => !isFirefox(), []);
+  
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>Appearance</Typography>
@@ -94,29 +106,31 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           </Typography>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
-          </Box>
-          
-          <FormControlLabel
-            control={
-              <Switch
-                checked={settings.splitScreenMode ?? false}
-                onChange={(e) => onSetSplitScreenMode(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Enable split screen mode"
-            sx={{ mb: 1 }}
-          />
-          
-          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
-            When enabled, the panel will use your browser's native side panel instead of a floating window.
-            The panel will be controlled by the browser and remain open until you close it via the browser's UI.
-          </Typography>
-        </Paper>
+        {isSplitScreenSupported && (
+          <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
+            </Box>
+            
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={settings.splitScreenMode ?? false}
+                  onChange={(e) => onSetSplitScreenMode(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Enable split screen mode"
+              sx={{ mb: 1 }}
+            />
+            
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
+              When enabled, the panel will use your browser's native side panel instead of a floating window.
+              The panel will be controlled by the browser and remain open until you close it via the browser's UI.
+            </Typography>
+          </Paper>
+        )}
       </Box>
 
       <Divider sx={{ my: 3 }} />

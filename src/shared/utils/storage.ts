@@ -7,6 +7,79 @@
 import type { ExtensionSettings } from '../types/settings';
 
 // ============================================================================
+// Cross-Browser Session Storage
+// ============================================================================
+
+/**
+ * Check if chrome.storage.session is available (Chrome 102+, Firefox 115+)
+ * Falls back to local storage with session_ prefix if not available
+ */
+function isSessionStorageAvailable(): boolean {
+  return typeof chrome !== 'undefined' && 
+         chrome.storage && 
+         typeof chrome.storage.session !== 'undefined';
+}
+
+const SESSION_PREFIX = '_session_';
+
+/**
+ * Cross-browser session storage wrapper
+ * Uses chrome.storage.session if available, falls back to chrome.storage.local
+ */
+export const sessionStorage = {
+  /**
+   * Get value from session storage
+   */
+  async get<T = unknown>(key: string): Promise<T | undefined> {
+    try {
+      if (isSessionStorageAvailable()) {
+        const result = await chrome.storage.session.get(key);
+        return result[key] as T | undefined;
+      } else {
+        // Fallback to local storage with prefix
+        const result = await chrome.storage.local.get(SESSION_PREFIX + key);
+        return result[SESSION_PREFIX + key] as T | undefined;
+      }
+    } catch (error) {
+      console.warn(`[Storage] Failed to get session key "${key}":`, error);
+      return undefined;
+    }
+  },
+  
+  /**
+   * Set value in session storage
+   */
+  async set(key: string, value: unknown): Promise<void> {
+    try {
+      if (isSessionStorageAvailable()) {
+        await chrome.storage.session.set({ [key]: value });
+      } else {
+        // Fallback to local storage with prefix
+        await chrome.storage.local.set({ [SESSION_PREFIX + key]: value });
+      }
+    } catch (error) {
+      console.warn(`[Storage] Failed to set session key "${key}":`, error);
+    }
+  },
+  
+  /**
+   * Remove value from session storage
+   */
+  async remove(key: string): Promise<void> {
+    try {
+      if (isSessionStorageAvailable()) {
+        await chrome.storage.session.remove(key);
+      } else {
+        // Fallback to local storage with prefix
+        await chrome.storage.local.remove(SESSION_PREFIX + key);
+      }
+    } catch (error) {
+      console.warn(`[Storage] Failed to remove session key "${key}":`, error);
+    }
+  },
+};
+
+// ============================================================================
 // Settings Storage
 // ============================================================================
 

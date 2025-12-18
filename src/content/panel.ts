@@ -64,13 +64,32 @@ export function getSplitScreenMode(): boolean {
 // ============================================================================
 
 /**
+ * Check if the browser supports Chrome's native side panel API (Chrome/Edge only)
+ * Firefox doesn't have chrome.sidePanel API
+ */
+function isSidePanelSupported(): boolean {
+  return typeof chrome !== 'undefined' && typeof chrome.sidePanel !== 'undefined';
+}
+
+/**
  * Check if split screen mode is enabled (cached after first check)
+ * - Firefox: Always false (no native side panel, use iframe)
+ * - Chrome/Edge: Based on user setting (only if sidePanel API available)
  */
 async function checkSplitScreenMode(): Promise<boolean> {
   if (splitScreenModeChecked) {
     return splitScreenMode;
   }
   
+  // Firefox doesn't support native side panel, always use floating iframe
+  if (!isSidePanelSupported()) {
+    splitScreenMode = false;
+    splitScreenModeChecked = true;
+    log.debug('[PANEL] Split screen mode: false (sidePanel API not supported)');
+    return false;
+  }
+  
+  // Chrome/Edge: Check user settings for split screen mode
   return new Promise((resolve) => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
@@ -112,9 +131,14 @@ export async function initializeSplitScreenMode(): Promise<boolean> {
 /**
  * Send a message to the panel.
  * In floating mode: sends via postMessage to iframe
- * In split screen mode: sends via chrome.runtime to native side panel
+ * In split screen mode / Firefox: sends via chrome.runtime to native side panel
  */
 export function sendPanelMessage(type: string, payload?: unknown): void {
+  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
+  if (!isSidePanelSupported()) {
+    splitScreenMode = false;
+  }
+  
   // In split screen mode, send via chrome.runtime to the native side panel
   if (splitScreenMode) {
     log.debug(` sendPanelMessage [SPLIT]: Sending '${type}' via runtime`);
@@ -128,12 +152,15 @@ export function sendPanelMessage(type: string, payload?: unknown): void {
   }
   
   // Floating mode - send via postMessage to iframe
-  if (!panelFrame?.contentWindow) {
-    log.debug(`Cannot send panel message '${type}': panel not available`);
+  // Queue message if panel iframe doesn't exist or isn't ready yet
+  // This handles race conditions where iframe was just created but contentWindow isn't ready
+  if (!panelFrame) {
+    log.debug(`Cannot send panel message '${type}': panel frame not created yet`);
     return;
   }
   
-  if (!isPanelReady) {
+  // Queue message if panel isn't ready (contentWindow not available or not initialized)
+  if (!isPanelReady || !panelFrame.contentWindow) {
     log.debug(` sendPanelMessage: Panel not ready, queuing '${type}'`);
     panelMessageQueue.push({ type, payload });
     return;
@@ -145,10 +172,19 @@ export function sendPanelMessage(type: string, payload?: unknown): void {
 
 /**
  * Flush all queued messages to the panel.
+ * If contentWindow is not available yet, retries after a short delay.
  */
-export function flushPanelMessageQueue(): void {
+export function flushPanelMessageQueue(retryCount = 0): void {
+  const MAX_RETRIES = 5;
+  const RETRY_DELAY = 100; // ms
+  
   if (!panelFrame?.contentWindow) {
-    log.warn('Cannot flush panel queue: panel not available');
+    if (retryCount < MAX_RETRIES && panelMessageQueue.length > 0) {
+      log.debug(`Cannot flush panel queue: contentWindow not ready, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+      setTimeout(() => flushPanelMessageQueue(retryCount + 1), RETRY_DELAY);
+      return;
+    }
+    log.warn('Cannot flush panel queue: panel not available after retries');
     return;
   }
   
@@ -168,9 +204,14 @@ export function flushPanelMessageQueue(): void {
 
 /**
  * Ensure panel elements exist (only in floating mode)
- * In split screen mode, the browser handles the panel
+ * In split screen mode / Firefox, the browser handles the panel
  */
 export function ensurePanelElements(): void {
+  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
+  if (!isSidePanelSupported()) {
+    splitScreenMode = false;
+  }
+  
   // In split screen mode, don't create floating iframe elements
   if (splitScreenMode) {
     log.debug('[PANEL] Split screen mode - skipping floating panel elements');
@@ -204,9 +245,14 @@ export function ensurePanelElements(): void {
 
 /**
  * Show panel elements (only in floating mode)
- * In split screen mode, the browser handles showing the panel
+ * In split screen mode / Firefox, the browser handles showing the panel
  */
 export function showPanelElements(): void {
+  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
+  if (!isSidePanelSupported()) {
+    splitScreenMode = false;
+  }
+  
   // In split screen mode, don't show floating panel elements
   if (splitScreenMode) {
     log.debug('[SHOW-PANEL-ELEMENTS] Split screen mode - skipping floating panel show');
@@ -256,9 +302,14 @@ export function hidePanel(): void {
 
 /**
  * Check if panel is hidden
- * In split screen mode, always returns false (browser manages panel visibility)
+ * In split screen mode / Firefox, always returns false (browser manages panel visibility)
  */
 export function isPanelHidden(): boolean {
+  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
+  if (!isSidePanelSupported()) {
+    splitScreenMode = false;
+  }
+  
   // In split screen mode, the panel is managed by the browser
   // We return false to prevent the content script from trying to re-open it
   if (splitScreenMode) {

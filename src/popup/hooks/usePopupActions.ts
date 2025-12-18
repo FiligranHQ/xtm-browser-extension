@@ -36,12 +36,19 @@ export const usePopupActions = ({
   setShowEETrialDialog,
 }: UsePopupActionsProps): UsePopupActionsReturn => {
   
-  // Helper function to open side panel if split screen mode is enabled
+  // Helper function to open side panel (Chrome/Edge only - Firefox uses iframe panel)
   const openSidePanelIfEnabled = useCallback(async (tabId: number): Promise<void> => {
     try {
+      // Only Chrome/Edge support native side panel
+      if (!chrome.sidePanel) {
+        return; // Firefox - uses iframe panel, no action needed
+      }
+      
+      // Chrome/Edge: Open side panel if split screen mode is enabled
       const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-      if (response?.success && response.data?.splitScreenMode && chrome.sidePanel) {
+      if (response?.success && response.data?.splitScreenMode) {
         await chrome.sidePanel.open({ tabId });
+        log.debug('Chrome side panel opened');
       }
     } catch (error) {
       log.debug('Side panel open failed or not supported:', error);

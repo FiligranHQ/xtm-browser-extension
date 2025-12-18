@@ -72,11 +72,12 @@ src/background/
 │   ├── types.ts            # Handler type definitions
 │   ├── ai-handlers.ts      # AI-related message handlers
 │   ├── cache-handlers.ts   # Cache management handlers
+│   ├── container-handlers.ts # Container creation handlers
 │   ├── misc-handlers.ts    # Miscellaneous handlers
 │   ├── openaev-handlers.ts # OpenAEV-specific handlers
 │   ├── opencti-handlers.ts # OpenCTI-specific handlers
-│   ├── platform-handlers.ts # Platform initialization handlers
 │   ├── scan-handlers.ts    # Page scanning handlers
+│   ├── scenario-handlers.ts # Scenario generation handlers
 │   └── settings-handlers.ts # Settings management handlers
 └── services/
     ├── cache-manager.ts    # Entity cache management (OpenCTI & OpenAEV)

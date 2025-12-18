@@ -1055,6 +1055,14 @@ The panel application (`src/panel/App.tsx`) detects which mode it's running in b
 - **In iframe**: `window.parent !== window` (floating mode)
 - **In side panel**: `window.parent === window` (split screen mode)
 
+**Settings Synchronization:**
+When split screen mode is toggled in settings:
+1. The options page broadcasts a `BROADCAST_SPLIT_SCREEN_MODE_CHANGE` message to the background script
+2. The background script relays `SPLIT_SCREEN_MODE_CHANGED` to all open tabs
+3. Each content script refreshes its cached split screen mode value
+4. If disabling split screen mode, the native side panel is closed via `chrome.sidePanel.setOptions({ enabled: false })`
+5. Subsequent scans will correctly use the floating iframe without requiring a page reload
+
 ## Panel Positioning (Floating Mode)
 
 In floating mode, the side panel iframe uses multiple defensive CSS strategies to prevent host page interference:

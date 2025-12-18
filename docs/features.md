@@ -48,6 +48,19 @@ Defanged values are shown with an indicator badge, and the refanged value is use
 - **Right-click**: Open context menu for quick actions
 - **Hover**: View tooltip with basic information
 
+### Scan Results Actions
+
+Each detected entity in the scan results panel has action buttons:
+- **Scroll-to-highlight** (target icon): Scrolls the page to the entity and triggers a bright 3-second glow animation to help locate it
+- **Expand/view** (arrow icon): Opens the full entity details in the panel
+
+### Empty Scan Results
+
+When a page scan returns no results:
+- The panel still opens with the full layout (header, search field, type filters)
+- The **AI Discovery** button is available, allowing you to immediately trigger AI-based entity discovery
+- A helpful message indicates no entities were detected and suggests using AI discovery
+
 ## Entity Details Panel
 
 When you click on a highlighted entity, a side panel opens with comprehensive information.

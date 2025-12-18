@@ -27,12 +27,13 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 
 ### OpenCTI Integration
 - 🔍 **Page Scanning** - Detect observables (IPs, domains, hashes, CVEs, etc.) and STIX entities
-- 🎯 **Visual Highlighting** - Color-coded indicators (green = found, amber = new)
+- 🎯 **Visual Highlighting** - Color-coded indicators (green = found, amber = new) with scroll-to-highlight glow effect
 - 📋 **Quick Actions** - Create reports, cases, groupings, and investigations
 - 📊 **Entity Details** - View author, creator, confidence/score, labels, markings, and containers
 - 🔄 **Entity Cache** - Fast offline detection with background refresh
 - 🤖 **AI Description Generation** - Generate container descriptions using AI (Enterprise Edition)
 - 📄 **PDF Generation** - Capture web pages as PDF attachments for containers
+- 🔮 **AI Discovery on Empty Results** - Trigger AI-based entity discovery even when initial scan finds nothing
 
 **Detected Entity Types:**
 - **Threat Entities**: Threat Actor Groups, Intrusion Sets (APT29, Cozy Bear...), Malware, Campaigns

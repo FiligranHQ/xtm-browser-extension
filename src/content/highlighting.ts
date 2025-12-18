@@ -350,6 +350,8 @@ export function highlightResults(
 
 /**
  * Create a highlight in text
+ * Collects all match positions first, then highlights in reverse order
+ * to avoid DOM modifications invalidating subsequent match positions
  */
 function highlightInText(
   fullText: string,
@@ -368,14 +370,24 @@ function highlightInText(
   if (!searchValue || searchValue.length < 2) return;
   
   const searchLower = searchValue.toLowerCase();
-  let pos = 0;
+  const fullTextLower = fullText.toLowerCase();
   
-  // Highlight ALL occurrences of the value on the page
-  while ((pos = fullText.toLowerCase().indexOf(searchLower, pos)) !== -1) {
+  // First pass: collect all match positions
+  interface MatchInfo {
+    pos: number;
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let pos = 0;
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
     for (const { node, start, end } of nodeMap) {
       if (pos >= start && pos < end) {
+        // Skip if already highlighted
         if (node.parentElement?.closest('.xtm-highlight')) {
           break;
         }
@@ -390,73 +402,91 @@ function highlightInText(
         }
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
-          try {
-            // Ensure styles are injected if this node is in a Shadow DOM
-            ensureStylesInShadowRoot(node);
-            
-            const range = document.createRange();
-            range.setStart(node, localStart);
-            range.setEnd(node, localEnd);
-            
-            if (range.toString().trim().length === 0) {
-              break;
-            }
-            
-            const highlight = document.createElement('span');
-            highlight.className = 'xtm-highlight';
-            
-            // Determine if this is an OpenCTI entity (check flag or type)
-            const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_TYPES_SET.has(meta.type);
-            
-            if (meta.found) {
-              // Found in platform = green
-              highlight.classList.add('xtm-found');
-            } else if (isOpenCTIEntity) {
-              // OpenCTI entity not found = gray (can be added via AI discovery)
-              highlight.classList.add('xtm-entity-not-addable');
-            } else {
-              // Observable not found = amber (can be added directly)
-              highlight.classList.add('xtm-not-found');
-            }
-            
-            highlight.dataset.type = meta.type;
-            highlight.dataset.value = searchValue;
-            highlight.dataset.found = String(meta.found);
-            highlight.dataset.entity = JSON.stringify(meta.data);
-            
-            // Check for mixed state: not found in main platform but found in other platforms
-            const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
-            if (hasMixedState) {
-              highlight.dataset.mixedState = 'true';
-              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
-              // Add mixed state styling - amber with green indicator
-              highlight.classList.add('xtm-mixed-state');
-            }
-            
-            // Store platform entities for multi-platform navigation (when found)
-            if (meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0) {
-              highlight.dataset.multiPlatform = 'true';
-              highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
-            }
-            
-            highlight.addEventListener('mouseenter', handlers.onHover);
-            highlight.addEventListener('mouseleave', handlers.onLeave);
-            highlight.addEventListener('click', handlers.onClick, { capture: true });
-            highlight.addEventListener('mousedown', handlers.onMouseDown, { capture: true });
-            highlight.addEventListener('mouseup', handlers.onMouseUp, { capture: true });
-            highlight.addEventListener('contextmenu', handlers.onRightClick);
-            
-            range.surroundContents(highlight);
-            highlights.push(highlight);
-          } catch (e) {
-            // Range might cross node boundaries
-          }
+          matchesToHighlight.push({ pos, node, localStart, localEnd });
         }
         break;
       }
     }
     
     pos = endPos;
+  }
+  
+  // Second pass: highlight in REVERSE order to avoid DOM modifications
+  // invalidating positions of earlier matches
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      // Verify node is still valid and not already highlighted
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      
+      if (range.toString().trim().length === 0) {
+        continue;
+      }
+      
+      const highlight = document.createElement('span');
+      highlight.className = 'xtm-highlight';
+      
+      // Determine if this is an OpenCTI entity (check flag or type)
+      const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_TYPES_SET.has(meta.type);
+      
+      if (meta.found) {
+        // Found in platform = green
+        highlight.classList.add('xtm-found');
+      } else if (isOpenCTIEntity) {
+        // OpenCTI entity not found = gray (can be added via AI discovery)
+        highlight.classList.add('xtm-entity-not-addable');
+      } else {
+        // Observable not found = amber (can be added directly)
+        highlight.classList.add('xtm-not-found');
+      }
+      
+      highlight.dataset.type = meta.type;
+      highlight.dataset.value = searchValue;
+      highlight.dataset.found = String(meta.found);
+      highlight.dataset.entity = JSON.stringify(meta.data);
+      
+      // Check for mixed state: not found in main platform but found in other platforms
+      const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
+      if (hasMixedState) {
+        highlight.dataset.mixedState = 'true';
+        highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+        // Add mixed state styling - amber with green indicator
+        highlight.classList.add('xtm-mixed-state');
+      }
+      
+      // Store platform entities for multi-platform navigation (when found)
+      if (meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0) {
+        highlight.dataset.multiPlatform = 'true';
+        highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+      }
+      
+      highlight.addEventListener('mouseenter', handlers.onHover);
+      highlight.addEventListener('mouseleave', handlers.onLeave);
+      highlight.addEventListener('click', handlers.onClick, { capture: true });
+      highlight.addEventListener('mousedown', handlers.onMouseDown, { capture: true });
+      highlight.addEventListener('mouseup', handlers.onMouseUp, { capture: true });
+      highlight.addEventListener('contextmenu', handlers.onRightClick);
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch {
+      // Range might cross node boundaries or node may have been modified
+    }
   }
 }
 
@@ -526,48 +556,81 @@ function highlightForInvestigation(
   if (!searchValue || searchValue.length < 2) return;
   
   const searchLower = searchValue.toLowerCase();
-  const pos = fullText.toLowerCase().indexOf(searchLower);
-  if (pos === -1) return;
+  const fullTextLower = fullText.toLowerCase();
   
-  for (const { node, start, end } of nodeMap) {
-    if (pos >= start && pos < end) {
-      if (node.parentElement?.closest('.xtm-highlight')) break;
-      
-      const nodeText = node.textContent || '';
-      const localStart = pos - start;
-      const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
-      if (localEnd > nodeText.length) break;
-      
-      try {
-        // Ensure styles are injected if this node is in a Shadow DOM
-        ensureStylesInShadowRoot(node);
-        
-        const range = document.createRange();
-        range.setStart(node, localStart);
-        range.setEnd(node, localEnd);
-        if (range.toString().trim().length === 0) break;
-        
-        const highlight = document.createElement('span');
-        highlight.className = 'xtm-highlight xtm-investigation';
-        highlight.dataset.entityId = entityId || '';
-        highlight.dataset.platformId = platformId || '';
-        highlight.dataset.entityType = entityType;
-        highlight.dataset.entityValue = searchValue;
-        
-        if (onHighlightClick) {
-          highlight.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            onHighlightClick(highlight);
-          });
+  // First pass: collect all match positions
+  interface MatchInfo {
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let pos = 0;
+  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
+    const endPos = pos + searchValue.length;
+    
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        if (node.parentElement?.closest('.xtm-highlight')) {
+          break;
         }
         
-        range.surroundContents(highlight);
-        highlights.push(highlight);
-      } catch { /* ignore */ }
-      break;
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
+        
+        if (localEnd <= nodeText.length) {
+          matchesToHighlight.push({ node, localStart, localEnd });
+        }
+        break;
+      }
     }
+    
+    pos = endPos;
+  }
+  
+  // Second pass: highlight in REVERSE order
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      if (range.toString().trim().length === 0) continue;
+      
+      const highlight = document.createElement('span');
+      highlight.className = 'xtm-highlight xtm-investigation';
+      highlight.dataset.entityId = entityId || '';
+      highlight.dataset.platformId = platformId || '';
+      highlight.dataset.entityType = entityType;
+      highlight.dataset.entityValue = searchValue;
+      
+      if (onHighlightClick) {
+        highlight.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          onHighlightClick(highlight);
+        });
+      }
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch { /* ignore */ }
   }
 }
 
@@ -577,6 +640,7 @@ function highlightForInvestigation(
 
 /**
  * Highlight for atomic testing mode
+ * Uses two-pass reverse-order approach to handle multiple occurrences
  */
 export function highlightForAtomicTesting(
   fullText: string,
@@ -588,9 +652,16 @@ export function highlightForAtomicTesting(
   
   const searchLower = searchValue.toLowerCase();
   const fullTextLower = fullText.toLowerCase();
-  let pos = 0;
   
-  // Highlight ALL occurrences
+  // First pass: collect all match positions
+  interface MatchInfo {
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let pos = 0;
   while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
@@ -618,35 +689,51 @@ export function highlightForAtomicTesting(
         }
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
-          try {
-            // Ensure styles are injected if this node is in a Shadow DOM
-            ensureStylesInShadowRoot(node);
-            
-            const range = document.createRange();
-            range.setStart(node, localStart);
-            range.setEnd(node, localEnd);
-            
-            if (range.toString().trim().length === 0) {
-              break;
-            }
-            
-            const highlight = document.createElement('span');
-            const typeClass = target.type === 'attack-pattern' 
-              ? 'xtm-atomic-attack-pattern' 
-              : 'xtm-atomic-domain';
-            highlight.className = `xtm-highlight xtm-atomic-testing ${typeClass}`;
-            highlight.dataset.value = target.value;
-            highlight.dataset.type = target.type;
-            
-            range.surroundContents(highlight);
-            highlights.push(highlight);
-          } catch { /* Range might cross node boundaries */ }
+          matchesToHighlight.push({ node, localStart, localEnd });
         }
         break;
       }
     }
     
     pos = endPos;
+  }
+  
+  // Second pass: highlight in REVERSE order
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      
+      if (range.toString().trim().length === 0) {
+        continue;
+      }
+      
+      const highlight = document.createElement('span');
+      const typeClass = target.type === 'attack-pattern' 
+        ? 'xtm-atomic-attack-pattern' 
+        : 'xtm-atomic-domain';
+      highlight.className = `xtm-highlight xtm-atomic-testing ${typeClass}`;
+      highlight.dataset.value = target.value;
+      highlight.dataset.type = target.type;
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch { /* Range might cross node boundaries */ }
   }
 }
 
@@ -667,6 +754,10 @@ export function highlightScenarioAttackPatterns(
   }
 }
 
+/**
+ * Highlight text for scenario mode
+ * Uses two-pass reverse-order approach to handle multiple occurrences
+ */
 function highlightInTextForScenario(
   fullText: string,
   searchValue: string,
@@ -677,9 +768,16 @@ function highlightInTextForScenario(
   
   const searchLower = searchValue.toLowerCase();
   const fullTextLower = fullText.toLowerCase();
-  let pos = 0;
   
-  // Highlight ALL occurrences
+  // First pass: collect all match positions
+  interface MatchInfo {
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let pos = 0;
   while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
@@ -707,33 +805,49 @@ function highlightInTextForScenario(
         }
         
         if (localEnd <= nodeText.length && textToHighlight.length > 0) {
-          try {
-            // Ensure styles are injected if this node is in a Shadow DOM
-            ensureStylesInShadowRoot(node);
-            
-            const range = document.createRange();
-            range.setStart(node, localStart);
-            range.setEnd(node, localEnd);
-            
-            if (range.toString().trim().length === 0) {
-              break;
-            }
-            
-            const highlight = document.createElement('span');
-            highlight.className = 'xtm-highlight xtm-scenario';
-            highlight.dataset.value = attackPattern.name;
-            highlight.dataset.type = 'attack-pattern';
-            highlight.dataset.entityId = attackPattern.id;
-            
-            range.surroundContents(highlight);
-            highlights.push(highlight);
-          } catch { /* Range might cross node boundaries */ }
+          matchesToHighlight.push({ node, localStart, localEnd });
         }
         break;
       }
     }
     
     pos = endPos;
+  }
+  
+  // Second pass: highlight in REVERSE order
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      
+      if (range.toString().trim().length === 0) {
+        continue;
+      }
+      
+      const highlight = document.createElement('span');
+      highlight.className = 'xtm-highlight xtm-scenario';
+      highlight.dataset.value = attackPattern.name;
+      highlight.dataset.type = 'attack-pattern';
+      highlight.dataset.entityId = attackPattern.id;
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch { /* Range might cross node boundaries */ }
   }
 }
 
@@ -763,6 +877,8 @@ export function highlightAIEntities(
   onPanelReopen?: () => void
 ): HighlightAIResult {
   const textNodes = getTextNodes(document.body);
+  const { nodeMap, fullText } = buildNodeMap(textNodes);
+  
   let highlightedCount = 0;
   const highlightedEntities: Array<{ type: string; value: string; name: string }> = [];
   const failedEntities: Array<{ type: string; value: string; name: string }> = [];
@@ -774,21 +890,56 @@ export function highlightAIEntities(
       continue;
     }
     
+    const searchLower = searchValue.toLowerCase();
+    const fullTextLower = fullText.toLowerCase();
+    
+    // First pass: collect all match positions for this entity
+    interface MatchInfo {
+      node: Text;
+      localStart: number;
+      localEnd: number;
+    }
+    const matchesToHighlight: MatchInfo[] = [];
+    
+    let pos = 0;
+    while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
+      const endPos = pos + searchValue.length;
+      
+      for (const { node, start, end } of nodeMap) {
+        if (pos >= start && pos < end) {
+          // Skip if already highlighted
+          if (node.parentElement?.closest('.xtm-highlight')) {
+            break;
+          }
+          
+          const nodeText = node.textContent || '';
+          const localStart = pos - start;
+          const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
+          
+          if (localEnd <= nodeText.length) {
+            matchesToHighlight.push({ node, localStart, localEnd });
+          }
+          break;
+        }
+      }
+      
+      pos = endPos;
+    }
+    
     let entityHighlighted = false;
     
-    for (const node of textNodes) {
-      const text = node.textContent || '';
-      const lowerText = text.toLowerCase();
-      const lowerSearch = searchValue.toLowerCase();
+    // Second pass: highlight in REVERSE order
+    for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+      const { node, localStart, localEnd } = matchesToHighlight[i];
       
-      let searchIndex = 0;
-      while (true) {
-        const index = lowerText.indexOf(lowerSearch, searchIndex);
-        if (index === -1) break;
+      try {
+        // Verify node is still valid
+        if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+          continue;
+        }
         
-        const parent = node.parentElement;
-        if (parent?.classList.contains('xtm-highlight')) {
-          searchIndex = index + lowerSearch.length;
+        const currentNodeText = node.textContent || '';
+        if (localEnd > currentNodeText.length) {
           continue;
         }
         
@@ -796,8 +947,12 @@ export function highlightAIEntities(
         ensureStylesInShadowRoot(node);
         
         const range = document.createRange();
-        range.setStart(node, index);
-        range.setEnd(node, index + searchValue.length);
+        range.setStart(node, localStart);
+        range.setEnd(node, localEnd);
+        
+        if (range.toString().trim().length === 0) {
+          continue;
+        }
         
         const highlightSpan = document.createElement('span');
         highlightSpan.className = 'xtm-highlight xtm-ai-discovered';
@@ -806,30 +961,23 @@ export function highlightAIEntities(
         highlightSpan.setAttribute('data-ai-discovered', 'true');
         highlightSpan.setAttribute('title', `AI Discovered: ${entity.type.replace(/-/g, ' ')}`);
         
-        try {
-          range.surroundContents(highlightSpan);
-          highlights.push(highlightSpan); // Add to highlights array so clearHighlights() can remove them
-          highlightedCount++;
-          entityHighlighted = true;
-          
-          highlightSpan.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Re-open panel if needed before toggling selection
-            if (onPanelReopen) {
-              onPanelReopen();
-            }
-            onToggleSelection(highlightSpan, searchValue);
-          });
-        } catch {
-          log.debug(' Could not highlight AI entity (range issue):', searchValue);
-        }
+        range.surroundContents(highlightSpan);
+        highlights.push(highlightSpan);
+        highlightedCount++;
+        entityHighlighted = true;
         
-        break;
+        highlightSpan.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Re-open panel if needed before toggling selection
+          if (onPanelReopen) {
+            onPanelReopen();
+          }
+          onToggleSelection(highlightSpan, searchValue);
+        });
+      } catch {
+        log.debug(' Could not highlight AI entity (range issue):', searchValue);
       }
-      
-      // Once we've highlighted at least one instance, mark as success
-      if (entityHighlighted) break;
     }
     
     if (entityHighlighted) {

@@ -107,6 +107,32 @@
 3. Reload the extension
 4. Try clicking the extension icon first
 
+### Split Screen Mode Issues
+
+**Symptoms:**
+- Floating iframe still opens after enabling split screen mode
+- Native panel doesn't close after disabling split screen mode
+- Panel not working correctly after toggling split screen setting
+
+**Solutions:**
+1. After changing split screen settings, existing tabs automatically receive the update
+2. If issues persist, reload the page
+3. Chrome/Edge: The native side panel is opened via browser's side panel button or `Ctrl+Shift+Y` / `Cmd+Shift+Y`
+4. When disabling split screen mode, the native panel should close automatically
+5. Ensure you're using Chrome 114+ or Edge equivalent for side panel support
+
+### CVEs Not Detected
+
+**Symptoms:**
+- Known CVEs on page not highlighted
+- CVEs with special characters not matched
+
+**Solutions:**
+1. Check if Vulnerability detection is enabled in Settings > Detection for at least one platform
+2. CVEs may use non-standard dash characters (fullwidth, horizontal bar, etc.) - the extension handles most variants
+3. Ensure CVE format follows standard pattern: CVE-YYYY-NNNNN (4-7 digit sequence number)
+4. Some pages may have CVEs in inaccessible content (iframes, shadow DOM) - try the AI discovery feature
+
 ## Error Messages
 
 ### "Cannot read properties of null"

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Split screen mode**: Optional browser native side panel mode for Chrome, Edge, and Firefox. When enabled in Settings > Appearance, the extension panel uses the browser's built-in side panel instead of a floating iframe. The close button is automatically hidden as the browser controls the panel. Works across all three browsers (Chrome/Edge use `sidePanel` API, Firefox uses `sidebar_action`)
+- **Scroll-to-highlight button**: Each entity in scan results now has a dedicated scroll icon (in addition to the expand arrow) that scrolls to and highlights the entity on the page with an enhanced glow effect
 - Loading spinner in entity overview while fetching full entity details from OpenCTI/OpenAEV (spinner replaces platform logo during load)
 - Multi-entity type support in scan results: entities like "Phishing" matching multiple types (Malware, Attack Pattern) now show combined counts with visual indicators (stacked icon, "N types" chip)
 - Compact multi-type entity display with tooltips showing all matched types
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-platform Vulnerability detection settings**: Added `Vulnerability` type to both OpenCTI and OpenAEV detection settings, allowing independent control of CVE detection per platform. If disabled on all platforms, CVE regex detection is skipped entirely for performance
 - **AI highlight click re-opens panel**: Clicking on AI-discovered (purple) highlights now re-opens the panel if hidden and automatically applies the "AI Discovered" filter
 - **AI results persistence**: AI-discovered entities are now persisted across panel open/close cycles until the next scan or explicit clear
+- **Empty scan results with AI access**: When a page scan returns no results, the panel now shows the full layout with search filters and AI discovery button, allowing users to immediately trigger AI-based entity discovery
 
 ### Changed
 - Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
@@ -60,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI observable relationship rules**: AI now correctly handles observable relationships (Observable → related-to → Threat only, with specific exceptions for C2 communication, DNS resolution, etc.)
 - **AI entity discovery filtering**: AI-discovered entities are now post-filtered to only include those that can actually be highlighted on the page (filters out entities from inaccessible DOM like shadow roots)
 - **OpenAEV Vulnerability overview**: Complete vulnerability details display including CVE ID, CVSS score, status, published date, remediation, and reference URLs
+- **Scroll-to-highlight glow effect**: Enhanced visual feedback with longer duration (3s) and brighter, more visible glow animation
+- **Shadow DOM content extraction**: More conservative approach prioritizing `innerText` over Shadow DOM traversal to avoid false positives (e.g., detecting hidden script content like "javascript"). Shadow DOM extraction only triggers when visible text is extremely short (<50 chars)
+- **CVE pattern detection**: Extended Unicode dash support for better CVE detection on international sites. Now handles fullwidth hyphen-minus (U+FF0D), horizontal bar (U+2015), small hyphen-minus (U+FE63), and other variants
 
 ### Fixed
 - PDF generation now properly extracts content from Shadow DOM components
@@ -71,6 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI results lost on panel close**: Fixed issue where AI-discovered entities would disappear when closing and reopening the panel - results now persist until next scan or clear
 - **OpenAEV CVE overview empty**: Fixed issue where navigating to OpenAEV vulnerability overview showed incomplete/empty data
 - **Entity overview empty from unified search**: Fixed issue where clicking a search result showed incomplete/empty entity overview - unified search now fetches full entity details (same as scan results flow)
+- **Split screen mode toggle**: Disabling split screen mode now properly closes the native side panel and allows the floating iframe to work again without requiring a page reload
+- **Default theme selection**: Dark theme is now visually selected by default in Settings > Appearance when it's the active theme
+- **Shadow DOM false positives**: Fixed detection of non-visible content (like "javascript" strings from script elements) when extracting text from Shadow DOM
+- **CVE detection on CERT-FR pages**: Fixed detection of CVEs using non-standard Unicode dash characters (e.g., CVE-2025-66478 with special dashes)
+- **Multiple occurrence highlighting**: Fixed critical bug where only the first occurrence of an entity was highlighted on a page. Now ALL occurrences of observables, CVEs, cached entities, and AI-discovered entities are properly highlighted. The fix uses reverse-order DOM modification to prevent node position invalidation.
 
 ## [0.0.6] - 2024-12-17
 

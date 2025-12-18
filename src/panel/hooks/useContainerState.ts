@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import type { ContainerData, EntityData, ImportResults } from '../types';
+import type { ContainerData, EntityData, ImportResults } from '../types/panel-types';
 
 export interface ContainerFormState {
   name: string;

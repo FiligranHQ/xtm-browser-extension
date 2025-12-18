@@ -5,10 +5,10 @@
  */
 
 import { loggers } from '../../shared/utils/logger';
-import { cleanHtmlContent, generateDescription } from '../utils';
+import { cleanHtmlContent, generateDescription } from '../utils/description-helpers';
 import type { PlatformConfig } from '../../shared/types';
 import { SCENARIO_DEFAULT_VALUES, type OAEVAsset, type OAEVAssetGroup, type OAEVTeam, type OAEVInjectorContract } from '../../shared/types/openaev';
-import { parsePrefixedType } from '../../shared/platform';
+import { parsePrefixedType } from '../../shared/platform/registry';
 import { processScanResults } from './scan-results-handler';
 import type { 
   EntityData, 
@@ -23,7 +23,7 @@ import type {
   ScenarioFormData,
   SelectedInject,
   AIGeneratedScenario,
-} from '../types';
+} from '../types/panel-types';
 import type { MultiPlatformResult } from '../hooks/useEntityState';
 
 const log = loggers.panel;

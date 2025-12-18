@@ -28,7 +28,7 @@ import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
-import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, AISettings } from '../types';
+import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, AISettings } from '../types/panel-types';
 
 const log = loggers.panel;
 

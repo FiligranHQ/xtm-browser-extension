@@ -16,7 +16,7 @@ import type {
   ScenarioFormData,
   ScenarioEmail,
   SelectedInject,
-} from '../types';
+} from '../types/panel-types';
 
 export interface AIGeneratedScenario {
   name: string;

@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import type { InvestigationEntity } from '../types';
+import type { InvestigationEntity } from '../types/panel-types';
 
 export type { InvestigationEntity };
 

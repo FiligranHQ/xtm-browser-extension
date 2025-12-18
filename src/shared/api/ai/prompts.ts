@@ -583,8 +583,6 @@ export function buildRelationshipResolutionPrompt(request: RelationshipResolutio
     pageContent = `${firstPart}\n\n[... content truncated for brevity ...]\n\n${lastPart}`;
   }
 
-  // Note: The comprehensive list of valid relationship types is defined in SYSTEM_PROMPTS.relationshipResolution
-  // This user prompt focuses on the task-specific instructions and entities to analyze
   return `Your task: Identify relationships between the entities below BASED ONLY ON THE PAGE CONTENT PROVIDED.
 
 IMPORTANT: The page content below is your ONLY source of truth. Do NOT use your prior knowledge about these entities. Only identify relationships that are EXPLICITLY DESCRIBED or STRONGLY IMPLIED in this specific page.

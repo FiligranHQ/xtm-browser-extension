@@ -51,7 +51,7 @@ import {
 } from '../../shared/utils/entity';
 import { getPlatformLogoName } from '../../shared/platform/registry';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
-import type { EntityData } from '../types';
+import type { EntityData } from '../types/panel-types';
 import type { OAEVEntityViewProps } from '../types/view-props';
 
 export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({

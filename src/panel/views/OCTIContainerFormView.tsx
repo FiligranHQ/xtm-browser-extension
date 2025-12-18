@@ -29,7 +29,7 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
-import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, AISettings } from '../types';
+import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, AISettings } from '../types/panel-types';
 import type { LabelOption, MarkingOption } from '../types/view-props';
 
 export interface ContainerFormViewProps {

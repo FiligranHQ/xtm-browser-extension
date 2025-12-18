@@ -10,7 +10,7 @@ import {
   getOAEVEntityName,
   getOAEVTypeFromClass,
 } from '../../shared/utils/entity';
-import type { UnifiedSearchResult, PlatformInfo } from '../types';
+import type { UnifiedSearchResult, PlatformInfo } from '../types/panel-types';
 
 const log = loggers.panel;
 

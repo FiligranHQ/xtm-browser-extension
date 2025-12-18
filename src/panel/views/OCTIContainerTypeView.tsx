@@ -18,7 +18,7 @@ import {
 import { ChevronLeftOutlined } from '@mui/icons-material';
 import { hexToRGB } from '../../shared/theme/colors';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { PanelMode, EntityData } from '../types';
+import type { PanelMode, EntityData } from '../types/panel-types';
 
 // Container type definitions
 const CONTAINER_TYPES = [

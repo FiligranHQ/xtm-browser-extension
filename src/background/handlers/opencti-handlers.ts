@@ -671,8 +671,6 @@ export const handleGetLabelsAndMarkings: MessageHandler = async (_payload, sendR
  * Export all OpenCTI handlers
  */
 export const openctiHandlers: Record<string, MessageHandler> = {
-  // Note: GET_ENTITY_DETAILS and SEARCH_PLATFORM are now unified handlers in background/index.ts
-  // These individual handlers are kept for potential direct use
   CREATE_ENTITY: handleCreateEntity,
   CREATE_OBSERVABLES_BULK: handleCreateObservablesBulk,
   FETCH_LABELS: handleFetchLabels,

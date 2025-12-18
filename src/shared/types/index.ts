@@ -3,9 +3,6 @@
 // ============================================================================
 
 import { PlatformType } from '../platform/registry';
-
-// Import OAEV types for use in this file's type definitions
-// Note: OAEV types are in ./openaev.ts - import directly from there (like ./opencti.ts)
 import type { 
   DetectedOAEVEntity,
   OAEVAsset,

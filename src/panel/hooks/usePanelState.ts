@@ -28,7 +28,7 @@ import type {
   AuthorOption,
   MultiPlatformResult,
   UnifiedSearchResult,
-} from '../types';
+} from '../types/panel-types';
 
 export interface PanelStateReturn {
   // Theme

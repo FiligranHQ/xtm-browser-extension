@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import type { AtomicTestingTarget, AIGeneratedPayload } from '../types';
+import type { AtomicTestingTarget, AIGeneratedPayload } from '../types/panel-types';
 import type { OAEVAsset, OAEVAssetGroup, OAEVInjectorContract } from '../../shared/types/openaev';
 
 export type { AtomicTestingTarget, AIGeneratedPayload };

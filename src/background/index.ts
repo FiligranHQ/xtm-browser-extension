@@ -45,7 +45,7 @@ import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
 import {
   type PlatformType,
-} from '../shared/platform';
+} from '../shared/platform/registry';
 import {
   CONNECTION_TIMEOUT_MS,
   ENTITY_FETCH_TIMEOUT_MS,
@@ -238,9 +238,6 @@ async function initializeClient(): Promise<void> {
 // ============================================================================
 // Context Menu Setup
 // ============================================================================
-
-// NOTE: All cache management code has been moved to services/cache-manager.ts
-
 
 /**
  * Set up context menu items (only called on install)

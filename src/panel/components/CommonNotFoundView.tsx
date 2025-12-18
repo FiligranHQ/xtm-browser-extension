@@ -17,7 +17,7 @@ import {
 } from '@mui/icons-material';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { EntityData, PanelMode } from '../types';
+import type { EntityData, PanelMode } from '../types/panel-types';
 
 export interface NotFoundViewProps {
   entity: EntityData | null;

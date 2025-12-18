@@ -9,7 +9,7 @@ import { getTextNodes } from '../shared/detection/text-utils';
 import {
   createPrefixedType,
   type PlatformType,
-} from '../shared/platform';
+} from '../shared/platform/registry';
 import { HIGHLIGHT_STYLES } from './styles';
 
 const log = loggers.content;

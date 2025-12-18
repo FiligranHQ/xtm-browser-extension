@@ -20,7 +20,7 @@ import {
   AddOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { PanelMode, PlatformInfo } from '../types';
+import type { PanelMode, PlatformInfo } from '../types/panel-types';
 
 // Available observable types for manual selection - sorted alphabetically by label
 const OBSERVABLE_TYPES = [

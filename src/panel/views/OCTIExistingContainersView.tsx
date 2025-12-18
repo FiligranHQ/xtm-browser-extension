@@ -31,7 +31,7 @@ import type {
   ContainerSpecificFields,
   LabelOption,
   MarkingOption,
-} from '../types';
+} from '../types/panel-types';
 import { loggers } from '../../shared/utils/logger';
 
 const log = loggers.panel;

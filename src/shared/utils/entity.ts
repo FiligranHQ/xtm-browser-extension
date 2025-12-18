@@ -3,7 +3,7 @@
  * Common functions for working with entities across different platforms
  */
 
-import type { PlatformType } from '../platform';
+import type { PlatformType } from '../platform/registry';
 
 /**
  * OpenCTI Observable Types

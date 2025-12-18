@@ -314,6 +314,3 @@ export interface OAEVInjectInput {
   inject_content?: Record<string, unknown>;
   inject_depends_duration?: number; // Relative time from scenario start in seconds
 }
-
-// Note: ScenarioOverviewData and ScenarioOverviewAttackPattern are defined
-// in src/panel/types/panel-types.ts as they are UI-specific types

@@ -15,7 +15,7 @@ import {
   getPlatformName,
   inferPlatformTypeFromEntityType,
   prefixEntityType,
-} from '../shared/platform';
+} from '../shared/platform/registry';
 
 // Module imports
 import { HIGHLIGHT_STYLES } from './styles';

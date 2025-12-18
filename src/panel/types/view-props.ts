@@ -28,7 +28,7 @@ import type {
   MarkingOption,
   VocabularyOption,
   AuthorOption,
-} from '../types';
+} from './panel-types';
 import type {
   OAEVAsset,
   OAEVAssetGroup,

@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from 'react';
-import type { PlatformInfo, InvestigationEntity } from '../types';
+import type { PlatformInfo, InvestigationEntity } from '../types/panel-types';
 
 export interface InvestigationActionsProps {
   // Platform state

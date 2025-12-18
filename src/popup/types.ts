@@ -2,7 +2,7 @@
  * Types for the popup UI
  */
 
-import type { PlatformType } from '../shared/platform';
+import type { PlatformType } from '../shared/platform/registry';
 
 /**
  * Connection status for a single platform instance

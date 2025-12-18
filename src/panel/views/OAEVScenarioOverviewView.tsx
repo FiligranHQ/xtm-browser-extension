@@ -25,7 +25,7 @@ import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
 } from '@mui/icons-material';
-import type { PlatformInfo } from '../types';
+import type { PlatformInfo } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
 
 export interface ScenarioOverviewViewProps extends ScenarioStateReturn {

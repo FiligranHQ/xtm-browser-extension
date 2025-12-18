@@ -13,7 +13,7 @@ import {
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import { loggers } from '../shared/utils/logger';
-import { cleanHtmlContent, generateDescription } from './utils';
+import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
 import { CommonEmptyView, CommonLoadingView } from './components';
 import {
   useScenarioState,
@@ -44,7 +44,7 @@ import {
   OAEVAtomicTestingView,
   OAEVScenarioView,
 } from './views';
-import { parsePrefixedType } from '../shared/platform';
+import { parsePrefixedType } from '../shared/platform/registry';
 import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
 import type { PlatformConfig } from '../shared/types/config';
@@ -53,7 +53,7 @@ import type {
   PanelMode,
   EntityData,
   PlatformInfo,
-} from './types';
+} from './types/panel-types';
 import type { MultiPlatformResult } from './hooks/useEntityState';
 
 const log = loggers.panel;

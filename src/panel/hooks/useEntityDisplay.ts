@@ -10,7 +10,7 @@ import {
   isVulnerabilityType,
   getOAEVEntityColor,
 } from '../../shared/utils/entity';
-import type { PlatformType } from '../../shared/platform';
+import type { PlatformType } from '../../shared/platform/registry';
 
 export interface EntityDisplayInfo {
   color: string;

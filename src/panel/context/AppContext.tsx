@@ -14,7 +14,7 @@ import type {
   ScanResultEntity,
   ImportResults,
   UnifiedSearchResult,
-} from '../types';
+} from '../types/panel-types';
 
 export interface AppContextValue {
   // Theme

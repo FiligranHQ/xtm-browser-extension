@@ -31,7 +31,7 @@ import type {
   PlatformInfo,
   MultiPlatformResult,
   UnifiedSearchResult,
-} from '../types';
+} from '../types/panel-types';
 import { loggers } from '../../shared/utils/logger';
 import { getOAEVEntityName, getOAEVTypeFromClass } from '../../shared/utils/entity';
 

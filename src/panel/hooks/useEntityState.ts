@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import type { EntityData, PlatformInfo } from '../types';
+import type { EntityData, PlatformInfo } from '../types/panel-types';
 
 export interface MultiPlatformResult {
   platformId: string;

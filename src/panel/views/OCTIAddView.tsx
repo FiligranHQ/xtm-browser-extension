@@ -12,7 +12,7 @@ import {
   Button,
 } from '@mui/material';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { PanelMode, EntityData } from '../types';
+import type { PanelMode, EntityData } from '../types/panel-types';
 
 export interface AddViewProps {
   setPanelMode: (mode: PanelMode) => void;

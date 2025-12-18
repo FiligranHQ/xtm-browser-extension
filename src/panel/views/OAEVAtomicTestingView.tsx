@@ -39,9 +39,9 @@ import {
 } from '@mui/icons-material';
 import { LockPattern, Target } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
-import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils';
+import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
-import type { PlatformInfo, PanelMode } from '../types';
+import type { PlatformInfo, PanelMode } from '../types/panel-types';
 import type { AtomicTestingStateReturn } from '../hooks/useAtomicTestingState';
 import type { AISettings } from '../hooks/useAIState';
 

@@ -48,8 +48,8 @@ import {
 import { LockPattern } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { loggers } from '../../shared/utils/logger';
-import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils';
-import type { PlatformInfo, PanelMode } from '../types';
+import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
+import type { PlatformInfo, PanelMode } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
 import {
 } from '../../shared/types';

@@ -6,11 +6,11 @@
 
 import {
   prefixEntityType,
-} from '../../shared/platform';
+} from '../../shared/platform/registry';
 import {
   getOAEVEntityId,
 } from '../../shared/utils/entity';
-import type { ScanResultEntity, ScanResultPlatformMatch } from '../types';
+import type { ScanResultEntity, ScanResultPlatformMatch } from '../types/panel-types';
 import type { DetectedObservable, DetectedOCTIEntity } from '../../shared/types';
 import type { DetectedOAEVEntity } from '../../shared/types/openaev';
 

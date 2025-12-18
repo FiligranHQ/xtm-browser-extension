@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
-import type { ImportResults } from '../types';
+import type { ImportResults } from '../types/panel-types';
 
 export interface ImportResultsViewProps {
   mode: 'dark' | 'light';

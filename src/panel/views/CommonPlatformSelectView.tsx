@@ -15,7 +15,7 @@ import {
   StepLabel,
 } from '@mui/material';
 import { ChevronLeftOutlined } from '@mui/icons-material';
-import type { PanelMode, PlatformInfo, EntityData } from '../types';
+import type { PanelMode, PlatformInfo, EntityData } from '../types/panel-types';
 
 export interface PlatformSelectViewProps {
   mode: 'dark' | 'light';

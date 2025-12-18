@@ -35,9 +35,10 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { ScanResultsViewProps } from '../types/view-props';
-import type { ScanResultEntity, EntityData, MultiPlatformResult } from '../types';
+import type { ScanResultEntity, EntityData, MultiPlatformResult } from '../types/panel-types';
 import { loggers } from '../../shared/utils/logger';
-import { generateDescription, cleanHtmlContent, getAiColor } from '../utils';
+import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
+import { getAiColor } from '../utils/platform-helpers';
 import { isDefaultPlatform, getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
 
 const log = loggers.panel;

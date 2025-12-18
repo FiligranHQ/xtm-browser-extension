@@ -10,7 +10,7 @@ import { loggers } from '../../shared/utils/logger';
 import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
 import { CONNECTION_TIMEOUT_MS } from '../../shared/constants';
-import type { PlatformType } from '../../shared/platform';
+import type { PlatformType } from '../../shared/platform/registry';
 import type { SendResponseFn } from './types';
 
 const log = loggers.background;

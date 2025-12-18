@@ -13,7 +13,7 @@ import { ComputerOutlined } from '@mui/icons-material';
 import { MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import { THEME_DARK_AI } from '../../shared/theme/ThemeDark';
 import { THEME_LIGHT_AI } from '../../shared/theme/ThemeLight';
-import type { MultiPlatformResult, PlatformInfo } from '../types';
+import type { MultiPlatformResult, PlatformInfo } from '../types/panel-types';
 
 // ============================================================================
 // AI Theme Colors

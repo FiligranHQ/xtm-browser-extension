@@ -31,6 +31,7 @@ import {
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
   LayersOutlined,
+  GpsFixedOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -42,6 +43,31 @@ import { getAiColor } from '../utils/platform-helpers';
 import { isDefaultPlatform, getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
 
 const log = loggers.panel;
+
+/**
+ * Send a message to the content script.
+ * Handles both floating iframe mode (postMessage) and split screen mode (chrome.tabs.sendMessage)
+ */
+const sendToContentScript = async (message: { type: string; payload?: unknown; value?: unknown; values?: unknown }) => {
+  // Check if we're in split screen mode (not in iframe)
+  const isInSidePanel = window.parent === window;
+  
+  if (isInSidePanel && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
+    // Split screen mode - send directly to active tab
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, message);
+      }
+    } catch {
+      // Fallback to postMessage
+      window.parent.postMessage(message, '*');
+    }
+  } else {
+    // Floating iframe mode - use postMessage
+    window.parent.postMessage(message, '*');
+  }
+};
 
 // Check if entity is selectable for OpenCTI import (not oaev-* type)
 const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {
@@ -1088,6 +1114,34 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                     }}
                     color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
                   />
+                  {/* Scroll to highlight button */}
+                  <Tooltip title="Scroll to highlight on page" placement="top">
+                    <Box
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const scrollValue = entity.value || entity.name;
+                        sendToContentScript({ 
+                          type: 'XTM_SCROLL_TO_HIGHLIGHT', 
+                          payload: { value: scrollValue } 
+                        });
+                      }}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        },
+                      }}
+                    >
+                      <GpsFixedOutlined sx={{ color: 'text.secondary', fontSize: 16 }} />
+                    </Box>
+                  </Tooltip>
                   <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
                 </Paper>
               );

@@ -519,25 +519,77 @@ export function getCleanVisibleText(): string {
 
 /**
  * Minimum content length to consider innerText as "good enough"
- * Below this threshold, we'll try Shadow DOM extraction
+ * Only use Shadow DOM extraction if innerText is nearly empty
+ * This is a very conservative threshold - only sites like VirusTotal
+ * that render entirely in Shadow DOM will trigger this
  */
-const MIN_CONTENT_LENGTH = 500;
+const MIN_CONTENT_LENGTH_FOR_SHADOW_DOM = 50;
 
 /**
  * Extract text from Shadow DOM for sites that use Web Components heavily
  * Recursively traverses all nested Shadow DOM trees
+ * Only extracts visible text, excluding script, style, and other non-visible elements
  */
 function extractTextFromShadowRootsOnly(): string {
   const textParts: string[] = [];
   const visitedRoots = new Set<ShadowRoot>();
+  
+  // Tags to skip when extracting text from Shadow DOM
+  const SHADOW_EXCLUDED_TAGS = new Set([
+    'script', 'style', 'noscript', 'template', 
+    'video', 'audio', 'link', 'meta',
+    'head', 'br', 'hr', 'img', 'svg',
+  ]);
+  
+  // Extract visible text from a node, excluding non-visible elements
+  function getVisibleText(node: Node): string {
+    // Text node - return the text
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent?.trim() || '';
+    }
+    
+    // Not an element node - skip
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+    
+    const el = node as Element;
+    const tagName = el.tagName?.toLowerCase();
+    
+    // Skip excluded tags (script, style, etc.)
+    if (tagName && SHADOW_EXCLUDED_TAGS.has(tagName)) {
+      return '';
+    }
+    
+    // Skip elements with type="text/javascript" or similar
+    if (el.getAttribute('type')?.includes('javascript')) {
+      return '';
+    }
+    
+    // Skip hidden elements
+    if ((el as HTMLElement).hidden || el.getAttribute('aria-hidden') === 'true') {
+      return '';
+    }
+    
+    // Collect text from child nodes
+    const childTexts: string[] = [];
+    for (const child of Array.from(node.childNodes)) {
+      const text = getVisibleText(child);
+      if (text) {
+        childTexts.push(text);
+      }
+    }
+    
+    return childTexts.join(' ');
+  }
   
   // Recursive function to extract text from a shadow root and its nested shadow roots
   function extractFromShadowRoot(shadowRoot: ShadowRoot): void {
     if (visitedRoots.has(shadowRoot)) return;
     visitedRoots.add(shadowRoot);
     
-    // Get text content from this shadow root
-    const shadowText = shadowRoot.textContent || '';
+    // Get visible text content from this shadow root (filtering out script/style)
+    const shadowText = getVisibleText(shadowRoot);
     if (shadowText.trim()) {
       textParts.push(shadowText);
     }
@@ -670,34 +722,29 @@ function filterContentAggressively(content: string): string {
 /**
  * Get page content for scanning - extracts visible text
  * This is the main function to use for IOC/entity scanning
+ * 
+ * IMPORTANT: We prioritize innerText because it only returns visible text
+ * and excludes script/style content. Shadow DOM extraction is ONLY used
+ * as a last resort for sites like VirusTotal that render entirely in Shadow DOM.
  */
 export function getPageContentForScanning(): string {
   // Get visible text using innerText (respects visibility, excludes script/style)
-  let content = document.body?.innerText || '';
+  // This is the safest and most reliable method for most websites
+  const content = document.body?.innerText || '';
   
-  // Only do additional extraction if innerText is too short
-  // (Sites like VirusTotal have all content in Shadow DOM, so innerText is nearly empty)
-  if (content.length < MIN_CONTENT_LENGTH) {
-    // Try extracting from Shadow DOM (for sites like VirusTotal)
+  // Only try Shadow DOM extraction if innerText is nearly empty
+  // This handles sites like VirusTotal that render entirely in Shadow DOM
+  // We use a very low threshold to avoid false positives on normal sites
+  if (content.length < MIN_CONTENT_LENGTH_FOR_SHADOW_DOM) {
     const shadowContent = extractTextFromShadowRootsOnly();
     if (shadowContent.length > content.length) {
-      // Shadow DOM has more content, use it
-      content = shadowContent;
-    }
-    
-    // If still not enough content, fall back to textContent
-    if (content.length < MIN_CONTENT_LENGTH) {
-      const textContent = document.body?.textContent || '';
-      if (textContent.length > content.length) {
-        content = textContent;
-      }
+      // Shadow DOM has more content, use it (but still filter it)
+      return filterContentAggressively(shadowContent);
     }
   }
   
   // Apply aggressive filtering to remove noise
-  content = filterContentAggressively(content);
-  
-  return content;
+  return filterContentAggressively(content);
 }
 
 // ============================================================================

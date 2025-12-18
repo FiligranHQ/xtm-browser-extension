@@ -42,6 +42,7 @@ import {
   highlightScenarioAttackPatterns,
   highlightAIEntities,
   scrollToFirstHighlight,
+  scrollToHighlightByValue,
   buildNodeMap,
 } from './highlighting';
 import {
@@ -63,6 +64,7 @@ import {
   setIsPanelReady,
   setHighlightClickInProgress,
   initializeSplitScreenMode,
+  refreshSplitScreenMode,
 } from './panel';
 
 const log = loggers.content;
@@ -165,6 +167,11 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     }
   } else if (event.data?.type === 'XTM_SCROLL_TO_FIRST') {
     scrollToFirstHighlight();
+  } else if (event.data?.type === 'XTM_SCROLL_TO_HIGHLIGHT') {
+    const value = event.data.payload?.value;
+    if (value) {
+      scrollToHighlightByValue(value);
+    }
   } else if (event.data?.type === 'XTM_SHOW_TOAST') {
     const { type, message, action, persistent, duration } = event.data.payload || {};
     showToast({
@@ -1390,6 +1397,34 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       hidePanel();
       sendResponse({ success: true });
       break;
+    
+    case 'XTM_SCROLL_TO_FIRST':
+      scrollToFirstHighlight();
+      sendResponse({ success: true });
+      break;
+    
+    case 'XTM_SCROLL_TO_HIGHLIGHT': {
+      const scrollValue = message.payload?.value;
+      if (scrollValue) {
+        const found = scrollToHighlightByValue(scrollValue);
+        sendResponse({ success: true, found });
+      } else {
+        sendResponse({ success: false, error: 'No value provided' });
+      }
+      break;
+    }
+    
+    case 'SPLIT_SCREEN_MODE_CHANGED': {
+      // Refresh split screen mode cache when settings change
+      // This allows the floating iframe to work again after disabling split screen mode
+      refreshSplitScreenMode();
+      // Re-initialize to update the cached value
+      initializeSplitScreenMode().then((enabled) => {
+        log.debug(' Split screen mode changed, new value:', enabled);
+      });
+      sendResponse({ success: true });
+      break;
+    }
       
     case 'GET_PAGE_CONTENT': {
       const articleData = extractArticleContent();

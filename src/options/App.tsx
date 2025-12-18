@@ -586,6 +586,25 @@ const App: React.FC = () => {
         payload: updatedSettings,
       });
       setSavedSettings(JSON.parse(JSON.stringify(updatedSettings)));
+      
+      // Notify all tabs to refresh their split screen mode cache
+      // This ensures the floating iframe can be created again after disabling split screen
+      await chrome.runtime.sendMessage({
+        type: 'BROADCAST_SPLIT_SCREEN_MODE_CHANGE',
+        payload: { enabled },
+      });
+      
+      // If disabling split screen mode, try to close the native side panel
+      if (!enabled && chrome.sidePanel?.setOptions) {
+        try {
+          // Disable the side panel for all tabs
+          await chrome.sidePanel.setOptions({ enabled: false });
+          // Re-enable it (but it won't auto-open)
+          await chrome.sidePanel.setOptions({ enabled: true });
+        } catch {
+          // Side panel API might not be available
+        }
+      }
     }
   };
 

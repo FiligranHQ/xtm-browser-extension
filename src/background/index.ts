@@ -460,6 +460,33 @@ async function handleMessage(
         break;
       }
       
+      case 'BROADCAST_SPLIT_SCREEN_MODE_CHANGE': {
+        // Broadcast split screen mode change to all tabs
+        const { enabled } = message.payload as { enabled: boolean };
+        
+        try {
+          const tabs = await chrome.tabs.query({});
+          for (const tab of tabs) {
+            if (tab.id) {
+              try {
+                await chrome.tabs.sendMessage(tab.id, {
+                  type: 'SPLIT_SCREEN_MODE_CHANGED',
+                  payload: { enabled },
+                });
+              } catch {
+                // Tab might not have content script loaded
+              }
+            }
+          }
+          log.debug(`Broadcast split screen mode change (enabled=${enabled}) to ${tabs.length} tabs`);
+        } catch (error) {
+          log.debug('Failed to broadcast split screen mode change:', error);
+        }
+        
+        sendResponse(successResponse(null));
+        break;
+      }
+      
       case 'INJECT_CONTENT_SCRIPT': {
         // Inject content script into a specific tab if not already present
         const { tabId } = (message.payload as { tabId: number }) || {};

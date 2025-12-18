@@ -580,12 +580,13 @@ export const HIGHLIGHT_STYLES = `
   /* Flash animation for scroll-to highlight */
   @keyframes xtm-flash {
     0%, 100% { box-shadow: 0 0 0 0 rgba(15, 188, 255, 0); }
-    25%, 75% { box-shadow: 0 0 20px 8px rgba(15, 188, 255, 0.6); }
-    50% { box-shadow: 0 0 30px 12px rgba(15, 188, 255, 0.8); }
+    15%, 85% { box-shadow: 0 0 35px 15px rgba(15, 188, 255, 0.85); }
+    30%, 70% { box-shadow: 0 0 50px 20px rgba(15, 188, 255, 0.95); }
+    50% { box-shadow: 0 0 60px 25px rgba(15, 188, 255, 1); }
   }
   
   .xtm-highlight.xtm-flash {
-    animation: xtm-flash 1.5s ease-out;
+    animation: xtm-flash 3s ease-in-out;
   }
   
   /* ========================================

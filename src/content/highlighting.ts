@@ -843,6 +843,41 @@ export function highlightAIEntities(
 }
 
 /**
+ * Scroll to and flash a highlight element
+ */
+function scrollToAndFlashHighlight(highlight: HTMLElement): void {
+  setTimeout(() => {
+    highlight.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'nearest'
+    });
+    
+    setTimeout(() => {
+      const rect = highlight.getBoundingClientRect();
+      const viewportCenter = window.innerHeight / 2;
+      const elementCenter = rect.top + rect.height / 2;
+      
+      if (Math.abs(elementCenter - viewportCenter) > 100) {
+        const absoluteTop = window.scrollY + rect.top;
+        const scrollTarget = Math.max(0, absoluteTop - viewportCenter + (rect.height / 2));
+        window.scrollTo({
+          top: scrollTarget,
+          behavior: 'smooth'
+        });
+      }
+    }, 300);
+    
+    setTimeout(() => {
+      highlight.classList.add('xtm-flash');
+      setTimeout(() => {
+        highlight.classList.remove('xtm-flash');
+      }, 3000);
+    }, 500);
+  }, 50);
+}
+
+/**
  * Scroll to the first highlight on the page
  */
 export function scrollToFirstHighlight(event?: MouseEvent): void {
@@ -853,35 +888,44 @@ export function scrollToFirstHighlight(event?: MouseEvent): void {
   
   const firstHighlight = document.querySelector('.xtm-highlight') as HTMLElement;
   if (firstHighlight) {
-    setTimeout(() => {
-      firstHighlight.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center',
-        inline: 'nearest'
-      });
-      
-      setTimeout(() => {
-        const rect = firstHighlight.getBoundingClientRect();
-        const viewportCenter = window.innerHeight / 2;
-        const elementCenter = rect.top + rect.height / 2;
-        
-        if (Math.abs(elementCenter - viewportCenter) > 100) {
-          const absoluteTop = window.scrollY + rect.top;
-          const scrollTarget = Math.max(0, absoluteTop - viewportCenter + (rect.height / 2));
-          window.scrollTo({
-            top: scrollTarget,
-            behavior: 'smooth'
-          });
-        }
-      }, 300);
-      
-      setTimeout(() => {
-        firstHighlight.classList.add('xtm-flash');
-        setTimeout(() => {
-          firstHighlight.classList.remove('xtm-flash');
-        }, 1500);
-      }, 500);
-    }, 50);
+    scrollToAndFlashHighlight(firstHighlight);
   }
+}
+
+/**
+ * Scroll to a specific highlight by entity value/name
+ */
+export function scrollToHighlightByValue(value: string): boolean {
+  if (!value) return false;
+  
+  // Normalize the search value for comparison
+  const normalizedValue = value.toLowerCase().trim();
+  
+  // Find all highlights
+  const highlights = document.querySelectorAll('.xtm-highlight') as NodeListOf<HTMLElement>;
+  
+  for (const highlight of highlights) {
+    // Check data attributes
+    const entityValue = highlight.dataset.entityValue?.toLowerCase().trim();
+    const dataValue = highlight.dataset.value?.toLowerCase().trim();
+    // Also check the text content
+    const textContent = highlight.textContent?.toLowerCase().trim();
+    
+    if (entityValue === normalizedValue || dataValue === normalizedValue || textContent === normalizedValue) {
+      scrollToAndFlashHighlight(highlight);
+      return true;
+    }
+  }
+  
+  // If exact match not found, try partial match
+  for (const highlight of highlights) {
+    const textContent = highlight.textContent?.toLowerCase().trim() || '';
+    if (textContent.includes(normalizedValue) || normalizedValue.includes(textContent)) {
+      scrollToAndFlashHighlight(highlight);
+      return true;
+    }
+  }
+  
+  return false;
 }
 

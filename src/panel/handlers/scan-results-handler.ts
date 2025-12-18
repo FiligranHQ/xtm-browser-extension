@@ -11,15 +11,16 @@ import {
   getOAEVEntityId,
 } from '../../shared/utils/entity';
 import type { ScanResultEntity, ScanResultPlatformMatch } from '../types';
+import type { DetectedObservable, DetectedOCTIEntity, DetectedPlatformEntity } from '../../shared/types';
 
 /**
  * Process scan results payload and return normalized entities
  */
 export function processScanResults(payload: {
-  observables?: any[];
-  openctiEntities?: any[];
-  cves?: any[];
-  openaevEntities?: any[];
+  observables?: DetectedObservable[];
+  openctiEntities?: DetectedOCTIEntity[];
+  cves?: DetectedOCTIEntity[];
+  openaevEntities?: DetectedPlatformEntity[];
   pageContent?: string;
   pageTitle?: string;
   pageUrl?: string;
@@ -81,7 +82,7 @@ export function processScanResults(payload: {
   if (payload.observables) {
     for (const obs of payload.observables) {
       addOrMergeEntity({
-        id: obs.entityId || obs.id || `obs-${obs.value}`,
+        id: obs.entityId || `obs-${obs.value}`,
         type: obs.type,
         name: obs.value,
         value: obs.value,
@@ -94,19 +95,19 @@ export function processScanResults(payload: {
     }
   }
   
-  // Add OpenCTI SDOs
+  // Add OpenCTI entities
   if (payload.openctiEntities) {
-    for (const sdo of payload.openctiEntities) {
+    for (const entity of payload.openctiEntities) {
       addOrMergeEntity({
-        id: sdo.entityId || sdo.id || `sdo-${sdo.name}`,
-        type: sdo.type,
-        name: sdo.name,
-        value: sdo.name,
-        found: sdo.found,
-        entityId: sdo.entityId,
-        platformId: sdo.platformId,
+        id: entity.entityId || `entity-${entity.name}`,
+        type: entity.type,
+        name: entity.name,
+        value: entity.name,
+        found: entity.found,
+        entityId: entity.entityId,
+        platformId: entity.platformId,
         platformType: 'opencti',
-        entityData: sdo,
+        entityData: entity,
       });
     }
   }
@@ -115,7 +116,7 @@ export function processScanResults(payload: {
   if (payload.cves) {
     for (const cve of payload.cves) {
       addOrMergeEntity({
-        id: cve.entityId || cve.id || `cve-${cve.name}`,
+        id: cve.entityId || `cve-${cve.name}`,
         type: 'Vulnerability',
         name: cve.name,
         value: cve.name,
@@ -133,9 +134,9 @@ export function processScanResults(payload: {
     for (const entity of payload.openaevEntities) {
       const platformType = entity.platformType || 'openaev';
       const entityType = entity.type || '';
-      const oaevEntityId = entity.entityId || (platformType === 'openaev' 
-        ? getOAEVEntityId(entity.entityData || entity, entityType)
-        : entity.id) || '';
+      const oaevEntityId = entity.entityId || (platformType === 'openaev' && entity.entityData
+        ? getOAEVEntityId(entity.entityData, entityType)
+        : '') || '';
       addOrMergeEntity({
         id: oaevEntityId || `${platformType}-${entity.name}`,
         type: prefixEntityType(entityType, platformType as 'opencti' | 'openaev' | 'opengrc'),

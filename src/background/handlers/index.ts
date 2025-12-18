@@ -9,9 +9,18 @@ export { openctiHandlers } from './opencti-handlers';
 export { openaevHandlers } from './openaev-handlers';
 export { aiHandlers } from './message-ai-handlers';
 export { cacheHandlers } from './cache-handlers';
-export { scanHandlers, scanForOAEVEntities, mergeScanResults } from './scan-handlers';
+export { scanHandlers, scanForOAEVEntities, mergeScanResults, handleScanPage, handleScanOAEV, handleScanAll } from './scan-handlers';
 export { settingsHandlers, type SettingsHandlerDependencies } from './settings-handlers';
 export { miscHandlers } from './misc-handlers';
+export { 
+  platformHandlers, 
+  handleTestPlatformConnection, 
+  handleInjectContentScript, 
+  handleInjectAllTabs, 
+  handleGetPlatformTheme,
+  type PlatformHandlerDependencies,
+  type TestConnectionPayload,
+} from './platform-handlers';
 
 // Re-export individual handlers for direct use
 export { 

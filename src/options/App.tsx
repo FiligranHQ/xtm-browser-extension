@@ -24,6 +24,7 @@ import {
   DEFAULT_DETECTION,
   type TabType,
   type CacheStats,
+  type PlatformCacheStats,
   type TestResult,
   type SnackbarState,
   type AITestResult,
@@ -181,12 +182,12 @@ const App: React.FC = () => {
       setCacheStats({
         total: response.data.total,
         age: Math.round(response.data.age / 60000),
-        byPlatform: response.data.byPlatform?.map((p: any) => ({
+        byPlatform: response.data.byPlatform?.map((p: PlatformCacheStats) => ({
           ...p,
           age: Math.round(p.age / 60000),
           byType: p.byType || {},
         })),
-        oaevByPlatform: response.data.oaevByPlatform?.map((p: any) => ({
+        oaevByPlatform: response.data.oaevByPlatform?.map((p: PlatformCacheStats) => ({
           ...p,
           age: Math.round(p.age / 60000),
           byType: p.byType || {},

@@ -8,7 +8,7 @@ import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
 import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
-import type { ScanResultPayload } from '../../shared/types';
+import type { ScanResultPayload, DetectedObservable, DetectedOCTIEntity } from '../../shared/types';
 import type { SendResponseFn } from './types';
 
 const log = loggers.background;
@@ -219,10 +219,103 @@ export function mergeScanResults(
 }
 
 /**
+ * Handle SCAN_ALL - unified scan across all platforms
+ */
+export async function handleScanAll(
+  payload: { content: string; url: string },
+  sendResponse: SendResponseFn,
+  deps: ScanHandlerDependencies
+): Promise<void> {
+  const detectionEngine = deps.getDetectionEngine();
+  
+  try {
+    log.info(`SCAN_ALL: Starting unified scan across all configured platforms...`);
+    
+    // Initialize results
+    let openctiResult: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[]; cves: DetectedOCTIEntity[] } = {
+      observables: [],
+      openctiEntities: [],
+      cves: [],
+    };
+    
+    // 1. Scan OpenCTI
+    if (detectionEngine) {
+      try {
+        const octiResult = await detectionEngine.scan(payload.content);
+        openctiResult = {
+          observables: octiResult.observables || [],
+          openctiEntities: octiResult.openctiEntities || [],
+          cves: octiResult.cves || [],
+        };
+        log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.openctiEntities.length} OpenCTI entities`);
+      } catch (octiError) {
+        log.warn('SCAN_ALL: OpenCTI scan failed:', octiError);
+      }
+    }
+    
+    // 2. Scan OpenAEV using existing helper
+    let openaevEntities: ScanResultPayload['openaevEntities'] = [];
+    try {
+      const { getAllCachedOAEVEntityNamesForMatching } = await import('../../shared/utils/storage');
+      const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
+      
+      if (oaevEntityMap.size > 0) {
+        // Use the existing helper - include all entity types
+        openaevEntities = scanForOAEVEntities(payload.content, oaevEntityMap, true);
+        log.debug(`SCAN_ALL: OpenAEV found ${openaevEntities?.length || 0} entities`);
+      }
+    } catch (oaevError) {
+      log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
+    }
+    
+    // Get detection settings to filter results
+    const settings = await getSettings();
+    const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
+    const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+    const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
+    
+    // Filter results
+    const filteredObservables = openctiResult.observables.filter(obs => 
+      !disabledObservableTypes.includes(obs.type)
+    );
+    const filteredOpenctiEntities = openctiResult.openctiEntities.filter(entity => 
+      !disabledOpenCTITypes.includes(entity.type)
+    );
+    const filteredOpenaevEntities = (openaevEntities || []).filter(entity => 
+      !disabledOpenAEVTypes.includes(entity.type)
+    );
+    
+    const scanResult: ScanResultPayload = {
+      observables: filteredObservables,
+      openctiEntities: filteredOpenctiEntities,
+      cves: openctiResult.cves,
+      openaevEntities: filteredOpenaevEntities,
+      scanTime: 0,
+      url: payload.url,
+    };
+    
+    const totalFound = 
+      scanResult.observables.filter(o => o.found).length +
+      scanResult.openctiEntities.filter(s => s.found).length +
+      (scanResult.openaevEntities?.length || 0);
+    log.info(`SCAN_ALL: Unified scan complete. Found: ${totalFound} entities`);
+    
+    sendResponse(successResponse(scanResult));
+  } catch (error) {
+    log.error('SCAN_ALL error:', error);
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unified scan failed',
+    });
+  }
+}
+
+/**
  * Registry of scan handlers
  */
 export const scanHandlers = {
   SCAN_PAGE: handleScanPage,
   SCAN_OAEV: handleScanOAEV,
+  SCAN_ALL: handleScanAll,
 };
 

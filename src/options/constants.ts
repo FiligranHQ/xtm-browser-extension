@@ -64,24 +64,21 @@ export const DEFAULT_DETECTION = {
 export type TabType = 'opencti' | 'openaev' | 'detection' | 'ai' | 'appearance' | 'about';
 // When adding new platform: type TabType = 'opencti' | 'openaev' | 'opengrc' | 'detection' | ...;
 
+// Platform cache stats sub-type
+export interface PlatformCacheStats {
+  platformId: string;
+  platformName: string;
+  total: number;
+  age: number;
+  byType: Record<string, number>;
+}
+
 // Cache stats type
 export interface CacheStats {
   total: number;
   age: number;
-  byPlatform?: Array<{
-    platformId: string;
-    platformName: string;
-    total: number;
-    age: number;
-    byType: Record<string, number>;
-  }>;
-  oaevByPlatform?: Array<{
-    platformId: string;
-    platformName: string;
-    total: number;
-    age: number;
-    byType: Record<string, number>;
-  }>;
+  byPlatform?: PlatformCacheStats[];
+  oaevByPlatform?: PlatformCacheStats[];
   oaevTotal?: number;
   isRefreshing?: boolean;
 }

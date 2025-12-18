@@ -827,14 +827,14 @@ export interface InjectorContract {
   injector_contract_platforms?: string[];
   // NOTE: This is a List<String> of attack pattern UUIDs from OpenAEV API, not objects!
   injector_contract_attack_patterns?: string[];
-  injector_contract_content?: any;
+  injector_contract_content?: Record<string, unknown>;
 }
 
 export interface AtomicTestingInput {
   inject_title: string;
   inject_description?: string;
   inject_injector_contract: string;
-  inject_content?: Record<string, any>;
+  inject_content?: Record<string, unknown>;
   inject_teams?: string[];
   inject_assets?: string[];
   inject_asset_groups?: string[];

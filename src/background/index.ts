@@ -88,6 +88,12 @@ import type {
   ExtensionSettings,
   ScanResultPayload,
   AddObservablePayload,
+  DetectedObservable,
+  DetectedOCTIEntity,
+  OAEVKillChainPhase,
+  OAEVInjectorContract,
+  Label,
+  MarkingDefinition,
 } from '../shared/types';
 
 // ============================================================================
@@ -1237,7 +1243,7 @@ async function handleMessage(
           log.info(`SCAN_ALL: Starting unified scan across ALL configured platforms (${octiPlatformCount} OpenCTI, ${oaevPlatformCount} OpenAEV)...`);
           
           // Initialize results
-          let openctiResult: { observables: any[]; openctiEntities: any[]; cves: any[] } = {
+          let openctiResult: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[]; cves: DetectedOCTIEntity[] } = {
             observables: [],
             openctiEntities: [],
             cves: [],
@@ -1767,7 +1773,7 @@ async function handleMessage(
           
           // Create a map of phase ID to phase info for quick lookups
           const phaseIdToInfo: Map<string, { name: string; killChainName: string; order: number }> = new Map();
-          killChainPhases.forEach((phase: any) => {
+          killChainPhases.forEach((phase: OAEVKillChainPhase) => {
             if (phase.phase_id) {
               phaseIdToInfo.set(phase.phase_id, {
                 name: phase.phase_name,
@@ -1789,7 +1795,7 @@ async function handleMessage(
               
               // Filter contracts that have this attack pattern
               // NOTE: injector_contract_attack_patterns is a List<String> of UUIDs, NOT objects!
-              const contracts = allContracts.filter((contract: any) => {
+              const contracts = allContracts.filter((contract: OAEVInjectorContract) => {
                 const contractApIds: string[] = contract.injector_contract_attack_patterns || [];
                 // Each item in the array is a UUID string, not an object
                 // Match by UUID directly
@@ -1798,7 +1804,7 @@ async function handleMessage(
               
               log.debug('[FETCH_SCENARIO_OVERVIEW] Contracts for', ap?.attack_pattern_name || id, 
                 '(uuid:', attackPatternUuid, '):', contracts.length,
-                'Sample contract APs:', allContracts.slice(0, 2).map((c: any) => c.injector_contract_attack_patterns));
+                'Sample contract APs:', allContracts.slice(0, 2).map((c: OAEVInjectorContract) => c.injector_contract_attack_patterns));
               
               // Resolve kill chain phase IDs to phase names
               const rawKillChainPhases: string[] = ap?.attack_pattern_kill_chain_phases || [];
@@ -2159,7 +2165,7 @@ async function handleMessage(
                     setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
                   );
                   const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-                  return { platformId: pId, results: results.map((r: any) => ({ ...r, _platformId: pId })) };
+                  return { platformId: pId, results: results.map((r) => ({ ...r, _platformId: pId })) };
                 } catch (e) {
                   log.warn(`Search timeout/error for platform ${pId}:`, e);
                   return { platformId: pId, results: [] };
@@ -2196,11 +2202,11 @@ async function handleMessage(
                   ]);
                   
                   // Transform the result into a list of entities
-                  const results: any[] = [];
+                  const results: Record<string, unknown>[] = [];
                   const platformInfo = client.getPlatformInfo();
                   
                   for (const [className, data] of Object.entries(searchResult)) {
-                    if (data && (data as any).count > 0) {
+                    if (data && (data as { count: number }).count > 0) {
                       // Fetch actual results for this class
                       const classResults = await client.fullTextSearchByClass(className, {
                         textSearch: searchTerm,
@@ -2208,7 +2214,7 @@ async function handleMessage(
                         size: 20,
                       });
                       
-                      results.push(...classResults.content.map((r: any) => ({
+                      results.push(...classResults.content.map((r: Record<string, unknown>) => ({
                         ...r,
                         _platformId: pId,
                         _platform: platformInfo,
@@ -2249,7 +2255,7 @@ async function handleMessage(
         };
         
         try {
-          const results: any[] = [];
+          const results: Record<string, unknown>[] = [];
           
           // Search across all OpenAEV platforms or specific one
           const clientsToSearch = platformId 
@@ -2586,8 +2592,8 @@ async function handleMessage(
         
         try {
           // Aggregate labels and markings from all platforms
-          const allLabels: any[] = [];
-          const allMarkings: any[] = [];
+          const allLabels: (Label & { _platformId: string })[] = [];
+          const allMarkings: (Partial<MarkingDefinition> & { id: string; _platformId: string })[] = [];
           const seenLabelIds = new Set<string>();
           const seenMarkingIds = new Set<string>();
           
@@ -2661,7 +2667,7 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allLabels: any[] = [];
+            const allLabels: (Label & { _platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const label of result.labels) {
@@ -2719,7 +2725,7 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allMarkings: any[] = [];
+            const allMarkings: (Partial<MarkingDefinition> & { id: string; _platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const marking of result.markings) {
@@ -3034,7 +3040,7 @@ async function handleMessage(
               );
               const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
               log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers for ${entityId} in platform ${pId}`);
-              return { platformId: pId, containers: containers.map((c: any) => ({ ...c, _platformId: pId })) };
+              return { platformId: pId, containers: containers.map((c) => ({ ...c, _platformId: pId })) };
             } catch (e) {
               // Entity might not exist or timeout
               log.debug(`No containers/timeout for ${entityId} in platform ${pId}:`, e);
@@ -3076,7 +3082,7 @@ async function handleMessage(
                 client.findContainersByExternalReferenceUrl(url),
                 timeoutPromise
               ]);
-              return { platformId: pId, containers: containers.map((c: any) => ({ ...c, _platformId: pId })) };
+              return { platformId: pId, containers: containers.map((c) => ({ ...c, _platformId: pId })) };
             } catch (e) {
               log.debug(`No containers found/timeout for URL in platform ${pId}`);
               return { platformId: pId, containers: [] };

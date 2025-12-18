@@ -47,6 +47,7 @@ import {
 import { parsePrefixedType } from '../shared/platform';
 import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types';
+import type { PlatformConfig } from '../shared/types/config';
 import { processScanResults } from './handlers/scan-results-handler';
 import type {
   PanelMode,
@@ -388,15 +389,15 @@ const App: React.FC = () => {
           setMode(response.data.theme === 'light' ? 'light' : 'dark');
         }
         
-        const platforms = response.data?.openctiPlatforms || [];
+        const platforms: PlatformConfig[] = response.data?.openctiPlatforms || [];
         const enabledPlatforms = platforms
-          .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
+          .filter((p) => p.enabled !== false && p.url && p.apiToken)
+          .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
         
-        const oaevPlatforms = response.data?.openaevPlatforms || [];
+        const oaevPlatforms: PlatformConfig[] = response.data?.openaevPlatforms || [];
         const enabledOAEVPlatforms = oaevPlatforms
-          .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
+          .filter((p) => p.enabled !== false && p.url && p.apiToken)
+          .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
         
         setAvailablePlatforms([...enabledPlatforms, ...enabledOAEVPlatforms]);
         
@@ -440,13 +441,13 @@ const App: React.FC = () => {
       if (areaName === 'local' && changes.settings) {
         const newSettings = changes.settings.newValue;
         if (newSettings) {
-          const enabledOpenCTI = (newSettings.openctiPlatforms || [])
-            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-            .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
+          const enabledOpenCTI = ((newSettings.openctiPlatforms || []) as PlatformConfig[])
+            .filter((p) => p.enabled !== false && p.url && p.apiToken)
+            .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
           
-          const enabledOpenAEV = (newSettings.openaevPlatforms || [])
-            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-            .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
+          const enabledOpenAEV = ((newSettings.openaevPlatforms || []) as PlatformConfig[])
+            .filter((p) => p.enabled !== false && p.url && p.apiToken)
+            .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
           
           const allPlatforms = [...enabledOpenCTI, ...enabledOpenAEV];
           setAvailablePlatforms(allPlatforms);
@@ -882,14 +883,14 @@ const App: React.FC = () => {
           chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
         });
         if (settingsResponse?.success && settingsResponse.data) {
-          const platforms = settingsResponse.data?.openctiPlatforms || [];
+          const platforms: PlatformConfig[] = settingsResponse.data?.openctiPlatforms || [];
           const enabledPlatforms = platforms
-            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-            .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
-          const oaevPlatformsFromSettings = settingsResponse.data?.openaevPlatforms || [];
+            .filter((p) => p.enabled !== false && p.url && p.apiToken)
+            .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
+          const oaevPlatformsFromSettings: PlatformConfig[] = settingsResponse.data?.openaevPlatforms || [];
           const enabledOAEVPlatforms = oaevPlatformsFromSettings
-            .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-            .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
+            .filter((p) => p.enabled !== false && p.url && p.apiToken)
+            .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
           currentPlatforms = [...enabledPlatforms, ...enabledOAEVPlatforms];
           setAvailablePlatforms(currentPlatforms);
           availablePlatformsRef.current = currentPlatforms;

@@ -70,9 +70,10 @@ import {
 } from './opencti/observable-utils';
 
 import type { ExtensionSettings } from '../types/settings';
-import type { PlatformInfo, GraphQLResponse } from '../types/api';
 import type { ObservableType, HashType } from '../types/observables';
 import type {
+  GraphQLResponse,
+  OCTIPlatformInfo,
   OCTIStixCyberObservable,
   OCTIStixDomainObject,
   OCTISearchResult,
@@ -141,7 +142,7 @@ export class OpenCTIClient {
   // Platform Information
   // ==========================================================================
 
-  async testConnection(): Promise<PlatformInfo> {
+  async testConnection(): Promise<OCTIPlatformInfo> {
     const data = await this.query<{
       about: { version: string };
       settings: {

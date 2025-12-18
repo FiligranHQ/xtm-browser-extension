@@ -231,15 +231,14 @@ src/shared/
 ├── platform/             # Platform abstractions
 │   └── registry.ts       # Platform type registry
 ├── types/                # TypeScript definitions
-│   ├── settings.ts       # Platform config, extension settings
-│   ├── ai.ts             # AI provider config, settings
-│   ├── observables.ts    # Observable types (IPs, domains, hashes)
-│   ├── platform.ts       # Multi-platform matching types
-│   ├── api.ts            # GraphQL/API response types
+│   ├── settings.ts       # Platform config, detection settings, extension settings
+│   ├── ai.ts             # AI provider types, model selection, affinities
+│   ├── observables.ts    # Observable types (IoCs) and detection interfaces
+│   ├── platform.ts       # Cross-platform matching and enrichment types
 │   ├── ui.ts             # UI state types (scan state, panel state)
-│   ├── opencti.ts        # OpenCTI types (STIX, entities, containers)
-│   ├── openaev.ts        # OpenAEV types (entities, scenarios)
-│   └── messages.ts       # Message types for extension communication
+│   ├── opencti.ts        # OpenCTI types (GraphQL, STIX, entities, containers)
+│   ├── openaev.ts        # OpenAEV entities, scenarios, atomic testing
+│   └── messages.ts       # Extension message types and payloads
 ├── theme/                # Theme definitions
 │   ├── ThemeDark.ts
 │   ├── ThemeLight.ts
@@ -290,7 +289,8 @@ The OpenAEV client is a REST API client with modular filter organization:
 
 ```
 src/shared/api/openaev/
-└── filters.ts   # Filter builders, payload builders, and type utilities
+├── types.ts     # API request/response types (Filter, FilterGroup, SearchBody, builder params)
+└── filters.ts   # Filter builders and payload builders (functions only)
 ```
 
 **Key modules:**

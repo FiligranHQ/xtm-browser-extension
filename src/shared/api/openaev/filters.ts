@@ -5,28 +5,20 @@
  * Separating filters from the client logic improves maintainability.
  */
 
-// ============================================================================
-// Filter Group Types
-// ============================================================================
+import {
+  ENTITY_TYPE_PATH_MAP,
+  type FilterGroup,
+  type SearchBody,
+  type PayloadBuilderParams,
+  type AtomicTestingBuilderParams,
+  type InjectBuilderParams,
+} from './types';
 
-export interface Filter {
-  key: string;
-  operator: 'eq' | 'contains' | 'starts_with' | 'not_eq';
-  values: string[];
-  mode?: 'or' | 'and';
-}
-
-export interface FilterGroup {
-  mode: 'or' | 'and';
-  filters: Filter[];
-}
-
-export interface SearchBody {
-  page?: number;
-  size?: number;
-  filterGroup?: FilterGroup;
-  textSearch?: string;
-}
+// Re-export types for backward compatibility
+export type { FilterGroup, SearchBody, PayloadBuilderParams as PayloadInput } from './types';
+export type { AtomicTestingBuilderParams as AtomicTestingInput } from './types';
+export type { InjectBuilderParams as InjectInput } from './types';
+export { ENTITY_TYPE_PATH_MAP };
 
 // ============================================================================
 // Asset Filters
@@ -149,22 +141,8 @@ export function buildPaginatedBody(page: number, size: number): SearchBody {
 }
 
 // ============================================================================
-// URL Path Mapping
+// URL Path Helper
 // ============================================================================
-
-export const ENTITY_TYPE_PATH_MAP: Record<string, string> = {
-  'Asset': 'admin/assets/endpoints',
-  'AssetGroup': 'admin/assets/asset_groups',
-  'User': 'admin/teams/players',
-  'Player': 'admin/teams/players',
-  'Team': 'admin/teams/teams',
-  'Organization': 'admin/teams/organizations',
-  'Scenario': 'admin/scenarios',
-  'Exercise': 'admin/simulations',
-  'AttackPattern': 'admin/attack_patterns',
-  'Finding': 'admin/findings',
-  'Vulnerability': 'admin/vulnerabilities',
-};
 
 /**
  * Get the URL path for an entity type
@@ -174,35 +152,13 @@ export function getEntityPath(entityClass: string): string {
 }
 
 // ============================================================================
-// Payload Types
+// Payload Body Builders
 // ============================================================================
-
-export type PayloadType = 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
-
-export interface PayloadInput {
-  payload_type: PayloadType;
-  payload_name: string;
-  payload_description?: string;
-  payload_platforms: string[];
-  payload_source?: string;
-  payload_status?: string;
-  payload_execution_arch?: string;
-  payload_expectations?: string[];
-  payload_attack_patterns?: string[];
-  // Command-specific
-  command_executor?: string;
-  command_content?: string;
-  // Cleanup
-  payload_cleanup_executor?: string | null;
-  payload_cleanup_command?: string | null;
-  // DNS Resolution-specific
-  dns_resolution_hostname?: string;
-}
 
 /**
  * Build a payload request body
  */
-export function buildPayloadBody(input: PayloadInput): Record<string, unknown> {
+export function buildPayloadBody(input: PayloadBuilderParams): Record<string, unknown> {
   const body: Record<string, unknown> = {
     payload_type: input.payload_type,
     payload_name: input.payload_name,
@@ -258,22 +214,13 @@ export function buildDnsResolutionPayloadBody(input: {
 }
 
 // ============================================================================
-// Atomic Testing Types
+// Atomic Testing Body Builders
 // ============================================================================
-
-export interface AtomicTestingInput {
-  title: string;
-  description?: string;
-  injectorContractId: string;
-  content?: Record<string, unknown>;
-  assetIds?: string[];
-  assetGroupIds?: string[];
-}
 
 /**
  * Build an atomic testing request body
  */
-export function buildAtomicTestingBody(input: AtomicTestingInput): Record<string, unknown> {
+export function buildAtomicTestingBody(input: AtomicTestingBuilderParams): Record<string, unknown> {
   return {
     inject_title: input.title,
     inject_description: input.description || '',
@@ -287,16 +234,21 @@ export function buildAtomicTestingBody(input: AtomicTestingInput): Record<string
 }
 
 // ============================================================================
-// Inject Types
+// Inject Body Builders
 // ============================================================================
 
-export interface InjectInput {
-  inject_title: string;
-  inject_description?: string;
-  inject_injector_contract: string;
-  inject_content?: Record<string, unknown>;
-  inject_depends_duration?: number;
-  inject_teams?: string[];
-  inject_assets?: string[];
-  inject_asset_groups?: string[];
+/**
+ * Build an inject request body
+ */
+export function buildInjectBody(input: InjectBuilderParams): Record<string, unknown> {
+  return {
+    inject_title: input.inject_title,
+    inject_description: input.inject_description || '',
+    inject_injector_contract: input.inject_injector_contract,
+    inject_content: input.inject_content || {},
+    inject_depends_duration: input.inject_depends_duration || 0,
+    inject_teams: input.inject_teams || [],
+    inject_assets: input.inject_assets || [],
+    inject_asset_groups: input.inject_asset_groups || [],
+  };
 }

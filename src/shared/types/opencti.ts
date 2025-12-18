@@ -1,9 +1,41 @@
 /**
  * OpenCTI Types
  * 
- * All OpenCTI-specific types including STIX objects, entity definitions, and containers.
- * All types are prefixed with OCTI for consistency with OpenAEV (OAEV*) types.
+ * All OpenCTI-specific types including STIX objects, entity definitions, containers,
+ * and GraphQL API types. All types are prefixed with OCTI for consistency with 
+ * OpenAEV (OAEV*) types.
  */
+
+// ============================================================================
+// GraphQL API Types
+// ============================================================================
+
+export interface GraphQLResponse<T> {
+  data?: T;
+  errors?: GraphQLError[];
+}
+
+export interface GraphQLError {
+  message: string;
+  name?: string;
+  data?: Record<string, unknown>;
+}
+
+// ============================================================================
+// Platform Info
+// ============================================================================
+
+export interface OCTIPlatformInfo {
+  version: string;
+  enterprise_edition?: boolean;
+  me?: {
+    name?: string;
+    user_email?: string;
+  };
+  settings?: {
+    platform_title?: string;
+  };
+}
 
 // ============================================================================
 // OpenCTI Entity Types
@@ -155,7 +187,7 @@ export interface DetectedOCTIEntity {
 }
 
 // Import PlatformMatch for DetectedOCTIEntity
-import type { PlatformMatch } from './index';
+import type { PlatformMatch } from './platform';
 
 // ============================================================================
 // Container Types

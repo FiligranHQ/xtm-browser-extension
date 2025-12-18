@@ -5,6 +5,8 @@
  * All types are prefixed with OAEV for consistency with OpenCTI (OCTI*) types.
  */
 
+import type { PayloadType } from '../api/openaev/types';
+
 // ============================================================================
 // Entity Types
 // ============================================================================
@@ -356,7 +358,7 @@ export interface AtomicTestingInput {
  * Payload creation input
  */
 export interface PayloadCreateInput {
-  payload_type: 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
+  payload_type: PayloadType;
   payload_name: string;
   payload_source: 'COMMUNITY' | 'FILIGRAN' | 'MANUAL';
   payload_status: 'VERIFIED' | 'UNVERIFIED' | 'DEPRECATED';

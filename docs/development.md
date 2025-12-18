@@ -83,6 +83,7 @@ src/
 │   │   │   ├── observable-utils.ts # Observable type mapping
 │   │   │   └── types.ts         # Response types
 │   │   └── openaev/             # OpenAEV modules
+│   │       ├── types.ts         # API request/response types
 │   │       └── filters.ts       # Filter & payload builders
 │   ├── components/      # Shared React components
 │   │   └── ItemIcon.tsx # Entity type icons
@@ -99,6 +100,14 @@ src/
 │   │   └── registry.ts  # Platform type definitions
 │   ├── theme/           # Theme configuration
 │   ├── types/           # TypeScript type definitions
+│   │   ├── settings.ts      # Platform config, detection settings
+│   │   ├── ai.ts            # AI provider types, model selection
+│   │   ├── observables.ts   # Observable types (IoCs) and detection
+│   │   ├── platform.ts      # Cross-platform matching types
+│   │   ├── ui.ts            # UI state types (scan, panel)
+│   │   ├── opencti.ts       # OpenCTI types (GraphQL, STIX, entities)
+│   │   ├── openaev.ts       # OpenAEV entities, scenarios
+│   │   └── messages.ts      # Extension message types
 │   └── utils/           # Utilities
 │       ├── logger.ts    # Structured logging
 │       ├── messaging.ts # Extension message helpers

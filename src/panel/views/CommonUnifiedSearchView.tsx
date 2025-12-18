@@ -56,6 +56,10 @@ export interface UnifiedSearchViewProps {
   multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
   availablePlatforms: PlatformInfo[];
   logoSuffix: string;
+  /** Loading entity details state */
+  entityDetailsLoading?: boolean;
+  /** Set loading entity details state */
+  setEntityDetailsLoading?: (loading: boolean) => void;
 }
 
 export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
@@ -77,6 +81,8 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   multiPlatformResultsRef,
   availablePlatforms,
   logoSuffix,
+  entityDetailsLoading: _entityDetailsLoading,
+  setEntityDetailsLoading,
 }) => {
   // Get platform counts
   const openctiPlatforms = useMemo(() => 
@@ -195,14 +201,20 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
       ? result.entityData as Record<string, unknown>
       : {};
     
+    // Clean the entity type (remove oaev- prefix for the API call)
+    const entityType = result.type || '';
+    const cleanEntityType = entityType.replace(/^oaev-/, '');
+    
     const entityData: EntityData = {
       ...baseEntityData,
       id: result.id,
       type: result.type,
+      entity_type: cleanEntityType,
       name: result.name,
       platformId: result.platformId,
       platformType: result.source,
       isNonDefaultPlatform: result.source !== 'opencti',
+      existsInPlatform: true,
     };
 
     const multiResult: MultiPlatformResult = {
@@ -220,6 +232,68 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
     setEntity(entityData);
     setEntityFromSearchMode('unified-search');
     setPanelMode('entity');
+    
+    // Fetch full entity details from the platform
+    const entityId = result.id;
+    if (entityId && result.platformId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      try {
+        setEntityDetailsLoading?.(true);
+        
+        chrome.runtime.sendMessage({
+          type: 'GET_ENTITY_DETAILS',
+          payload: {
+            id: entityId,
+            entityType: cleanEntityType,
+            platformId: result.platformId,
+            platformType: result.source,
+          },
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            log.debug('Entity details fetch error:', chrome.runtime.lastError);
+            setEntityDetailsLoading?.(false);
+            return;
+          }
+          
+          // Only update if we got a successful response with data
+          if (response?.success && response.data) {
+            const fullEntityData = response.data;
+            
+            // Update the entity with full details, preserving platform metadata and type
+            const updatedEntity: EntityData = {
+              ...fullEntityData,
+              // Preserve the entity type - API response may not include 'type' field
+              type: entityType,
+              entity_type: cleanEntityType,
+              // Store API response in entityData for views that read from it
+              entityData: fullEntityData,
+              // Platform metadata
+              platformId: result.platformId,
+              platformType: result.source,
+              isNonDefaultPlatform: result.source !== 'opencti',
+              existsInPlatform: true,
+            };
+            
+            setEntity(updatedEntity);
+            
+            // Also update the multi-platform results
+            const updatedResults: MultiPlatformResult[] = [{
+              ...multiResult,
+              entity: updatedEntity,
+            }];
+            setMultiPlatformResults(updatedResults);
+            multiPlatformResultsRef.current = updatedResults;
+            
+            log.debug('Entity details fetched successfully for search result:', entityId);
+          } else {
+            log.debug('Entity details fetch failed or no data:', response?.error);
+          }
+          setEntityDetailsLoading?.(false);
+        });
+      } catch (error) {
+        log.debug('Failed to fetch entity details:', error);
+        setEntityDetailsLoading?.(false);
+      }
+    }
   };
 
   const hasSearched = unifiedSearchResults.length > 0 || (unifiedSearchQuery.trim() && !unifiedSearching);

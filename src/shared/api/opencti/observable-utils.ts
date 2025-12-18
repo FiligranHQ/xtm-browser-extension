@@ -3,7 +3,7 @@
  * Type normalization and input building for observables
  */
 
-import type { HashType } from '../../types';
+import type { HashType } from '../../types/observables';
 
 // ============================================================================
 // Type Normalization Maps

@@ -9,7 +9,7 @@ import type {
   DetectedObservable,
   ObservableType,
   HashType,
-} from './index';
+} from './observables';
 import type {
   DetectedOCTIEntity,
   OCTIContainerType,

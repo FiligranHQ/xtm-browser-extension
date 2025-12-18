@@ -314,7 +314,8 @@ xtm-browser-extension/
 │       │   │   ├── queries.ts       # GraphQL queries & mutations
 │       │   │   └── observable-utils.ts # Observable helpers
 │       │   └── openaev/             # OpenAEV REST modules
-│       │       └── filters.ts       # Filter builders & payload utilities
+│       │       ├── types.ts         # API request/response types
+│       │       └── filters.ts       # Filter builders & payload builders
 │       ├── detection/           # Detection engine
 │       │   ├── detector.ts          # Main detection orchestrator
 │       │   ├── patterns.ts          # Regex patterns
@@ -331,15 +332,14 @@ xtm-browser-extension/
 │       ├── components/          # Shared React components
 │       │   └── ItemIcon.tsx
 │       ├── types/               # TypeScript definitions
-│       │   ├── settings.ts          # Platform config, extension settings
-│       │   ├── ai.ts                # AI provider config, settings
-│       │   ├── observables.ts       # Observable types (IPs, domains, hashes)
-│       │   ├── platform.ts          # Multi-platform matching types
-│       │   ├── api.ts               # GraphQL/API response types
+│       │   ├── settings.ts          # Platform config, detection settings, extension settings
+│       │   ├── ai.ts                # AI provider types, model selection, affinities
+│       │   ├── observables.ts       # Observable types (IoCs) and detection interfaces
+│       │   ├── platform.ts          # Cross-platform matching and enrichment types
 │       │   ├── ui.ts                # UI state types (scan state, panel state)
-│       │   ├── opencti.ts           # OpenCTI types (STIX, entities, containers)
-│       │   ├── openaev.ts           # OpenAEV types (entities, scenarios, atomic testing)
-│       │   └── messages.ts          # Message types for extension communication
+│       │   ├── opencti.ts           # OpenCTI types (GraphQL, STIX, entities, containers)
+│       │   ├── openaev.ts           # OpenAEV entities, scenarios, atomic testing
+│       │   └── messages.ts          # Extension message types and payloads
 │       └── utils/               # Utilities
 │           ├── logger.ts            # Logging
 │           ├── storage.ts           # Chrome storage wrapper

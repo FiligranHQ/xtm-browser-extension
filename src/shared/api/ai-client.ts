@@ -27,8 +27,6 @@ export type {
   ResolvedRelationship,
 } from './ai/types';
 
-export { parseAIJsonResponse } from './ai/json-parser';
-
 // Import types for internal use
 import type {
   AIGenerationRequest,

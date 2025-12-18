@@ -1,238 +1,224 @@
 /**
  * OpenCTI Types
  * 
- * All OpenCTI-specific types including STIX objects and entity definitions.
+ * All OpenCTI-specific types including STIX objects, entity definitions, and containers.
  * All types are prefixed with OCTI for consistency with OpenAEV (OAEV*) types.
  */
 
-import type { PlatformMatch } from './index';
+// ============================================================================
+// OpenCTI Entity Types
+// ============================================================================
+
+export type OCTIEntityType =
+  | 'Intrusion-Set'
+  | 'Malware'
+  | 'Threat-Actor'
+  | 'Campaign'
+  | 'Vulnerability'
+  | 'Attack-Pattern'
+  | 'Tool'
+  | 'Incident'
+  | 'Infrastructure'
+  | 'Indicator';
 
 // ============================================================================
 // STIX Base Types
 // ============================================================================
 
-/**
- * Base STIX object interface
- */
-export interface OCTIStixBaseObject {
+export interface OCTIBaseEntity {
   id: string;
-  standard_id?: string;
+  standard_id: string;
   entity_type: string;
+  parent_types: string[];
+  created_at: string;
+  updated_at: string;
   created?: string;
   modified?: string;
-  revoked?: boolean;
-  confidence?: number;
-  lang?: string;
-  labels?: Array<{ id: string; value: string; color?: string }>;
-  objectMarking?: Array<{ id: string; definition?: string; definition_type?: string; x_opencti_color?: string }>;
-  createdBy?: { id: string; name?: string; entity_type?: string };
-  objectLabel?: Array<{ id: string; value: string; color?: string }>;
 }
 
-/**
- * STIX Cyber Observable (SCO)
- */
-export interface OCTIStixCyberObservable extends OCTIStixBaseObject {
-  observable_value: string;
-  value?: string;
-  x_opencti_score?: number;
-  x_opencti_description?: string;
-  // Hash-specific fields
-  hashes?: {
-    MD5?: string;
-    'SHA-1'?: string;
-    'SHA-256'?: string;
-    'SHA-512'?: string;
-    SSDEEP?: string;
-  };
-  // File-specific fields
-  name?: string;
-  size?: number;
-  mime_type?: string;
-  // Network-specific fields
-  rir?: string;
-  asn?: string;
-  // Related indicators
-  indicators?: {
-    edges?: Array<{
-      node?: {
-        id: string;
-        name?: string;
-        pattern?: string;
-        valid_from?: string;
-        valid_until?: string;
-      };
-    }>;
-  };
+export interface OCTIMarkingDefinition {
+  id: string;
+  definition_type: string;
+  definition: string;
+  x_opencti_order: number;
+  x_opencti_color: string;
 }
 
-/**
- * STIX Domain Object (SDO)
- */
-export interface OCTIStixDomainObject extends OCTIStixBaseObject {
+export interface OCTILabel {
+  id: string;
+  value: string;
+  color: string;
+}
+
+export interface OCTIIdentity extends OCTIBaseEntity {
   name: string;
-  aliases?: string[];
   description?: string;
-  x_mitre_id?: string;
+  identity_class: string;
+  x_opencti_aliases?: string[];
+}
+
+export interface OCTIExternalReference {
+  id: string;
+  source_name: string;
+  description?: string;
+  url?: string;
+  external_id?: string;
+}
+
+export interface OCTIFileData {
+  id: string;
+  name: string;
+  metaData?: {
+    mimetype?: string;
+  };
+}
+
+// ============================================================================
+// STIX Cyber Observables (SCO)
+// ============================================================================
+
+export interface OCTIStixCyberObservable extends OCTIBaseEntity {
+  observable_value: string;
+  x_opencti_description?: string;
+  x_opencti_score?: number;
+  objectMarking?: OCTIMarkingDefinition[];
+  objectLabel?: OCTILabel[];
+  createdBy?: OCTIIdentity;
+  indicators?: OCTIIndicator[];
+  // Type-specific fields
+  value?: string;
+  name?: string;
+  hashes?: Record<string, string>;
+}
+
+export interface OCTIIndicator extends OCTIBaseEntity {
+  name: string;
+  description?: string;
+  pattern: string;
+  pattern_type: string;
+  valid_from?: string;
+  valid_until?: string;
+  x_opencti_score?: number;
+  x_opencti_main_observable_type?: string;
+}
+
+// ============================================================================
+// STIX Domain Objects (SDO)
+// ============================================================================
+
+export interface OCTIStixDomainObject extends OCTIBaseEntity {
+  name: string;
+  description?: string;
+  aliases?: string[];
+  x_opencti_aliases?: string[];
+  objectMarking?: OCTIMarkingDefinition[];
+  objectLabel?: OCTILabel[];
+  createdBy?: OCTIIdentity;
+  externalReferences?: OCTIExternalReference[];
+  confidence?: number;
+  revoked?: boolean;
+  // Images
+  x_opencti_files?: OCTIFileData[];
+  // Type-specific fields
   first_seen?: string;
   last_seen?: string;
-  threat_actor_types?: string[];
-  sophistication?: string;
+  goals?: string[];
   resource_level?: string;
   primary_motivation?: string;
   secondary_motivations?: string[];
-  goals?: string[];
-  roles?: string[];
-  country?: {
-    id: string;
-    name?: string;
-    x_opencti_aliases?: string[];
-  };
+  threat_actor_types?: string[];
   malware_types?: string[];
   is_family?: boolean;
-  architecture_execution_envs?: string[];
-  implementation_languages?: string[];
-  capabilities?: string[];
-  kill_chain_phases?: Array<{ kill_chain_name: string; phase_name: string }>;
-  x_opencti_base_severity?: string;
-  // External references
-  externalReferences?: {
-    edges?: Array<{
-      node?: {
-        id: string;
-        source_name?: string;
-        external_id?: string;
-        url?: string;
-        description?: string;
-      };
-    }>;
-  };
+  // Vulnerability specific
+  x_opencti_cvss_base_score?: number;
+  x_opencti_cvss_base_severity?: string;
+  x_opencti_epss_score?: number;
+  x_opencti_cisa_kev?: boolean;
 }
 
-/**
- * STIX Relationship
- */
-export interface OCTIStixRelationship extends OCTIStixBaseObject {
-  relationship_type: string;
-  description?: string;
-  start_time?: string;
-  stop_time?: string;
-  from?: OCTIStixBaseObject;
-  to?: OCTIStixBaseObject;
+// ============================================================================
+// Detection Types
+// ============================================================================
+
+export interface DetectedOCTIEntity {
+  type: OCTIEntityType;
+  name: string;
+  aliases?: string[];
+  startIndex: number;
+  endIndex: number;
+  found: boolean;
+  entityId?: string;
+  entityData?: OCTIStixDomainObject;
+  platformId?: string;
+  matchedValue?: string;
+  platformMatches?: PlatformMatch[];
 }
+
+// Import PlatformMatch for DetectedOCTIEntity
+import type { PlatformMatch } from './index';
 
 // ============================================================================
 // Container Types
 // ============================================================================
 
-/**
- * OpenCTI container types
- */
-export type OCTIContainerType = 'Report' | 'Grouping' | 'Note' | 'Case-Incident' | 'Case-Rfi' | 'Case-Rft';
+export type OCTIContainerType = 'Report' | 'Case-Incident' | 'Case-Rfi' | 'Case-Rft' | 'Grouping';
 
-/**
- * Container create input
- */
 export interface OCTIContainerCreateInput {
   type: OCTIContainerType;
   name: string;
   description?: string;
   content?: string;
-  objects?: string[];
-  objectLabel?: string[];
-  objectMarking?: string[];
+  published?: string;
+  created?: string;
   report_types?: string[];
   context?: string;
   severity?: string;
   priority?: string;
   response_types?: string[];
+  objects?: string[];
+  objectMarking?: string[];
+  objectLabel?: string[];
   createdBy?: string;
+  externalReferences?: OCTIExternalReferenceInput[];
   createAsDraft?: boolean;
-  published?: string;
-  created?: string;
+}
+
+export interface OCTIExternalReferenceInput {
+  source_name: string;
+  description?: string;
+  url?: string;
+  external_id?: string;
 }
 
 // ============================================================================
-// Entity Types
+// Investigation (Workbench) Types
 // ============================================================================
 
-/**
- * OpenCTI entity type enum
- */
-export type OCTIEntityType =
-  | 'Intrusion-Set'
-  | 'Malware'
-  | 'Threat-Actor'
-  | 'Threat-Actor-Group'
-  | 'Threat-Actor-Individual'
-  | 'Attack-Pattern'
-  | 'Campaign'
-  | 'Incident'
-  | 'Vulnerability'
-  | 'Tool'
-  | 'Infrastructure'
-  | 'Sector'
-  | 'Organization'
-  | 'Individual'
-  | 'Event'
-  | 'Country'
-  | 'Region'
-  | 'City'
-  | 'Administrative-Area'
-  | 'Position'
-  | 'Report'
-  | 'Note'
-  | 'Grouping'
-  | 'Case-Incident'
-  | 'Case-Rfi'
-  | 'Case-Rft'
-  | 'Feedback';
-
-/**
- * Detected OpenCTI entity from page scanning
- */
-export interface DetectedOCTIEntity {
-  type: OCTIEntityType;
+export interface InvestigationCreateInput {
   name: string;
-  value: string;
-  startIndex: number;
-  endIndex: number;
-  context?: string;
-  found: boolean;
-  entityId?: string;
-  entityData?: OCTIStixDomainObject;
-  aliases?: string[];
-  x_mitre_id?: string;
-  platformId?: string;
-  platformMatches?: PlatformMatch[];
+  description?: string;
+  investigated_entities_ids?: string[];
 }
 
-/**
- * OpenCTI entity match for detection
- */
-export interface OCTIEntityMatch {
-  type: OCTIEntityType;
+export interface Investigation {
+  id: string;
   name: string;
-  aliases?: string[];
-  x_mitre_id?: string;
-  entityId: string;
-  entityData?: OCTIStixDomainObject;
-  platformId: string;
+  description?: string;
+  type: 'investigation';
+  investigated_entities_ids?: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 // ============================================================================
-// Type Aliases (match OpenCTI GraphQL API naming)
+// Search Types
 // ============================================================================
 
-/** Alias matching OpenCTI GraphQL API naming */
-export type StixBaseObject = OCTIStixBaseObject;
-/** Alias matching OpenCTI GraphQL API naming */
-export type StixCyberObservable = OCTIStixCyberObservable;
-/** Alias matching OpenCTI GraphQL API naming */
-export type StixDomainObject = OCTIStixDomainObject;
-/** Alias matching OpenCTI GraphQL API naming */
-export type StixRelationship = OCTIStixRelationship;
-/** Alias matching OpenCTI GraphQL API naming */
-export type ContainerType = OCTIContainerType;
-/** Alias matching OpenCTI GraphQL API naming */
-export type ContainerCreateInput = OCTIContainerCreateInput;
+export interface OCTISearchResult {
+  id: string;
+  entity_type: string;
+  name?: string;
+  observable_value?: string;
+  x_opencti_score?: number;
+  objectMarking?: OCTIMarkingDefinition[];
+}

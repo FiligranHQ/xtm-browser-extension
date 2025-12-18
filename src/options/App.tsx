@@ -32,15 +32,13 @@ import {
 } from './constants';
 
 // Import components
-import {
-  Sidebar,
-  OpenCTITab,
-  OpenAEVTab,
-  DetectionTab,
-  AITab,
-  AppearanceTab,
-  AboutTab,
-} from './components';
+import Sidebar from './components/Sidebar';
+import OpenCTITab from './components/OpenCTITab';
+import OpenAEVTab from './components/OpenAEVTab';
+import DetectionTab from './components/DetectionTab';
+import AITab from './components/AITab';
+import AppearanceTab from './components/AppearanceTab';
+import AboutTab from './components/AboutTab';
 
 const App: React.FC = () => {
   // Theme and navigation state

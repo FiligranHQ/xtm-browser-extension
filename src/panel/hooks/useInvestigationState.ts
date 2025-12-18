@@ -7,8 +7,6 @@
 import { useState, useMemo } from 'react';
 import type { InvestigationEntity } from '../types/panel-types';
 
-export type { InvestigationEntity };
-
 export interface InvestigationStateReturn {
   // Entities found
   investigationEntities: InvestigationEntity[];

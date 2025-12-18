@@ -10,7 +10,7 @@
 
 import { type MessageHandler, successResponse, errorResponse } from './types';
 import { loggers } from '../../shared/utils/logger';
-import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction';
+import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction/native-pdf';
 
 const log = loggers.background;
 

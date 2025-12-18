@@ -6,9 +6,9 @@
 import { loggers } from '../shared/utils/logger';
 import { 
   extractContent, 
-  generatePDF as generateEnhancedPDF,
   type ExtractedContent 
-} from '../shared/extraction';
+} from '../shared/extraction/content-extractor';
+import { generatePDF as generateEnhancedPDF } from '../shared/extraction/pdf-generator';
 import { jsPDF } from 'jspdf';
 
 const log = loggers.content;

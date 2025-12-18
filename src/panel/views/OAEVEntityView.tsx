@@ -50,7 +50,7 @@ import {
   getOAEVEntityColor,
 } from '../../shared/utils/entity';
 import { getPlatformLogoName } from '../../shared/platform/registry';
-import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
+import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
 import type { EntityData } from '../types/panel-types';
 import type { OAEVEntityViewProps } from '../types/view-props';
 

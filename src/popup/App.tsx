@@ -31,16 +31,14 @@ import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 
 // Components
-import {
-  ActionButton,
-  PlatformSetupForm,
-  WelcomeScreen,
-  EETrialDialog,
-  PlatformDetailsPopover,
-} from './components';
-
-// Hooks
-import { usePlatformStatus, useSetupWizard, usePopupActions } from './hooks';
+import { ActionButton } from './components/ActionButton';
+import { PlatformSetupForm } from './components/PlatformSetupForm';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { EETrialDialog } from './components/EETrialDialog';
+import { PlatformDetailsPopover } from './components/PlatformDetailsPopover';
+import { usePlatformStatus } from './hooks/usePlatformStatus';
+import { useSetupWizard } from './hooks/useSetupWizard';
+import { usePopupActions } from './hooks/usePopupActions';
 
 // Pulsing animation for connection indicator
 const pulse = keyframes`

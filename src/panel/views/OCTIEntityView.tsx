@@ -39,7 +39,7 @@ import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import { formatDate } from '../../shared/utils/formatters';
 import { getCvssChipStyle, getSeverityColor } from '../utils/cvss-helpers';
 import { getMarkingColor } from '../utils/marking-helpers';
-import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks';
+import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
 import type { EntityData } from '../types/panel-types';
 import type { OCTIEntityViewProps } from '../types/view-props';
 

@@ -53,7 +53,7 @@ import {
   CONTAINER_FETCH_TIMEOUT_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/utils/messaging';
-import { generateNativePDF, isNativePDFAvailable } from '../shared/extraction';
+import { generateNativePDF, isNativePDFAvailable } from '../shared/extraction/native-pdf';
 import {
   startOCTICacheRefresh,
   startOAEVCacheRefresh,

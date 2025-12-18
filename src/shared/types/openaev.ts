@@ -314,3 +314,95 @@ export interface OAEVInjectInput {
   inject_content?: Record<string, unknown>;
   inject_depends_duration?: number; // Relative time from scenario start in seconds
 }
+
+// ============================================================================
+// Atomic Testing Types
+// ============================================================================
+
+/**
+ * Injector Contract (simplified version for atomic testing)
+ */
+export interface InjectorContract {
+  injector_contract_id: string;
+  injector_contract_labels?: Record<string, string>;
+  injector_contract_injector_type?: string;
+  injector_contract_injector?: {
+    injector_id: string;
+    injector_name: string;
+    injector_type: string;
+  };
+  injector_contract_payload_type?: string;
+  injector_contract_platforms?: string[];
+  injector_contract_attack_patterns?: string[];
+  injector_contract_content?: Record<string, unknown>;
+}
+
+/**
+ * Atomic Testing input for creation
+ */
+export interface AtomicTestingInput {
+  inject_title: string;
+  inject_description?: string;
+  inject_injector_contract: string;
+  inject_content?: Record<string, unknown>;
+  inject_teams?: string[];
+  inject_assets?: string[];
+  inject_asset_groups?: string[];
+  inject_all_teams?: boolean;
+  inject_tags?: string[];
+}
+
+/**
+ * Payload creation input
+ */
+export interface PayloadCreateInput {
+  payload_type: 'Command' | 'Executable' | 'FileDrop' | 'DnsResolution' | 'NetworkTraffic';
+  payload_name: string;
+  payload_source: 'COMMUNITY' | 'FILIGRAN' | 'MANUAL';
+  payload_status: 'VERIFIED' | 'UNVERIFIED' | 'DEPRECATED';
+  payload_platforms: string[];
+  payload_execution_arch?: 'ALL_ARCHITECTURES' | 'x86_64' | 'arm64';
+  payload_expectations?: string[];
+  payload_description?: string;
+  dns_resolution_hostname?: string;
+  payload_attack_patterns?: string[];
+  payload_tags?: string[];
+}
+
+/**
+ * OpenAEV Payload
+ */
+export interface OAEVPayload {
+  payload_id: string;
+  payload_name: string;
+  payload_type: string;
+  payload_platforms: string[];
+  payload_injector_contract?: InjectorContract;
+}
+
+/**
+ * Atomic Testing result
+ */
+export interface AtomicTestingResult {
+  inject_id: string;
+  inject_title: string;
+  inject_type: string;
+  inject_status?: {
+    name: string;
+    label: string;
+  };
+}
+
+/**
+ * Detected atomic target from page scan
+ */
+export interface DetectedAtomicTarget {
+  id: string;
+  type: 'attack-pattern' | 'domain' | 'hostname';
+  name: string;
+  value: string;
+  platformId: string;
+  platformName: string;
+  injectorContracts?: InjectorContract[];
+  entityData?: OAEVAttackPattern;
+}

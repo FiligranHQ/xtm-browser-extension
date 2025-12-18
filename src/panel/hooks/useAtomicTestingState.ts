@@ -8,8 +8,6 @@ import { useState } from 'react';
 import type { AtomicTestingTarget, AIGeneratedPayload } from '../types/panel-types';
 import type { OAEVAsset, OAEVAssetGroup, OAEVInjectorContract } from '../../shared/types/openaev';
 
-export type { AtomicTestingTarget, AIGeneratedPayload };
-
 export interface AtomicTestingStateReturn {
   // Targets from page scan
   atomicTestingTargets: AtomicTestingTarget[];

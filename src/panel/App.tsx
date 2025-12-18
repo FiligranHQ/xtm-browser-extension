@@ -14,48 +14,43 @@ import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
 import { loggers } from '../shared/utils/logger';
 import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
-import { CommonEmptyView, CommonLoadingView } from './components';
-import {
-  useScenarioState,
-  useAIState,
-  useAtomicTestingState,
-  useInvestigationState,
-  useContainerState,
-  useScanResultsState,
-  useSearchState,
-  useEntityState,
-  useAddSelectionState,
-} from './hooks';
-import {
-  CommonScanResultsView,
-  CommonUnifiedSearchView,
-  CommonPreviewView,
-  CommonPlatformSelectView,
-  CommonNotFoundView,
-  OCTIEntityView,
-  OCTIImportResultsView,
-  OCTIContainerTypeView,
-  OCTIContainerFormView,
-  OCTIExistingContainersView,
-  OCTIInvestigationView,
-  OCTIAddView,
-  OCTIAddSelectionView,
-  OAEVEntityView,
-  OAEVAtomicTestingView,
-  OAEVScenarioView,
-} from './views';
+import { CommonEmptyView } from './components/CommonEmptyView';
+import { CommonLoadingView } from './components/CommonLoadingView';
+import { useScenarioState } from './hooks/useScenarioState';
+import { useAIState } from './hooks/useAIState';
+import { useAtomicTestingState } from './hooks/useAtomicTestingState';
+import { useInvestigationState } from './hooks/useInvestigationState';
+import { useContainerState } from './hooks/useContainerState';
+import { useScanResultsState } from './hooks/useScanResultsState';
+import { useSearchState } from './hooks/useSearchState';
+import { useEntityState, type MultiPlatformResult } from './hooks/useEntityState';
+import { useAddSelectionState } from './hooks/useAddSelectionState';
+import { CommonNotFoundView } from './components/CommonNotFoundView';
+import { CommonScanResultsView } from './views/CommonScanResultsView';
+import { CommonUnifiedSearchView } from './views/CommonUnifiedSearchView';
+import { CommonPreviewView } from './views/CommonPreviewView';
+import { CommonPlatformSelectView } from './views/CommonPlatformSelectView';
+import { OCTIEntityView } from './views/OCTIEntityView';
+import { OCTIImportResultsView } from './views/OCTIImportResultsView';
+import { OCTIContainerTypeView } from './views/OCTIContainerTypeView';
+import { OCTIContainerFormView } from './views/OCTIContainerFormView';
+import { OCTIExistingContainersView } from './views/OCTIExistingContainersView';
+import { OCTIInvestigationView } from './views/OCTIInvestigationView';
+import { OCTIAddView } from './views/OCTIAddView';
+import { OCTIAddSelectionView } from './views/OCTIAddSelectionView';
+import { OAEVEntityView } from './views/OAEVEntityView';
+import { OAEVAtomicTestingView } from './views/OAEVAtomicTestingView';
+import { OAEVScenarioView } from './views/OAEVScenarioView';
 import { parsePrefixedType } from '../shared/platform/registry';
 import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
-import type { PlatformConfig } from '../shared/types/config';
+import type { PlatformConfig } from '../shared/types/index';
 import { processScanResults } from './handlers/scan-results-handler';
 import type {
   PanelMode,
   EntityData,
   PlatformInfo,
 } from './types/panel-types';
-import type { MultiPlatformResult } from './hooks/useEntityState';
-
 const log = loggers.panel;
 
 const App: React.FC = () => {

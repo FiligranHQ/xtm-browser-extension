@@ -6,7 +6,8 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { cleanHtmlContent, generateDescription } from '../utils';
-import { SCENARIO_DEFAULT_VALUES, type OAEVAsset, type OAEVAssetGroup, type OAEVTeam, type OAEVInjectorContract, type PlatformConfig } from '../../shared/types';
+import type { PlatformConfig } from '../../shared/types';
+import { SCENARIO_DEFAULT_VALUES, type OAEVAsset, type OAEVAssetGroup, type OAEVTeam, type OAEVInjectorContract } from '../../shared/types/openaev';
 import { parsePrefixedType } from '../../shared/platform';
 import { processScanResults } from './scan-results-handler';
 import type { 
@@ -589,16 +590,25 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: Show
         if (ctx.currentPlatformIndexRef.current !== 0) return;
         
         if (response?.success && response.data) {
+          // Preserve type and entity_type fields along with full API response data
           const fullEntity = { 
-            ...firstResult.entity, ...response.data, entityData: response.data, existsInPlatform: true,
-            platformId: firstPlatformId, platformType: firstPlatformType, isNonDefaultPlatform: firstPlatformType !== 'opencti',
+            ...firstResult.entity, 
+            ...response.data, 
+            // Ensure type is preserved (API response may not include it)
+            type: firstResult.entity.type || firstEntityType,
+            entity_type: firstEntityType,
+            entityData: response.data, 
+            existsInPlatform: true,
+            platformId: firstPlatformId, 
+            platformType: firstPlatformType, 
+            isNonDefaultPlatform: firstPlatformType !== 'opencti',
           };
           ctx.setEntity(fullEntity);
           ctx.setMultiPlatformResults(prev => prev.map((r, i) => 
-            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } } : r
+            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, type: r.entity.type, entityData: response.data } } : r
           ));
           ctx.multiPlatformResultsRef.current = ctx.multiPlatformResultsRef.current.map((r, i) =>
-            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } as EntityData } : r
+            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, type: r.entity.type, entityData: response.data } as EntityData } : r
           );
           if (firstPlatformType === 'opencti' && firstEntityId) ctx.fetchEntityContainers(firstEntityId, firstPlatformId);
         }

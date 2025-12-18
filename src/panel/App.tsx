@@ -46,7 +46,7 @@ import {
 } from './views';
 import { parsePrefixedType } from '../shared/platform';
 import { formatDate } from '../shared/utils/formatters';
-import { SCENARIO_DEFAULT_VALUES } from '../shared/types';
+import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
 import type { PlatformConfig } from '../shared/types/config';
 import { processScanResults } from './handlers/scan-results-handler';
 import type {

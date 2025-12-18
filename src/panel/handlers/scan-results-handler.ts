@@ -11,7 +11,8 @@ import {
   getOAEVEntityId,
 } from '../../shared/utils/entity';
 import type { ScanResultEntity, ScanResultPlatformMatch } from '../types';
-import type { DetectedObservable, DetectedOCTIEntity, DetectedOAEVEntity } from '../../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity } from '../../shared/types';
+import type { DetectedOAEVEntity } from '../../shared/types/openaev';
 
 /**
  * Process scan results payload and return normalized entities

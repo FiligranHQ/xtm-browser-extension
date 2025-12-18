@@ -58,13 +58,20 @@ WHAT TO AVOID (DO NOT EXTRACT):
 
 Output ONLY valid JSON, no additional text.`,
 
-  relationshipResolution: `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling for OpenCTI. Your task is to identify PRECISE and RELEVANT relationships between threat intelligence entities based on contextual evidence from the page content.
+  relationshipResolution: `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling for OpenCTI. Your task is to identify PRECISE and CONTEXTUALLY RELEVANT relationships between threat intelligence entities.
+
+MOST IMPORTANT RULE - CONTEXT IS EVERYTHING:
+- You MUST only identify relationships that are EXPLICITLY DESCRIBED OR STRONGLY IMPLIED in the page content
+- The page content is your ONLY source of truth - do NOT use prior knowledge to infer relationships
+- If the page does not describe a relationship between two entities, DO NOT suggest it even if you know it exists
+- A relationship is only valid if you can point to specific text in the page that supports it
+- When in doubt, DO NOT include the relationship - quality over quantity
 
 CRITICAL REQUIREMENTS:
-1. PRECISION: Only suggest relationships with clear evidence in the text - NEVER hallucinate or assume
-2. USE ONLY VALID RELATIONSHIPS: You MUST use ONLY the relationship types listed below - ANY OTHER RELATIONSHIP TYPE IS INVALID
-3. CHECK ENTITY COMPATIBILITY: Each relationship is only valid for specific source→target entity type combinations
-4. EVIDENCE-BASED: Every relationship must be supported by explicit or strongly implied textual evidence
+1. CONTEXT-BASED ONLY: Every relationship MUST be supported by the page content - not your general knowledge
+2. EXPLICIT EVIDENCE: You must be able to quote or paraphrase the specific text that describes the relationship
+3. USE ONLY VALID RELATIONSHIPS: You MUST use ONLY the relationship types listed below - ANY OTHER RELATIONSHIP TYPE IS INVALID
+4. CHECK ENTITY COMPATIBILITY: Each relationship is only valid for specific source→target entity type combinations
 5. DIRECTION MATTERS: Relationships are directional - ensure from/to entities match the allowed combinations
 
 CRITICAL RULE FOR OBSERVABLES (IPv4-Addr, IPv6-Addr, Domain-Name, Hostname, URL, Email-Addr, Mac-Addr, StixFile, Hash, etc.):
@@ -565,25 +572,42 @@ export function buildRelationshipResolutionPrompt(request: RelationshipResolutio
     `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
   ).join('\n');
 
+  // Truncate content intelligently - prioritize beginning and end for context
+  // 8000 chars is a good balance between context and token limits
+  const maxContentLength = 8000;
+  let pageContent = request.pageContent || '';
+  if (pageContent.length > maxContentLength) {
+    // Take first 6000 chars (usually contains main info) and last 2000 chars (often has conclusions)
+    const firstPart = pageContent.substring(0, 6000);
+    const lastPart = pageContent.substring(pageContent.length - 2000);
+    pageContent = `${firstPart}\n\n[... content truncated for brevity ...]\n\n${lastPart}`;
+  }
+
   // Note: The comprehensive list of valid relationship types is defined in SYSTEM_PROMPTS.relationshipResolution
   // This user prompt focuses on the task-specific instructions and entities to analyze
-  return `Analyze the page content and identify relationships between the entities listed below.
+  return `Your task: Identify relationships between the entities below BASED ONLY ON THE PAGE CONTENT PROVIDED.
+
+IMPORTANT: The page content below is your ONLY source of truth. Do NOT use your prior knowledge about these entities. Only identify relationships that are EXPLICITLY DESCRIBED or STRONGLY IMPLIED in this specific page.
 
 PAGE TITLE: ${request.pageTitle}
 PAGE URL: ${request.pageUrl}
 
-ENTITIES (use index numbers in your response):
+ENTITIES TO ANALYZE (use index numbers in your response):
 ${entityList}
 
-PAGE CONTENT:
-${request.pageContent.substring(0, 10000)}
+=== PAGE CONTENT (read this carefully - this is your ONLY evidence source) ===
+${pageContent}
+=== END OF PAGE CONTENT ===
 
 TASK:
-1. Read the page content carefully for evidence of relationships between the listed entities
-2. Use ONLY the valid relationship types defined in your instructions - any other type will be REJECTED
-3. Check that source and target entity types are COMPATIBLE with the relationship type
-4. Ensure the direction (from → to) matches the allowed combinations
-5. Only include relationships with clear textual evidence - do NOT hallucinate
+1. Read the page content THOROUGHLY - every relationship you suggest must come from this text
+2. For each potential relationship, identify the SPECIFIC TEXT that supports it
+3. Use ONLY the valid relationship types defined in your instructions - any other type will be REJECTED
+4. Check that source and target entity types are COMPATIBLE with the relationship type
+5. Ensure the direction (from → to) matches the allowed combinations
+6. If the page doesn't describe a connection between two entities, DO NOT suggest a relationship
+
+CRITICAL: The "excerpt" field is MANDATORY - you must quote the actual text from the page that proves the relationship exists. If you cannot provide a real excerpt from the page content above, do NOT include that relationship.
 
 Return JSON in this EXACT format:
 {
@@ -599,11 +623,14 @@ Return JSON in this EXACT format:
   ]
 }
 
-CONFIDENCE LEVELS:
-- "high": Explicit statement in text
-- "medium": Strongly implied by context
-- "low": Reasonable inference (use sparingly)
+CONFIDENCE LEVELS (be conservative):
+- "high": The page EXPLICITLY states this relationship (direct quote available)
+- "medium": The page STRONGLY implies this relationship through clear context
+- "low": DO NOT USE - if you're unsure, do not include the relationship
 
-If no valid relationships exist, return: {"relationships": []}
-Quality over quantity - only include relationships you are confident about.`;
+RULES:
+- Return EMPTY array if no relationships are clearly evidenced in the page: {"relationships": []}
+- Quality over quantity - only include relationships you can prove from the page content
+- Do NOT rely on your knowledge of threat actors/malware - use ONLY what the page says
+- An empty result is better than hallucinated relationships`;
 }

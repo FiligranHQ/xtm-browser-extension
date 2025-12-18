@@ -10,61 +10,13 @@ import {
   type OAEVAsset, 
   type OAEVAssetGroup, 
   type OAEVTeam, 
-  type OAEVInjectorContract,
-} from '../../shared/types';
-
-export interface ScenarioOverviewData {
-  attackPatterns: Array<{
-    id: string;
-    name: string;
-    externalId: string;
-    description?: string;
-    killChainPhases: string[];
-    contracts: OAEVInjectorContract[];
-    entityId?: string;
-    platformId?: string;
-  }>;
-  killChainPhases: Array<{
-    phase_id: string;
-    phase_kill_chain_name: string;
-    phase_name: string;
-    phase_order: number;
-  }>;
-  pageTitle?: string;
-  pageUrl?: string;
-  pageDescription?: string;
-}
-
-export interface ScenarioFormData {
-  name: string;
-  description: string;
-  subtitle: string;
-  category: string;
-  mainFocus: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-}
-
-export interface ScenarioEmail {
-  attackPatternId: string;
-  subject: string;
-  body: string;
-}
-
-export interface SelectedInject {
-  attackPatternId: string;
-  attackPatternName: string;
-  contractId: string;
-  contractLabel: string;
-  delayMinutes: number;
-  // Additional fields for AI-generated injects
-  title?: string;
-  description?: string;
-  type?: string;
-  content?: string;
-  executor?: string;
-  subject?: string;
-  body?: string;
-}
+} from '../../shared/types/openaev';
+import type {
+  ScenarioOverviewData,
+  ScenarioFormData,
+  ScenarioEmail,
+  SelectedInject,
+} from '../types';
 
 export interface AIGeneratedScenario {
   name: string;

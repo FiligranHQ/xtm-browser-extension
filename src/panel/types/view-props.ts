@@ -34,7 +34,7 @@ import type {
   OAEVAssetGroup,
   OAEVTeam,
   OAEVInjectorContract,
-} from '../../shared/types';
+} from '../../shared/types/openaev';
 
 export type { LabelOption, MarkingOption, VocabularyOption, AuthorOption };
 

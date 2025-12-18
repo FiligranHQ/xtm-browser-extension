@@ -202,6 +202,14 @@ export interface SelectedInject {
   contractId: string;
   contractLabel: string;
   delayMinutes: number;
+  // Additional fields for AI-generated injects
+  title?: string;
+  description?: string;
+  type?: string;
+  content?: string;
+  executor?: string;
+  subject?: string;
+  body?: string;
 }
 
 // Scenario email content
@@ -220,6 +228,8 @@ export interface ScenarioOverviewData {
     description?: string;
     killChainPhases: string[];
     contracts: unknown[];
+    entityId?: string;
+    platformId?: string;
   }>;
   killChainPhases: Array<{
     phase_id: string;
@@ -227,9 +237,9 @@ export interface ScenarioOverviewData {
     phase_name: string;
     phase_order: number;
   }>;
-  pageTitle: string;
-  pageUrl: string;
-  pageDescription: string;
+  pageTitle?: string;
+  pageUrl?: string;
+  pageDescription?: string;
 }
 
 // Atomic testing target

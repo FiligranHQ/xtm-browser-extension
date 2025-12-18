@@ -52,11 +52,13 @@ import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils';
 import type { PlatformInfo, PanelMode } from '../types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
 import {
+} from '../../shared/types';
+import {
   SCENARIO_CATEGORY_OPTIONS,
   SCENARIO_MAIN_FOCUS_OPTIONS,
   SCENARIO_SEVERITY_OPTIONS,
   SCENARIO_DEFAULT_VALUES,
-} from '../../shared/types';
+} from '../../shared/types/openaev';
 
 const log = loggers.panel;
 

@@ -24,8 +24,8 @@ import {
   type InjectInput,
 } from './openaev/filters';
 
+import type { PlatformConfig } from '../types';
 import type {
-  PlatformConfig,
   OAEVAsset,
   OAEVAssetGroup,
   OAEVPlayer,
@@ -34,7 +34,7 @@ import type {
   OAEVFinding,
   OAEVScenario,
   OAEVScenarioInput,
-} from '../types';
+} from '../types/openaev';
 
 const log = loggers.openaev;
 

@@ -280,7 +280,6 @@ xtm-browser-extension/
 │   └── shared/                  # Shared modules
 │       ├── api/                 # API clients
 │       │   ├── ai-client.ts         # AI provider client (unified interface)
-│       │   ├── base-client.ts       # Base client with common utilities
 │       │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │       │   ├── openaev-client.ts    # OpenAEV REST client
 │       │   ├── ai/                  # AI provider modules
@@ -313,9 +312,12 @@ xtm-browser-extension/
 │       ├── components/          # Shared React components
 │       │   └── ItemIcon.tsx
 │       ├── types/               # TypeScript definitions
-│       │   ├── index.ts             # Main exports
+│       │   ├── index.ts             # Main exports and re-exports
+│       │   ├── opencti.ts           # OpenCTI types (STIX, entities)
+│       │   ├── openaev.ts           # OpenAEV types (entities, scenarios)
 │       │   ├── messages.ts          # Message types
-│       │   ├── detection.ts         # Detection types
+│       │   ├── platform.ts          # Platform types
+│       │   ├── config.ts            # Configuration types
 │       │   └── ai.ts                # AI types
 │       └── utils/               # Utilities
 │           ├── logger.ts            # Logging

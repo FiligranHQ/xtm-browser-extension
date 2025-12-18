@@ -309,9 +309,16 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             if (response?.success && response.data) {
               const fullEntityData = response.data;
               
-              // Update the entity with full details, preserving platform metadata
+              // Update the entity with full details, preserving platform metadata and type
+              // IMPORTANT: entityType and entityData must be preserved for view rendering
               const updatedEntity: EntityData = {
                 ...fullEntityData,
+                // Preserve the entity type - API response may not include 'type' field
+                type: entityType,
+                entity_type: entityType.replace('oaev-', ''),
+                // Store API response in entityData for views that read from it
+                entityData: fullEntityData,
+                // Platform metadata
                 platformId: platformId,
                 platformType: platformType,
                 isNonDefaultPlatform: platformType !== 'opencti',

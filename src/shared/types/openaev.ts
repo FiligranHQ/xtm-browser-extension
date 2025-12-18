@@ -315,25 +315,5 @@ export interface OAEVInjectInput {
   inject_depends_duration?: number; // Relative time from scenario start in seconds
 }
 
-/**
- * Scenario overview attack pattern with contracts
- */
-export interface ScenarioOverviewAttackPattern {
-  id: string;
-  name: string;
-  externalId: string;
-  description?: string;
-  killChainPhases: string[];
-  contracts: OAEVInjectorContract[];
-}
-
-/**
- * Scenario overview data
- */
-export interface ScenarioOverviewData {
-  attackPatterns: ScenarioOverviewAttackPattern[];
-  killChainPhases: OAEVKillChainPhase[];
-  pageTitle: string;
-  pageUrl: string;
-  pageDescription: string;
-}
+// Note: ScenarioOverviewData and ScenarioOverviewAttackPattern are defined
+// in src/panel/types/panel-types.ts as they are UI-specific types

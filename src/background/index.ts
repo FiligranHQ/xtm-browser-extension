@@ -87,11 +87,13 @@ import type {
   AddObservablePayload,
   DetectedObservable,
   DetectedOCTIEntity,
-  OAEVKillChainPhase,
-  OAEVInjectorContract,
   OCTILabel,
   OCTIMarkingDefinition,
 } from '../shared/types';
+import type {
+  OAEVKillChainPhase,
+  OAEVInjectorContract,
+} from '../shared/types/openaev';
 
 // ============================================================================
 // Global State - Multi-Platform Architecture

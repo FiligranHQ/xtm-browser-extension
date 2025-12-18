@@ -15,7 +15,7 @@ import type {
   OAEVTeam,
   OAEVAttackPattern,
   OAEVFinding,
-} from '../../shared/types';
+} from '../../shared/types/openaev';
 import {
   saveOCTICache,
   shouldRefreshOCTICache,

@@ -8,13 +8,13 @@ import { loggers } from '../utils/logger';
 import type {
   DetectedObservable,
   DetectedOCTIEntity,
-  DetectedOAEVEntity,
   OCTIStixCyberObservable,
   OCTIStixDomainObject,
   EnrichmentMatch,
   EnrichmentPlatformType,
   ObservableType,
 } from '../types';
+import type { DetectedOAEVEntity } from '../types/openaev';
 import {
   OBSERVABLE_PATTERNS,
   CVE_CONFIG,

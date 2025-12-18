@@ -17,12 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CVE/Vulnerability support for OpenAEV**: CVEs are now searched in both OpenCTI and OpenAEV platforms. When a CVE is found in both platforms, it shows as a multi-platform match (e.g., "OCTI (1), OAEV (1)"). Added `OAEVVulnerability` type and `getVulnerabilityByExternalId()` API method
 - **Per-platform Vulnerability detection settings**: Added `Vulnerability` type to both OpenCTI and OpenAEV detection settings, allowing independent control of CVE detection per platform. If disabled on all platforms, CVE regex detection is skipped entirely for performance
 - **AI highlight click re-opens panel**: Clicking on AI-discovered (purple) highlights now re-opens the panel if hidden and automatically applies the "AI Discovered" filter
+- **AI results persistence**: AI-discovered entities are now persisted across panel open/close cycles until the next scan or explicit clear
 
 ### Changed
 - Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
 - Reorganized panel types: consolidated `types.ts` and `types/` directory structure
 - OpenCTI STIX types now have both `OCTI*` prefixed names and GraphQL API-matching aliases
 - Reduced `background/index.ts` from 3238 lines to ~2850 lines through service extraction
+- **Type organization**: Created dedicated `types/openaev.ts` for OpenAEV types (matching `types/opencti.ts` structure for consistency)
 - **Naming convention standardization**: Replaced generic terms with platform-specific naming throughout codebase:
   - `CachedEntity` → `CachedOCTIEntity`
   - `DetectedSDO` → `DetectedOCTIEntity` (removed alias)
@@ -44,8 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code structure: cleaner separation between services and handlers in background script
 - Entity state management: added `entityDetailsLoading` state for better UX feedback
 - Entity navigation now always fetches fresh data to prevent stale/empty overviews
-- **AI relationship resolution accuracy**: Completely rewritten prompts with exhaustive list of valid STIX 2.1 and OpenCTI relationship types with entity compatibility rules to prevent hallucination
+- **AI relationship resolution accuracy**: Completely rewritten prompts with exhaustive list of valid STIX 2.1 and OpenCTI relationship types with entity compatibility rules to prevent hallucination. Consolidated duplicate relationship definitions into single authoritative source.
+- **AI observable relationship rules**: AI now correctly handles observable relationships (Observable → related-to → Threat only, with specific exceptions for C2 communication, DNS resolution, etc.)
 - **AI entity discovery filtering**: AI-discovered entities are now post-filtered to only include those that can actually be highlighted on the page (filters out entities from inaccessible DOM like shadow roots)
+- **OpenAEV Vulnerability overview**: Complete vulnerability details display including CVE ID, CVSS score, status, published date, remediation, and reference URLs
 
 ### Fixed
 - PDF generation now properly extracts content from Shadow DOM components
@@ -54,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scan results now properly merge entities with same name but different types on the same platform
 - **Entity overview empty after navigation**: Fixed issue where navigating back and forth between entity overviews would result in empty data - now always fetches fresh details
 - **Side panel width on certain websites**: Fixed issue where panel would open full-screen on sites with aggressive CSS (e.g., Malwarebytes) - panel now always respects its intended width using CSS isolation
+- **AI results lost on panel close**: Fixed issue where AI-discovered entities would disappear when closing and reopening the panel - results now persist until next scan or clear
+- **OpenAEV CVE overview empty**: Fixed issue where navigating to OpenAEV vulnerability overview showed incomplete/empty data
 
 ## [0.0.6] - 2024-12-17
 

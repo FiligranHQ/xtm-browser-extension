@@ -75,10 +75,13 @@ export function processScanResults(payload: {
         existing.found = true;
       }
     } else {
-      // New entry
+      // New entry - use provided platformMatches if available, otherwise create from single platform
+      const initialMatches = entity.platformMatches && entity.platformMatches.length > 0
+        ? entity.platformMatches
+        : (platformMatch ? [platformMatch] : []);
       entityMap.set(groupKey, {
         ...entity,
-        platformMatches: platformMatch ? [platformMatch] : [],
+        platformMatches: initialMatches,
       });
     }
   };
@@ -117,9 +120,21 @@ export function processScanResults(payload: {
     }
   }
   
-  // Add CVEs
+  // Add CVEs - CVEs can be found in both OpenCTI and OpenAEV platforms
   if (payload.cves) {
     for (const cve of payload.cves) {
+      // Convert DetectedOCTIEntity platformMatches to ScanResultPlatformMatch[]
+      const platformMatches: ScanResultPlatformMatch[] | undefined = cve.platformMatches?.map(pm => ({
+        platformId: pm.platformId || '',
+        platformType: (pm.platformType || 'opencti') as 'opencti' | 'openaev',
+        entityId: pm.entityId,
+        entityData: pm.entityData,
+        type: pm.type || 'Vulnerability',
+      }));
+      
+      // Determine platform type from first platformMatch if available
+      const firstPlatformType = platformMatches?.[0]?.platformType || 'opencti';
+      
       addOrMergeEntity({
         id: cve.entityId || `cve-${cve.name}`,
         type: 'Vulnerability',
@@ -128,8 +143,10 @@ export function processScanResults(payload: {
         found: cve.found,
         entityId: cve.entityId,
         platformId: cve.platformId,
-        platformType: 'opencti',
+        platformType: firstPlatformType,
         entityData: cve,
+        // Pass the multi-platform matches if present
+        platformMatches,
       });
     }
   }

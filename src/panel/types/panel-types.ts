@@ -95,11 +95,20 @@ export interface EntityData {
   // Malware fields
   malware_types?: string[];
   is_family?: boolean;
-  // Multi-platform support
+  // Multi-platform support - UI Navigation Context
+  // Properties prefixed with _ are added by UI layer for navigation/display purposes
+  // They may duplicate source data but ensure consistent access during multi-platform navigation
+  /** Platform instance ID for navigation (UI-added) */
   _platformId?: string;
+  /** Platform type for navigation (UI-added) */
   _platformType?: string;
+  /** Flag indicating non-OpenCTI platform (UI-added) */
   _isNonDefaultPlatform?: boolean;
+  // Source entity data - where the entity was originally found
+  /** Platform ID from source entity data */
   platformId?: string;
+  /** Platform type from source entity data */
+  platformType?: string;
   // Allow additional properties
   [key: string]: unknown;
 }
@@ -113,11 +122,13 @@ export interface ContainerData {
   modified: string;
   createdBy?: { id: string; name: string };
   description?: string;
+  /** Platform instance ID for navigation (UI-added) */
   _platformId?: string;
 }
 
-// Search result extends EntityData
+// Search result extends EntityData (inherits platformId properties from EntityData)
 export interface SearchResult extends EntityData {
+  /** Platform instance ID for navigation (UI-added) */
   _platformId?: string;
 }
 

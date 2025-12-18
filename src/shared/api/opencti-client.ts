@@ -72,9 +72,9 @@ import {
 import type {
   ExtensionSettings,
   PlatformInfo,
-  StixCyberObservable,
-  StixDomainObject,
-  SearchResult,
+  OCTIStixCyberObservable,
+  OCTIStixDomainObject,
+  OCTISearchResult,
   GraphQLResponse,
   OCTIContainerCreateInput,
   ObservableType,
@@ -165,24 +165,24 @@ export class OpenCTIClient {
   // Observable Queries
   // ==========================================================================
 
-  async searchObservableByValue(value: string, type?: ObservableType): Promise<StixCyberObservable | null> {
+  async searchObservableByValue(value: string, type?: ObservableType): Promise<OCTIStixCyberObservable | null> {
     const data = await this.query<{
-      stixCyberObservables: { edges: Array<{ node: StixCyberObservable }> };
+      stixCyberObservables: { edges: Array<{ node: OCTIStixCyberObservable }> };
     }>(SEARCH_OBSERVABLE_QUERY, { filters: buildValueFilter(value, type) });
     return data.stixCyberObservables.edges[0]?.node || null;
   }
 
-  async searchObservableByHash(hash: string, hashType: HashType): Promise<StixCyberObservable | null> {
+  async searchObservableByHash(hash: string, hashType: HashType): Promise<OCTIStixCyberObservable | null> {
     const data = await this.query<{
-      stixCyberObservables: { edges: Array<{ node: StixCyberObservable }> };
+      stixCyberObservables: { edges: Array<{ node: OCTIStixCyberObservable }> };
     }>(SEARCH_FILE_BY_HASH_QUERY, { filters: buildHashFilter(hash, hashType) });
     return data.stixCyberObservables.edges[0]?.node || null;
   }
 
   async batchSearchObservables(
     values: Array<{ value: string; type?: ObservableType; hashType?: HashType }>
-  ): Promise<Map<string, StixCyberObservable>> {
-    const results = new Map<string, StixCyberObservable>();
+  ): Promise<Map<string, OCTIStixCyberObservable>> {
+    const results = new Map<string, OCTIStixCyberObservable>();
     const batchSize = 20;
 
     for (let i = 0; i < values.length; i += batchSize) {
@@ -202,8 +202,8 @@ export class OpenCTIClient {
     return results;
   }
 
-  async getObservableById(id: string): Promise<StixCyberObservable | null> {
-    const data = await this.query<{ stixCyberObservable: StixCyberObservable | null }>(GET_OBSERVABLE_QUERY, { id });
+  async getObservableById(id: string): Promise<OCTIStixCyberObservable | null> {
+    const data = await this.query<{ stixCyberObservable: OCTIStixCyberObservable | null }>(GET_OBSERVABLE_QUERY, { id });
     return data.stixCyberObservable;
   }
 
@@ -211,10 +211,10 @@ export class OpenCTIClient {
   // SDO Queries
   // ==========================================================================
 
-  async searchSDOByNameOrAlias(name: string, types?: string[]): Promise<StixDomainObject | null> {
+  async searchSDOByNameOrAlias(name: string, types?: string[]): Promise<OCTIStixDomainObject | null> {
     // Try name first
     let data = await this.query<{
-      stixDomainObjects: { edges: Array<{ node: StixDomainObject }> };
+      stixDomainObjects: { edges: Array<{ node: OCTIStixDomainObject }> };
     }>(SEARCH_SDO_QUERY, { types, filters: buildNameFilter(name, false) });
 
     if (data.stixDomainObjects.edges[0]?.node) {
@@ -223,14 +223,14 @@ export class OpenCTIClient {
 
     // Try aliases
     data = await this.query<{
-      stixDomainObjects: { edges: Array<{ node: StixDomainObject }> };
+      stixDomainObjects: { edges: Array<{ node: OCTIStixDomainObject }> };
     }>(SEARCH_SDO_QUERY, { types, filters: buildNameFilter(name, true) });
 
     return data.stixDomainObjects.edges[0]?.node || null;
   }
 
-  async getSDOById(id: string): Promise<StixDomainObject | null> {
-    const data = await this.query<{ stixDomainObject: StixDomainObject | null }>(GET_SDO_QUERY, { id });
+  async getSDOById(id: string): Promise<OCTIStixDomainObject | null> {
+    const data = await this.query<{ stixDomainObject: OCTIStixDomainObject | null }>(GET_SDO_QUERY, { id });
     return data.stixDomainObject;
   }
 
@@ -383,7 +383,7 @@ export class OpenCTIClient {
     createIndicator?: boolean;
     objectMarking?: string[];
     objectLabel?: string[];
-  }): Promise<StixCyberObservable> {
+  }): Promise<OCTIStixCyberObservable> {
     const stixType = normalizeToStixType(input.type);
     const gqlType = stixToGraphQLType(stixType);
     const observableInput = buildObservableInput(stixType, gqlType, input.value, input.hashType);
@@ -398,7 +398,7 @@ export class OpenCTIClient {
       [gqlType]: observableInput,
     };
 
-    const data = await this.query<{ stixCyberObservableAdd: StixCyberObservable }>(
+    const data = await this.query<{ stixCyberObservableAdd: OCTIStixCyberObservable }>(
       buildCreateObservableMutation(gqlType),
       variables
     );
@@ -526,12 +526,12 @@ export class OpenCTIClient {
     return data.externalReferences.edges.map(edge => edge.node);
   }
 
-  async findContainersByExternalReferenceUrl(url: string): Promise<StixDomainObject[]> {
+  async findContainersByExternalReferenceUrl(url: string): Promise<OCTIStixDomainObject[]> {
     const externalRefs = await this.findExternalReferencesByUrl(url);
     if (externalRefs.length === 0) return [];
 
     const extRefIds = externalRefs.map(ref => ref.id);
-    const data = await this.query<{ stixDomainObjects: { edges: Array<{ node: StixDomainObject }> } }>(FIND_CONTAINERS_BY_EXTERNAL_REFS_QUERY, { filters: buildExternalRefFilter(extRefIds) });
+    const data = await this.query<{ stixDomainObjects: { edges: Array<{ node: OCTIStixDomainObject }> } }>(FIND_CONTAINERS_BY_EXTERNAL_REFS_QUERY, { filters: buildExternalRefFilter(extRefIds) });
     return data.stixDomainObjects.edges.map(edge => edge.node);
   }
 
@@ -544,7 +544,7 @@ export class OpenCTIClient {
     return data.draftWorkspaceAdd;
   }
 
-  async createContainer(input: OCTIContainerCreateInput): Promise<StixDomainObject & { draftId?: string }> {
+  async createContainer(input: OCTIContainerCreateInput): Promise<OCTIStixDomainObject & { draftId?: string }> {
     let draftId: string | undefined;
     if (input.createAsDraft) {
       const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
@@ -609,7 +609,7 @@ export class OpenCTIClient {
         throw new Error(`Unsupported container type: ${input.type}`);
     }
 
-    const data = await this.query<{ [key: string]: StixDomainObject }>(query, { input: containerInput }, draftId);
+    const data = await this.query<{ [key: string]: OCTIStixDomainObject }>(query, { input: containerInput }, draftId);
     const container = data[mutationName];
     return draftId ? { ...container, draftId } : container;
   }
@@ -617,7 +617,7 @@ export class OpenCTIClient {
   async uploadFileToEntity(entityId: string, file: { name: string; data: Blob | ArrayBuffer; mimeType: string }): Promise<void> {
     const formData = new FormData();
     const operations = JSON.stringify({
-      query: `mutation StixDomainObjectFileUpload($id: ID!, $file: Upload!) { stixDomainObjectEdit(id: $id) { importPush(file: $file) { id name } } }`,
+      query: `mutation OCTIStixDomainObjectFileUpload($id: ID!, $file: Upload!) { stixDomainObjectEdit(id: $id) { importPush(file: $file) { id name } } }`,
       variables: { id: entityId, file: null },
     });
     formData.append('operations', operations);
@@ -637,8 +637,8 @@ export class OpenCTIClient {
   // Search Operations
   // ==========================================================================
 
-  async globalSearch(searchTerm: string, types?: string[], limit: number = 25): Promise<SearchResult[]> {
-    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: SearchResult }> } }>(GLOBAL_SEARCH_QUERY, {
+  async globalSearch(searchTerm: string, types?: string[], limit: number = 25): Promise<OCTISearchResult[]> {
+    const data = await this.query<{ stixCoreObjects: { edges: Array<{ node: OCTISearchResult }> } }>(GLOBAL_SEARCH_QUERY, {
       search: searchTerm,
       types,
       first: limit,

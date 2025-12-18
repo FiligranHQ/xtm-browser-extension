@@ -245,18 +245,18 @@ export const HIGHLIGHT_STYLES = `
   }
 
   /* ========================================
-     SDO NOT ADDABLE - Gray style for CVEs and other SDOs that cannot be added
+     ENTITY NOT ADDABLE - Gray style for OpenCTI entities that cannot be directly added
      Shows detected but not in platform, without add option
      ======================================== */
-  .xtm-highlight.xtm-sdo-not-addable {
+  .xtm-highlight.xtm-entity-not-addable {
     background: rgba(158, 158, 158, 0.2) !important;
     outline: 2px solid #9e9e9e !important;
     padding: 2px 22px 2px 6px !important;
     cursor: default !important;  /* Not clickable */
   }
   
-  /* Info icon on RIGHT for SDO not addable */
-  .xtm-highlight.xtm-sdo-not-addable::after {
+  /* Info icon on RIGHT for entity not addable */
+  .xtm-highlight.xtm-entity-not-addable::after {
     content: '' !important;
     position: absolute !important;
     right: 6px !important;
@@ -340,7 +340,7 @@ export const HIGHLIGHT_STYLES = `
     z-index: 2147483641 !important;
   }
   
-  .xtm-highlight.xtm-sdo-not-addable:hover {
+  .xtm-highlight.xtm-entity-not-addable:hover {
     background: rgba(158, 158, 158, 0.35) !important;
     outline-color: #757575 !important;
     box-shadow: 0 0 8px rgba(158, 158, 158, 0.4) !important;

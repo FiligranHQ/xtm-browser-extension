@@ -89,8 +89,8 @@ import type {
   DetectedOCTIEntity,
   OAEVKillChainPhase,
   OAEVInjectorContract,
-  Label,
-  MarkingDefinition,
+  OCTILabel,
+  OCTIMarkingDefinition,
 } from '../shared/types';
 
 // ============================================================================
@@ -200,11 +200,16 @@ async function initializeClient(): Promise<void> {
     }
   }
   
-  // Create detection engine with ALL OpenCTI clients for multi-platform search
+  // Create detection engine with ALL OpenCTI and OpenAEV clients for multi-platform search
   if (openCTIClients.size > 0) {
-    detectionEngine = new DetectionEngine(openCTIClients);
+    detectionEngine = new DetectionEngine(openCTIClients, openAEVClients);
   } else {
     detectionEngine = null;
+  }
+  
+  // Also set OpenAEV clients on existing detection engine if any
+  if (detectionEngine && openAEVClients.size > 0) {
+    detectionEngine.setOAEVClients(openAEVClients);
   }
   
   // Set up side panel (Chrome/Edge)
@@ -603,7 +608,8 @@ async function handleMessage(
       }
       
       case 'SCAN_PAGE': {
-        // SCAN_PAGE scans for OpenCTI entities only (observables, SDOs, CVEs)
+        // SCAN_PAGE scans for observables, OpenCTI entities, and CVEs
+        // CVEs are enriched across both OpenCTI and OpenAEV platforms
         // For global scanning across all platforms, use SCAN_ALL instead
         // Applies detection settings filtering (unlike atomic testing/scenario)
         const payload = message.payload as { content: string; url: string };
@@ -2176,9 +2182,9 @@ async function handleMessage(
         
         try {
           // Aggregate labels and markings from all platforms
-          const allLabels: (Label & { _platformId: string })[] = [];
-          const allMarkings: (Partial<MarkingDefinition> & { id: string; _platformId: string })[] = [];
-          const seenLabelIds = new Set<string>();
+          const allOCTILabels: (OCTILabel & { _platformId: string })[] = [];
+          const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; _platformId: string })[] = [];
+          const seenOCTILabelIds = new Set<string>();
           const seenMarkingIds = new Set<string>();
           
           for (const [pId, client] of openCTIClients) {
@@ -2189,9 +2195,9 @@ async function handleMessage(
               ]);
               // Deduplicate by ID
               for (const label of labels) {
-                if (!seenLabelIds.has(label.id)) {
-                  seenLabelIds.add(label.id);
-                  allLabels.push({ ...label, _platformId: pId });
+                if (!seenOCTILabelIds.has(label.id)) {
+                  seenOCTILabelIds.add(label.id);
+                  allOCTILabels.push({ ...label, _platformId: pId });
                 }
               }
               for (const marking of markings) {
@@ -2205,7 +2211,7 @@ async function handleMessage(
             }
           }
           
-          sendResponse({ success: true, data: { labels: allLabels, markings: allMarkings } });
+          sendResponse({ success: true, data: { labels: allOCTILabels, markings: allMarkings } });
         } catch (error) {
           sendResponse({
             success: false,
@@ -2251,18 +2257,18 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allLabels: (Label & { _platformId: string })[] = [];
+            const allOCTILabels: (OCTILabel & { _platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const label of result.labels) {
                 if (!seenIds.has(label.id)) {
                   seenIds.add(label.id);
-                  allLabels.push({ ...label, _platformId: result.platformId });
+                  allOCTILabels.push({ ...label, _platformId: result.platformId });
                 }
               }
             }
             
-            sendResponse({ success: true, data: allLabels });
+            sendResponse({ success: true, data: allOCTILabels });
           }
         } catch (error) {
           sendResponse({
@@ -2309,7 +2315,7 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allMarkings: (Partial<MarkingDefinition> & { id: string; _platformId: string })[] = [];
+            const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; _platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const marking of result.markings) {

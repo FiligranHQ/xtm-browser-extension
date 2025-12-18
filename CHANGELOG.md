@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Loading spinner in entity overview while fetching full entity details from OpenCTI/OpenAEV (spinner replaces platform logo during load)
 - Multi-entity type support in scan results: entities like "Phishing" matching multiple types (Malware, Attack Pattern) now show combined counts with visual indicators (stacked icon, "N types" chip)
 - Compact multi-type entity display with tooltips showing all matched types
+- **Cross-platform type mapping**: New `CROSS_PLATFORM_TYPE_MAPPINGS` in registry for declaring equivalent types across platforms (e.g., OpenCTI `Attack-Pattern` ↔ OpenAEV `AttackPattern`). Multi-type displays now deduplicate equivalent types instead of showing duplicates like "Attack Pattern, Malware, Attack Pattern"
+- **CVE/Vulnerability support for OpenAEV**: CVEs are now searched in both OpenCTI and OpenAEV platforms. When a CVE is found in both platforms, it shows as a multi-platform match (e.g., "OCTI ×1, OAEV ×1"). Added `OAEVVulnerability` type and `getVulnerabilityByExternalId()` API method
 
 ### Changed
 - Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization

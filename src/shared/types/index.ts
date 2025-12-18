@@ -157,8 +157,44 @@ export type HashType = 'MD5' | 'SHA-1' | 'SHA-256' | 'SHA-512' | 'SSDEEP';
 export interface PlatformMatch {
   platformId: string;
   entityId: string;
-  entityData?: StixCyberObservable | StixDomainObject;
+  entityData?: OCTIStixCyberObservable | OCTIStixDomainObject | Record<string, unknown>;
+  /** Platform type identifier (e.g., 'opencti', 'openaev') */
+  platformType?: 'opencti' | 'openaev' | string;
+  /** Entity type (for display in multi-type results) */
+  type?: string;
 }
+
+// ============================================================================
+// Multi-Platform Enrichment Types
+// ============================================================================
+// These types support cross-platform entity enrichment (e.g., CVE/Vulnerability
+// found in both OpenCTI and OpenAEV, or future Observable enrichment in OpenAEV)
+
+/**
+ * Supported platform types for enrichment
+ */
+export type EnrichmentPlatformType = 'opencti' | 'openaev';
+
+/**
+ * A single platform match result from enrichment
+ */
+export interface EnrichmentMatch {
+  /** Platform identifier (e.g., 'opencti-prod', 'openaev-dev') */
+  platformId: string;
+  /** Platform type */
+  platformType: EnrichmentPlatformType;
+  /** Entity ID in the platform */
+  entityId: string;
+  /** Entity type in the platform (e.g., 'Vulnerability', 'oaev-Vulnerability') */
+  entityType: string;
+  /** Raw entity data from the platform */
+  entityData: Record<string, unknown>;
+}
+
+/**
+ * Enrichable entity categories - for future multi-platform enrichment routing
+ */
+export type EnrichableEntityCategory = 'vulnerability' | 'observable';
 
 export interface DetectedObservable {
   type: ObservableType;
@@ -176,9 +212,9 @@ export interface DetectedObservable {
   context?: string;
   found: boolean;
   entityId?: string;
-  entityData?: StixCyberObservable;
+  entityData?: OCTIStixCyberObservable;
   platformId?: string;
-  // All platforms where this entity was found (for multi-platform navigation)
+  /** All platforms where this entity was found (for multi-platform navigation) */
   platformMatches?: PlatformMatch[];
 }
 
@@ -206,7 +242,7 @@ export interface DetectedOCTIEntity {
   endIndex: number;
   found: boolean;
   entityId?: string;
-  entityData?: StixDomainObject;
+  entityData?: OCTIStixDomainObject;
   platformId?: string;
   // The actual text that was matched (may differ from name if matched via alias or x_mitre_id)
   matchedValue?: string;
@@ -230,31 +266,7 @@ export type OAEVEntityType = 'Asset' | 'AssetGroup' | 'Player' | 'Team' | 'Attac
  */
 export type PlatformEntityType = string;
 
-export interface OAEVAsset {
-  asset_id: string;
-  asset_name: string;
-  asset_description?: string;
-  asset_hostname?: string;
-  asset_ips?: string[];
-  // Alternative field names from different API versions/endpoints
-  endpoint_id?: string;
-  endpoint_name?: string;
-  endpoint_hostname?: string;
-  endpoint_ips?: string[];
-  endpoint_platform?: string;
-  asset_platform?: string;
-  asset_type?: string;
-  asset_tags?: string[];
-  asset_last_seen?: string;
-}
-
-export interface OAEVAssetGroup {
-  asset_group_id: string;
-  asset_group_name: string;
-  asset_group_description?: string;
-  asset_group_assets_number?: number;
-  asset_group_tags?: string[];
-}
+// Note: Full OAEVAsset, OAEVAssetGroup, OAEVTeam definitions are in the Scenario/Inject section below
 
 export interface OAEVPlayer {
   user_id: string;
@@ -264,14 +276,6 @@ export interface OAEVPlayer {
   user_phone?: string;
   user_organization?: string;
   user_teams?: string[];
-}
-
-export interface OAEVTeam {
-  team_id: string;
-  team_name: string;
-  team_description?: string;
-  team_users_number?: number;
-  team_tags?: string[];
 }
 
 export interface OAEVAttackPattern {
@@ -302,6 +306,28 @@ export interface OAEVFinding {
   }>;
 }
 
+export interface OAEVVulnerability {
+  vulnerability_id: string;
+  vulnerability_external_id: string; // CVE ID (e.g., CVE-2024-0001)
+  vulnerability_cvss_v31?: number;
+  vulnerability_published?: string;
+  // Full output fields
+  vulnerability_source_identifier?: string;
+  vulnerability_description?: string;
+  vulnerability_vuln_status?: string;
+  vulnerability_cisa_exploit_add?: string;
+  vulnerability_cisa_action_due?: string;
+  vulnerability_cisa_required_action?: string;
+  vulnerability_cisa_vulnerability_name?: string;
+  vulnerability_remediation?: string;
+  vulnerability_reference_urls?: string[];
+  vulnerability_cwes?: Array<{
+    cwe_id: string;
+    cwe_name: string;
+    cwe_description?: string;
+  }>;
+}
+
 /**
  * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenGRC)
  * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
@@ -328,7 +354,7 @@ export interface DetectedOAEVEntity {
 // OpenCTI Entity Types
 // ============================================================================
 
-export interface BaseEntity {
+export interface OCTIBaseEntity {
   id: string;
   standard_id: string;
   entity_type: string;
@@ -339,7 +365,7 @@ export interface BaseEntity {
   modified?: string;
 }
 
-export interface MarkingDefinition {
+export interface OCTIMarkingDefinition {
   id: string;
   definition_type: string;
   definition: string;
@@ -347,20 +373,20 @@ export interface MarkingDefinition {
   x_opencti_color: string;
 }
 
-export interface Label {
+export interface OCTILabel {
   id: string;
   value: string;
   color: string;
 }
 
-export interface Identity extends BaseEntity {
+export interface OCTIIdentity extends OCTIBaseEntity {
   name: string;
   description?: string;
   identity_class: string;
   x_opencti_aliases?: string[];
 }
 
-export interface ExternalReference {
+export interface OCTIExternalReference {
   id: string;
   source_name: string;
   description?: string;
@@ -368,33 +394,33 @@ export interface ExternalReference {
   external_id?: string;
 }
 
-export interface StixCyberObservable extends BaseEntity {
+export interface OCTIStixCyberObservable extends OCTIBaseEntity {
   observable_value: string;
   x_opencti_description?: string;
   x_opencti_score?: number;
-  objectMarking?: MarkingDefinition[];
-  objectLabel?: Label[];
-  createdBy?: Identity;
-  indicators?: Indicator[];
+  objectMarking?: OCTIMarkingDefinition[];
+  objectLabel?: OCTILabel[];
+  createdBy?: OCTIIdentity;
+  indicators?: OCTIIndicator[];
   // Type-specific fields
   value?: string;
   name?: string;
   hashes?: Record<string, string>;
 }
 
-export interface StixDomainObject extends BaseEntity {
+export interface OCTIStixDomainObject extends OCTIBaseEntity {
   name: string;
   description?: string;
   aliases?: string[];
   x_opencti_aliases?: string[];
-  objectMarking?: MarkingDefinition[];
-  objectLabel?: Label[];
-  createdBy?: Identity;
-  externalReferences?: ExternalReference[];
+  objectMarking?: OCTIMarkingDefinition[];
+  objectLabel?: OCTILabel[];
+  createdBy?: OCTIIdentity;
+  externalReferences?: OCTIExternalReference[];
   confidence?: number;
   revoked?: boolean;
   // Images
-  x_opencti_files?: FileData[];
+  x_opencti_files?: OCTIFileData[];
   // Type-specific fields
   first_seen?: string;
   last_seen?: string;
@@ -412,7 +438,7 @@ export interface StixDomainObject extends BaseEntity {
   x_opencti_cisa_kev?: boolean;
 }
 
-export interface Indicator extends BaseEntity {
+export interface OCTIIndicator extends OCTIBaseEntity {
   name: string;
   description?: string;
   pattern: string;
@@ -423,13 +449,14 @@ export interface Indicator extends BaseEntity {
   x_opencti_main_observable_type?: string;
 }
 
-export interface FileData {
+export interface OCTIFileData {
   id: string;
   name: string;
   metaData?: {
     mimetype?: string;
   };
 }
+
 
 // ============================================================================
 // OpenCTI Container Types
@@ -457,12 +484,12 @@ export interface OCTIContainerCreateInput {
   objectMarking?: string[];
   objectLabel?: string[];
   createdBy?: string;
-  externalReferences?: ExternalReferenceInput[];
+  externalReferences?: OCTIExternalReferenceInput[];
   // Draft mode - creates container in a new draft workspace
   createAsDraft?: boolean;
 }
 
-export interface ExternalReferenceInput {
+export interface OCTIExternalReferenceInput {
   source_name: string;
   description?: string;
   url?: string;
@@ -516,13 +543,13 @@ export interface Investigation {
   updated_at: string;
 }
 
-export interface SearchResult {
+export interface OCTISearchResult {
   id: string;
   entity_type: string;
   name?: string;
   observable_value?: string;
   x_opencti_score?: number;
-  objectMarking?: MarkingDefinition[];
+  objectMarking?: OCTIMarkingDefinition[];
 }
 
 // ============================================================================
@@ -606,6 +633,7 @@ export type OAEVArch = 'x86_64' | 'arm64' | 'Unknown' | 'ALL_ARCHITECTURES';
 
 /**
  * OpenAEV Asset (Endpoint)
+ * Consolidated definition for both entity detection and scenario creation
  */
 export interface OAEVAsset {
   asset_id: string;
@@ -616,7 +644,13 @@ export interface OAEVAsset {
   asset_created_at?: string;
   asset_updated_at?: string;
   asset_external_reference?: string;
-  // Endpoint-specific fields
+  asset_last_seen?: string;
+  asset_hostname?: string;
+  asset_ips?: string[];
+  asset_platform?: string;
+  // Endpoint-specific fields (alternative field names from API)
+  endpoint_id?: string;
+  endpoint_name?: string;
   endpoint_hostname?: string;
   endpoint_ips?: string[];
   endpoint_mac_addresses?: string[];
@@ -628,6 +662,7 @@ export interface OAEVAsset {
 
 /**
  * OpenAEV Asset Group
+ * Consolidated definition for both entity detection and scenario creation
  */
 export interface OAEVAssetGroup {
   asset_group_id: string;
@@ -639,10 +674,12 @@ export interface OAEVAssetGroup {
   asset_group_created_at?: string;
   asset_group_updated_at?: string;
   asset_group_external_reference?: string;
+  asset_group_assets_number?: number;
 }
 
 /**
  * OpenAEV Team
+ * Consolidated definition for both entity detection and scenario creation
  */
 export interface OAEVTeam {
   team_id: string;
@@ -870,7 +907,7 @@ export interface ScanState {
 export interface PanelState {
   isOpen: boolean;
   entity?: DetectedObservable | DetectedOCTIEntity | DetectedOAEVEntity;
-  entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
+  entityDetails?: OCTIStixCyberObservable | OCTIStixDomainObject | OAEVAsset;
   loading: boolean;
 }
 

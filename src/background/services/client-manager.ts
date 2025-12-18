@@ -122,7 +122,7 @@ export async function initializeOpenCTIClient(
   
   // Initialize detection engine if not exists
   if (!state.detectionEngine) {
-    state.detectionEngine = new DetectionEngine(state.clients.opencti);
+    state.detectionEngine = new DetectionEngine(state.clients.opencti, state.clients.openaev);
     log.info(`Detection engine initialized with primary client`);
   }
   
@@ -139,6 +139,11 @@ export async function initializeOpenAEVClient(
   
   const client = new OpenAEVClient(platform);
   state.clients.openaev.set(platform.id, client);
+  
+  // Sync OpenAEV clients with detection engine for CVE enrichment
+  if (state.detectionEngine) {
+    state.detectionEngine.setOAEVClients(state.clients.openaev);
+  }
   
   return client;
 }

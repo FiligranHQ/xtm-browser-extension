@@ -285,29 +285,48 @@ export function highlightResults(
   }
   
   // Highlight OpenCTI entities (can be added via AI discovery when not found)
-  for (const sdo of results.openctiEntities) {
-    const textToHighlight = (sdo as { matchedValue?: string }).matchedValue || sdo.name;
-    const valueLower = sdo.name.toLowerCase();
+  for (const octiEntity of results.openctiEntities) {
+    const textToHighlight = (octiEntity as { matchedValue?: string }).matchedValue || octiEntity.name;
+    const valueLower = octiEntity.name.toLowerCase();
     const otherPlatformMatches = findPlatformMatchesWithSubstrings(valueLower);
     
     highlightInText(fullText, textToHighlight, nodeMap, {
-      type: sdo.type,
-      found: sdo.found,
-      data: sdo,
+      type: octiEntity.type,
+      found: octiEntity.found,
+      data: octiEntity,
       isOpenCTIEntity: true, // OpenCTI entities can be added via AI discovery
       foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     }, handlers);
   }
   
-  // Highlight CVEs (OpenCTI Vulnerability entities, can be added via AI discovery)
+  // Highlight CVEs (Vulnerability entities)
+  // CVEs are detected via regex and enriched across both OpenCTI and OpenAEV platforms
+  // They are handled separately from cached entities because they use pattern-based detection
   if (results.cves) {
     for (const cve of results.cves) {
       const textToHighlight = (cve as { matchedValue?: string }).matchedValue || cve.name;
+      
+      // Build foundInPlatforms from platformMatches for multi-platform display
+      const cvePlatformMatches = cve.platformMatches || [];
+      const foundInPlatforms = cvePlatformMatches.map(pm => ({
+        type: pm.type || 'Vulnerability',
+        platformType: pm.platformType || 'opencti',
+        found: true, // platformMatches only contain found platforms
+        data: {
+          entityId: pm.entityId,
+          platformId: pm.platformId,
+          platformType: pm.platformType || 'opencti',
+          type: pm.type || 'Vulnerability',
+          entityData: pm.entityData,
+        },
+      }));
+      
       highlightInText(fullText, textToHighlight, nodeMap, {
         type: cve.type,
         found: cve.found,
         data: cve,
-        isOpenCTIEntity: true, // CVEs are OpenCTI entities, can be added via AI discovery
+        isOpenCTIEntity: true, // Flag for AI discovery feature (can add to OpenCTI if not found)
+        foundInPlatforms: foundInPlatforms.length > 0 ? foundInPlatforms : undefined,
       }, handlers);
     }
   }
@@ -392,7 +411,7 @@ function highlightInText(
               highlight.classList.add('xtm-found');
             } else if (isOpenCTIEntity) {
               // OpenCTI entity not found = gray (can be added via AI discovery)
-              highlight.classList.add('xtm-sdo-not-addable');
+              highlight.classList.add('xtm-entity-not-addable');
             } else {
               // Observable not found = amber (can be added directly)
               highlight.classList.add('xtm-not-found');
@@ -465,14 +484,14 @@ export function highlightResultsForInvestigation(
     );
   }
   
-  for (const sdo of results.openctiEntities) {
+  for (const octiEntity of results.openctiEntities) {
     highlightForInvestigation(
       fullText,
-      sdo.name,
+      octiEntity.name,
       nodeMap,
-      sdo.type,
-      sdo.entityId,
-      sdo.platformId || (sdo as { _platformId?: string })._platformId,
+      octiEntity.type,
+      octiEntity.entityId,
+      octiEntity.platformId || (octiEntity as { _platformId?: string })._platformId,
       onHighlightClick
     );
   }

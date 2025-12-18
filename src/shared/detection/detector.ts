@@ -9,8 +9,11 @@ import type {
   DetectedObservable,
   DetectedOCTIEntity,
   DetectedOAEVEntity,
-  StixCyberObservable,
-  StixDomainObject,
+  OCTIStixCyberObservable,
+  OCTIStixDomainObject,
+  EnrichmentMatch,
+  EnrichmentPlatformType,
+  ObservableType,
 } from '../types';
 import {
   OBSERVABLE_PATTERNS,
@@ -30,6 +33,7 @@ import {
   needsManualBoundaryCheck,
 } from './matching';
 import { OpenCTIClient } from '../api/opencti-client';
+import { OpenAEVClient } from '../api/openaev-client';
 import {
   getAllCachedOCTIEntityNamesForMatching,
   getAllCachedOAEVEntityNamesForMatching,
@@ -55,13 +59,32 @@ export interface DetectionResult {
 
 export class DetectionEngine {
   private clients: Map<string, OpenCTIClient>;
+  private oaevClients: Map<string, OpenAEVClient>;
   private primaryClient: OpenCTIClient | null;
 
-  constructor(clients: Map<string, OpenCTIClient>) {
+  constructor(clients: Map<string, OpenCTIClient>, oaevClients?: Map<string, OpenAEVClient>) {
     this.clients = clients;
+    this.oaevClients = oaevClients || new Map();
     // Get first client as primary
     const firstEntry = clients.entries().next().value;
     this.primaryClient = firstEntry ? firstEntry[1] : null;
+  }
+
+  /**
+   * Set OpenAEV clients for multi-platform enrichment
+   */
+  setOAEVClients(clients: Map<string, OpenAEVClient>): void {
+    this.oaevClients = clients;
+  }
+
+  /**
+   * Get all available platform clients for enrichment
+   */
+  getAvailablePlatforms(): { opencti: string[]; openaev: string[] } {
+    return {
+      opencti: Array.from(this.clients.keys()),
+      openaev: Array.from(this.oaevClients.keys()),
+    };
   }
 
   /**
@@ -250,12 +273,12 @@ export class DetectionEngine {
    */
   async enrichObservables(observables: DetectedObservable[]): Promise<DetectedObservable[]> {
     const searchPromises = observables.map(async (obs) => {
-      const platformMatches: Array<{ platformId: string; entityId: string; entityData: StixCyberObservable }> = [];
+      const platformMatches: Array<{ platformId: string; entityId: string; entityData: OCTIStixCyberObservable }> = [];
       const searchValue = obs.refangedValue || obs.value;
       
       for (const [platformId, client] of this.clients) {
         try {
-          let result: StixCyberObservable | null = null;
+          let result: OCTIStixCyberObservable | null = null;
 
           if (obs.hashType) {
             result = await client.searchObservableByHash(searchValue, obs.hashType);
@@ -294,10 +317,10 @@ export class DetectionEngine {
    */
   async enrichOCTIEntities(entities: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
     const uniqueNames = [...new Set(entities.map((e) => e.name))];
-    const searchResults = new Map<string, Array<{ entity: StixDomainObject; platformId: string }>>();
+    const searchResults = new Map<string, Array<{ entity: OCTIStixDomainObject; platformId: string }>>();
 
     for (const name of uniqueNames) {
-      const matches: Array<{ entity: StixDomainObject; platformId: string }> = [];
+      const matches: Array<{ entity: OCTIStixDomainObject; platformId: string }> = [];
       
       for (const [platformId, client] of this.clients) {
         try {
@@ -340,39 +363,231 @@ export class DetectionEngine {
     });
   }
 
-  /**
-   * Enrich CVEs with OpenCTI data (searches all platforms)
-   */
-  async enrichCVEs(cves: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
-    const uniqueCVEs = [...new Set(cves.map((c) => c.name))];
-    const searchResults = new Map<string, { entity: StixDomainObject; platformId: string }>();
+  // ============================================================================
+  // Multi-Platform Enrichment Infrastructure
+  // ============================================================================
+  // Generic enrichment system that supports CVE/Vulnerability enrichment now
+  // and is designed to support Observable enrichment in OpenAEV in the future.
 
-    for (const cve of uniqueCVEs) {
-      for (const [platformId, client] of this.clients) {
-        try {
-          const result = await client.searchSDOByNameOrAlias(cve, ['Vulnerability']);
-          if (result) {
-            searchResults.set(cve.toUpperCase(), { entity: result, platformId });
-            break; // Found, no need to search other platforms
-          }
-        } catch {
-          // Continue to next platform
+  /**
+   * Search for a vulnerability/CVE across all platforms
+   * @param cveId - The CVE identifier (e.g., CVE-2024-1234)
+   * @returns Array of enrichment matches from all platforms
+   */
+  private async searchVulnerabilityAcrossPlatforms(cveId: string): Promise<EnrichmentMatch[]> {
+    const matches: EnrichmentMatch[] = [];
+
+    // Search OpenCTI platforms
+    for (const [platformId, client] of this.clients) {
+      try {
+        const result = await client.searchSDOByNameOrAlias(cveId, ['Vulnerability']);
+        if (result) {
+          log.debug(`[Enrichment] Found ${cveId} in OpenCTI platform ${platformId}`);
+          matches.push({
+            platformId,
+            platformType: 'opencti',
+            entityId: result.id,
+            entityType: 'Vulnerability',
+            entityData: result as unknown as Record<string, unknown>,
+          });
         }
+      } catch (error) {
+        log.debug(`[Enrichment] Error searching ${cveId} in OpenCTI ${platformId}:`, error);
       }
     }
 
+    // Search OpenAEV platforms
+    for (const [platformId, client] of this.oaevClients) {
+      try {
+        log.debug(`[Enrichment] Searching ${cveId} in OpenAEV platform ${platformId}...`);
+        const result = await client.getVulnerabilityByExternalId(cveId);
+        if (result) {
+          log.debug(`[Enrichment] Found ${cveId} in OpenAEV platform ${platformId}`);
+          matches.push({
+            platformId,
+            platformType: 'openaev',
+            entityId: result.vulnerability_id,
+            entityType: 'oaev-Vulnerability',
+            entityData: {
+              id: result.vulnerability_id,
+              entity_type: 'oaev-Vulnerability',
+              name: result.vulnerability_external_id,
+              description: result.vulnerability_description,
+              x_opencti_cvss_base_score: result.vulnerability_cvss_v31,
+              vulnerability_vuln_status: result.vulnerability_vuln_status,
+              vulnerability_cisa_vulnerability_name: result.vulnerability_cisa_vulnerability_name,
+              vulnerability_remediation: result.vulnerability_remediation,
+              vulnerability_reference_urls: result.vulnerability_reference_urls,
+            },
+          });
+        } else {
+          log.debug(`[Enrichment] ${cveId} not found in OpenAEV platform ${platformId}`);
+        }
+      } catch (error) {
+        log.debug(`[Enrichment] Error searching ${cveId} in OpenAEV ${platformId}:`, error);
+      }
+    }
+
+    return matches;
+  }
+
+  /**
+   * Search for an observable across all platforms
+   * Currently only implemented for OpenCTI, OpenAEV support coming soon.
+   * 
+   * @param observableValue - The observable value (e.g., IP address, domain)
+   * @param observableType - The type of observable (e.g., 'IPv4-Addr', 'Domain-Name')
+   * @returns Array of enrichment matches from all platforms
+   * 
+   * @internal This method is prepared for future multi-platform observable enrichment.
+   * Currently observables are enriched via the existing enrichObservables() method.
+   */
+  private async searchObservableAcrossPlatforms(
+    observableValue: string, 
+    observableType: string
+  ): Promise<EnrichmentMatch[]> {
+    const matches: EnrichmentMatch[] = [];
+
+    // Search OpenCTI platforms
+    for (const [platformId, client] of this.clients) {
+      try {
+        const result = await client.searchObservableByValue(observableValue, observableType as ObservableType);
+        if (result) {
+          log.debug(`[Enrichment] Found observable ${observableValue} in OpenCTI platform ${platformId}`);
+          matches.push({
+            platformId,
+            platformType: 'opencti',
+            entityId: result.id,
+            entityType: observableType,
+            entityData: result as unknown as Record<string, unknown>,
+          });
+        }
+      } catch (error) {
+        log.debug(`[Enrichment] Error searching observable ${observableValue} in OpenCTI ${platformId}:`, error);
+      }
+    }
+
+    // TODO: Search OpenAEV platforms for observables (Findings)
+    // When OpenAEV adds observable/finding search by value, implement here:
+    // for (const [platformId, client] of this.oaevClients) {
+    //   const result = await client.searchFindingByValue(observableValue);
+    //   if (result) matches.push({ platformId, platformType: 'openaev', ... });
+    // }
+
+    return matches;
+  }
+
+  /**
+   * Convert enrichment matches to the PlatformMatch format used in DetectedOCTIEntity
+   */
+  private enrichmentMatchesToPlatformMatches(matches: EnrichmentMatch[]): Array<{
+    platformId: string;
+    platformType: EnrichmentPlatformType;
+    entityId: string;
+    entityData: Record<string, unknown>;
+    type: string;
+  }> {
+    return matches.map(m => ({
+      platformId: m.platformId,
+      platformType: m.platformType,
+      entityId: m.entityId,
+      entityData: m.entityData,
+      type: m.entityType,
+    }));
+  }
+
+  /**
+   * Enrich CVEs/Vulnerabilities with data from both OpenCTI and OpenAEV platforms
+   * Supports multi-platform matches (CVE found in both platforms)
+   */
+  async enrichCVEs(cves: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
+    const uniqueCVEs = [...new Set(cves.map((c) => c.name))];
+    const searchResults = new Map<string, EnrichmentMatch[]>();
+
+    log.info(`[CVE Enrichment] Enriching ${uniqueCVEs.length} CVEs across ${this.clients.size} OpenCTI and ${this.oaevClients.size} OpenAEV clients`);
+    
+    // Log available platforms for debugging
+    if (this.oaevClients.size > 0) {
+      for (const [platformId] of this.oaevClients) {
+        log.info(`[CVE Enrichment] OpenAEV client available: ${platformId}`);
+      }
+    } else {
+      log.warn('[CVE Enrichment] No OpenAEV clients available for CVE enrichment!');
+    }
+
+    // Search each CVE across all platforms using the generic infrastructure
+    for (const cve of uniqueCVEs) {
+      const matches = await this.searchVulnerabilityAcrossPlatforms(cve);
+      if (matches.length > 0) {
+        searchResults.set(cve.toUpperCase(), matches);
+        log.info(`[CVE Enrichment] ${cve}: Found in ${matches.length} platform(s)`);
+      }
+    }
+
+    // Apply enrichment results to the detected CVEs
     return cves.map((cve) => {
-      const result = searchResults.get(cve.name.toUpperCase());
-      if (result) {
+      const matches = searchResults.get(cve.name.toUpperCase());
+      if (matches && matches.length > 0) {
+        const firstMatch = matches[0];
         return {
           ...cve,
           found: true,
-          entityId: result.entity.id,
-          entityData: result.entity,
-          platformId: result.platformId,
+          entityId: firstMatch.entityId,
+          entityData: firstMatch.entityData as unknown as OCTIStixDomainObject,
+          platformId: firstMatch.platformId,
+          platformMatches: this.enrichmentMatchesToPlatformMatches(matches),
         };
       }
       return cve;
+    });
+  }
+
+  /**
+   * Future: Enrich observables across all platforms using multi-platform infrastructure
+   * 
+   * This method is prepared for when OpenAEV adds observable/finding search.
+   * Currently, the existing enrichObservables() method handles OpenCTI-only enrichment.
+   * 
+   * @internal Reserved for future multi-platform observable enrichment
+   */
+  async enrichObservablesMultiPlatform(observables: DetectedObservable[]): Promise<DetectedObservable[]> {
+    const uniqueObservables = new Map<string, { type: string; value: string }>();
+    for (const obs of observables) {
+      const key = `${obs.type}:${obs.refangedValue || obs.value}`;
+      if (!uniqueObservables.has(key)) {
+        uniqueObservables.set(key, { type: obs.type, value: obs.refangedValue || obs.value });
+      }
+    }
+
+    const searchResults = new Map<string, EnrichmentMatch[]>();
+
+    log.info(`[Observable Enrichment] Enriching ${uniqueObservables.size} unique observables across all platforms`);
+
+    // Search each observable across all platforms
+    for (const [key, { type, value }] of uniqueObservables) {
+      const matches = await this.searchObservableAcrossPlatforms(value, type);
+      if (matches.length > 0) {
+        searchResults.set(key, matches);
+        log.debug(`[Observable Enrichment] ${value}: Found in ${matches.length} platform(s)`);
+      }
+    }
+
+    // Apply enrichment results to the detected observables
+    return observables.map((obs) => {
+      const key = `${obs.type}:${obs.refangedValue || obs.value}`;
+      const matches = searchResults.get(key);
+      if (matches && matches.length > 0) {
+        const firstMatch = matches[0];
+        return {
+          ...obs,
+          found: true,
+          entityId: firstMatch.entityId,
+          entityData: firstMatch.entityData as unknown as OCTIStixCyberObservable,
+          platformId: firstMatch.platformId,
+          platformMatches: this.enrichmentMatchesToPlatformMatches(matches),
+        };
+      }
+      return obs;
     });
   }
 
@@ -446,7 +661,7 @@ export class DetectionEngine {
               entity_type: entity.type,
               name: entity.name,
               aliases: entity.aliases,
-            } as unknown as StixDomainObject,
+            } as unknown as OCTIStixDomainObject,
           });
           
           seenEntities.add(entity.id);
@@ -575,7 +790,7 @@ export class DetectionEngine {
       }
     }
 
-    // Enrich observables and CVEs with OpenCTI data
+    // Enrich observables (OpenCTI) and CVEs (both OpenCTI and OpenAEV)
     const [enrichedObservables, enrichedCVEs] = await Promise.all([
       this.enrichObservables(observables),
       this.enrichCVEs(cves),

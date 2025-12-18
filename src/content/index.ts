@@ -305,7 +305,7 @@ function handleHighlightHover(event: MouseEvent): void {
   const rawType = target.dataset.type || 'Unknown';
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
-  const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
   const isMixedState = target.dataset.mixedState === 'true';
   const isMultiPlatform = target.dataset.multiPlatform === 'true';
   
@@ -350,20 +350,27 @@ function handleHighlightHover(event: MouseEvent): void {
     if (isMultiPlatform) {
       try {
         const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-        const otherPlatformNames = otherPlatformEntities.map((p: { type: string }) => {
+        const otherPlatformNames = otherPlatformEntities.map((p: { type: string; platformType?: string }) => {
+          // First try to get name from platformType field (for CVEs and other multi-platform entities)
+          if (p.platformType) {
+            return getPlatformName(p.platformType);
+          }
+          // Fall back to extracting from type prefix
           const def = getPlatformFromEntity(p.type);
           return def.name;
         }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
         
         const allPlatformNames = [platformName, ...otherPlatformNames];
-        statusText = `Found in ${allPlatformNames.join(' and ')}`;
+        // Deduplicate platform names (in case primary platform is also in other platforms)
+        const uniquePlatformNames = [...new Set(allPlatformNames)];
+        statusText = `Found in ${uniquePlatformNames.join(' and ')}`;
       } catch {
         statusText = `Found in ${platformName}`;
       }
     } else {
       statusText = `Found in ${platformName}`;
     }
-  } else if (isSdoNotAddable) {
+  } else if (isEntityNotAddable) {
     statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9e9e9e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
     statusText = `Not in ${platformName}`;
   } else {
@@ -442,7 +449,7 @@ function handleHighlightClick(event: MouseEvent): void {
   const entityData = target.dataset.entity;
   const value = target.dataset.value || '';
   const found = target.dataset.found === 'true';
-  const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
   const isMixedState = target.dataset.mixedState === 'true';
   const isMultiPlatform = target.dataset.multiPlatform === 'true';
   const highlightType = target.dataset.type || '';
@@ -469,7 +476,7 @@ function handleHighlightClick(event: MouseEvent): void {
       
       if (found) {
         handleFoundEntityClick(event, target, entity, value, isMultiPlatform);
-      } else if (isSdoNotAddable) {
+      } else if (isEntityNotAddable) {
         return;
       } else {
         toggleSelection(target, value);
@@ -681,9 +688,9 @@ function handleHighlightRightClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   const entityData = target.dataset.entity;
   const found = target.dataset.found === 'true';
-  const isSdoNotAddable = target.classList.contains('xtm-sdo-not-addable');
+  const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
   
-  if (entityData && !found && !isSdoNotAddable) {
+  if (entityData && !found && !isEntityNotAddable) {
     try {
       const entity = JSON.parse(entityData);
       showAddPanel(entity);
@@ -887,12 +894,23 @@ async function scanAllPlatforms(): Promise<void> {
         onMouseUp: handleHighlightMouseUp,
       });
       
+      // Count found entities per platform (CVEs can be found in both platforms via platformMatches)
+      const cves = data.cves || [];
+      const cveOctiCount = cves.filter((c: { found?: boolean; platformMatches?: Array<{ platformType?: string }> }) => 
+        c.found && c.platformMatches?.some(pm => pm.platformType === 'opencti')
+      ).length;
+      const cveOaevCount = cves.filter((c: { found?: boolean; platformMatches?: Array<{ platformType?: string }> }) => 
+        c.found && c.platformMatches?.some(pm => pm.platformType === 'openaev')
+      ).length;
+      
       const octiFound = [
         ...data.observables.filter((o: { found?: boolean }) => o.found),
         ...data.openctiEntities.filter((s: { found?: boolean }) => s.found),
-      ].length;
-      const oaevFound = data.openaevEntities?.length || 0;
-      const totalDetected = data.observables.length + data.openctiEntities.length + (data.openaevEntities?.length || 0);
+      ].length + cveOctiCount;
+      
+      const oaevFound = (data.openaevEntities?.filter((e: { found?: boolean }) => e.found)?.length || 0) + cveOaevCount;
+      
+      const totalDetected = data.observables.length + data.openctiEntities.length + cves.length + (data.openaevEntities?.length || 0);
       
       if (totalDetected === 0) {
         showToast({ type: 'info', message: 'No entities found on this page' });

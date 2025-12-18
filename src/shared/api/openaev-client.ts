@@ -508,6 +508,86 @@ export class OpenAEVClient {
   }
 
   // ============================================================================
+  // Vulnerabilities (CVE)
+  // ============================================================================
+
+  /**
+   * Get a vulnerability by its external ID (CVE ID)
+   * Uses the /api/vulnerabilities/external-id/{externalId} endpoint
+   */
+  async getVulnerabilityByExternalId(cveId: string): Promise<{
+    vulnerability_id: string;
+    vulnerability_external_id: string;
+    vulnerability_cvss_v31?: number;
+    vulnerability_published?: string;
+    vulnerability_description?: string;
+    vulnerability_vuln_status?: string;
+    vulnerability_cisa_vulnerability_name?: string;
+    vulnerability_remediation?: string;
+    vulnerability_reference_urls?: string[];
+  } | null> {
+    try {
+      log.info(`[OpenAEV] Searching for vulnerability by external ID: ${cveId}`);
+      const endpoint = `/api/vulnerabilities/external-id/${encodeURIComponent(cveId)}`;
+      log.debug(`[OpenAEV] Calling endpoint: ${endpoint}`);
+      
+      const result = await this.request<{
+        vulnerability_id: string;
+        vulnerability_external_id: string;
+        vulnerability_cvss_v31?: number;
+        vulnerability_published?: string;
+        vulnerability_description?: string;
+        vulnerability_vuln_status?: string;
+        vulnerability_cisa_vulnerability_name?: string;
+        vulnerability_remediation?: string;
+        vulnerability_reference_urls?: string[];
+      }>(endpoint);
+      
+      if (result && result.vulnerability_id) {
+        log.info(`[OpenAEV] Found vulnerability ${cveId}: id=${result.vulnerability_id}`);
+        return result;
+      }
+      log.debug(`[OpenAEV] Vulnerability ${cveId} - empty result`);
+      return null;
+    } catch (error) {
+      // Not found (404) is expected - not all CVEs will be in OpenAEV
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+        log.debug(`[OpenAEV] Vulnerability ${cveId} not found in OpenAEV (404)`);
+      } else {
+        log.warn(`[OpenAEV] Error searching vulnerability ${cveId}: ${errorMsg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Get a vulnerability by its internal ID
+   */
+  async getVulnerability(vulnerabilityId: string): Promise<{
+    vulnerability_id: string;
+    vulnerability_external_id: string;
+    vulnerability_cvss_v31?: number;
+    vulnerability_published?: string;
+    vulnerability_description?: string;
+    vulnerability_vuln_status?: string;
+    vulnerability_cisa_vulnerability_name?: string;
+    vulnerability_remediation?: string;
+    vulnerability_reference_urls?: string[];
+  } | null> {
+    try {
+      return await this.request(`/api/vulnerabilities/${vulnerabilityId}`);
+    } catch (error) {
+      log.error('Get vulnerability failed:', error);
+      return null;
+    }
+  }
+
+  getVulnerabilityUrl(vulnerabilityId: string): string {
+    return `${this.baseUrl}/admin/vulnerabilities/${vulnerabilityId}`;
+  }
+
+  // ============================================================================
   // Full Text Search
   // ============================================================================
 

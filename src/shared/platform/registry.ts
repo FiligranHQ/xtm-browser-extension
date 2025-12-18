@@ -178,6 +178,7 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
       'Player': '/teams/players',
       'AttackPattern': '/components/attack_patterns',
       'Finding': '/assets/security_platforms',
+      'Vulnerability': '/vulnerabilities',
       'Scenario': '/scenarios',
       'Exercise': '/exercises',
       'Organization': '/settings/organizations',
@@ -188,7 +189,7 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
   },
   entityTypes: [
     'Asset', 'AssetGroup', 'Team', 'Player', 'AttackPattern', 'Finding',
-    'Scenario', 'Exercise', 'Organization', 'User',
+    'Vulnerability', 'Scenario', 'Exercise', 'Organization', 'User',
   ],
   usesGraphQL: false,
   features: {
@@ -558,8 +559,9 @@ export const CROSS_PLATFORM_TYPE_MAPPINGS: Record<string, string[]> = {
   // Organization exists in both platforms
   'Organization': ['organization', 'oaev-organization'],
   
-  // Future mappings can be added here as more types become shared across platforms
-  // Example: 'Vulnerability': ['vulnerability', 'oaev-vulnerability'],
+  // Vulnerability/CVE exists in both OpenCTI (Vulnerability) and OpenAEV (oaev-Vulnerability)
+  // CVE is the common identifier format but maps to Vulnerability type in both platforms
+  'Vulnerability': ['vulnerability', 'oaev-vulnerability', 'cve'],
 };
 
 /**

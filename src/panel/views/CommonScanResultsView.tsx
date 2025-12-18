@@ -201,19 +201,25 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     if (entity.platformMatches && entity.platformMatches.length > 0) {
       // Use platformMatches for multi-platform support
       for (const match of entity.platformMatches) {
-        const platform = availablePlatforms.find(p => p.id === match.platformId);
+        // Try to find platform by ID first, then fall back to platformType match
+        let platform = availablePlatforms.find(p => p.id === match.platformId);
+        if (!platform && match.platformType) {
+          // Fall back to finding any platform of the same type
+          platform = availablePlatforms.find(p => p.type === match.platformType);
+        }
+        
         if (platform) {
           results.push({
-            platformId: match.platformId,
+            platformId: platform.id, // Use the found platform's ID
             platformName: platform.name,
             entity: {
               ...entity,
               entityId: match.entityId,
               entityData: match.entityData,
               type: match.type,
-              _platformId: match.platformId,
-              _platformType: match.platformType,
-              _isNonDefaultPlatform: match.platformType !== 'opencti',
+              _platformId: platform.id,
+              _platformType: match.platformType || platform.type,
+              _isNonDefaultPlatform: (match.platformType || platform.type) !== 'opencti',
             } as EntityData,
           });
         }
@@ -957,7 +963,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                         <>
                           {octiCount > 0 && (
                             <Chip
-                              label={octiCount > 1 ? `OCTI ×${octiCount}` : 'OCTI'}
+                              label={octiCount > 1 ? `OCTI (${octiCount})` : 'OCTI'}
                               size="small"
                               sx={{
                                 height: 16,
@@ -971,7 +977,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                           )}
                           {oaevCount > 0 && (
                             <Chip
-                              label={oaevCount > 1 ? `OAEV ×${oaevCount}` : 'OAEV'}
+                              label={oaevCount > 1 ? `OAEV (${oaevCount})` : 'OAEV'}
                               size="small"
                               sx={{
                                 height: 16,

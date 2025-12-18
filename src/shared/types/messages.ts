@@ -7,11 +7,13 @@
 
 import type {
   DetectedObservable,
-  DetectedOCTIEntity,
   ObservableType,
   HashType,
-  OCTIContainerType,
 } from './index';
+import type {
+  DetectedOCTIEntity,
+  OCTIContainerType,
+} from './opencti';
 import type { DetectedOAEVEntity } from './openaev';
 
 // ============================================================================

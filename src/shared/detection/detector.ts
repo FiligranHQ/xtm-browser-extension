@@ -5,15 +5,13 @@
  */
 
 import { loggers } from '../utils/logger';
+import type { DetectedObservable, ObservableType } from '../types/observables';
+import type { EnrichmentMatch, EnrichmentPlatformType } from '../types/platform';
 import type {
-  DetectedObservable,
   DetectedOCTIEntity,
   OCTIStixCyberObservable,
   OCTIStixDomainObject,
-  EnrichmentMatch,
-  EnrichmentPlatformType,
-  ObservableType,
-} from '../types';
+} from '../types/opencti';
 import type { DetectedOAEVEntity } from '../types/openaev';
 import {
   OBSERVABLE_PATTERNS,

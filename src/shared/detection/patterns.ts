@@ -8,7 +8,7 @@
  * Also supports defanged indicators (e.g., example[.]com, hxxp://, 192[.]168[.]1[.]1)
  */
 
-import type { ObservableType, HashType } from '../types';
+import type { ObservableType, HashType } from '../types/observables';
 
 // ============================================================================
 // Defanging/Refanging Utilities

@@ -52,8 +52,6 @@ import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform
 import type { PlatformInfo, PanelMode } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
 import {
-} from '../../shared/types';
-import {
   SCENARIO_CATEGORY_OPTIONS,
   SCENARIO_MAIN_FOCUS_OPTIONS,
   SCENARIO_SEVERITY_OPTIONS,

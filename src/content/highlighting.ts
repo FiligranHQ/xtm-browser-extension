@@ -4,7 +4,8 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedOCTIEntity } from '../shared/types';
+import type { DetectedObservable } from '../shared/types/observables';
+import type { DetectedOCTIEntity } from '../shared/types/opencti';
 import type { ScanResultPayload } from '../shared/types/messages';
 import { getTextNodes } from '../shared/detection/text-utils';
 import {
@@ -309,7 +310,7 @@ export function highlightResults(
       
       // Build foundInPlatforms from platformMatches for multi-platform display
       const cvePlatformMatches = cve.platformMatches || [];
-      const foundInPlatforms = cvePlatformMatches.map(pm => ({
+      const foundInPlatforms = cvePlatformMatches.map((pm: { type?: string; platformType?: string; entityId?: string; platformId?: string; entityData?: unknown }) => ({
         type: pm.type || 'Vulnerability',
         platformType: pm.platformType || 'opencti',
         found: true, // platformMatches only contain found platforms
@@ -807,6 +808,7 @@ export function highlightAIEntities(
         
         try {
           range.surroundContents(highlightSpan);
+          highlights.push(highlightSpan); // Add to highlights array so clearHighlights() can remove them
           highlightedCount++;
           entityHighlighted = true;
           

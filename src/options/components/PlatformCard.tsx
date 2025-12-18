@@ -20,7 +20,7 @@ import {
   CheckOutlined,
   DeleteOutlined,
 } from '@mui/icons-material';
-import type { PlatformConfig } from '../../shared/types';
+import type { PlatformConfig } from '../../shared/types/settings';
 import type { TestResult } from '../constants';
 
 interface PlatformCardProps {

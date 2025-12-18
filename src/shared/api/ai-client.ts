@@ -7,7 +7,7 @@
  * - On-the-fly atomic testing
  */
 
-import type { AIProvider, AISettings } from '../types';
+import type { AIProvider, AISettings } from '../types/ai';
 
 export type {
   AIGenerationRequest,

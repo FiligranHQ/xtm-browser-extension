@@ -29,7 +29,8 @@ import {
   TravelExploreOutlined,
   HubOutlined,
 } from '@mui/icons-material';
-import type { ExtensionSettings, AIProvider } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types/settings';
+import type { AIProvider } from '../../shared/types/ai';
 import type { AITestResult, AvailableModel } from '../constants';
 
 interface AITabProps {

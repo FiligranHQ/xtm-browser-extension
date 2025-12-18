@@ -6,7 +6,7 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { cleanHtmlContent, generateDescription } from '../utils/description-helpers';
-import type { PlatformConfig } from '../../shared/types';
+import type { PlatformConfig } from '../../shared/types/settings';
 import { SCENARIO_DEFAULT_VALUES, type OAEVAsset, type OAEVAssetGroup, type OAEVTeam, type OAEVInjectorContract } from '../../shared/types/openaev';
 import { parsePrefixedType } from '../../shared/platform/registry';
 import { processScanResults } from './scan-results-handler';

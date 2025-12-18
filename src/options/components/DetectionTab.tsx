@@ -20,7 +20,7 @@ import {
   RefreshOutlined,
   RestartAltOutlined,
 } from '@mui/icons-material';
-import type { ExtensionSettings } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types/settings';
 import { type CacheStats, OBSERVABLE_TYPES, OPENCTI_TYPES, OPENAEV_TYPES } from '../constants';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor } from '../../shared/theme/colors';

@@ -15,7 +15,7 @@ import {
   DarkModeOutlined,
   RestartAltOutlined,
 } from '@mui/icons-material';
-import type { ExtensionSettings } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types/settings';
 
 interface AppearanceTabProps {
   settings: ExtensionSettings;

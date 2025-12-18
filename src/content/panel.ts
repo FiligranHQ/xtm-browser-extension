@@ -4,7 +4,8 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedOCTIEntity } from '../shared/types';
+import type { DetectedObservable } from '../shared/types/observables';
+import type { DetectedOCTIEntity } from '../shared/types/opencti';
 import { extractArticleContent, extractFirstParagraph } from './extraction';
 
 const log = loggers.content;

@@ -15,7 +15,7 @@ import {
 } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
 import { CONNECTION_TIMEOUT_MS } from '../../shared/constants';
-import type { ExtensionSettings } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types/settings';
 import type { PlatformType } from '../../shared/platform/registry';
 import type { SendResponseFn } from './types';
 

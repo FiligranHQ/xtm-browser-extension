@@ -69,19 +69,17 @@ import {
   buildObservableInput,
 } from './opencti/observable-utils';
 
+import type { ExtensionSettings } from '../types/settings';
+import type { PlatformInfo, GraphQLResponse } from '../types/api';
+import type { ObservableType, HashType } from '../types/observables';
 import type {
-  ExtensionSettings,
-  PlatformInfo,
   OCTIStixCyberObservable,
   OCTIStixDomainObject,
   OCTISearchResult,
-  GraphQLResponse,
   OCTIContainerCreateInput,
-  ObservableType,
-  HashType,
   Investigation,
   InvestigationCreateInput,
-} from '../types';
+} from '../types/opencti';
 
 const log = loggers.opencti;
 

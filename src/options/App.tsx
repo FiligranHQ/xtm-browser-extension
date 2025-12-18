@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import ThemeDark from '../shared/theme/ThemeDark';
 import ThemeLight from '../shared/theme/ThemeLight';
-import type { ExtensionSettings, PlatformConfig } from '../shared/types';
+import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
 
 const log = loggers.options;
@@ -600,11 +600,30 @@ const App: React.FC = () => {
       const response = await chrome.runtime.sendMessage({ type: 'REFRESH_CACHE' });
       
       if (response?.success) {
-        await loadCacheStats();
+        // Poll for cache refresh completion since the actual refresh is async
+        const pollInterval = setInterval(async () => {
+          const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
+          if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
+            clearInterval(pollInterval);
+            setIsRefreshingCache(false);
+            await loadCacheStats();
+          } else {
+            // Update cache stats while refreshing to show progress
+            await loadCacheStats();
+          }
+        }, 1000);
+        
+        // Safety timeout to prevent infinite polling
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          setIsRefreshingCache(false);
+          loadCacheStats();
+        }, 120000); // 2 minute timeout
+      } else {
+        setIsRefreshingCache(false);
       }
     } catch (error) {
       log.error('Cache refresh error:', error);
-    } finally {
       setIsRefreshingCache(false);
     }
   };

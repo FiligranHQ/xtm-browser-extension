@@ -24,7 +24,7 @@ import {
   type InjectInput,
 } from './openaev/filters';
 
-import type { PlatformConfig } from '../types';
+import type { PlatformConfig } from '../types/settings';
 import type {
   OAEVAsset,
   OAEVAssetGroup,

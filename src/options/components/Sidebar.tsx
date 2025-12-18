@@ -17,7 +17,7 @@ import {
   CenterFocusStrongOutlined,
 } from '@mui/icons-material';
 import type { TabType } from '../constants';
-import type { ExtensionSettings } from '../../shared/types';
+import type { ExtensionSettings } from '../../shared/types/settings';
 
 interface SidebarProps {
   activeTab: TabType;

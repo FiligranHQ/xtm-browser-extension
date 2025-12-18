@@ -13,7 +13,7 @@ import {
   AddOutlined,
   LinkOffOutlined,
 } from '@mui/icons-material';
-import type { PlatformConfig, ExtensionSettings } from '../../shared/types';
+import type { PlatformConfig, ExtensionSettings } from '../../shared/types/settings';
 import type { TestResult } from '../constants';
 import PlatformCard from './PlatformCard';
 

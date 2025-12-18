@@ -385,7 +385,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.2rem' }} />
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                AI Relationships
+                AI Relationships{resolvedRelationships.length > 0 && ` (${resolvedRelationships.length} relationship${resolvedRelationships.length > 1 ? 's' : ''} found)`}
               </Typography>
             </Box>
             <Tooltip title={!aiSettings.available ? 'AI not configured' : !hasEnterprisePlatform ? 'Requires Enterprise platform' : 'Analyze page context to find relationships between entities'}>

@@ -9,7 +9,7 @@ import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { errorResponse } from '../../shared/utils/messaging';
 import { loggers } from '../../shared/utils/logger';
-import type { OCTIContainerType } from '../../shared/types';
+import type { OCTIContainerType } from '../../shared/types/opencti';
 
 const log = loggers.background;
 

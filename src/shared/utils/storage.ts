@@ -4,7 +4,7 @@
  * Wrapper functions for browser storage API with type safety.
  */
 
-import type { ExtensionSettings } from '../types';
+import type { ExtensionSettings } from '../types/settings';
 
 // ============================================================================
 // Settings Storage

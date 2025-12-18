@@ -239,31 +239,53 @@ xtm-browser-extension/
 │   ├── panel/                   # Side panel (entity details, forms)
 │   │   ├── App.tsx              # Main orchestrator component
 │   │   ├── views/               # Panel mode view components
-│   │   │   ├── ScanResultsView.tsx     # Scan results display
-│   │   │   ├── SearchView.tsx          # OpenCTI search
-│   │   │   ├── UnifiedSearchView.tsx   # Multi-platform search
-│   │   │   ├── PreviewView.tsx         # Import preview
-│   │   │   ├── ImportResultsView.tsx   # Import results
-│   │   │   ├── ContainerTypeView.tsx   # Container type selection
-│   │   │   ├── PlatformSelectView.tsx  # Platform selection
-│   │   │   └── AddView.tsx             # Manual entity addition
+│   │   │   ├── CommonScanResultsView.tsx     # Scan results display
+│   │   │   ├── CommonUnifiedSearchView.tsx   # Multi-platform search
+│   │   │   ├── CommonPreviewView.tsx         # Import preview
+│   │   │   ├── CommonPlatformSelectView.tsx  # Platform selection
+│   │   │   ├── OCTIContainerTypeView.tsx     # Container type selection
+│   │   │   ├── OCTIContainerFormView.tsx     # Container form
+│   │   │   ├── OCTIAddView.tsx               # Manual entity addition
+│   │   │   ├── OCTIAddSelectionView.tsx      # Add from selection
+│   │   │   ├── OCTIEntityView.tsx            # OpenCTI entity details
+│   │   │   ├── OCTIExistingContainersView.tsx # Existing containers
+│   │   │   ├── OCTIImportResultsView.tsx     # Import results
+│   │   │   ├── OCTIInvestigationView.tsx     # Investigation view
+│   │   │   ├── OAEVEntityView.tsx            # OpenAEV entity details
+│   │   │   ├── OAEVScenarioView.tsx          # Scenario creation
+│   │   │   ├── OAEVScenarioOverviewView.tsx  # Scenario overview
+│   │   │   └── OAEVAtomicTestingView.tsx     # Atomic testing
 │   │   ├── components/          # Reusable UI components
-│   │   │   ├── EmptyView.tsx
-│   │   │   ├── LoadingView.tsx
-│   │   │   ├── NotFoundView.tsx
-│   │   │   ├── PanelHeader.tsx
-│   │   │   └── PlatformNavigation.tsx
+│   │   │   ├── CommonEmptyView.tsx
+│   │   │   ├── CommonLoadingView.tsx
+│   │   │   └── CommonNotFoundView.tsx
 │   │   ├── hooks/               # React hooks
-│   │   │   ├── usePanelState.ts     # Centralized state management
-│   │   │   ├── usePlatforms.ts      # Platform data
-│   │   │   └── useToast.ts          # Toast notifications
+│   │   │   ├── usePanelState.ts         # Centralized state management
+│   │   │   ├── usePlatforms.ts          # Platform data
+│   │   │   ├── useToast.ts              # Toast notifications
+│   │   │   ├── useContainerState.ts     # Container state
+│   │   │   ├── useContainerActions.ts   # Container actions
+│   │   │   ├── useEntityState.ts        # Entity state
+│   │   │   ├── useEntityDisplay.ts      # Entity display helpers
+│   │   │   ├── useScenarioState.ts      # Scenario state
+│   │   │   ├── useAtomicTestingState.ts # Atomic testing state
+│   │   │   ├── useInvestigationState.ts # Investigation state
+│   │   │   ├── useInvestigationActions.ts # Investigation actions
+│   │   │   ├── useScanResultsState.ts   # Scan results state
+│   │   │   ├── useSearchState.ts        # Search state
+│   │   │   ├── useAddSelectionState.ts  # Add selection state
+│   │   │   └── useAIState.ts            # AI state
+│   │   ├── handlers/            # Message handlers
+│   │   │   ├── message-handlers.ts      # Panel message handlers
+│   │   │   └── scan-results-handler.ts  # Scan results handler
 │   │   ├── utils/               # Panel utilities
-│   │   │   ├── platform-helpers.tsx # Platform icons, colors, AI theme
-│   │   │   ├── cvss-helpers.ts      # CVSS score formatting
-│   │   │   ├── marking-helpers.ts   # TLP/PAP colors
+│   │   │   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
+│   │   │   ├── cvss-helpers.ts          # CVSS score formatting
+│   │   │   ├── marking-helpers.ts       # TLP/PAP colors
 │   │   │   └── description-helpers.ts
 │   │   └── types/               # TypeScript definitions
-│   │       └── view-props.ts        # View component props
+│   │       ├── panel-types.ts           # Panel-specific types
+│   │       └── view-props.ts            # View component props
 │   │
 │   ├── options/                 # Settings page
 │   │   ├── App.tsx              # Settings orchestrator
@@ -309,7 +331,12 @@ xtm-browser-extension/
 │       ├── components/          # Shared React components
 │       │   └── ItemIcon.tsx
 │       ├── types/               # TypeScript definitions
-│       │   ├── index.ts             # Common types (config, AI, observables, API responses)
+│       │   ├── settings.ts          # Platform config, extension settings
+│       │   ├── ai.ts                # AI provider config, settings
+│       │   ├── observables.ts       # Observable types (IPs, domains, hashes)
+│       │   ├── platform.ts          # Multi-platform matching types
+│       │   ├── api.ts               # GraphQL/API response types
+│       │   ├── ui.ts                # UI state types (scan state, panel state)
 │       │   ├── opencti.ts           # OpenCTI types (STIX, entities, containers)
 │       │   ├── openaev.ts           # OpenAEV types (entities, scenarios, atomic testing)
 │       │   └── messages.ts          # Message types for extension communication

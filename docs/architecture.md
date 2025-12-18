@@ -97,14 +97,13 @@ Injected into web pages to provide scanning, highlighting, and panel management.
 **Structure:**
 ```
 src/content/
-├── index.ts              # Main entry point, event handlers, initialization
+├── index.ts              # Main entry point, event handlers, message handling
 ├── styles.ts             # CSS styles for highlights, tooltips, panel
 ├── highlighting.ts       # Entity highlighting logic
 ├── extraction.ts         # Content extraction for PDFs and descriptions
 ├── page-content.ts       # Page content utilities
 ├── panel.ts              # Side panel iframe management
-├── toast.ts              # Toast notification system
-└── message-handlers.ts   # Background/panel message handlers
+└── toast.ts              # Toast notification system
 ```
 
 **Key State:**
@@ -124,36 +123,53 @@ src/panel/
 ├── App.tsx               # Main panel component (orchestrates views)
 ├── main.tsx              # React entry point
 ├── index.html            # Panel HTML shell
-├── types.ts              # Panel-specific type definitions
 ├── components/           # Reusable UI components
-│   ├── EmptyView.tsx     # Empty state view
-│   ├── LoadingView.tsx   # Loading state view
-│   ├── NotFoundView.tsx  # Entity not found view
-│   ├── PanelHeader.tsx   # Panel header with actions
-│   ├── PlatformNavigation.tsx # Multi-platform navigation
-│   └── ItemIcon.tsx      # Entity type icons
-├── views/                # Panel mode views (extracted from App.tsx)
-│   ├── index.ts          # View exports
-│   ├── ScanResultsView.tsx    # Scan results display
-│   ├── SearchView.tsx         # OpenCTI search
-│   ├── UnifiedSearchView.tsx  # Multi-platform search
-│   ├── PreviewView.tsx        # Import preview
-│   ├── ImportResultsView.tsx  # Import results
-│   ├── ContainerTypeView.tsx  # Container type selection
-│   ├── PlatformSelectView.tsx # Platform selection
-│   └── AddView.tsx            # Manual entity addition
+│   ├── CommonEmptyView.tsx    # Empty state view
+│   ├── CommonLoadingView.tsx  # Loading state view
+│   └── CommonNotFoundView.tsx # Entity not found view
+├── handlers/             # Message handlers
+│   ├── message-handlers.ts      # Panel message handlers
+│   └── scan-results-handler.ts  # Scan results handler
+├── views/                # Panel mode views
+│   ├── CommonScanResultsView.tsx     # Scan results display
+│   ├── CommonUnifiedSearchView.tsx   # Multi-platform search
+│   ├── CommonPreviewView.tsx         # Import preview
+│   ├── CommonPlatformSelectView.tsx  # Platform selection
+│   ├── OCTIContainerTypeView.tsx     # Container type selection
+│   ├── OCTIContainerFormView.tsx     # Container form
+│   ├── OCTIAddView.tsx               # Manual entity addition
+│   ├── OCTIAddSelectionView.tsx      # Add from selection
+│   ├── OCTIEntityView.tsx            # OpenCTI entity details
+│   ├── OCTIExistingContainersView.tsx # Existing containers
+│   ├── OCTIImportResultsView.tsx     # Import results
+│   ├── OCTIInvestigationView.tsx     # Investigation view
+│   ├── OAEVEntityView.tsx            # OpenAEV entity details
+│   ├── OAEVScenarioView.tsx          # Scenario creation
+│   ├── OAEVScenarioOverviewView.tsx  # Scenario overview
+│   └── OAEVAtomicTestingView.tsx     # Atomic testing
 ├── hooks/                # Custom React hooks
-│   ├── usePanelState.ts  # Centralized panel state management
-│   ├── usePlatforms.ts   # Platform data hooks
-│   └── useToast.ts       # Toast notification hook
-├── utils/                # Panel utilities (consolidated)
-│   ├── index.ts          # Barrel export for all utilities
-│   ├── platform-helpers.tsx  # Platform icons, colors, AI theme, filtering
-│   ├── cvss-helpers.ts       # CVSS score formatting and styling
+│   ├── usePanelState.ts         # Centralized panel state management
+│   ├── usePlatforms.ts          # Platform data hooks
+│   ├── useToast.ts              # Toast notification hook
+│   ├── useContainerState.ts     # Container state
+│   ├── useContainerActions.ts   # Container actions
+│   ├── useEntityState.ts        # Entity state
+│   ├── useEntityDisplay.ts      # Entity display helpers
+│   ├── useScenarioState.ts      # Scenario state
+│   ├── useAtomicTestingState.ts # Atomic testing state
+│   ├── useInvestigationState.ts # Investigation state
+│   ├── useInvestigationActions.ts # Investigation actions
+│   ├── useScanResultsState.ts   # Scan results state
+│   ├── useSearchState.ts        # Search state
+│   ├── useAddSelectionState.ts  # Add selection state
+│   └── useAIState.ts            # AI state
+├── utils/                # Panel utilities
+│   ├── platform-helpers.tsx  # Platform icons, colors, AI theme
+│   ├── cvss-helpers.ts       # CVSS score formatting
 │   ├── description-helpers.ts # HTML content processing
 │   └── marking-helpers.ts    # TLP/PAP marking colors
 └── types/                # Type definitions
-    ├── index.ts          # Type exports
+    ├── panel-types.ts    # Panel-specific types
     └── view-props.ts     # View component prop types
 ```
 
@@ -190,22 +206,18 @@ Common code shared across all components.
 src/shared/
 ├── api/                  # API clients
 │   ├── ai-client.ts      # AI provider client (unified interface)
-│   ├── base-client.ts    # Base client with common utilities (errors, pagination, retry)
 │   ├── opencti-client.ts # OpenCTI GraphQL client
 │   ├── openaev-client.ts # OpenAEV REST client
 │   ├── ai/               # AI provider modules
-│   │   ├── index.ts      # Barrel export
 │   │   ├── types.ts      # AI request/response types
 │   │   ├── prompts.ts    # AI prompt templates (system prompts, theme configs, builders)
 │   │   └── json-parser.ts # AI response parsing utilities
 │   ├── opencti/          # OpenCTI GraphQL modules
-│   │   ├── index.ts      # Barrel export
-│   │   ├── types.ts      # OpenCTI-specific types (query responses, etc.)
+│   │   ├── types.ts      # OpenCTI-specific types (query responses)
 │   │   ├── fragments.ts  # Reusable GraphQL fragments
 │   │   ├── queries.ts    # GraphQL queries, mutations, and filter builders
 │   │   └── observable-utils.ts # Observable type mapping and input builders
 │   └── openaev/          # OpenAEV REST modules
-│       ├── index.ts      # Barrel export
 │       └── filters.ts    # Filter builders, payload builders, and type utilities
 ├── detection/            # Detection engine
 │   ├── detector.ts       # Main detection orchestrator
@@ -217,17 +229,17 @@ src/shared/
 │   ├── pdf-generator.ts     # PDF generation
 │   └── native-pdf.ts        # Native PDF support
 ├── platform/             # Platform abstractions
-│   ├── registry.ts       # Platform type registry
-│   └── index.ts
+│   └── registry.ts       # Platform type registry
 ├── types/                # TypeScript definitions
-│   ├── index.ts          # Main type exports
-│   ├── config.ts         # Configuration types
-│   ├── messages.ts       # Message types
-│   ├── detection.ts      # Detection types
-│   ├── observable.ts     # Observable types
-│   ├── sdo.ts            # SDO types
-│   ├── ai.ts             # AI types
-│   └── platform.ts       # Platform types
+│   ├── settings.ts       # Platform config, extension settings
+│   ├── ai.ts             # AI provider config, settings
+│   ├── observables.ts    # Observable types (IPs, domains, hashes)
+│   ├── platform.ts       # Multi-platform matching types
+│   ├── api.ts            # GraphQL/API response types
+│   ├── ui.ts             # UI state types (scan state, panel state)
+│   ├── opencti.ts        # OpenCTI types (STIX, entities, containers)
+│   ├── openaev.ts        # OpenAEV types (entities, scenarios)
+│   └── messages.ts       # Message types for extension communication
 ├── theme/                # Theme definitions
 │   ├── ThemeDark.ts
 │   ├── ThemeLight.ts
@@ -250,7 +262,6 @@ The OpenCTI client is a GraphQL client with modular query organization:
 
 ```
 src/shared/api/opencti/
-├── index.ts           # Barrel exports
 ├── types.ts           # Query response types (SDOQueryResponse, etc.)
 ├── fragments.ts       # Reusable GraphQL fragments (OBSERVABLE_PROPERTIES, SDO_PROPERTIES)
 ├── queries.ts         # All GraphQL queries, mutations, and filter builders
@@ -279,7 +290,6 @@ The OpenAEV client is a REST API client with modular filter organization:
 
 ```
 src/shared/api/openaev/
-├── index.ts     # Barrel exports
 └── filters.ts   # Filter builders, payload builders, and type utilities
 ```
 
@@ -300,13 +310,6 @@ const response = await this.request('/api/endpoints/search', {
   body: JSON.stringify(buildSearchBody({ filterGroup: buildAssetSearchFilter(term) })),
 });
 ```
-
-### Base Client (`src/shared/api/base-client.ts`)
-
-Shared utilities for all API clients:
-- Error classes: `APIError`, `RateLimitError`, `AuthError`
-- Pagination types: `PaginatedResponse`, `GraphQLResponse`
-- Utilities: `withTimeout`, `withRetry`, `fetchAllPages`
 
 ## State Management
 
@@ -901,7 +904,6 @@ The AI client is modularized for maintainability:
 
 ```
 src/shared/api/ai/
-├── index.ts       # Barrel exports
 ├── types.ts       # AI request/response type definitions
 ├── prompts.ts     # All prompt templates and builders (system prompts, themes, JSON schemas)
 └── json-parser.ts # Robust AI response parsing (code blocks, malformed JSON)

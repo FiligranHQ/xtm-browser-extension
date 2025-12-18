@@ -60,7 +60,14 @@ import {
   refreshOCTICache,
   refreshOAEVCache,
   getCacheRefreshStatus,
+  setOpenCTIClientGetter as setCacheManagerOCTIClientGetter,
+  setOpenAEVClientGetter as setCacheManagerOAEVClientGetter,
 } from './services/cache-manager';
+import {
+  setOpenCTIClientGetter as setClientManagerOCTIClientGetter,
+  setOpenAEVClientGetter as setClientManagerOAEVClientGetter,
+  setPrimaryOpenCTIClientGetter,
+} from './services/client-manager';
 
 const log = loggers.background;
 import {
@@ -80,13 +87,13 @@ import {
   cleanupOrphanedOAEVCaches,
   type CachedOCTIEntity,
 } from '../shared/utils/storage';
+import type { ExtensionSettings } from '../shared/types/settings';
+import type { DetectedObservable } from '../shared/types/observables';
 import type {
-  ExtensionSettings,
-  DetectedObservable,
   DetectedOCTIEntity,
   OCTILabel,
   OCTIMarkingDefinition,
-} from '../shared/types';
+} from '../shared/types/opencti';
 import type {
   ExtensionMessage,
   ScanResultPayload,
@@ -225,6 +232,17 @@ async function initializeClient(): Promise<void> {
   }
   
   isInitialized = true;
+  
+  // Configure cache manager with client getters
+  // This allows the cache manager to access the actual client instances
+  setCacheManagerOCTIClientGetter(() => openCTIClients);
+  setCacheManagerOAEVClientGetter(() => openAEVClients);
+  
+  // Configure client manager with client getters
+  // This allows message handlers to access the actual client instances
+  setClientManagerOCTIClientGetter(() => openCTIClients);
+  setClientManagerOAEVClientGetter(() => openAEVClients);
+  setPrimaryOpenCTIClientGetter(() => openCTIClient);
   
   // Start cache refresh for OpenCTI clients
   if (openCTIClients.size > 0) {

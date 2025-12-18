@@ -71,7 +71,6 @@ src/
 ├── shared/              # Shared code
 │   ├── api/             # API clients (modular architecture)
 │   │   ├── ai-client.ts         # AI/LLM provider client
-│   │   ├── base-client.ts       # Base client (errors, pagination, retry)
 │   │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │   │   ├── openaev-client.ts    # OpenAEV REST client
 │   │   ├── ai/                  # AI modules
@@ -81,21 +80,23 @@ src/
 │   │   ├── opencti/             # OpenCTI modules
 │   │   │   ├── queries.ts       # GraphQL queries & filters
 │   │   │   ├── fragments.ts     # GraphQL fragments
+│   │   │   ├── observable-utils.ts # Observable type mapping
 │   │   │   └── types.ts         # Response types
 │   │   └── openaev/             # OpenAEV modules
 │   │       └── filters.ts       # Filter & payload builders
 │   ├── components/      # Shared React components
+│   │   └── ItemIcon.tsx # Entity type icons
 │   ├── detection/       # Detection engine
 │   │   ├── detector.ts  # Entity and observable detection
-│   │   └── patterns.ts  # Regex patterns for observables
+│   │   ├── patterns.ts  # Regex patterns for observables
+│   │   ├── matching.ts  # Entity matching logic
+│   │   └── text-utils.ts # Text processing utilities
 │   ├── extraction/      # Content extraction & PDF
 │   │   ├── content-extractor.ts # Mozilla Readability wrapper
 │   │   ├── pdf-generator.ts     # jsPDF-based PDF generation
-│   │   ├── native-pdf.ts        # Chrome Debugger API PDF
-│   │   └── index.ts             # Module exports
+│   │   └── native-pdf.ts        # Chrome Debugger API PDF
 │   ├── platform/        # Platform registry
-│   │   ├── registry.ts  # Platform type definitions
-│   │   └── index.ts     # Registry exports
+│   │   └── registry.ts  # Platform type definitions
 │   ├── theme/           # Theme configuration
 │   ├── types/           # TypeScript type definitions
 │   └── utils/           # Utilities

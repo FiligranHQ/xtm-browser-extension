@@ -44,7 +44,7 @@ import { OAEVScenarioView } from './views/OAEVScenarioView';
 import { parsePrefixedType } from '../shared/platform/registry';
 import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
-import type { PlatformConfig } from '../shared/types/index';
+import type { PlatformConfig } from '../shared/types/settings';
 import { processScanResults } from './handlers/scan-results-handler';
 import type {
   PanelMode,

@@ -31,6 +31,10 @@ export interface SearchStateReturn {
   unifiedSearchPlatformFilter: 'all' | 'opencti' | 'openaev';
   setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
   
+  // Entity type filter
+  unifiedSearchTypeFilter: string;
+  setUnifiedSearchTypeFilter: (filter: string) => void;
+  
   // Search handler
   handleUnifiedSearch: (availablePlatforms: PlatformInfo[], queryOverride?: string) => Promise<void>;
   
@@ -46,6 +50,7 @@ export function useSearchState(): SearchStateReturn {
   const [unifiedSearchResults, setUnifiedSearchResults] = useState<UnifiedSearchResult[]>([]);
   const [unifiedSearching, setUnifiedSearching] = useState<boolean>(false);
   const [unifiedSearchPlatformFilter, setUnifiedSearchPlatformFilter] = useState<'all' | 'opencti' | 'openaev'>('all');
+  const [unifiedSearchTypeFilter, setUnifiedSearchTypeFilter] = useState<string>('all');
   
   // Unified search handler - searches BOTH OpenCTI and OpenAEV
   const handleUnifiedSearch = useCallback(async (availablePlatforms: PlatformInfo[], queryOverride?: string) => {
@@ -121,6 +126,7 @@ export function useSearchState(): SearchStateReturn {
     setUnifiedSearchQuery('');
     setUnifiedSearchResults([]);
     setUnifiedSearchPlatformFilter('all');
+    setUnifiedSearchTypeFilter('all');
   }, []);
   
   return {
@@ -132,6 +138,8 @@ export function useSearchState(): SearchStateReturn {
     setUnifiedSearching,
     unifiedSearchPlatformFilter,
     setUnifiedSearchPlatformFilter,
+    unifiedSearchTypeFilter,
+    setUnifiedSearchTypeFilter,
     handleUnifiedSearch,
     clearSearch,
   };

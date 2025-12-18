@@ -708,7 +708,7 @@ export async function saveOAEVCache(cache: OAEVCache, platformId: string): Promi
   multiCache.platforms[platformId] = trimmedCache;
   
   // Try to save
-  let success = await safeStorageSet({ [OAEV_CACHE_KEY]: multiCache });
+  const success = await safeStorageSet({ [OAEV_CACHE_KEY]: multiCache });
   
   if (!success) {
     // Quota exceeded - try clearing this platform's cache

@@ -49,6 +49,8 @@ export interface UnifiedSearchViewProps {
   setUnifiedSearching: (searching: boolean) => void;
   unifiedSearchPlatformFilter: 'all' | 'opencti' | 'openaev';
   setUnifiedSearchPlatformFilter: (filter: 'all' | 'opencti' | 'openaev') => void;
+  unifiedSearchTypeFilter: string;
+  setUnifiedSearchTypeFilter: (filter: string) => void;
   setPanelMode: (mode: PanelMode) => void;
   setEntity: (entity: EntityData | null) => void;
   setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
@@ -76,6 +78,8 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   setUnifiedSearching,
   unifiedSearchPlatformFilter,
   setUnifiedSearchPlatformFilter,
+  unifiedSearchTypeFilter,
+  setUnifiedSearchTypeFilter,
   setPanelMode,
   setEntity,
   setEntityFromSearchMode,
@@ -103,11 +107,37 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
   const hasOpenCTI = openctiPlatforms.length > 0;
   const hasOpenAEV = openaevPlatforms.length > 0;
 
-  // Filter results based on platform filter
+  // Get unique entity types from results (with counts)
+  const entityTypesWithCounts = useMemo(() => {
+    const typeCounts = new Map<string, number>();
+    unifiedSearchResults.forEach(r => {
+      const type = r.type.replace('oaev-', '');
+      typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+    });
+    return Array.from(typeCounts.entries())
+      .sort((a, b) => b[1] - a[1]) // Sort by count descending
+      .map(([type, count]) => ({ type, count }));
+  }, [unifiedSearchResults]);
+
+  // Filter results based on platform and type filters
   const filteredResults = useMemo(() => {
-    if (unifiedSearchPlatformFilter === 'all') return unifiedSearchResults;
-    return unifiedSearchResults.filter(r => r.source === unifiedSearchPlatformFilter);
-  }, [unifiedSearchResults, unifiedSearchPlatformFilter]);
+    let results = unifiedSearchResults;
+    
+    // Apply platform filter
+    if (unifiedSearchPlatformFilter !== 'all') {
+      results = results.filter(r => r.source === unifiedSearchPlatformFilter);
+    }
+    
+    // Apply type filter
+    if (unifiedSearchTypeFilter !== 'all') {
+      results = results.filter(r => {
+        const type = r.type.replace('oaev-', '');
+        return type === unifiedSearchTypeFilter;
+      });
+    }
+    
+    return results;
+  }, [unifiedSearchResults, unifiedSearchPlatformFilter, unifiedSearchTypeFilter]);
 
   // Count results by source
   const openctiResultCount = useMemo(() => 
@@ -373,36 +403,66 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
         sx={{ mb: 2 }}
       />
 
-      {/* Platform filter - only show if both platforms have results */}
-      {unifiedSearchResults.length > 0 && hasOpenCTI && hasOpenAEV && (
-        <Box sx={{ mb: 2 }}>
-          <FormControl fullWidth size="small">
-            <InputLabel>Filter by platform</InputLabel>
-            <Select
-              value={unifiedSearchPlatformFilter}
-              label="Filter by platform"
-              onChange={(e) => setUnifiedSearchPlatformFilter(e.target.value as 'all' | 'opencti' | 'openaev')}
-            >
-              <MenuItem value="all">
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                  <span>All platforms</span>
-                  <Chip label={unifiedSearchResults.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                </Box>
-              </MenuItem>
-              <MenuItem value="opencti">
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                  <span>OpenCTI only</span>
-                  <Chip label={openctiResultCount} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                </Box>
-              </MenuItem>
-              <MenuItem value="openaev">
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                  <span>OpenAEV only</span>
-                  <Chip label={openaevResultCount} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                </Box>
-              </MenuItem>
-            </Select>
-          </FormControl>
+      {/* Filters - show when results exist */}
+      {unifiedSearchResults.length > 0 && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          {/* Platform filter - only show if both platforms have results */}
+          {hasOpenCTI && hasOpenAEV && (
+            <FormControl size="small" sx={{ flex: 1 }}>
+              <InputLabel>Platform</InputLabel>
+              <Select
+                value={unifiedSearchPlatformFilter}
+                label="Platform"
+                onChange={(e) => setUnifiedSearchPlatformFilter(e.target.value as 'all' | 'opencti' | 'openaev')}
+              >
+                <MenuItem value="all">
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>All</span>
+                    <Chip label={unifiedSearchResults.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                  </Box>
+                </MenuItem>
+                <MenuItem value="opencti">
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>OpenCTI</span>
+                    <Chip label={openctiResultCount} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                  </Box>
+                </MenuItem>
+                <MenuItem value="openaev">
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>OpenAEV</span>
+                    <Chip label={openaevResultCount} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                  </Box>
+                </MenuItem>
+              </Select>
+            </FormControl>
+          )}
+          
+          {/* Entity type filter - show if multiple types */}
+          {entityTypesWithCounts.length > 1 && (
+            <FormControl size="small" sx={{ flex: 1 }}>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={unifiedSearchTypeFilter}
+                label="Type"
+                onChange={(e) => setUnifiedSearchTypeFilter(e.target.value)}
+              >
+                <MenuItem value="all">
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>All types</span>
+                    <Chip label={unifiedSearchResults.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                  </Box>
+                </MenuItem>
+                {entityTypesWithCounts.map(({ type, count }) => (
+                  <MenuItem key={type} value={type}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                      <span>{type.replace(/-/g, ' ')}</span>
+                      <Chip label={count} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </Box>
       )}
 

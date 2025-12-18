@@ -236,7 +236,7 @@ export const OAEVScenarioOverviewView: React.FC<ScenarioOverviewViewProps> = (pr
           <Button
             variant="contained"
             size="small"
-            endIcon={<ChevronRightOutlined />}
+            startIcon={<ArrowForwardOutlined />}
             onClick={handleAffinityNext}
             sx={{ flex: 1 }}
           >

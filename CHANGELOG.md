@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scanning spinner**: The panel now shows a loading spinner with "Scanning page..." message while a scan is in progress, instead of the empty/home view
 - **Back to actions navigation**: All top-level entry point views (Search, Container, Investigation, Atomic Testing, Scenario) now have a "Back to actions" button at the top to return to the action buttons home view
 - **Unlimited storage**: Added `unlimitedStorage` permission to remove the 10MB storage limit. Entity cache limits increased from 5,000 to 50,000 per type for OpenCTI and from 2,000 to 20,000 for OpenAEV to support large platforms with thousands of entities
+- **Consistent button icon placement**: All action buttons (Add to OpenCTI, Create Container, Create Scenario, Next) now have icons on the left side for visual consistency
+- **Search entity type filter**: Federated search now includes a "Type" filter dropdown alongside the platform filter. Both filters are displayed side-by-side (50/50) when results exist, allowing users to narrow results by entity type (e.g., Malware, Threat-Actor, Asset). Types are sorted by result count.
 
 ### Changed
 - **Context menu rename**: "Search in OpenCTI" context menu item renamed to "Search across platforms" to accurately reflect its federated search functionality across all configured platforms

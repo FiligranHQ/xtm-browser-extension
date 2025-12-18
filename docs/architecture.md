@@ -235,7 +235,6 @@ src/shared/
 │   ├── ai.ts             # AI provider types, model selection, affinities
 │   ├── observables.ts    # Observable types (IoCs) and detection interfaces
 │   ├── platform.ts       # Cross-platform matching and enrichment types
-│   ├── ui.ts             # UI state types (scan state, panel state)
 │   ├── opencti.ts        # OpenCTI types (GraphQL, STIX, entities, containers)
 │   ├── openaev.ts        # OpenAEV entities, scenarios, atomic testing
 │   └── messages.ts       # Extension message types and payloads
@@ -244,7 +243,9 @@ src/shared/
 │   ├── ThemeLight.ts
 │   └── colors.ts
 ├── components/           # Shared React components
-│   └── ItemIcon.tsx      # Entity type icons
+│   ├── ItemIcon.tsx      # Entity type icons
+│   ├── ActionButton.tsx  # Stylized action button
+│   └── ActionButtonsGrid.tsx # Action buttons layout grid
 └── utils/                # Utilities
     ├── logger.ts         # Logging utility
     ├── storage.ts        # Chrome storage wrapper

@@ -88,7 +88,7 @@ function getOpenAEVClients(): Map<string, OpenAEVClient> {
 
 const CACHE_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes (after successful cache creation)
 const CACHE_RETRY_INTERVAL = 5 * 60 * 1000; // 5 minutes (if cache creation fails)
-const MAX_CONSECUTIVE_FAILURES = 3; // Stop retrying after 3 consecutive quota failures
+const FAILURE_NOTIFICATION_THRESHOLD = 10; // Show notification after this many consecutive failures
 
 // ============================================================================
 // State
@@ -98,15 +98,45 @@ const MAX_CONSECUTIVE_FAILURES = 3; // Stop retrying after 3 consecutive quota f
 let octiCacheRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let isCacheRefreshing = false;
 let allOCTICachesCreatedSuccessfully = false;
-let octiConsecutiveFailures = 0;
-let octiCacheDisabled = false; // Set to true after too many failures
 
 // OpenAEV cache state
 let oaevCacheRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let isOAEVCacheRefreshing = false;
 let allOAEVCachesCreatedSuccessfully = false;
-let oaevConsecutiveFailures = 0;
-let oaevCacheDisabled = false; // Set to true after too many failures
+
+// Per-platform failure tracking (to notify user after repeated failures)
+const octiPlatformFailures: Map<string, number> = new Map();
+const oaevPlatformFailures: Map<string, number> = new Map();
+// Track which platforms have already shown a notification (to avoid spam)
+const octiNotificationShown: Set<string> = new Set();
+const oaevNotificationShown: Set<string> = new Set();
+
+// ============================================================================
+// Notification Helpers
+// ============================================================================
+
+/**
+ * Show a browser notification to warn the user about repeated cache failures
+ */
+function showCacheFailureNotification(platformId: string, platformName: string, platformType: 'OpenCTI' | 'OpenAEV', failureCount: number): void {
+  try {
+    chrome.notifications.create(`cache-failure-${platformType}-${platformId}`, {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('assets/icons/icon-128.png'),
+      title: `${platformType} Cache Issue`,
+      message: `Failed to refresh cache for "${platformName}" (${failureCount} attempts). Check if the platform is accessible or consider removing this configuration.`,
+      priority: 1,
+    }, (notificationId) => {
+      if (chrome.runtime.lastError) {
+        log.warn(`Failed to show notification: ${chrome.runtime.lastError.message}`);
+      } else {
+        log.debug(`Notification shown: ${notificationId}`);
+      }
+    });
+  } catch (error) {
+    log.warn('Failed to show cache failure notification:', error);
+  }
+}
 
 // ============================================================================
 // OpenCTI Cache Management
@@ -162,16 +192,11 @@ function scheduleNextOCTICacheRefresh(): void {
 
 /**
  * Check and refresh caches for ALL configured OpenCTI platforms
+ * Always keeps trying even if errors occur - silently fails and continues
  * @param forceRefresh - If true, refresh all caches regardless of age (also bypasses in-progress check)
  * @returns true if all caches are successfully created/refreshed
  */
 export async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false): Promise<boolean> {
-  // If cache is disabled due to too many failures, skip refresh
-  if (octiCacheDisabled) {
-    log.debug('OpenCTI cache disabled due to previous quota errors, skipping refresh');
-    return false;
-  }
-  
   const openCTIClients = getOpenCTIClients();
   
   if (openCTIClients.size === 0) {
@@ -204,7 +229,6 @@ export async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false
   log.debug(`${forceRefresh ? 'Force refreshing' : 'Checking'} cache for ${openCTIClients.size} OpenCTI platform(s)...`);
   
   let allSuccessful = true;
-  let hadQuotaError = false;
   
   try {
     for (const [platformId, client] of openCTIClients) {
@@ -213,36 +237,45 @@ export async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false
         log.debug(`OpenCTI cache for platform ${platformId} ${forceRefresh ? 'force' : 'needs'} refresh, starting...`);
         try {
           const success = await refreshOCTICacheForPlatform(platformId, client);
-          if (!success) {
+          const platformInfo = client.getPlatformInfo();
+          if (success) {
+            // Reset failure count on success
+            octiPlatformFailures.set(platformId, 0);
+            octiNotificationShown.delete(platformId);
+          } else {
             allSuccessful = false;
-            log.warn(`[${platformId}] OpenCTI cache refresh returned false, continuing with other platforms`);
+            // Track failure
+            const failures = (octiPlatformFailures.get(platformId) || 0) + 1;
+            octiPlatformFailures.set(platformId, failures);
+            log.warn(`[${platformId}] OpenCTI cache refresh returned false (attempt ${failures}), continuing with other platforms`);
+            // Show notification after threshold
+            if (failures >= FAILURE_NOTIFICATION_THRESHOLD && !octiNotificationShown.has(platformId)) {
+              showCacheFailureNotification(platformId, platformInfo.name, 'OpenCTI', failures);
+              octiNotificationShown.add(platformId);
+            }
           }
         } catch (error) {
-          // Don't let one platform's failure affect others
+          // Don't let one platform's failure affect others - silently continue
           allSuccessful = false;
+          // Track failure
+          const failures = (octiPlatformFailures.get(platformId) || 0) + 1;
+          octiPlatformFailures.set(platformId, failures);
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (errorMessage.includes('quota') || errorMessage.includes('QUOTA_BYTES')) {
-            hadQuotaError = true;
-            log.warn(`[${platformId}] Quota error during cache refresh, continuing with other platforms`);
+            log.warn(`[${platformId}] Quota error during cache refresh (attempt ${failures}), continuing with other platforms`);
           } else {
-            // Log but don't throw - allow other platforms to continue
-            log.error(`[${platformId}] OpenCTI cache refresh failed, continuing with other platforms:`, error);
+            log.warn(`[${platformId}] OpenCTI cache refresh failed (attempt ${failures}), continuing with other platforms:`, error);
+          }
+          // Show notification after threshold - use client's name if available
+          const platformName = client.getPlatformInfo().name;
+          if (failures >= FAILURE_NOTIFICATION_THRESHOLD && !octiNotificationShown.has(platformId)) {
+            showCacheFailureNotification(platformId, platformName, 'OpenCTI', failures);
+            octiNotificationShown.add(platformId);
           }
         }
       } else {
         log.debug(`OpenCTI cache for platform ${platformId} is fresh`);
       }
-    }
-    
-    // Track consecutive failures for quota errors
-    if (hadQuotaError) {
-      octiConsecutiveFailures++;
-      if (octiConsecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        log.error(`OpenCTI cache disabled after ${MAX_CONSECUTIVE_FAILURES} consecutive quota failures. Extension will work without cache.`);
-        octiCacheDisabled = true;
-      }
-    } else if (allSuccessful) {
-      octiConsecutiveFailures = 0; // Reset on success
     }
   } finally {
     isCacheRefreshing = false;
@@ -436,16 +469,11 @@ function scheduleNextOAEVCacheRefresh(): void {
 
 /**
  * Check and refresh OpenAEV cache for all platforms
+ * Always keeps trying even if errors occur - silently fails and continues
  * @param forceRefresh - If true, refresh all caches regardless of age
  * @returns true if all caches are successfully created/refreshed
  */
 export async function checkAndRefreshAllOAEVCaches(forceRefresh: boolean = false): Promise<boolean> {
-  // If cache is disabled due to too many failures, skip refresh
-  if (oaevCacheDisabled) {
-    log.debug('OpenAEV cache disabled due to previous quota errors, skipping refresh');
-    return false;
-  }
-  
   const openAEVClients = getOpenAEVClients();
   
   if (openAEVClients.size === 0) {
@@ -478,7 +506,6 @@ export async function checkAndRefreshAllOAEVCaches(forceRefresh: boolean = false
   log.debug(`${forceRefresh ? 'Force refreshing' : 'Checking'} cache for ${openAEVClients.size} OpenAEV platform(s)...`);
 
   let allSuccessful = true;
-  let hadQuotaError = false;
 
   try {
     for (const [platformId, client] of openAEVClients) {
@@ -487,36 +514,45 @@ export async function checkAndRefreshAllOAEVCaches(forceRefresh: boolean = false
         log.debug(`OpenAEV cache for platform ${platformId} ${forceRefresh ? 'force' : 'needs'} refresh, starting...`);
         try {
           const success = await refreshOAEVCacheForPlatform(platformId, client);
-          if (!success) {
+          const platformInfo = client.getPlatformInfo();
+          if (success) {
+            // Reset failure count on success
+            oaevPlatformFailures.set(platformId, 0);
+            oaevNotificationShown.delete(platformId);
+          } else {
             allSuccessful = false;
-            log.warn(`[${platformId}] OpenAEV cache refresh returned false, continuing with other platforms`);
+            // Track failure
+            const failures = (oaevPlatformFailures.get(platformId) || 0) + 1;
+            oaevPlatformFailures.set(platformId, failures);
+            log.warn(`[${platformId}] OpenAEV cache refresh returned false (attempt ${failures}), continuing with other platforms`);
+            // Show notification after threshold
+            if (failures >= FAILURE_NOTIFICATION_THRESHOLD && !oaevNotificationShown.has(platformId)) {
+              showCacheFailureNotification(platformId, platformInfo.name, 'OpenAEV', failures);
+              oaevNotificationShown.add(platformId);
+            }
           }
         } catch (error) {
-          // Don't let one platform's failure affect others
+          // Don't let one platform's failure affect others - silently continue
           allSuccessful = false;
+          // Track failure
+          const failures = (oaevPlatformFailures.get(platformId) || 0) + 1;
+          oaevPlatformFailures.set(platformId, failures);
           const errorMessage = error instanceof Error ? error.message : String(error);
           if (errorMessage.includes('quota') || errorMessage.includes('QUOTA_BYTES')) {
-            hadQuotaError = true;
-            log.warn(`[${platformId}] Quota error during OAEV cache refresh, continuing with other platforms`);
+            log.warn(`[${platformId}] Quota error during OAEV cache refresh (attempt ${failures}), continuing with other platforms`);
           } else {
-            // Log but don't throw - allow other platforms to continue
-            log.error(`[${platformId}] OpenAEV cache refresh failed, continuing with other platforms:`, error);
+            log.warn(`[${platformId}] OpenAEV cache refresh failed (attempt ${failures}), continuing with other platforms:`, error);
+          }
+          // Show notification after threshold - use client's name
+          const platformName = client.getPlatformInfo().name;
+          if (failures >= FAILURE_NOTIFICATION_THRESHOLD && !oaevNotificationShown.has(platformId)) {
+            showCacheFailureNotification(platformId, platformName, 'OpenAEV', failures);
+            oaevNotificationShown.add(platformId);
           }
         }
       } else {
         log.debug(`OpenAEV cache for platform ${platformId} is fresh`);
       }
-    }
-    
-    // Track consecutive failures for quota errors
-    if (hadQuotaError) {
-      oaevConsecutiveFailures++;
-      if (oaevConsecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        log.error(`OpenAEV cache disabled after ${MAX_CONSECUTIVE_FAILURES} consecutive quota failures. Extension will work without cache.`);
-        oaevCacheDisabled = true;
-      }
-    } else if (allSuccessful) {
-      oaevConsecutiveFailures = 0; // Reset on success
     }
   } finally {
     isOAEVCacheRefreshing = false;

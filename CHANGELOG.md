@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unlimited storage**: Added `unlimitedStorage` permission to remove the 10MB storage limit. Entity cache limits increased from 5,000 to 50,000 per type for OpenCTI and from 2,000 to 20,000 for OpenAEV to support large platforms with thousands of entities
 - **Consistent button icon placement**: All action buttons (Add to OpenCTI, Create Container, Create Scenario, Next) now have icons on the left side for visual consistency
 - **Search entity type filter**: Federated search now includes a "Type" filter dropdown alongside the platform filter. Both filters are displayed side-by-side (50/50) when results exist, allowing users to narrow results by entity type (e.g., Malware, Threat-Actor, Asset). Types are sorted by result count.
+- **Cache failure notifications**: After 10 consecutive failed attempts to refresh a platform's cache, a browser notification is shown to warn the user. This helps identify misconfigured or inaccessible platforms so users can take corrective action (e.g., check connectivity or remove the configuration).
 
 ### Changed
 - **Context menu rename**: "Search in OpenCTI" context menu item renamed to "Search across platforms" to accurately reflect its federated search functionality across all configured platforms
@@ -29,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified search entity overview**: Fixed partial/empty entity overview when clicking on search results - now properly fetches full entity details and containers
 - **Context menu panel opening**: Fixed context menu actions (Search across platforms, Add to OpenCTI) not opening the panel reliably in both floating iframe and split screen modes
 - **Highlight click re-opens panel in split mode**: Fixed clicking on highlights not re-opening the native side panel if it was previously closed in split screen mode
-- **Critical: Storage quota crash loop**: Fixed extension crashing in a loop when OpenCTI/OpenAEV cache exceeds Chrome's storage quota (~10MB). The extension now gracefully handles quota errors by: trimming cache to fit limits (max 5000 entities per type), falling back to minimal cache (1000 entities with essential data only), disabling cache refresh after 3 consecutive failures. The extension continues to work without full cache - scanning and detection will still function, just without cached entity matching.
+- **Critical: Storage quota crash loop**: Fixed extension crashing in a loop when OpenCTI/OpenAEV cache exceeds storage quota. The extension now gracefully handles quota errors by trimming oldest cache entries and falling back to a minimal cache with essential data only. Cache refresh continues to retry silently in the background - errors are logged but never crash the extension. Combined with the new `unlimitedStorage` permission, the extension can now handle platforms with tens of thousands of entities.
 - **Platform isolation**: One platform's failure during cache refresh no longer affects other platforms. Previously, a single platform error could prevent cache refresh for all configured platforms. Now each platform is handled independently - if Platform A fails, Platform B/C still get their caches refreshed successfully.
 
 ### Removed

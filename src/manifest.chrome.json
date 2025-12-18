@@ -19,7 +19,8 @@
     "scripting",
     "contextMenus",
     "debugger",
-    "sidePanel"
+    "sidePanel",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"

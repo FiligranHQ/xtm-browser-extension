@@ -17,7 +17,8 @@
     "unlimitedStorage",
     "activeTab",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"

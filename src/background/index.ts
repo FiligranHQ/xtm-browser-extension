@@ -176,6 +176,8 @@ async function initializeClient(): Promise<void> {
           const client = new OpenCTIClient({
             url: platform.url,
             apiToken: platform.apiToken,
+            id: platform.id,
+            name: platform.name,
           });
           openCTIClients.set(platform.id, client);
           // First enabled client becomes primary

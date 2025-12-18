@@ -96,10 +96,21 @@ const DEFAULT_PAGE_SIZE = 500;
 export class OpenCTIClient {
   private baseUrl: string;
   private apiToken: string;
+  private platformId: string;
+  private platformName: string;
 
-  constructor(config: { url: string; apiToken: string }) {
+  constructor(config: { url: string; apiToken: string; id?: string; name?: string }) {
     this.baseUrl = config.url.replace(/\/+$/, '');
     this.apiToken = config.apiToken;
+    this.platformId = config.id || 'default';
+    this.platformName = config.name || 'OpenCTI';
+  }
+
+  /**
+   * Get platform information
+   */
+  getPlatformInfo(): { id: string; name: string; url: string } {
+    return { id: this.platformId, name: this.platformName, url: this.baseUrl };
   }
 
   /**

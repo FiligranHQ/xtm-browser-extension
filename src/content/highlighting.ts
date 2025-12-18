@@ -189,8 +189,9 @@ export function highlightResults(
     onMouseUp: (e: MouseEvent) => void;
   }
 ): void {
-  const textNodes = getTextNodes(document.body);
-  const { nodeMap, fullText } = buildNodeMap(textNodes);
+  // Build initial node map - will be rebuilt after each entity type to handle DOM modifications
+  let textNodes = getTextNodes(document.body);
+  let { nodeMap, fullText } = buildNodeMap(textNodes);
   
   // Build a map of values to their platform findings
   const valueToPlatformEntities: Map<string, {
@@ -304,10 +305,18 @@ export function highlightResults(
   // Highlight CVEs (Vulnerability entities)
   // CVEs are detected via regex and enriched across both OpenCTI and OpenAEV platforms
   // They are handled separately from cached entities because they use pattern-based detection
-  if (results.cves) {
+  // CVEs need special handling because the same CVE might appear with different dash characters
+  // (e.g., U+002D hyphen-minus vs U+2011 non-breaking hyphen) in different locations on the page
+  // 
+  // IMPORTANT: Rebuild nodeMap before processing CVEs because previous highlighting
+  // (observables, OpenCTI entities) may have modified the DOM, invalidating the original nodeMap.
+  // Without this rebuild, CVEs that appear in the same text nodes as previously highlighted
+  // entities would fail to be highlighted.
+  if (results.cves && results.cves.length > 0) {
+    textNodes = getTextNodes(document.body);
+    ({ nodeMap, fullText } = buildNodeMap(textNodes));
+    
     for (const cve of results.cves) {
-      const textToHighlight = (cve as { matchedValue?: string }).matchedValue || cve.name;
-      
       // Build foundInPlatforms from platformMatches for multi-platform display
       const cvePlatformMatches = cve.platformMatches || [];
       const foundInPlatforms = cvePlatformMatches.map((pm: { type?: string; platformType?: string; entityId?: string; platformId?: string; entityData?: unknown }) => ({
@@ -323,7 +332,8 @@ export function highlightResults(
         },
       }));
       
-      highlightInText(fullText, textToHighlight, nodeMap, {
+      // Use flexible CVE highlighting that matches any dash variant
+      highlightCVEInText(fullText, cve.name, nodeMap, {
         type: cve.type,
         found: cve.found,
         data: cve,
@@ -334,7 +344,11 @@ export function highlightResults(
   }
   
   // Highlight platform entities
-  if (results.openaevEntities) {
+  // Rebuild nodeMap as CVE highlighting may have modified the DOM
+  if (results.openaevEntities && results.openaevEntities.length > 0) {
+    textNodes = getTextNodes(document.body);
+    ({ nodeMap, fullText } = buildNodeMap(textNodes));
+    
     for (const entity of results.openaevEntities) {
       const entityPlatformType = (entity.platformType || 'openaev') as PlatformType;
       const prefixedType = createPrefixedType(entity.type, entityPlatformType);
@@ -344,6 +358,177 @@ export function highlightResults(
         found: entity.found,
         data: entity as unknown as DetectedOCTIEntity,
       }, handlers);
+    }
+  }
+}
+
+// All dash-like characters that might be used in CVEs
+// This includes: hyphen-minus, hyphen, non-breaking hyphen, figure dash, en dash, em dash,
+// horizontal bar, minus sign, soft hyphen, small hyphen-minus, fullwidth hyphen-minus
+// Also handles zero-width characters that may be inserted by web rendering:
+// - Zero-width space \u200B
+// - Zero-width non-joiner \u200C
+// - Zero-width joiner \u200D
+// - Word joiner \u2060
+// - Zero-width no-break space (BOM) \uFEFF
+
+/**
+ * Create a regex pattern for a CVE that matches any dash variant and invisible characters
+ * Converts "CVE-2025-66478" to a pattern that matches CVE with any dash character
+ * Also allows optional whitespace and zero-width chars around dashes (for web content)
+ */
+function createFlexibleCVEPattern(cveName: string): RegExp {
+  // CVE name format: CVE-YYYY-NNNNN
+  // Extract the parts: CVE, year, sequence number
+  const match = cveName.match(/^CVE[^\d]*(\d{4})[^\d]*(\d{4,7})$/i);
+  if (!match) {
+    // Fallback: create pattern that matches the CVE with flexible dashes
+    const parts = cveName.match(/CVE[^\d]*(\d+)[^\d]*(\d+)/i);
+    if (parts) {
+      const [, y, s] = parts;
+      const dashClass = `[\\-\\u002D\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212\\u00AD\\uFE63\\uFF0D]`;
+      const invisibleClass = `[\\s\\u200B\\u200C\\u200D\\u2060\\uFEFF]*`;
+      return new RegExp(`CVE${invisibleClass}${dashClass}${invisibleClass}${y}${invisibleClass}${dashClass}${invisibleClass}${s}`, 'gi');
+    }
+    return new RegExp(cveName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  }
+  
+  const [, year, seq] = match;
+  // Build pattern: CVE + optional invisible + any dash + optional invisible + year + ...
+  // Use character class with all dash variants and invisible characters
+  const dashClass = `[\\-\\u002D\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212\\u00AD\\uFE63\\uFF0D]`;
+  const invisibleClass = `[\\s\\u200B\\u200C\\u200D\\u2060\\uFEFF]*`;
+  const pattern = `CVE${invisibleClass}${dashClass}${invisibleClass}${year}${invisibleClass}${dashClass}${invisibleClass}${seq}`;
+  return new RegExp(pattern, 'gi');
+}
+
+/**
+ * Highlight CVE in text with flexible dash matching
+ * CVEs might appear with different dash characters (U+002D, U+2011, etc.) in different locations
+ * This function uses a regex to match any dash variant
+ */
+function highlightCVEInText(
+  fullText: string,
+  cveName: string,
+  nodeMap: NodeMapEntry[],
+  meta: HighlightMeta,
+  handlers: {
+    onHover: (e: MouseEvent) => void;
+    onLeave: () => void;
+    onClick: (e: MouseEvent) => void;
+    onRightClick: (e: MouseEvent) => void;
+    onMouseDown: (e: MouseEvent) => void;
+    onMouseUp: (e: MouseEvent) => void;
+  }
+): void {
+  if (!cveName || cveName.length < 2) return;
+  
+  const cvePattern = createFlexibleCVEPattern(cveName);
+  
+  // First pass: collect all match positions using regex
+  interface MatchInfo {
+    pos: number;
+    matchLength: number;
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let match;
+  while ((match = cvePattern.exec(fullText)) !== null) {
+    const pos = match.index;
+    const matchLength = match[0].length;
+    
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        // Skip if already highlighted
+        if (node.parentElement?.closest('.xtm-highlight')) {
+          break;
+        }
+        
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + matchLength, nodeText.length);
+        
+        if (localEnd <= nodeText.length) {
+          matchesToHighlight.push({ pos, matchLength, node, localStart, localEnd });
+        }
+        break;
+      }
+    }
+  }
+  
+  // Second pass: highlight in REVERSE order
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      // Verify node is still valid and not already highlighted
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      
+      if (range.toString().trim().length === 0) {
+        continue;
+      }
+      
+      const highlight = document.createElement('span');
+      highlight.className = 'xtm-highlight';
+      
+      // Determine if this is an OpenCTI entity (check flag or type)
+      const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_TYPES_SET.has(meta.type);
+      
+      if (meta.found) {
+        highlight.classList.add('xtm-found');
+      } else if (isOpenCTIEntity) {
+        highlight.classList.add('xtm-entity-not-addable');
+      } else {
+        highlight.classList.add('xtm-not-found');
+      }
+      
+      highlight.dataset.type = meta.type;
+      highlight.dataset.value = cveName; // Use normalized CVE name
+      highlight.dataset.found = String(meta.found);
+      highlight.dataset.entity = JSON.stringify(meta.data);
+      
+      // Check for mixed state
+      const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
+      if (hasMixedState) {
+        highlight.dataset.mixedState = 'true';
+        highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+        highlight.classList.add('xtm-mixed-state');
+      }
+      
+      // Store platform entities for multi-platform navigation
+      if (meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0) {
+        highlight.dataset.multiPlatform = 'true';
+        highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
+      }
+      
+      highlight.addEventListener('mouseenter', handlers.onHover);
+      highlight.addEventListener('mouseleave', handlers.onLeave);
+      highlight.addEventListener('click', handlers.onClick, { capture: true });
+      highlight.addEventListener('mousedown', handlers.onMouseDown, { capture: true });
+      highlight.addEventListener('mouseup', handlers.onMouseUp, { capture: true });
+      highlight.addEventListener('contextmenu', handlers.onRightClick);
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch {
+      // Range might cross node boundaries or node may have been modified
     }
   }
 }
@@ -528,18 +713,115 @@ export function highlightResultsForInvestigation(
     );
   }
   
-  if (results.openaevEntities) {
-    for (const e of results.openaevEntities) {
-      const prefixedType = createPrefixedType(e.type, 'openaev');
-      highlightForInvestigation(
+  // Investigation mode is OpenCTI-only - no OpenAEV entity highlighting
+  
+  // Highlight CVEs (Vulnerability entities) - these are detected via regex
+  // CVEs need flexible dash matching because the same CVE might appear with different
+  // dash characters (U+002D vs U+2011 etc.) in different locations on the page
+  if (results.cves) {
+    for (const cve of results.cves) {
+      highlightCVEForInvestigation(
         fullText,
-        e.name,
+        cve.name,
         nodeMap,
-        prefixedType,
-        e.entityId,
-        e.platformId,
+        cve.type || 'Vulnerability',
+        cve.entityId,
+        cve.platformId,
         onHighlightClick
       );
+    }
+  }
+}
+
+/**
+ * Highlight CVE for investigation mode with flexible dash matching
+ */
+function highlightCVEForInvestigation(
+  fullText: string,
+  cveName: string,
+  nodeMap: NodeMapEntry[],
+  entityType: string,
+  entityId?: string,
+  platformId?: string,
+  onHighlightClick?: (highlight: HTMLElement) => void
+): void {
+  if (!cveName || cveName.length < 2) return;
+  
+  const cvePattern = createFlexibleCVEPattern(cveName);
+  
+  // First pass: collect all match positions using regex
+  interface MatchInfo {
+    matchLength: number;
+    node: Text;
+    localStart: number;
+    localEnd: number;
+  }
+  const matchesToHighlight: MatchInfo[] = [];
+  
+  let match;
+  while ((match = cvePattern.exec(fullText)) !== null) {
+    const pos = match.index;
+    const matchLength = match[0].length;
+    
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        if (node.parentElement?.closest('.xtm-highlight')) {
+          break;
+        }
+        
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + matchLength, nodeText.length);
+        
+        if (localEnd <= nodeText.length) {
+          matchesToHighlight.push({ matchLength, node, localStart, localEnd });
+        }
+        break;
+      }
+    }
+  }
+  
+  // Second pass: highlight in REVERSE order
+  for (let i = matchesToHighlight.length - 1; i >= 0; i--) {
+    const { node, localStart, localEnd } = matchesToHighlight[i];
+    
+    try {
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      if (range.toString().trim().length === 0) continue;
+      
+      const highlight = document.createElement('span');
+      highlight.className = 'xtm-highlight xtm-investigation';
+      highlight.dataset.entityId = entityId || '';
+      highlight.dataset.platformId = platformId || '';
+      highlight.dataset.entityType = entityType;
+      highlight.dataset.entityValue = cveName;
+      
+      if (onHighlightClick) {
+        highlight.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onHighlightClick(highlight);
+        });
+      }
+      
+      range.surroundContents(highlight);
+      highlights.push(highlight);
+    } catch {
+      // Range might cross node boundaries or node may have been modified
     }
   }
 }

@@ -1198,40 +1198,58 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
     if (response.success && response.data) {
       const data = response.data;
       
-      const foundObservables = (data.observables || []).filter((o: DetectedObservable) => {
+      // Investigation mode requires a specific OpenCTI platform
+      // All entities must be found AND belong to the targeted platform
+      
+      const foundObservables = (data.observables || []).filter((o: DetectedObservable & { platformType?: string }) => {
+        // Must be found in a platform
         if (!o.found) return false;
+        // Must be from an OpenCTI platform (not OpenAEV)
+        if (o.platformType && o.platformType !== 'opencti') return false;
+        // Must match the targeted platform ID
+        const entityPlatformId = o.platformId || (o as { platformId?: string }).platformId;
         if (platformId) {
-          const entityPlatformId = o.platformId || (o as { platformId?: string }).platformId;
           return entityPlatformId === platformId;
         }
-        return true;
+        // If no platformId specified, still require entity to have a valid OpenCTI platform
+        return !!entityPlatformId;
       });
       
-      const foundOCTIEntities = (data.openctiEntities || []).filter((e: DetectedOCTIEntity) => {
+      const foundOCTIEntities = (data.openctiEntities || []).filter((e: DetectedOCTIEntity & { platformType?: string }) => {
+        // Must be found in a platform
         if (!e.found) return false;
+        // Must be from an OpenCTI platform
+        if (e.platformType && e.platformType !== 'opencti') return false;
+        // Must match the targeted platform ID
+        const entityPlatformId = e.platformId || (e as { platformId?: string }).platformId;
         if (platformId) {
-          const entityPlatformId = e.platformId || (e as { platformId?: string }).platformId;
           return entityPlatformId === platformId;
         }
-        return true;
+        // If no platformId specified, still require entity to have a valid OpenCTI platform
+        return !!entityPlatformId;
       });
       
-      const foundOAEV = (data.openaevEntities || []).filter((e: { found?: boolean; type?: string }) => {
-        if (!e.found) return false;
+      // Include CVEs that are found in the targeted OpenCTI platform
+      // CVEs are detected via regex and enriched from OpenCTI API
+      const foundCVEs = (data.cves || []).filter((cve: { found?: boolean; platformId?: string; platformType?: string }) => {
+        // Must be found in a platform
+        if (!cve.found) return false;
+        // Must be from an OpenCTI platform (not OpenAEV)
+        if (cve.platformType && cve.platformType !== 'opencti') return false;
+        // Must match the targeted platform ID
         if (platformId) {
-          const entityPlatformDef = getPlatformFromEntity(`${e.type}`);
-          if (entityPlatformDef.type === 'opencti') {
-            return false;
-          }
+          return cve.platformId === platformId;
         }
-        return true;
+        // If no platformId specified, still require CVE to have a valid OpenCTI platform
+        return !!cve.platformId;
       });
       
+      // Investigation mode is OpenCTI-only - no OpenAEV entities
       const investigationResults: ScanResultPayload = {
         observables: foundObservables,
         openctiEntities: foundOCTIEntities,
-        cves: [],
-        openaevEntities: foundOAEV,
+        cves: foundCVEs,
+        openaevEntities: [], // Investigation is OpenCTI-only
         scanTime: data.scanTime,
         url: data.url,
       };
@@ -1253,6 +1271,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         });
       });
       
+      // Investigation mode is OpenCTI-only: observables, OCTI entities, and CVEs
       const allFoundEntities = [
         ...foundObservables.map((o: DetectedObservable) => ({
           id: o.entityId,
@@ -1268,12 +1287,13 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
           value: e.name,
           platformId: e.platformId || (e as { platformId?: string }).platformId,
         })),
-        ...foundOAEV.map((e: { entityId?: string; type?: string; name?: string; value?: string; platformId?: string }) => ({
-          id: e.entityId,
-          type: e.type,
-          name: e.name,
-          value: e.value || e.name,
-          platformId: e.platformId,
+        // Include CVEs (Vulnerability entities) detected via regex and found in OpenCTI
+        ...foundCVEs.map((cve: { entityId?: string; type?: string; name?: string; platformId?: string }) => ({
+          id: cve.entityId,
+          type: cve.type || 'Vulnerability',
+          name: cve.name,
+          value: cve.name,
+          platformId: cve.platformId,
         })),
       ].filter(e => e.id);
       

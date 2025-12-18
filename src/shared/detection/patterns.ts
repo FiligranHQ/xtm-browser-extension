@@ -158,9 +158,21 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // - Soft hyphen \u00AD
 // - Small hyphen-minus \uFE63
 // - Fullwidth hyphen-minus \uFF0D
+// Also handles zero-width characters that may be inserted by web rendering:
+// - Zero-width space \u200B
+// - Zero-width non-joiner \u200C
+// - Zero-width joiner \u200D
+// - Word joiner \u2060
+// - Zero-width no-break space (BOM) \uFEFF
 // Also allows optional spaces around dashes for malformed content
 // CVE sequence numbers can have 4 to 7 digits (officially up to 7)
-export const CVE_PATTERN = /CVE\s*[-\u002D\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u00AD\uFE63\uFF0D]\s*\d{4}\s*[-\u002D\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u00AD\uFE63\uFF0D]\s*\d{4,7}/gi;
+// Pattern: CVE + optional invisible chars + dash + optional invisible chars + 4 digits (year) + optional invisible chars + dash + optional invisible chars + 4-7 digits (sequence)
+const CVE_DASH_CLASS = '[-\\u002D\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212\\u00AD\\uFE63\\uFF0D]';
+const CVE_INVISIBLE_CLASS = '[\\s\\u200B\\u200C\\u200D\\u2060\\uFEFF]*';
+export const CVE_PATTERN = new RegExp(
+  `CVE${CVE_INVISIBLE_CLASS}${CVE_DASH_CLASS}${CVE_INVISIBLE_CLASS}\\d{4}${CVE_INVISIBLE_CLASS}${CVE_DASH_CLASS}${CVE_INVISIBLE_CLASS}\\d{4,7}`,
+  'gi'
+);
 
 // ============================================================================
 // ASN Pattern

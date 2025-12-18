@@ -11,6 +11,7 @@
  * - Finding
  * - Scenario
  * - Exercise
+ * - Vulnerability (CVE)
  */
 
 import React from 'react';
@@ -34,6 +35,7 @@ import {
   MovieFilterOutlined,
   TravelExploreOutlined,
   DomainOutlined,
+  BugReportOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Kayaking } from 'mdi-material-ui';
 import Markdown from 'react-markdown';
@@ -112,6 +114,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       case 'Finding': return entityData.finding_description || `Type: ${entityData.finding_type || 'Unknown'}`;
       case 'Scenario': return entityData.scenario_description || entityData.description || '';
       case 'Exercise': return entityData.exercise_description || entityData.description || '';
+      case 'Vulnerability': return entityData.vulnerability_description || entityData.description || '';
       default: return entityData.description || '';
     }
   };
@@ -134,6 +137,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       case 'Exercise': return <Kayaking sx={{ fontSize: 20, color }} />;
       case 'AttackPattern': return <LockPattern sx={{ fontSize: 20, color }} />;
       case 'Finding': return <TravelExploreOutlined sx={{ fontSize: 20, color }} />;
+      case 'Vulnerability': return <BugReportOutlined sx={{ fontSize: 20, color }} />;
       default: return <ComputerOutlined sx={{ fontSize: 20, color }} />;
     }
   };
@@ -568,6 +572,137 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
               <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
                 {formatDateTime(entityData.finding_created_at)}
               </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Vulnerability (CVE) specific */}
+      {oaevType === 'Vulnerability' && (
+        <>
+          {/* CVE ID */}
+          {entityData.vulnerability_external_id && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                CVE ID
+              </Typography>
+              <Chip 
+                label={entityData.vulnerability_external_id} 
+                size="small" 
+                sx={{ 
+                  bgcolor: hexToRGB(color, 0.2), 
+                  color,
+                  fontWeight: 600,
+                  borderRadius: 1,
+                  fontSize: '0.875rem',
+                }} 
+              />
+            </Box>
+          )}
+          
+          {/* CVSS Score */}
+          {entityData.vulnerability_cvss_v31 != null && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                CVSS v3.1 Score
+              </Typography>
+              <Chip 
+                label={entityData.vulnerability_cvss_v31.toFixed(1)} 
+                size="small" 
+                sx={{ 
+                  bgcolor: entityData.vulnerability_cvss_v31 >= 9 ? '#d32f2f' :
+                           entityData.vulnerability_cvss_v31 >= 7 ? '#f57c00' :
+                           entityData.vulnerability_cvss_v31 >= 4 ? '#fbc02d' : '#388e3c',
+                  color: '#fff',
+                  fontWeight: 700,
+                  borderRadius: 1,
+                  fontSize: '0.875rem',
+                }} 
+              />
+            </Box>
+          )}
+          
+          {/* Vulnerability Name (CISA) */}
+          {entityData.vulnerability_cisa_vulnerability_name && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Vulnerability Name
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
+                {entityData.vulnerability_cisa_vulnerability_name}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Status */}
+          {entityData.vulnerability_vuln_status && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Status
+              </Typography>
+              <Chip 
+                label={entityData.vulnerability_vuln_status} 
+                size="small" 
+                sx={{ bgcolor: 'action.selected', borderRadius: 1, fontWeight: 500 }} 
+              />
+            </Box>
+          )}
+          
+          {/* Published Date */}
+          {entityData.vulnerability_published && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Published Date
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 500, ...contentTextStyle }}>
+                {formatDateTime(entityData.vulnerability_published)}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Remediation */}
+          {entityData.vulnerability_remediation && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                Remediation
+              </Typography>
+              <Typography variant="body2" sx={{ ...contentTextStyle }}>
+                {entityData.vulnerability_remediation}
+              </Typography>
+            </Box>
+          )}
+          
+          {/* Reference URLs */}
+          {entityData.vulnerability_reference_urls && entityData.vulnerability_reference_urls.length > 0 && (
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={sectionTitleStyle}>
+                References
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {entityData.vulnerability_reference_urls.slice(0, 5).map((url: string, i: number) => (
+                  <Typography 
+                    key={i} 
+                    component="a"
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="body2" 
+                    sx={{ 
+                      color: 'primary.main',
+                      textDecoration: 'none',
+                      wordBreak: 'break-all',
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    {url}
+                  </Typography>
+                ))}
+                {entityData.vulnerability_reference_urls.length > 5 && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    ...and {entityData.vulnerability_reference_urls.length - 5} more
+                  </Typography>
+                )}
+              </Box>
             </Box>
           )}
         </>

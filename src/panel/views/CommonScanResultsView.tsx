@@ -468,6 +468,20 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                         
                         if (visibleEntities.length > 0) {
                           setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...visibleEntities]);
+                          // Send AI entities to content script to persist in lastScanData
+                          window.parent.postMessage({
+                            type: 'XTM_ADD_AI_ENTITIES',
+                            payload: {
+                              entities: visibleEntities.map(e => ({
+                                id: e.id,
+                                type: e.type,
+                                name: e.name,
+                                value: e.value,
+                                aiReason: e.aiReason,
+                                aiConfidence: e.aiConfidence,
+                              })),
+                            },
+                          }, '*');
                           showToast({ 
                             type: 'success', 
                             message: `AI discovered ${visibleEntities.length} additional entit${visibleEntities.length === 1 ? 'y' : 'ies'}${
@@ -487,11 +501,39 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   } else {
                     // No tab - add all entities (can't verify highlighting)
                     setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
+                    // Send AI entities to content script to persist in lastScanData
+                    window.parent.postMessage({
+                      type: 'XTM_ADD_AI_ENTITIES',
+                      payload: {
+                        entities: newEntities.map(e => ({
+                          id: e.id,
+                          type: e.type,
+                          name: e.name,
+                          value: e.value,
+                          aiReason: e.aiReason,
+                          aiConfidence: e.aiConfidence,
+                        })),
+                      },
+                    }, '*');
                     showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
                   }
                 } catch {
                   // On error, add all entities (fallback)
                   setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
+                  // Send AI entities to content script to persist in lastScanData
+                  window.parent.postMessage({
+                    type: 'XTM_ADD_AI_ENTITIES',
+                    payload: {
+                      entities: newEntities.map(e => ({
+                        id: e.id,
+                        type: e.type,
+                        name: e.name,
+                        value: e.value,
+                        aiReason: e.aiReason,
+                        aiConfidence: e.aiConfidence,
+                      })),
+                    },
+                  }, '*');
                   showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
                 }
               })();

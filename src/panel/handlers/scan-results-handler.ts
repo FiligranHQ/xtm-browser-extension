@@ -21,6 +21,14 @@ export function processScanResults(payload: {
   openctiEntities?: DetectedOCTIEntity[];
   cves?: DetectedOCTIEntity[];
   openaevEntities?: DetectedOAEVEntity[];
+  aiDiscoveredEntities?: Array<{
+    id: string;
+    type: string;
+    name: string;
+    value: string;
+    aiReason?: string;
+    aiConfidence?: 'high' | 'medium' | 'low';
+  }>;
   pageContent?: string;
   pageTitle?: string;
   pageUrl?: string;
@@ -173,8 +181,28 @@ export function processScanResults(payload: {
     }
   }
   
+  // Get entities from map
+  const entities = Array.from(entityMap.values());
+  
+  // Add AI-discovered entities (persisted from previous AI discovery)
+  // These are stored separately and don't go through deduplication
+  if (payload.aiDiscoveredEntities) {
+    for (const aiEntity of payload.aiDiscoveredEntities) {
+      entities.push({
+        id: aiEntity.id,
+        type: aiEntity.type,
+        name: aiEntity.name,
+        value: aiEntity.value,
+        found: false,
+        discoveredByAI: true,
+        aiReason: aiEntity.aiReason,
+        aiConfidence: aiEntity.aiConfidence,
+      });
+    }
+  }
+  
   return {
-    entities: Array.from(entityMap.values()),
+    entities,
     pageContent: payload.pageContent,
     pageTitle: payload.pageTitle,
     pageUrl: payload.pageUrl,

@@ -143,6 +143,19 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     clearHighlights();
     currentScanMode = null;
     lastScanData = null;
+  } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
+    // Update lastScanData with AI-discovered entities so they persist when panel re-opens
+    const aiEntities = event.data.payload?.entities;
+    if (lastScanData && Array.isArray(aiEntities)) {
+      lastScanData = {
+        ...lastScanData,
+        aiDiscoveredEntities: [
+          ...(lastScanData.aiDiscoveredEntities || []),
+          ...aiEntities,
+        ],
+      };
+      log.debug(' Updated lastScanData with AI entities:', aiEntities.length);
+    }
   } else if (event.data?.type === 'XTM_SCROLL_TO_FIRST') {
     scrollToFirstHighlight();
   } else if (event.data?.type === 'XTM_SHOW_TOAST') {

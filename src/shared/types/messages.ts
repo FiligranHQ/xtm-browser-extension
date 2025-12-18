@@ -133,6 +133,15 @@ export interface ScanResultPayload {
   cves?: DetectedOCTIEntity[];
   /** OpenAEV Types detected (Assets, Teams, Players, etc.) */
   openaevEntities?: DetectedOAEVEntity[];
+  /** AI-discovered entities (persisted for panel re-open) */
+  aiDiscoveredEntities?: Array<{
+    id: string;
+    type: string;
+    name: string;
+    value: string;
+    aiReason?: string;
+    aiConfidence?: 'high' | 'medium' | 'low';
+  }>;
   scanTime: number;
   url: string;
 }

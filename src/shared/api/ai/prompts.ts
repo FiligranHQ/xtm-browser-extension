@@ -67,6 +67,16 @@ CRITICAL REQUIREMENTS:
 4. EVIDENCE-BASED: Every relationship must be supported by explicit or strongly implied textual evidence
 5. DIRECTION MATTERS: Relationships are directional - ensure from/to entities match the allowed combinations
 
+CRITICAL RULE FOR OBSERVABLES (IPv4-Addr, IPv6-Addr, Domain-Name, Hostname, URL, Email-Addr, Mac-Addr, StixFile, Hash, etc.):
+- Observables can ONLY connect to threat entities (Threat-Actor, Intrusion-Set, Campaign, Incident, Malware) using "related-to"
+- The direction MUST ALWAYS be: Observable → related-to → Threat Entity
+- NEVER create: Threat-Actor/Intrusion-Set/Campaign → uses/targets/any → Observable (THIS IS INVALID!)
+- The only exceptions are:
+  - Malware → communicates-with → Domain-Name/IPv4-Addr/IPv6-Addr/URL (malware C2 communication)
+  - Domain-Name/Hostname → resolves-to → IPv4-Addr/IPv6-Addr (DNS resolution)
+  - IPv4-Addr/IPv6-Addr → belongs-to → Autonomous-System/Organization
+  - IPv4-Addr/IPv6-Addr → located-at → Location
+
 COMPLETE LIST OF VALID RELATIONSHIP TYPES (use ONLY these - anything else is INVALID):
 
 STIX 2.1 STANDARD RELATIONSHIPS:
@@ -555,6 +565,8 @@ export function buildRelationshipResolutionPrompt(request: RelationshipResolutio
     `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
   ).join('\n');
 
+  // Note: The comprehensive list of valid relationship types is defined in SYSTEM_PROMPTS.relationshipResolution
+  // This user prompt focuses on the task-specific instructions and entities to analyze
   return `Analyze the page content and identify relationships between the entities listed below.
 
 PAGE TITLE: ${request.pageTitle}
@@ -566,47 +578,12 @@ ${entityList}
 PAGE CONTENT:
 ${request.pageContent.substring(0, 10000)}
 
-VALID RELATIONSHIP TYPES (use ONLY these exact strings - any other value will be REJECTED):
-- "uses" (Threat-Actor/Campaign/Intrusion-Set/Malware/Incident → Attack-Pattern/Tool/Malware/Infrastructure)
-- "targets" (Threat-Actor/Campaign/Intrusion-Set/Malware/Tool/Incident/Attack-Pattern → Identity/Sector/Location/Vulnerability)
-- "attributed-to" (Campaign/Intrusion-Set/Incident → Intrusion-Set/Threat-Actor)
-- "delivers" (Attack-Pattern/Infrastructure/Tool → Malware)
-- "drops" (Malware/Tool → Malware/Tool/File)
-- "downloads" (Malware → Malware/Tool/File)
-- "exploits" (Malware → Vulnerability)
-- "variant-of" (Malware → Malware)
-- "controls" (Malware/Infrastructure → Malware/Infrastructure)
-- "authored-by" (Malware → Threat-Actor/Intrusion-Set)
-- "communicates-with" (Malware/Infrastructure → Domain/IP/URL/Infrastructure)
-- "beacons-to" (Malware → Infrastructure)
-- "exfiltrates-to" (Malware → Infrastructure)
-- "hosts" (Infrastructure/Intrusion-Set/Threat-Actor → Malware/Tool/Infrastructure)
-- "owns" (Intrusion-Set/Threat-Actor/Organization → Infrastructure)
-- "consists-of" (Infrastructure → Observable/Infrastructure)
-- "indicates" (Indicator → Attack-Pattern/Campaign/Intrusion-Set/Malware/Threat-Actor/Tool)
-- "based-on" (Indicator → Observable)
-- "derived-from" (Any-SDO → Same-Type-SDO)
-- "mitigates" (Course-of-Action → Attack-Pattern/Malware/Tool/Vulnerability)
-- "remediates" (Course-of-Action → Malware/Vulnerability)
-- "located-at" (Identity/Threat-Actor/Infrastructure → Location)
-- "originates-from" (Campaign/Intrusion-Set/Malware/Threat-Actor → Location)
-- "impersonates" (Threat-Actor → Identity)
-- "compromises" (Campaign/Intrusion-Set/Incident/Threat-Actor → Infrastructure)
-- "resolves-to" (Domain/Hostname → IP/Domain/Hostname)
-- "belongs-to" (IP/Domain/Channel → Autonomous-System/Organization/Threat-Actor)
-- "part-of" (Identity → Identity/Organization | Sector → Sector | Threat-Actor-Group → Threat-Actor-Group)
-- "cooperates-with" (Threat-Actor-Group → Threat-Actor-Group/Threat-Actor-Individual)
-- "participates-in" (Threat-Actor → Campaign)
-- "subtechnique-of" (Attack-Pattern → Attack-Pattern)
-- "has" (Infrastructure/Tool/System → Vulnerability)
-- "related-to" (ONLY if no other type fits)
-
-INSTRUCTIONS:
-1. Read the page content for evidence of relationships between the listed entities
-2. Check that the source and target entity types are COMPATIBLE with the relationship type
-3. Ensure the direction (from → to) matches the allowed combinations above
-4. Only include relationships with clear textual evidence
-5. Do NOT invent or hallucinate relationships - if unsure, do not include it
+TASK:
+1. Read the page content carefully for evidence of relationships between the listed entities
+2. Use ONLY the valid relationship types defined in your instructions - any other type will be REJECTED
+3. Check that source and target entity types are COMPATIBLE with the relationship type
+4. Ensure the direction (from → to) matches the allowed combinations
+5. Only include relationships with clear textual evidence - do NOT hallucinate
 
 Return JSON in this EXACT format:
 {
@@ -627,10 +604,6 @@ CONFIDENCE LEVELS:
 - "medium": Strongly implied by context
 - "low": Reasonable inference (use sparingly)
 
-CRITICAL VALIDATION RULES:
-- ONLY use relationship types from the list above - anything else is INVALID
-- Verify source→target entity type compatibility BEFORE adding a relationship
-- Direction matters: e.g., "Malware uses Attack-Pattern" is valid, "Attack-Pattern uses Malware" is NOT
-- If no valid relationships exist, return: {"relationships": []}
-- Quality over quantity - only include relationships you are confident about`;
+If no valid relationships exist, return: {"relationships": []}
+Quality over quantity - only include relationships you are confident about.`;
 }

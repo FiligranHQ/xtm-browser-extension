@@ -93,7 +93,6 @@ A list of the 5 most recent containers (Reports, Cases, Groupings) that include 
 - Container name
 - Last modified date
 - Click to open in OpenCTI
-- Shows count indicator (e.g., "5 of 12") if more containers exist
 
 ### Actions
 - **Open in OpenCTI**: Direct link to the entity in your platform

@@ -758,14 +758,14 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
         </Paper>
       )}
 
-      {/* Containers Section - Show max 5 */}
+      {/* Containers Section - API fetches max 5 containers */}
       {entityContainers.length > 0 && (
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="caption" sx={sectionTitleStyle}>
-            Latest Containers ({Math.min(entityContainers.length, 5)}{entityContainers.length > 5 ? ` of ${entityContainers.length}` : ''})
+            Latest Containers ({entityContainers.length})
           </Typography>
           <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-            {entityContainers.slice(0, 5).map((container, idx) => {
+            {entityContainers.map((container, idx) => {
               const containerColor = itemColor(container.entity_type, mode === 'dark');
               return (
                 <Box
@@ -777,7 +777,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                     gap: 1.5,
                     p: 1.5,
                     cursor: 'pointer',
-                    borderBottom: idx < Math.min(entityContainers.length, 5) - 1 ? 1 : 0,
+                    borderBottom: idx < entityContainers.length - 1 ? 1 : 0,
                     borderColor: 'divider',
                     transition: 'background-color 0.2s',
                     '&:hover': { bgcolor: 'action.hover' },

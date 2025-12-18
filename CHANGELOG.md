@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - OCTI (OpenCTI): Changed from orange (#ff9800) to indigo (#5c6bc0) - distinct from green (found) and amber (new)
   - OAEV (OpenAEV): Changed from cyan (#00bcd4) to pink (#e91e63) - distinct from primary blue
   - Multi-type indicator: Now uses primary theme color (adapts to light/dark theme) instead of purple
-- **Entity overview containers limited to 5**: "Latest Containers" section now shows maximum 5 containers with count indicator (e.g., "5 of 12")
+- **Entity overview containers limited to 5**: "Latest Containers" section now fetches only 5 containers via GraphQL query for efficiency
 - **Description truncation**: Entity descriptions in both OpenCTI and OpenAEV overviews are now truncated to 500 characters for better readability
 
 ### Improved

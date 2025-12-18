@@ -242,17 +242,17 @@ export function getOAEVTypeFromClass(className: string): string {
  */
 export function getOAEVEntityColor(type: string): string {
   switch (type) {
-    case 'Asset': return '#00bcd4'; // Cyan
-    case 'AssetGroup': return '#009688'; // Teal
+    case 'Asset': return '#009688'; // Teal
+    case 'AssetGroup': return '#26a69a'; // Light Teal
     case 'Player':
-    case 'User': return '#ff9800'; // Orange
-    case 'Team': return '#4caf50'; // Green
+    case 'User': return '#7e57c2'; // Deep Purple
+    case 'Team': return '#66bb6a'; // Light Green
     case 'Organization': return '#3f51b5'; // Indigo
-    case 'Scenario': return '#9c27b0'; // Purple
-    case 'Exercise': return '#ff5722'; // Deep Orange
+    case 'Scenario': return '#ab47bc'; // Purple
+    case 'Exercise': return '#ff7043'; // Deep Orange
     case 'AttackPattern': return '#d4e157'; // Yellow-green
-    case 'Finding': return '#e91e63'; // Pink
-    default: return '#00bcd4';
+    case 'Finding': return '#ec407a'; // Pink
+    default: return '#e91e63'; // Pink (OAEV platform color)
   }
 }
 

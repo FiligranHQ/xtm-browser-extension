@@ -1,7 +1,7 @@
 /**
  * Cache Manager Service
  * 
- * Manages entity caches for OpenCTI and OpenAEV platforms.
+ * Manages caches for OpenCTI and OpenAEV platforms.
  * Handles cache refresh scheduling, background refresh, and cache statistics.
  */
 
@@ -24,7 +24,7 @@ import {
   shouldRefreshOAEVCache,
   createEmptyOAEVCache,
   type OCTIEntityCache,
-  type CachedEntity,
+  type CachedOCTIEntity,
   type OAEVCache,
 } from '../../shared/utils/storage';
 import { getOpenCTIClients, getOpenAEVClients } from './client-manager';
@@ -57,11 +57,11 @@ let allOAEVCachesCreatedSuccessfully = false;
 // ============================================================================
 
 /**
- * Start periodic OpenCTI entity cache refresh for all platforms
+ * Start periodic OpenCTI cache refresh for all platforms
  * Uses 5-minute interval until all caches are successfully created, then switches to 30 minutes
  */
 export function startOCTICacheRefresh(): void {
-  log.info('Starting OpenCTI entity cache refresh system...');
+  log.info('Starting OpenCTI cache refresh system...');
   
   // Clear existing interval if any
   if (octiCacheRefreshInterval) {
@@ -87,7 +87,7 @@ function scheduleNextOCTICacheRefresh(): void {
   const interval = allOCTICachesCreatedSuccessfully ? CACHE_REFRESH_INTERVAL : CACHE_RETRY_INTERVAL;
   const intervalMinutes = interval / 60000;
   
-  log.info(`OpenCTI entity cache refresh scheduled (every ${intervalMinutes} minutes${!allOCTICachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
+  log.info(`OpenCTI cache refresh scheduled (every ${intervalMinutes} minutes${!allOCTICachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
   
   octiCacheRefreshInterval = setInterval(async () => {
     await checkAndRefreshAllOCTICaches();
@@ -174,7 +174,7 @@ export async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false
 }
 
 /**
- * Refresh the OpenCTI entity cache for a specific platform
+ * Refresh the OpenCTI cache for a specific platform
  * @returns true if cache was successfully created with at least some entities
  */
 async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTIClient): Promise<boolean> {
@@ -235,11 +235,11 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
       fetchWithLog('Position', () => client.fetchPositions()),
     ]);
     
-    // Map to CachedEntity format (minimal data: id, name, aliases, x_mitre_id, type)
-    const mapToCachedEntity = (
+    // Map to CachedOCTIEntity format (minimal data: id, name, aliases, x_mitre_id, type)
+    const mapToCachedOCTIEntity = (
       entities: Array<{ id: string; name: string; aliases?: string[]; x_mitre_id?: string }>,
       type: string
-    ): CachedEntity[] => entities.map(e => ({
+    ): CachedOCTIEntity[] => entities.map(e => ({
       id: e.id,
       name: e.name,
       aliases: e.aliases,
@@ -248,23 +248,23 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
       platformId,
     }));
     
-    cache.entities['Threat-Actor-Group'] = mapToCachedEntity(threatActorGroups, 'Threat-Actor-Group');
-    cache.entities['Threat-Actor-Individual'] = mapToCachedEntity(threatActorIndividuals, 'Threat-Actor-Individual');
-    cache.entities['Intrusion-Set'] = mapToCachedEntity(intrusionSets, 'Intrusion-Set');
-    cache.entities['Campaign'] = mapToCachedEntity(campaigns, 'Campaign');
-    cache.entities['Incident'] = mapToCachedEntity(incidents, 'Incident');
-    cache.entities['Malware'] = mapToCachedEntity(malware, 'Malware');
-    cache.entities['Attack-Pattern'] = mapToCachedEntity(attackPatterns, 'Attack-Pattern');
+    cache.entities['Threat-Actor-Group'] = mapToCachedOCTIEntity(threatActorGroups, 'Threat-Actor-Group');
+    cache.entities['Threat-Actor-Individual'] = mapToCachedOCTIEntity(threatActorIndividuals, 'Threat-Actor-Individual');
+    cache.entities['Intrusion-Set'] = mapToCachedOCTIEntity(intrusionSets, 'Intrusion-Set');
+    cache.entities['Campaign'] = mapToCachedOCTIEntity(campaigns, 'Campaign');
+    cache.entities['Incident'] = mapToCachedOCTIEntity(incidents, 'Incident');
+    cache.entities['Malware'] = mapToCachedOCTIEntity(malware, 'Malware');
+    cache.entities['Attack-Pattern'] = mapToCachedOCTIEntity(attackPatterns, 'Attack-Pattern');
     // Note: Vulnerabilities are NOT cached - searched in real-time via CVE detection
-    cache.entities['Sector'] = mapToCachedEntity(sectors, 'Sector');
-    cache.entities['Organization'] = mapToCachedEntity(organizations, 'Organization');
-    cache.entities['Individual'] = mapToCachedEntity(individuals, 'Individual');
-    cache.entities['Event'] = mapToCachedEntity(events, 'Event');
-    cache.entities['Country'] = mapToCachedEntity(countries, 'Country');
-    cache.entities['Region'] = mapToCachedEntity(regions, 'Region');
-    cache.entities['City'] = mapToCachedEntity(cities, 'City');
-    cache.entities['Administrative-Area'] = mapToCachedEntity(administrativeAreas, 'Administrative-Area');
-    cache.entities['Position'] = mapToCachedEntity(positions, 'Position');
+    cache.entities['Sector'] = mapToCachedOCTIEntity(sectors, 'Sector');
+    cache.entities['Organization'] = mapToCachedOCTIEntity(organizations, 'Organization');
+    cache.entities['Individual'] = mapToCachedOCTIEntity(individuals, 'Individual');
+    cache.entities['Event'] = mapToCachedOCTIEntity(events, 'Event');
+    cache.entities['Country'] = mapToCachedOCTIEntity(countries, 'Country');
+    cache.entities['Region'] = mapToCachedOCTIEntity(regions, 'Region');
+    cache.entities['City'] = mapToCachedOCTIEntity(cities, 'City');
+    cache.entities['Administrative-Area'] = mapToCachedOCTIEntity(administrativeAreas, 'Administrative-Area');
+    cache.entities['Position'] = mapToCachedOCTIEntity(positions, 'Position');
     
     // Calculate totals
     let total = 0;
@@ -288,7 +288,7 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
 }
 
 /**
- * Force refresh the OpenCTI entity cache for all platforms
+ * Force refresh the OpenCTI cache for all platforms
  */
 export async function refreshOCTICache(): Promise<void> {
   await checkAndRefreshAllOCTICaches(true);
@@ -299,11 +299,11 @@ export async function refreshOCTICache(): Promise<void> {
 // ============================================================================
 
 /**
- * Start periodic OpenAEV entity cache refresh for all platforms
+ * Start periodic OpenAEV cache refresh for all platforms
  * Uses 5-minute interval until all caches are successfully created, then switches to 30 minutes
  */
 export function startOAEVCacheRefresh(): void {
-  log.info('Starting OpenAEV entity cache refresh system...');
+  log.info('Starting OpenAEV cache refresh system...');
   
   // Clear existing interval if any
   if (oaevCacheRefreshInterval) {
@@ -329,7 +329,7 @@ function scheduleNextOAEVCacheRefresh(): void {
   const interval = allOAEVCachesCreatedSuccessfully ? CACHE_REFRESH_INTERVAL : CACHE_RETRY_INTERVAL;
   const intervalMinutes = interval / 60000;
   
-  log.info(`OpenAEV entity cache refresh scheduled (every ${intervalMinutes} minutes${!allOAEVCachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
+  log.info(`OpenAEV cache refresh scheduled (every ${intervalMinutes} minutes${!allOAEVCachesCreatedSuccessfully ? ' - retrying until success' : ''})`);
   
   oaevCacheRefreshInterval = setInterval(async () => {
     await checkAndRefreshAllOAEVCaches();

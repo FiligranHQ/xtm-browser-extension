@@ -10,6 +10,16 @@
 4. Entities are matched against the cached OpenCTI/OpenAEV data
 5. Results are highlighted directly on the page
 
+### Multi-Type Entity Support
+
+When an entity like "Phishing" is found matching multiple types (e.g., both Malware and Attack Pattern) in the same platform, the scan results show:
+- **Stacked icon** with a layers indicator
+- **Combined counts**: "OCTI ×2" instead of separate entries
+- **Tooltip** showing all matched types
+- **Single result** instead of duplicate entries per type
+
+This makes it easy to see entities that exist in multiple forms without cluttering the results.
+
 ### Highlight Indicators
 
 | Color | Icon | Meaning |
@@ -40,7 +50,14 @@ Defanged values are shown with an indicator badge, and the refanged value is use
 
 ## Entity Details Panel
 
-When you click on a highlighted entity, a side panel opens with comprehensive information:
+When you click on a highlighted entity, a side panel opens with comprehensive information.
+
+### Loading State
+
+While fetching entity details from OpenCTI/OpenAEV, a loading spinner replaces the platform logo in the navigation bar. This provides visual feedback during data loading, especially useful for:
+- Initial entity lookup after clicking scan results
+- Navigating between multi-platform or multi-type entities
+- Fetching detailed metadata from platforms
 
 ### Entity Information
 - **Type Badge**: Entity type with icon and color coding
@@ -368,6 +385,19 @@ The extension supports multiple instances of each platform type:
 - **Entity Details**: Results show which platforms contain the entity
 - **Container Creation**: Select target platform for new containers
 - **Cache**: Each platform maintains its own entity cache
+
+### Multi-Platform Navigation
+When an entity exists in multiple platforms, navigation arrows appear in the entity overview:
+- Use **← →** arrows to switch between platforms
+- Each platform view fetches fresh data to ensure accuracy
+- A loading spinner shows while fetching data
+- Navigation arrows are disabled during loading to prevent race conditions
+
+### Multi-Type Navigation
+When an entity exists as multiple types within a single platform (e.g., "Phishing" as both Malware and Attack Pattern in OpenCTI):
+- Results are grouped under a single entry with a "N types" indicator
+- Navigate through all matching types using the same arrow navigation
+- Each type view shows the specific entity details for that type
 
 ## Clear Highlights
 

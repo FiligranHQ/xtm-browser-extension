@@ -7,8 +7,8 @@
 import { loggers } from '../utils/logger';
 import type {
   DetectedObservable,
-  DetectedSDO,
-  DetectedPlatformEntity,
+  DetectedOCTIEntity,
+  DetectedOAEVEntity,
   StixCyberObservable,
   StixDomainObject,
 } from '../types';
@@ -31,7 +31,7 @@ import {
 } from './matching';
 import { OpenCTIClient } from '../api/opencti-client';
 import {
-  getAllCachedEntityNamesForMatching,
+  getAllCachedOCTIEntityNamesForMatching,
   getAllCachedOAEVEntityNamesForMatching,
 } from '../utils/storage';
 
@@ -43,9 +43,9 @@ const log = loggers.detection;
 
 export interface DetectionResult {
   observables: DetectedObservable[];
-  openctiEntities: DetectedSDO[];
-  cves: DetectedSDO[];
-  openaevEntities: DetectedPlatformEntity[];
+  openctiEntities: DetectedOCTIEntity[];
+  cves: DetectedOCTIEntity[];
+  openaevEntities: DetectedOAEVEntity[];
   scanTime: number;
 }
 
@@ -197,8 +197,8 @@ export class DetectionEngine {
   /**
    * Detect CVE references
    */
-  detectCVEs(text: string): DetectedSDO[] {
-    const detected: DetectedSDO[] = [];
+  detectCVEs(text: string): DetectedOCTIEntity[] {
+    const detected: DetectedOCTIEntity[] = [];
     const pattern = new RegExp(CVE_CONFIG.pattern.source, CVE_CONFIG.pattern.flags);
     
     let match;
@@ -219,10 +219,10 @@ export class DetectionEngine {
   }
 
   /**
-   * Search for known entity names in text
+   * Search for known OpenCTI entity names in text
    */
-  async detectSDOs(text: string, entityNames: string[]): Promise<DetectedSDO[]> {
-    const detected: DetectedSDO[] = [];
+  async detectOCTIEntitiesFromNames(text: string, entityNames: string[]): Promise<DetectedOCTIEntity[]> {
+    const detected: DetectedOCTIEntity[] = [];
 
     for (const name of entityNames) {
       // Skip very short names to avoid false positives
@@ -290,10 +290,10 @@ export class DetectionEngine {
   }
 
   /**
-   * Enrich detected SDOs with OpenCTI data (searches ALL platforms)
+   * Enrich detected OpenCTI entities with data from OpenCTI API (searches ALL platforms)
    */
-  async enrichSDOs(sdos: DetectedSDO[]): Promise<DetectedSDO[]> {
-    const uniqueNames = [...new Set(sdos.map((s) => s.name))];
+  async enrichOCTIEntities(entities: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
+    const uniqueNames = [...new Set(entities.map((e) => e.name))];
     const searchResults = new Map<string, Array<{ entity: StixDomainObject; platformId: string }>>();
 
     for (const name of uniqueNames) {
@@ -318,13 +318,13 @@ export class DetectionEngine {
       }
     }
 
-    return sdos.map((sdo) => {
-      const matches = searchResults.get(sdo.name.toLowerCase());
+    return entities.map((entity) => {
+      const matches = searchResults.get(entity.name.toLowerCase());
       if (matches && matches.length > 0) {
         const firstMatch = matches[0];
         return {
-          ...sdo,
-          type: firstMatch.entity.entity_type as DetectedSDO['type'],
+          ...entity,
+          type: firstMatch.entity.entity_type as DetectedOCTIEntity['type'],
           found: true,
           entityId: firstMatch.entity.id,
           entityData: firstMatch.entity,
@@ -336,14 +336,14 @@ export class DetectionEngine {
           })) : undefined,
         };
       }
-      return sdo;
+      return entity;
     });
   }
 
   /**
    * Enrich CVEs with OpenCTI data (searches all platforms)
    */
-  async enrichCVEs(cves: DetectedSDO[]): Promise<DetectedSDO[]> {
+  async enrichCVEs(cves: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
     const uniqueCVEs = [...new Set(cves.map((c) => c.name))];
     const searchResults = new Map<string, { entity: StixDomainObject; platformId: string }>();
 
@@ -377,17 +377,19 @@ export class DetectionEngine {
   }
 
   /**
-   * Detect SDOs using cached entity names
+   * Detect OpenCTI entities using cached entity names
+   * Now supports multiple entities with the same name but different types
+   * (e.g., "Phishing" as both Malware and Attack Pattern)
    */
-  async detectSDOsFromCache(text: string): Promise<DetectedSDO[]> {
-    const detected: DetectedSDO[] = [];
+  async detectOCTIEntitiesFromCache(text: string): Promise<DetectedOCTIEntity[]> {
+    const detected: DetectedOCTIEntity[] = [];
     const seenEntities = new Set<string>();
     const seenRanges = new Set<string>();
     
-    const entityMap = await getAllCachedEntityNamesForMatching();
+    const entityMap = await getAllCachedOCTIEntityNamesForMatching();
     
     if (entityMap.size === 0) {
-      log.debug(' No cached entities available for SDO detection');
+      log.debug('No cached entities available for OpenCTI entity detection');
       return detected;
     }
     
@@ -396,12 +398,9 @@ export class DetectionEngine {
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
     
-    for (const [nameLower, entity] of sortedEntities) {
+    for (const [nameLower, entities] of sortedEntities) {
       // Skip very short names (< 3 chars) to avoid false positives
       if (nameLower.length < 3) continue;
-      
-      // Skip if we already found this entity
-      if (seenEntities.has(entity.id)) continue;
       
       const regex = createMatchingRegex(nameLower);
       
@@ -428,38 +427,46 @@ export class DetectionEngine {
         const rangeKey = createRangeKey(startIndex, endIndex);
         if (hasOverlappingRange(startIndex, endIndex, seenRanges)) continue;
         
-        detected.push({
-          type: entity.type as DetectedSDO['type'],
-          name: entity.name,
-          matchedValue: matchedText !== entity.name ? matchedText : undefined,
-          startIndex,
-          endIndex,
-          found: true,
-          entityId: entity.id,
-          platformId: entity.platformId,
-          entityData: {
-            id: entity.id,
-            entity_type: entity.type,
+        // Add ALL entities with this name (supports multiple types like Malware + Attack Pattern)
+        for (const entity of entities) {
+          // Skip if we already found this specific entity
+          if (seenEntities.has(entity.id)) continue;
+          
+          detected.push({
+            type: entity.type as DetectedOCTIEntity['type'],
             name: entity.name,
-            aliases: entity.aliases,
-          } as unknown as StixDomainObject,
-        });
+            matchedValue: matchedText !== entity.name ? matchedText : undefined,
+            startIndex,
+            endIndex,
+            found: true,
+            entityId: entity.id,
+            platformId: entity.platformId,
+            entityData: {
+              id: entity.id,
+              entity_type: entity.type,
+              name: entity.name,
+              aliases: entity.aliases,
+            } as unknown as StixDomainObject,
+          });
+          
+          seenEntities.add(entity.id);
+        }
         
-        seenEntities.add(entity.id);
         seenRanges.add(rangeKey);
-        break; // Only detect first occurrence per entity
+        break; // Only detect first text occurrence per name
       }
     }
     
-    log.debug(`Found ${detected.length} SDOs from cache`);
+    log.debug(`Found ${detected.length} OpenCTI entities from cache`);
     return detected;
   }
 
   /**
-   * Detect platform entities (OpenAEV, etc.) using cached entity names
+   * Detect OpenAEV entities using cached entity names
+   * Now supports multiple entities with the same name but different types
    */
-  async detectPlatformEntitiesFromCache(text: string): Promise<DetectedPlatformEntity[]> {
-    const detected: DetectedPlatformEntity[] = [];
+  async detectOAEVEntitiesFromCache(text: string): Promise<DetectedOAEVEntity[]> {
+    const detected: DetectedOAEVEntity[] = [];
     const seenEntities = new Set<string>();
     const seenRanges = new Set<string>();
     
@@ -475,12 +482,9 @@ export class DetectionEngine {
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
     
-    for (const [nameLower, entity] of sortedEntities) {
+    for (const [nameLower, entities] of sortedEntities) {
       // Skip very short names (except for MITRE IDs which are 4+ chars)
       if (nameLower.length < 4) continue;
-      
-      // Skip if we already found this entity
-      if (seenEntities.has(entity.id)) continue;
       
       const regex = createMatchingRegex(nameLower);
       
@@ -507,22 +511,29 @@ export class DetectionEngine {
         const rangeKey = createRangeKey(startIndex, endIndex);
         if (hasOverlappingRange(startIndex, endIndex, seenRanges)) continue;
         
-        detected.push({
-          platformType: 'openaev',
-          type: entity.type,
-          name: entity.name,
-          value: matchedText,
-          startIndex,
-          endIndex,
-          found: true,
-          entityId: entity.id,
-          platformId: entity.platformId,
-          entityData: entity,
-        });
+        // Add ALL entities with this name (supports multiple types)
+        for (const entity of entities) {
+          // Skip if we already found this specific entity
+          if (seenEntities.has(entity.id)) continue;
+          
+          detected.push({
+            platformType: 'openaev',
+            type: entity.type,
+            name: entity.name,
+            value: matchedText,
+            startIndex,
+            endIndex,
+            found: true,
+            entityId: entity.id,
+            platformId: entity.platformId,
+            entityData: entity,
+          });
+          
+          seenEntities.add(entity.id);
+        }
         
-        seenEntities.add(entity.id);
         seenRanges.add(rangeKey);
-        break; // Only detect first occurrence per entity
+        break; // Only detect first text occurrence per name
       }
     }
     
@@ -542,25 +553,25 @@ export class DetectionEngine {
     // Detect CVEs
     const cves = this.detectCVEs(text);
     
-    // Detect SDOs from cache first (fast, offline)
-    const cachedSDOs = await this.detectSDOsFromCache(text);
+    // Detect OpenCTI entities from cache first (fast, offline)
+    const cachedOCTIEntities = await this.detectOCTIEntitiesFromCache(text);
     
     // Detect OpenAEV entities from cache
-    const openaevEntities = await this.detectPlatformEntitiesFromCache(text);
+    const openaevEntities = await this.detectOAEVEntitiesFromCache(text);
     
     // Also detect from provided entity names (fallback/additional)
-    let additionalSDOs: DetectedSDO[] = [];
+    let additionalOCTIEntities: DetectedOCTIEntity[] = [];
     if (knownEntityNames.length > 0) {
-      additionalSDOs = await this.detectSDOs(text, knownEntityNames);
+      additionalOCTIEntities = await this.detectOCTIEntitiesFromNames(text, knownEntityNames);
     }
     
-    // Merge SDOs, preferring cached ones
-    const allSDOs = [...cachedSDOs];
-    const seenNames = new Set(cachedSDOs.map(s => s.name.toLowerCase()));
-    for (const sdo of additionalSDOs) {
-      if (!seenNames.has(sdo.name.toLowerCase())) {
-        allSDOs.push(sdo);
-        seenNames.add(sdo.name.toLowerCase());
+    // Merge OCTI entities, preferring cached ones
+    const allOCTIEntities = [...cachedOCTIEntities];
+    const seenNames = new Set(cachedOCTIEntities.map(e => e.name.toLowerCase()));
+    for (const entity of additionalOCTIEntities) {
+      if (!seenNames.has(entity.name.toLowerCase())) {
+        allOCTIEntities.push(entity);
+        seenNames.add(entity.name.toLowerCase());
       }
     }
 
@@ -570,24 +581,24 @@ export class DetectionEngine {
       this.enrichCVEs(cves),
     ]);
     
-    // For SDOs not from cache, enrich them
-    const sdosToEnrich = allSDOs.filter(s => !s.found);
-    const enrichedSDOsFromAPI = sdosToEnrich.length > 0 
-      ? await this.enrichSDOs(sdosToEnrich)
+    // For OCTI entities not from cache, enrich them
+    const octiEntitiesToEnrich = allOCTIEntities.filter(e => !e.found);
+    const enrichedOCTIEntitiesFromAPI = octiEntitiesToEnrich.length > 0 
+      ? await this.enrichOCTIEntities(octiEntitiesToEnrich)
       : [];
     
-    // Merge all SDOs
-    const finalSDOs = allSDOs.map(sdo => {
-      if (sdo.found) return sdo;
-      const enriched = enrichedSDOsFromAPI.find(e => e.name.toLowerCase() === sdo.name.toLowerCase());
-      return enriched || sdo;
+    // Merge all OCTI entities
+    const finalOCTIEntities = allOCTIEntities.map(entity => {
+      if (entity.found) return entity;
+      const enriched = enrichedOCTIEntitiesFromAPI.find(e => e.name.toLowerCase() === entity.name.toLowerCase());
+      return enriched || entity;
     });
 
     const scanTime = performance.now() - startTime;
 
     return {
       observables: enrichedObservables,
-      openctiEntities: finalSDOs,
+      openctiEntities: finalOCTIEntities,
       cves: enrichedCVEs,
       openaevEntities,
       scanTime,

@@ -106,7 +106,7 @@ interface EntityNamesCache {
 /**
  * Get cached entity names
  */
-export async function getCachedEntityNames(): Promise<string[]> {
+export async function getCachedOCTIEntityNames(): Promise<string[]> {
   const result = await chrome.storage.local.get('entityNames');
   const cache = result.entityNames as EntityNamesCache | undefined;
   
@@ -132,10 +132,10 @@ export async function cacheEntityNames(names: string[]): Promise<void> {
 }
 
 // ============================================================================
-// OpenCTI Entity Cache - Structured Entity Cache (Per-Platform)
+// OpenCTI Cache (Per-Platform)
 // ============================================================================
 
-export interface CachedEntity {
+export interface CachedOCTIEntity {
   id: string;
   name: string;
   aliases?: string[];
@@ -169,24 +169,24 @@ export interface OCTIEntityCache {
   lastRefresh: number;
   platformId: string;
   entities: {
-    'Threat-Actor-Group': CachedEntity[];
-    'Threat-Actor-Individual': CachedEntity[];
-    'Intrusion-Set': CachedEntity[];
-    'Campaign': CachedEntity[];
-    'Incident': CachedEntity[];
-    'Malware': CachedEntity[];
-    'Attack-Pattern': CachedEntity[];
+    'Threat-Actor-Group': CachedOCTIEntity[];
+    'Threat-Actor-Individual': CachedOCTIEntity[];
+    'Intrusion-Set': CachedOCTIEntity[];
+    'Campaign': CachedOCTIEntity[];
+    'Incident': CachedOCTIEntity[];
+    'Malware': CachedOCTIEntity[];
+    'Attack-Pattern': CachedOCTIEntity[];
     // Note: Vulnerability/CVE is NOT cached - searched in real-time
-    'Sector': CachedEntity[];
-    'Organization': CachedEntity[];
-    'Individual': CachedEntity[];
-    'Event': CachedEntity[];
+    'Sector': CachedOCTIEntity[];
+    'Organization': CachedOCTIEntity[];
+    'Individual': CachedOCTIEntity[];
+    'Event': CachedOCTIEntity[];
     // Location types separated
-    'Country': CachedEntity[];
-    'Region': CachedEntity[];
-    'City': CachedEntity[];
-    'Administrative-Area': CachedEntity[];
-    'Position': CachedEntity[];
+    'Country': CachedOCTIEntity[];
+    'Region': CachedOCTIEntity[];
+    'City': CachedOCTIEntity[];
+    'Administrative-Area': CachedOCTIEntity[];
+    'Position': CachedOCTIEntity[];
   };
 }
 
@@ -200,7 +200,7 @@ const OCTI_CACHE_DURATION = 60 * 60 * 1000; // 1 hour default
 const OCTI_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Get the full multi-platform OpenCTI entity cache
+ * Get the full multi-platform OpenCTI cache
  */
 export async function getMultiPlatformOCTICache(): Promise<MultiPlatformOCTICache> {
   const result = await chrome.storage.local.get(OCTI_CACHE_KEY);
@@ -212,7 +212,7 @@ export async function getMultiPlatformOCTICache(): Promise<MultiPlatformOCTICach
 }
 
 /**
- * Get OpenCTI entity cache for a specific platform
+ * Get OpenCTI cache for a specific platform
  */
 export async function getOCTICache(platformId?: string): Promise<OCTIEntityCache | null> {
   const multiCache = await getMultiPlatformOCTICache();
@@ -228,7 +228,7 @@ export async function getOCTICache(platformId?: string): Promise<OCTIEntityCache
 }
 
 /**
- * Check if OpenCTI entity cache is expired for a platform
+ * Check if OpenCTI cache is expired for a platform
  */
 export async function isOCTICacheExpired(platformId?: string): Promise<boolean> {
   const cache = await getOCTICache(platformId);
@@ -238,7 +238,7 @@ export async function isOCTICacheExpired(platformId?: string): Promise<boolean> 
 }
 
 /**
- * Check if OpenCTI entity cache needs refresh for a platform
+ * Check if OpenCTI cache needs refresh for a platform
  */
 export async function shouldRefreshOCTICache(platformId?: string): Promise<boolean> {
   const cache = await getOCTICache(platformId);
@@ -248,7 +248,7 @@ export async function shouldRefreshOCTICache(platformId?: string): Promise<boole
 }
 
 /**
- * Save OpenCTI entity cache for a specific platform
+ * Save OpenCTI cache for a specific platform
  */
 export async function saveOCTICache(cache: OCTIEntityCache, platformId: string): Promise<void> {
   const multiCache = await getMultiPlatformOCTICache();
@@ -258,11 +258,11 @@ export async function saveOCTICache(cache: OCTIEntityCache, platformId: string):
 }
 
 /**
- * Update OpenCTI entity cache for a specific entity type on a platform
+ * Update OpenCTI cache for a specific entity type on a platform
  */
 export async function updateOCTICacheForType(
   entityType: keyof OCTIEntityCache['entities'],
-  entities: CachedEntity[],
+  entities: CachedOCTIEntity[],
   platformId: string
 ): Promise<void> {
   let cache = await getOCTICache(platformId);
@@ -278,11 +278,11 @@ export async function updateOCTICacheForType(
 }
 
 /**
- * Add a single entity to the OpenCTI entity cache for a specific platform
+ * Add a single entity to the OpenCTI cache for a specific platform
  * This is used when creating new entities to avoid needing a full cache refresh
  */
 export async function addEntityToOCTICache(
-  entity: CachedEntity,
+  entity: CachedOCTIEntity,
   platformId: string
 ): Promise<void> {
   let cache = await getOCTICache(platformId);
@@ -314,7 +314,7 @@ export async function addEntityToOCTICache(
 }
 
 /**
- * Create empty OpenCTI entity cache structure
+ * Create empty OpenCTI cache structure
  */
 export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntityCache {
   return {
@@ -345,10 +345,25 @@ export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntity
 /**
  * Get all entity names and aliases for matching from ALL platforms (merged)
  * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
+ * Returns an array of entities per name to support entities with the same name but different types
+ * (e.g., "Phishing" as both Malware and Attack Pattern)
  */
-export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, CachedEntity>> {
+export async function getAllCachedOCTIEntityNamesForMatching(): Promise<Map<string, CachedOCTIEntity[]>> {
   const multiCache = await getMultiPlatformOCTICache();
-  const nameMap = new Map<string, CachedEntity>();
+  const nameMap = new Map<string, CachedOCTIEntity[]>();
+  
+  // Helper to add entity to map
+  const addToMap = (key: string, entity: CachedOCTIEntity) => {
+    const existing = nameMap.get(key);
+    if (existing) {
+      // Only add if not already in the array (by id)
+      if (!existing.some(e => e.id === entity.id)) {
+        existing.push(entity);
+      }
+    } else {
+      nameMap.set(key, [entity]);
+    }
+  };
   
   // Merge entities from all platforms
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
@@ -358,7 +373,7 @@ export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, 
         const entityWithPlatform = { ...entity, platformId };
         const nameLower = entity.name.toLowerCase();
         if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          nameMap.set(nameLower, entityWithPlatform);
+          addToMap(nameLower, entityWithPlatform);
         }
         
         // Add aliases (only if long enough and not excluded)
@@ -366,7 +381,7 @@ export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, 
           for (const alias of entity.aliases) {
             const aliasLower = alias.toLowerCase();
             if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              nameMap.set(aliasLower, entityWithPlatform);
+              addToMap(aliasLower, entityWithPlatform);
             }
           }
         }
@@ -374,7 +389,7 @@ export async function getAllCachedEntityNamesForMatching(): Promise<Map<string, 
         // Add x_mitre_id for attack patterns (e.g., T1059, T1059.001)
         // These are short but specific identifiers, so we include them regardless of length
         if (entity.x_mitre_id) {
-          nameMap.set(entity.x_mitre_id.toLowerCase(), entityWithPlatform);
+          addToMap(entity.x_mitre_id.toLowerCase(), entityWithPlatform);
         }
       }
     }
@@ -444,7 +459,7 @@ export async function getOCTICacheStats(platformId?: string): Promise<{
 }
 
 /**
- * Clear OpenCTI entity cache for a specific platform
+ * Clear OpenCTI cache for a specific platform
  */
 export async function clearOCTICacheForPlatform(platformId: string): Promise<void> {
   const multiCache = await getMultiPlatformOCTICache();
@@ -453,14 +468,14 @@ export async function clearOCTICacheForPlatform(platformId: string): Promise<voi
 }
 
 /**
- * Clear all OpenCTI entity caches
+ * Clear all OpenCTI caches
  */
 export async function clearAllOCTICaches(): Promise<void> {
   await chrome.storage.local.set({ [OCTI_CACHE_KEY]: { platforms: {} } });
 }
 
 /**
- * Clean up OpenCTI entity caches for platforms that no longer exist in settings
+ * Clean up OpenCTI caches for platforms that no longer exist in settings
  */
 export async function cleanupOrphanedOCTICaches(validPlatformIds: string[]): Promise<void> {
   const multiCache = await getMultiPlatformOCTICache();
@@ -480,7 +495,7 @@ export async function cleanupOrphanedOCTICaches(validPlatformIds: string[]): Pro
 }
 
 // ============================================================================
-// OpenAEV Cache - Structured Entity Cache (Per-Platform)
+// OpenAEV Cache (Per-Platform)
 // ============================================================================
 
 export interface CachedOAEVEntity {
@@ -585,9 +600,22 @@ export function createEmptyOAEVCache(platformId: string = 'default'): OAEVCache 
  * Get all OpenAEV entity names for matching from ALL platforms (merged)
  * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
  */
-export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<string, CachedOAEVEntity>> {
+export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<string, CachedOAEVEntity[]>> {
   const multiCache = await getMultiPlatformOAEVCache();
-  const nameMap = new Map<string, CachedOAEVEntity>();
+  const nameMap = new Map<string, CachedOAEVEntity[]>();
+  
+  // Helper to add entity to map
+  const addToMap = (key: string, entity: CachedOAEVEntity) => {
+    const existing = nameMap.get(key);
+    if (existing) {
+      // Only add if not already in the array (by id)
+      if (!existing.some(e => e.id === entity.id)) {
+        existing.push(entity);
+      }
+    } else {
+      nameMap.set(key, [entity]);
+    }
+  };
   
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
     for (const entityType of Object.keys(cache.entities) as Array<keyof OAEVCache['entities']>) {
@@ -596,7 +624,7 @@ export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<stri
         // Add main name (only if long enough and not excluded)
         const nameLower = entity.name.toLowerCase();
         if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          nameMap.set(nameLower, entityWithPlatform);
+          addToMap(nameLower, entityWithPlatform);
         }
         
         // Add aliases (hostnames, IPs) - only if long enough and not excluded
@@ -604,7 +632,7 @@ export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<stri
           for (const alias of entity.aliases) {
             const aliasLower = alias.toLowerCase();
             if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              nameMap.set(aliasLower, entityWithPlatform);
+              addToMap(aliasLower, entityWithPlatform);
             }
           }
         }

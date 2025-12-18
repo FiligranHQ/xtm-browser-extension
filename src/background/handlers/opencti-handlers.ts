@@ -15,7 +15,7 @@ import {
   getPrimaryOpenCTIClient,
   hasOpenCTIClients,
 } from '../services/client-manager';
-import { addEntityToOCTICache, type CachedEntity } from '../../shared/utils/storage';
+import { addEntityToOCTICache, type CachedOCTIEntity } from '../../shared/utils/storage';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
 import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
@@ -254,7 +254,7 @@ export const handleCreateObservablesBulk: MessageHandler = async (payload, sendR
 
         // Add created entities to cache
         if (created?.id && created?.entity_type && CACHEABLE_OPENCTI_TYPES.includes(created.entity_type)) {
-          const cachedEntity: CachedEntity = {
+          const cachedEntity: CachedOCTIEntity = {
             id: created.id,
             name: created.name || name || '',
             aliases: created.aliases,

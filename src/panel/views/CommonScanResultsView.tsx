@@ -30,6 +30,7 @@ import {
   AutoAwesomeOutlined,
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
+  LayersOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -37,7 +38,7 @@ import type { ScanResultsViewProps } from '../types/view-props';
 import type { ScanResultEntity, EntityData, MultiPlatformResult } from '../types';
 import { loggers } from '../../shared/utils/logger';
 import { generateDescription, cleanHtmlContent, getAiColor } from '../utils';
-import { isDefaultPlatform } from '../../shared/platform/registry';
+import { isDefaultPlatform, getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
 
 const log = loggers.panel;
 
@@ -57,6 +58,23 @@ const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
     return entity.platformType === 'opencti' || !entity.platformType;
   }
   return false;
+};
+
+// Get unique types from platform matches for multi-type display
+// Uses cross-platform type mapping to deduplicate equivalent types (e.g., OCTI Attack-Pattern and OAEV AttackPattern)
+const getUniqueTypesFromMatches = (entity: ScanResultEntity): { types: string[]; hasMultipleTypes: boolean } => {
+  if (!entity.platformMatches || entity.platformMatches.length === 0) {
+    return { types: [getCanonicalTypeName(entity.type)], hasMultipleTypes: false };
+  }
+  // Get all types and deduplicate using cross-platform mapping
+  const allTypes = entity.platformMatches.map(pm => pm.type);
+  const uniqueCanonicalTypes = getUniqueCanonicalTypes(allTypes);
+  return { types: uniqueCanonicalTypes, hasMultipleTypes: uniqueCanonicalTypes.length > 1 };
+};
+
+// Format type name for display - uses canonical type name for cross-platform consistency
+const formatTypeName = (type: string): string => {
+  return getCanonicalTypeName(type);
 };
 
 interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showToast' | 'entitiesToAdd' | 'setContainerWorkflowOrigin'> {
@@ -80,6 +98,10 @@ interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showT
   setCurrentPageTitle: (title: string) => void;
   /** Logo suffix based on theme */
   logoSuffix: string;
+  /** Loading entity details state */
+  entityDetailsLoading?: boolean;
+  /** Set loading entity details state */
+  setEntityDetailsLoading?: (loading: boolean) => void;
 }
 
 export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
@@ -111,6 +133,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   setCurrentPageUrl,
   setCurrentPageTitle,
   scanPageContent,
+  setEntityDetailsLoading,
 }) => {
   // Local state for search query
   const [searchQuery, setSearchQuery] = useState('');
@@ -257,6 +280,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       
       if (entityId && platformId) {
         try {
+          // Set loading state
+          setEntityDetailsLoading?.(true);
+          
           // Fetch full entity details from platform
           chrome.runtime.sendMessage({
             type: 'GET_ENTITY_DETAILS',
@@ -269,6 +295,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           }, (response) => {
             if (chrome.runtime.lastError) {
               log.debug('Entity details fetch error:', chrome.runtime.lastError);
+              setEntityDetailsLoading?.(false);
               return;
             }
             
@@ -302,9 +329,11 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             } else {
               log.debug('Entity details fetch failed or no data:', response?.error);
             }
+            setEntityDetailsLoading?.(false);
           });
         } catch (error) {
           log.debug('Failed to fetch entity details:', error);
+          setEntityDetailsLoading?.(false);
         }
       }
     }
@@ -789,11 +818,12 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           <Box sx={{ flex: 1, overflow: 'auto' }}>
             {filteredScanResultsEntities.map((entity, index) => {
               const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
-              const displayType = entity.type.replace('oaev-', '');
+              const { types: uniqueTypes, hasMultipleTypes } = getUniqueTypesFromMatches(entity);
+              const primaryType = uniqueTypes[0] || entity.type;
+              const displayType = formatTypeName(primaryType);
 
               const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
               const oaevCount = entity.platformMatches?.filter(pm => pm.platformType === 'openaev').length || 0;
-              const hasMultiplePlatforms = (entity.platformMatches?.length || 0) > 1;
 
               const entityValue = entity.value || entity.name;
               const isSelected = selectedScanItems.has(entityValue);
@@ -801,6 +831,11 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               const borderColor = entity.discoveredByAI
                 ? aiColors.main
                 : (entity.found ? 'success.main' : 'warning.main');
+
+              // Build tooltip content for multi-type entities
+              const multiTypeTooltip = hasMultipleTypes
+                ? `Multiple types: ${uniqueTypes.map(t => formatTypeName(t)).join(', ')}`
+                : '';
 
               return (
                 <Paper
@@ -811,8 +846,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
-                    p: 1.5,
-                    mb: 1,
+                    p: 1,
+                    mb: 0.75,
                     bgcolor: isSelected
                       ? hexToRGB('#1976d2', 0.08)
                       : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.05) : 'background.paper'),
@@ -821,7 +856,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                     borderRadius: 1,
                     cursor: 'pointer',
                     transition: 'all 0.15s',
-                    borderLeftWidth: 4,
+                    borderLeftWidth: 3,
                     '&:hover': {
                       bgcolor: isSelected
                         ? hexToRGB('#1976d2', 0.12)
@@ -847,26 +882,63 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                       }}
                       size="small"
                       sx={{
-                        p: 0.5,
-                        mr: 0.5,
+                        p: 0.25,
                         '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : (isFoundInOpenCTI(entity) ? 'success.main' : 'primary.main') },
                       }}
                     />
                   )}
-                  <ItemIcon type={entity.type} size="small" color={entityColor} />
+                  {/* Entity icon - show stacked icon for multi-type */}
+                  {hasMultipleTypes ? (
+                    <Tooltip title={multiTypeTooltip} placement="top">
+                      <Box sx={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ItemIcon type={primaryType} size="small" color={entityColor} />
+                        <LayersOutlined 
+                          sx={{ 
+                            position: 'absolute', 
+                            bottom: -2, 
+                            right: -4, 
+                            fontSize: 12, 
+                            color: 'primary.main',
+                            bgcolor: 'background.paper',
+                            borderRadius: '50%',
+                          }} 
+                        />
+                      </Box>
+                    </Tooltip>
+                  ) : (
+                    <ItemIcon type={entity.type} size="small" color={entityColor} />
+                  )}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word', fontSize: '0.85rem' }}>
                       {entity.name || entity.value}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                      <Typography variant="caption" sx={{ color: entity.discoveredByAI ? aiColors.main : 'text.secondary' }}>
-                        {displayType.replace(/-/g, ' ')}
-                      </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
+                      {/* Type display - compact for multi-type */}
+                      {hasMultipleTypes ? (
+                        <Tooltip title={multiTypeTooltip} placement="top">
+                          <Chip
+                            icon={<LayersOutlined sx={{ fontSize: '0.65rem !important' }} />}
+                            label={`${uniqueTypes.length} types`}
+                            size="small"
+                            color="primary"
+                            sx={{
+                              height: 16,
+                              fontSize: '0.6rem',
+                              '& .MuiChip-label': { px: 0.5 },
+                              '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+                            }}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: entity.discoveredByAI ? aiColors.main : 'text.secondary', fontSize: '0.7rem' }}>
+                          {displayType}
+                        </Typography>
+                      )}
                       {/* Show AI indicator for AI-discovered entities */}
                       {entity.discoveredByAI && (
                         <Tooltip title={entity.aiReason || 'Detected by AI analysis'} placement="top">
                           <Chip
-                            icon={<AutoAwesomeOutlined sx={{ fontSize: '0.7rem !important' }} />}
+                            icon={<AutoAwesomeOutlined sx={{ fontSize: '0.65rem !important' }} />}
                             label="AI"
                             size="small"
                             sx={{
@@ -874,42 +946,44 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                               fontSize: '0.6rem',
                               bgcolor: hexToRGB(aiColors.main, 0.2),
                               color: aiColors.main,
-                              '& .MuiChip-label': { px: 0.5 },
-                              '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+                              '& .MuiChip-label': { px: 0.4 },
+                              '& .MuiChip-icon': { ml: 0.4, mr: -0.25 },
                             }}
                           />
                         </Tooltip>
                       )}
-                      {/* Show platform counts */}
+                      {/* Show compact platform badges */}
                       {!entity.discoveredByAI && (octiCount > 0 || oaevCount > 0) && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.5 }}>
+                        <>
                           {octiCount > 0 && (
                             <Chip
-                              label={`OCTI${hasMultiplePlatforms ? ` (${octiCount})` : ''}`}
+                              label={octiCount > 1 ? `OCTI ×${octiCount}` : 'OCTI'}
                               size="small"
                               sx={{
                                 height: 16,
                                 fontSize: '0.6rem',
-                                bgcolor: hexToRGB('#ff9800', 0.2),
-                                color: '#ff9800',
-                                '& .MuiChip-label': { px: 0.75 },
+                                bgcolor: hexToRGB('#5c6bc0', 0.15),
+                                color: '#5c6bc0',
+                                fontWeight: octiCount > 1 ? 600 : 400,
+                                '& .MuiChip-label': { px: 0.5 },
                               }}
                             />
                           )}
                           {oaevCount > 0 && (
                             <Chip
-                              label={`OAEV${hasMultiplePlatforms ? ` (${oaevCount})` : ''}`}
+                              label={oaevCount > 1 ? `OAEV ×${oaevCount}` : 'OAEV'}
                               size="small"
                               sx={{
                                 height: 16,
                                 fontSize: '0.6rem',
-                                bgcolor: hexToRGB('#00bcd4', 0.2),
-                                color: '#00bcd4',
-                                '& .MuiChip-label': { px: 0.75 },
+                                bgcolor: hexToRGB('#e91e63', 0.15),
+                                color: '#e91e63',
+                                fontWeight: oaevCount > 1 ? 600 : 400,
+                                '& .MuiChip-label': { px: 0.5 },
                               }}
                             />
                           )}
-                        </Box>
+                        </>
                       )}
                     </Box>
                   </Box>

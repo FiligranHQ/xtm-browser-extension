@@ -97,7 +97,7 @@ const OPENCTI_DEFINITION: PlatformDefinition = {
   shortName: 'OCTI',
   fullName: 'OpenCTI',
   tagline: 'Cyber Threat Intelligence',
-  primaryColor: '#00bcd4', // Cyan
+  primaryColor: '#5c6bc0', // Indigo (distinct from green=found, amber=new)
   secondaryColor: '#001e3c',
   logoSuffix: 'opencti',
   settingsKey: 'openctiPlatforms',
@@ -164,7 +164,7 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
   shortName: 'OAEV',
   fullName: 'OpenAEV',
   tagline: 'Adversarial Exposure Validation',
-  primaryColor: '#9c27b0', // Purple
+  primaryColor: '#e91e63', // Pink (distinct from primary blue)
   secondaryColor: '#4a148c',
   logoSuffix: 'openaev',
   settingsKey: 'openaevPlatforms',
@@ -439,9 +439,9 @@ export function getPlatformActionColor(platformType: PlatformType, actionType: '
   
   switch (actionType) {
     case 'scan':
-      return '#00bcd4'; // Cyan for scan across all platforms
+      return '#2196f3'; // Blue for scan across all platforms
     case 'search':
-      return '#9c27b0'; // Purple for search across all platforms
+      return '#7c4dff'; // Deep purple for search across all platforms
     case 'primary':
       return definition.primaryColor;
     case 'secondary':
@@ -533,4 +533,79 @@ export function inferPlatformTypeFromEntityType(entityType: string | undefined):
     }
   }
   return 'opencti';
+}
+
+// ============================================================================
+// Cross-Platform Type Mapping
+// ============================================================================
+// Defines equivalent types across platforms. When the same concept exists
+// in multiple platforms (e.g., Attack Pattern in both OpenCTI and OpenAEV),
+// they are mapped here for deduplication in multi-type displays.
+// ============================================================================
+
+/**
+ * Cross-platform type equivalence mapping.
+ * Key: canonical display name (used for deduplication)
+ * Value: array of equivalent types across platforms (normalized to lowercase)
+ * 
+ * When adding new platform integrations, add mappings here for types
+ * that represent the same concept across platforms.
+ */
+export const CROSS_PLATFORM_TYPE_MAPPINGS: Record<string, string[]> = {
+  // Attack Pattern exists in both OpenCTI (Attack-Pattern) and OpenAEV (AttackPattern)
+  'Attack Pattern': ['attack-pattern', 'attackpattern', 'oaev-attackpattern'],
+  
+  // Organization exists in both platforms
+  'Organization': ['organization', 'oaev-organization'],
+  
+  // Future mappings can be added here as more types become shared across platforms
+  // Example: 'Vulnerability': ['vulnerability', 'oaev-vulnerability'],
+};
+
+/**
+ * Normalize a type string for comparison (lowercase, remove prefix)
+ */
+export function normalizeTypeForComparison(type: string): string {
+  return type.toLowerCase().replace('oaev-', '');
+}
+
+/**
+ * Get the canonical display name for a type, considering cross-platform equivalents.
+ * Returns the canonical name if found in mappings, otherwise formats the original type.
+ */
+export function getCanonicalTypeName(type: string): string {
+  const normalizedType = normalizeTypeForComparison(type);
+  
+  for (const [canonicalName, equivalentTypes] of Object.entries(CROSS_PLATFORM_TYPE_MAPPINGS)) {
+    if (equivalentTypes.some(t => normalizeTypeForComparison(t) === normalizedType)) {
+      return canonicalName;
+    }
+  }
+  
+  // Fallback: format the type name for display
+  return type
+    .replace('oaev-', '')
+    .replace(/-/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+
+/**
+ * Get unique canonical types from a list of types, deduplicating cross-platform equivalents.
+ * Returns an array of canonical type names.
+ */
+export function getUniqueCanonicalTypes(types: string[]): string[] {
+  const canonicalTypes = new Set<string>();
+  
+  for (const type of types) {
+    canonicalTypes.add(getCanonicalTypeName(type));
+  }
+  
+  return Array.from(canonicalTypes);
+}
+
+/**
+ * Check if two types are equivalent across platforms.
+ */
+export function areTypesEquivalent(type1: string, type2: string): boolean {
+  return getCanonicalTypeName(type1) === getCanonicalTypeName(type2);
 }

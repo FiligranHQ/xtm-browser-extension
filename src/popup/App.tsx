@@ -223,7 +223,7 @@ const App: React.FC = () => {
                 subtitle="Find entities across all platforms"
                 tooltip="Scan page for entities in OpenCTI and OpenAEV"
                 onClick={handleUnifiedScan}
-                color="#00bcd4"
+                color="#2196f3"
                 compact
               />
               <ActionButton
@@ -232,7 +232,7 @@ const App: React.FC = () => {
                 subtitle="Query all platforms"
                 tooltip="Search across OpenCTI and OpenAEV"
                 onClick={handleUnifiedSearch}
-                color="#9c27b0"
+                color="#7c4dff"
                 disabled={!hasOpenCTI && !hasOpenAEV}
                 compact
               />
@@ -280,7 +280,7 @@ const App: React.FC = () => {
                 subtitle="Start an investigation"
                 tooltip="Start investigation with entities"
                 onClick={handleInvestigate}
-                color="#ff9800"
+                color="#5c6bc0"
                 disabled={!hasOpenCTI}
                 compact
               />

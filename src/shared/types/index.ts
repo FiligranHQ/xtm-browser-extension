@@ -214,11 +214,8 @@ export interface DetectedOCTIEntity {
   platformMatches?: PlatformMatch[];
 }
 
-/** Type alias for DetectedOCTIEntity (STIX Domain Object) */
-export type DetectedSDO = DetectedOCTIEntity;
-
 // ============================================================================
-// Platform-Specific Entity Types
+// OpenAEV Entity Types
 // ============================================================================
 
 /**
@@ -309,7 +306,7 @@ export interface OAEVFinding {
  * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenGRC)
  * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
  */
-export interface DetectedPlatformEntity {
+export interface DetectedOAEVEntity {
   /** Entity type with platform prefix (e.g., 'oaev-Asset') */
   type: string;
   /** Display name of the entity */
@@ -826,7 +823,7 @@ export interface ScanResultPayload {
   /** CVEs (Vulnerabilities) - separate array for special handling */
   cves?: DetectedOCTIEntity[];
   /** OpenAEV Types detected (Assets, Teams, Players, etc.) */
-  openaevEntities?: DetectedPlatformEntity[];
+  openaevEntities?: DetectedOAEVEntity[];
   scanTime: number;
   url: string;
 }
@@ -838,7 +835,7 @@ export interface ShowEntityPanelPayload {
    * 'platform' is for any non-default platform (identified by entity type prefix)
    */
   entityType: 'observable' | 'octi' | 'platform';
-  entity: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
+  entity: DetectedObservable | DetectedOCTIEntity | DetectedOAEVEntity;
 }
 
 export interface AddObservablePayload {
@@ -872,7 +869,7 @@ export interface ScanState {
 
 export interface PanelState {
   isOpen: boolean;
-  entity?: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
+  entity?: DetectedObservable | DetectedOCTIEntity | DetectedOAEVEntity;
   entityDetails?: StixCyberObservable | StixDomainObject | OAEVAsset;
   loading: boolean;
 }

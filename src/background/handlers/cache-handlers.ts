@@ -2,7 +2,7 @@
  * Cache Management Message Handlers
  * 
  * Handles messages related to cache operations:
- * - OpenCTI entity cache clearing
+ * - OpenCTI cache clearing
  * - OpenAEV cache clearing
  * 
  * Note: REFRESH_CACHE and GET_CACHE_STATS are handled directly in background/index.ts
@@ -21,7 +21,7 @@ import { loggers } from '../../shared/utils/logger';
 const log = loggers.background;
 
 /**
- * Clear OpenCTI entity cache handler
+ * Clear OpenCTI cache handler
  */
 export const handleClearOCTICache: MessageHandler = async (payload, sendResponse) => {
   const { platformId } = (payload as { platformId?: string }) || {};

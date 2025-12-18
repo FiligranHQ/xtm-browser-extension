@@ -59,14 +59,14 @@ The extension follows a standard browser extension architecture with four main c
 
 The background service worker is the central hub that:
 - Manages API clients for OpenCTI and OpenAEV
-- Handles entity caching (SDO cache for fast lookups)
+- Handles entity caching (OpenCTI/OpenAEV entity cache for fast lookups)
 - Processes all inter-component messages
 - Manages context menus
 
 **Structure:**
 ```
 src/background/
-├── index.ts                 # Main entry point, client initialization, cache management
+├── index.ts                 # Main entry point, client initialization
 ├── handlers/                # Message handlers split by domain
 │   ├── index.ts            # Handler registry and exports
 │   ├── types.ts            # Handler type definitions
@@ -78,13 +78,14 @@ src/background/
 │   ├── scan-handlers.ts    # Page scanning handlers
 │   └── settings-handlers.ts # Settings management handlers
 └── services/
+    ├── cache-manager.ts    # Entity cache management (OpenCTI & OpenAEV)
     ├── client-manager.ts   # API client lifecycle management
     └── message-dispatcher.ts # Centralized message routing
 ```
 
 **Key State:**
 - `platformClients` - Registry of OpenCTI and OpenAEV client instances
-- `sdoCache` - Cached SDO entities per platform for fast detection
+- `octiCache` - Cached OpenCTI entities per platform for fast detection
 - `oaevCache` - Cached OpenAEV entities (attack patterns, assets, etc.)
 
 ### 2. Content Script (`src/content/`)
@@ -316,18 +317,19 @@ const platformClients: {
   openaev: Map<string, OpenAEVClient>
 }
 
-// SDO Cache (for fast detection) - stored in chrome.storage.local per platform
-interface SDOCache {
+// OpenCTI Entity Cache (for fast detection) - stored in chrome.storage.local per platform
+interface OCTIEntityCache {
   [platformId: string]: {
     lastRefresh: number;
-    entities: CachedEntity[];
+    entities: CachedOCTIEntity[];
   }
 }
 
-// OpenAEV Cache (attack patterns, tags, kill chain phases)
-interface OAEVCache {
+// OpenAEV Entity Cache (attack patterns, assets, tags, kill chain phases)
+interface OAEVEntityCache {
   [platformId: string]: {
     attackPatterns: Map<string, AttackPattern>;
+    assets: Map<string, Asset>;
     tags: Map<string, Tag>;
     killChainPhases: Map<string, KillChainPhase>;
   }
@@ -612,9 +614,10 @@ The panel operates as a state machine with the following modes and transitions:
 **Cache Operations:**
 | Message Type | Direction | Description |
 |--------------|-----------|-------------|
-| `REFRESH_SDO_CACHE` | Any → BG | Refresh entity cache |
-| `GET_SDO_CACHE_STATS` | Any → BG | Get cache statistics |
-| `CLEAR_SDO_CACHE` | Options → BG | Clear platform cache |
+| `REFRESH_OCTI_CACHE` | Any → BG | Refresh OpenCTI entity cache |
+| `REFRESH_OAEV_CACHE` | Any → BG | Refresh OpenAEV entity cache |
+| `GET_CACHE_STATS` | Any → BG | Get cache statistics |
+| `CLEAR_CACHE` | Options → BG | Clear platform cache |
 
 **Panel Communication:**
 | Message Type | Direction | Description |
@@ -861,19 +864,19 @@ User clicks "Discover more with AI"
 └─────────────────────────────┘
 ```
 
-### 6. SDO Cache Refresh Workflow
+### 6. Entity Cache Refresh Workflow
 
 ```
 ┌─────────────────────────────────┐
 │ Background: On startup or timer │
-│ checkAndRefreshAllSDOCaches()   │
+│ CacheManager.refreshAllCaches() │
 └────────┬────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────┐
 │ For each OpenCTI platform:      │
 │ - Check cache age               │
-│ - If stale, fetch bulk SDOs     │
+│ - If stale, fetch bulk entities │
 │ - Store in chrome.storage.local │
 └────────┬────────────────────────┘
          │
@@ -881,9 +884,10 @@ User clicks "Discover more with AI"
 ┌─────────────────────────────────┐
 │ For each OpenAEV platform:      │
 │ - Fetch attack patterns         │
+│ - Fetch assets & asset groups   │
 │ - Fetch tags                    │
 │ - Fetch kill chain phases       │
-│ - Store in memory cache         │
+│ - Store in chrome.storage.local │
 └─────────────────────────────────┘
 ```
 
@@ -1027,11 +1031,12 @@ The side panel iframe uses multiple defensive CSS strategies to prevent host pag
 
 ## Performance Considerations
 
-1. **SDO Caching**: Entities are cached locally to avoid API calls during scanning
+1. **Entity Caching**: OpenCTI and OpenAEV entities are cached locally to avoid API calls during scanning
 2. **Lazy Loading**: Panel loads labels/markings on-demand
 3. **Debounced Search**: Search inputs are debounced to reduce API calls
 4. **Background Refresh**: Cache refresh happens in background without blocking UI
 5. **Efficient Highlighting**: Text nodes are indexed once, patterns run in parallel
+6. **Always-Fresh Navigation**: Entity details are always fetched fresh when navigating between entities to ensure data consistency
 
 ## Security
 

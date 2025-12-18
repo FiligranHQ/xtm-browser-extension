@@ -90,6 +90,10 @@ export interface OCTIEntityViewProps {
   entityContainers: ContainerData[];
   /** Loading containers state */
   loadingContainers: boolean;
+  /** Loading entity details state */
+  entityDetailsLoading: boolean;
+  /** Set loading entity details state */
+  setEntityDetailsLoading: (loading: boolean) => void;
   /** All available platforms */
   availablePlatforms: PlatformInfo[];
   /** Multi-platform results for the current entity */
@@ -138,6 +142,10 @@ export interface OAEVEntityViewProps {
   entity: EntityData | null;
   /** Set current entity */
   setEntity: (entity: EntityData | null) => void;
+  /** Loading entity details state */
+  entityDetailsLoading: boolean;
+  /** Set loading entity details state */
+  setEntityDetailsLoading: (loading: boolean) => void;
   /** All available platforms */
   availablePlatforms: PlatformInfo[];
   /** Multi-platform results for the current entity */

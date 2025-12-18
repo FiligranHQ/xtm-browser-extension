@@ -4,7 +4,7 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity, ScanResultPayload } from '../shared/types';
 import { getTextNodes } from '../shared/detection/text-utils';
 import {
   createPrefixedType,
@@ -48,7 +48,7 @@ function ensureStylesInShadowRoot(node: Node): void {
 export interface HighlightMeta {
   type: string;
   found: boolean;
-  data: DetectedObservable | DetectedSDO;
+  data: DetectedObservable | DetectedOCTIEntity;
   isOpenCTIEntity?: boolean; // Flag to indicate if this is an OpenCTI entity (can be added via AI discovery)
   foundInPlatforms?: Array<{
     platformType: string;
@@ -214,18 +214,18 @@ export function highlightResults(
     }
   }
   
-  // Collect OpenCTI SDOs by name
-  for (const sdo of results.openctiEntities) {
-    if (sdo.found) {
-      const valueLower = sdo.name.toLowerCase();
+  // Collect OpenCTI entities by name
+  for (const octiEntity of results.openctiEntities) {
+    if (octiEntity.found) {
+      const valueLower = octiEntity.name.toLowerCase();
       if (!valueToPlatformEntities.has(valueLower)) {
         valueToPlatformEntities.set(valueLower, []);
       }
       valueToPlatformEntities.get(valueLower)!.push({
         platformType: 'opencti',
-        type: sdo.type,
+        type: octiEntity.type,
         found: true,
-        data: sdo,
+        data: octiEntity,
       });
     }
   }
@@ -321,7 +321,7 @@ export function highlightResults(
       highlightInText(fullText, textToHighlight, nodeMap, {
         type: prefixedType,
         found: entity.found,
-        data: entity as unknown as DetectedSDO,
+        data: entity as unknown as DetectedOCTIEntity,
       }, handlers);
     }
   }

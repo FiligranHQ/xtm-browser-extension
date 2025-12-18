@@ -7,7 +7,7 @@
 import type { 
   DetectedObservable, 
   DetectedOCTIEntity, 
-  DetectedPlatformEntity,
+  DetectedOAEVEntity,
   ObservableType, 
   HashType, 
   OCTIContainerType,
@@ -132,7 +132,7 @@ export interface ScanResultPayload {
   /** CVEs (Vulnerabilities) - separate array for special handling */
   cves?: DetectedOCTIEntity[];
   /** OpenAEV Types detected (Assets, Teams, Players, etc.) */
-  openaevEntities?: DetectedPlatformEntity[];
+  openaevEntities?: DetectedOAEVEntity[];
   scanTime: number;
   url: string;
 }
@@ -144,7 +144,7 @@ export interface ShowEntityPanelPayload {
    * 'platform' is for any non-default platform (identified by entity type prefix)
    */
   entityType: 'observable' | 'octi' | 'platform';
-  entity: DetectedObservable | DetectedOCTIEntity | DetectedPlatformEntity;
+  entity: DetectedObservable | DetectedOCTIEntity | DetectedOAEVEntity;
 }
 
 export interface AddObservablePayload {

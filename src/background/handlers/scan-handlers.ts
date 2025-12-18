@@ -111,10 +111,11 @@ export async function handleScanOAEV(
 
 /**
  * Scan text for OpenAEV entities
+ * Supports multiple entities with the same name but different types
  */
 export function scanForOAEVEntities(
   content: string,
-  entityMap: Map<string, { id: string; name: string; type: string; platformId: string }>,
+  entityMap: Map<string, { id: string; name: string; type: string; platformId: string }[]>,
   includeAttackPatterns: boolean
 ): ScanResultPayload['openaevEntities'] {
   const openaevEntities: ScanResultPayload['openaevEntities'] = [];
@@ -126,12 +127,9 @@ export function scanForOAEVEntities(
   // Sort by name length (longest first) to match longer names before substrings
   const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
   
-  for (const [nameLower, entity] of sortedEntities) {
-    // Skip AttackPatterns unless explicitly requested
-    if (entity.type === 'AttackPattern' && !includeAttackPatterns) continue;
-    
-    // Skip short names and already seen entities
-    if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
+  for (const [nameLower, entities] of sortedEntities) {
+    // Skip short names
+    if (nameLower.length < 4) continue;
     
     // Use indexOf for simple, reliable matching (case-insensitive)
     let searchStart = 0;
@@ -173,24 +171,34 @@ export function scanForOAEVEntities(
         
         if (!hasOverlap) {
           const matchedText = originalText.substring(matchIndex, endIndex);
-          log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
           
-          openaevEntities.push({
-            platformType: 'openaev',
-            type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
-            name: entity.name,
-            value: matchedText,
-            startIndex: matchIndex,
-            endIndex: endIndex,
-            found: true,
-            entityId: entity.id,
-            platformId: entity.platformId,
-            entityData: entity,
-          });
+          // Add ALL entities with this name (supports multiple types)
+          for (const entity of entities) {
+            // Skip AttackPatterns unless explicitly requested
+            if (entity.type === 'AttackPattern' && !includeAttackPatterns) continue;
+            // Skip already seen entities
+            if (seenEntities.has(entity.id)) continue;
+            
+            log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
+            
+            openaevEntities.push({
+              platformType: 'openaev',
+              type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
+              name: entity.name,
+              value: matchedText,
+              startIndex: matchIndex,
+              endIndex: endIndex,
+              found: true,
+              entityId: entity.id,
+              platformId: entity.platformId,
+              entityData: entity,
+            });
+            
+            seenEntities.add(entity.id);
+          }
           
-          seenEntities.add(entity.id);
           seenRanges.add(rangeKey);
-          break; // Only first match per entity
+          break; // Only first text match per name
         }
       }
       

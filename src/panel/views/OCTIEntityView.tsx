@@ -48,6 +48,8 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   setEntity,
   entityContainers,
   loadingContainers,
+  entityDetailsLoading,
+  setEntityDetailsLoading,
   availablePlatforms,
   multiPlatformResults,
   setMultiPlatformResults,
@@ -84,7 +86,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
     return null;
   }
   
-  // Entity might be a DetectedSDO/DetectedObservable with entityData, or direct entity data
+  // Entity might be a DetectedOCTIEntity/DetectedObservable with entityData, or direct entity data
   const entityData = (entity as any).entityData || entity || {};
   const entityId = (entity as any).entityId || entityData?.id || entity?.id;
   const entityPlatformId = (entity as any)._platformId || (entity as any).platformId;
@@ -132,21 +134,6 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const epssPercentile = entityData.x_opencti_epss_percentile;
   const isVulnerability = type.toLowerCase() === 'vulnerability';
 
-  // Helper to check if entity needs full data fetched
-  const needsEntityFetch = (entityObj: EntityData | undefined): boolean => {
-    if (!entityObj) return true;
-    const platformType = entityObj._platformType || 'opencti';
-     
-    const ed = (entityObj.entityData || entityObj) as any;
-    if (platformType === 'openaev') {
-      return !(ed.finding_type || ed.finding_created_at || ed.endpoint_name || 
-               ed.asset_group_name || ed.team_name || ed.attack_pattern_name || 
-               ed.attack_pattern_description || ed.scenario_name || ed.exercise_name || 
-               ed.user_email || ed.asset_description);
-    }
-    return !(entityObj.description || ed.description || entityObj.objectLabel || ed.objectLabel);
-  };
-  
   // Fire-and-forget fetch for entity details
   const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
     const platformType = targetEntity._platformType || inferPlatformTypeFromEntityType(targetEntity.type);
@@ -155,12 +142,19 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
     
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
+    setEntityDetailsLoading(true);
     chrome.runtime.sendMessage({
       type: 'GET_ENTITY_DETAILS',
       payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
     }, (response) => {
-      if (chrome.runtime.lastError) return;
-      if (currentPlatformIndexRef.current !== targetIdx) return;
+      if (chrome.runtime.lastError) {
+        setEntityDetailsLoading(false);
+        return;
+      }
+      if (currentPlatformIndexRef.current !== targetIdx) {
+        setEntityDetailsLoading(false);
+        return;
+      }
       
       if (response?.success && response.data) {
         const fullEntity = {
@@ -177,10 +171,12 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
         );
       }
+      setEntityDetailsLoading(false);
     });
   };
 
   // Platform navigation handlers
+  // Always fetch entity details when navigating to ensure fresh data
   const handlePrevPlatform = () => {
     const idx = currentPlatformIndexRef.current;
     const results = multiPlatformResultsRef.current;
@@ -193,9 +189,8 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
       setEntity(target.entity);
       setSelectedPlatformId(target.platformId);
       if (platform) setPlatformUrl(platform.url);
-      if (needsEntityFetch(target.entity)) {
-        fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-      }
+      // Always fetch to ensure fresh data when navigating
+      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
     }
   };
 
@@ -211,9 +206,8 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
       setEntity(target.entity);
       setSelectedPlatformId(target.platformId);
       if (platform) setPlatformUrl(platform.url);
-      if (needsEntityFetch(target.entity)) {
-        fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-      }
+      // Always fetch to ensure fresh data when navigating
+      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
     }
   };
 
@@ -275,21 +269,25 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
               <IconButton 
                 size="small" 
                 onClick={handlePrevPlatform} 
-                disabled={currentPlatformIndex === 0}
+                disabled={currentPlatformIndex === 0 || entityDetailsLoading}
                 sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
               >
                 <ChevronLeftOutlined />
               </IconButton>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <img
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                    ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
-                    : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
-                  }
-                  alt={platformAlt}
-                  width={18}
-                  height={18}
-                />
+                {entityDetailsLoading ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <img
+                    src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                      ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                      : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
+                    }
+                    alt={platformAlt}
+                    width={18}
+                    height={18}
+                  />
+                )}
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {currentPlatform?.name || platformAlt}
                 </Typography>
@@ -300,7 +298,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
               <IconButton 
                 size="small" 
                 onClick={handleNextPlatform} 
-                disabled={currentPlatformIndex === multiPlatformResults.length - 1}
+                disabled={currentPlatformIndex === multiPlatformResults.length - 1 || entityDetailsLoading}
                 sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
               >
                 <ChevronRightOutlined />
@@ -308,15 +306,19 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
             </>
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', justifyContent: 'center' }}>
-              <img
-                src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
-                  ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
-                  : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
-                }
-                alt={platformAlt}
-                width={18}
-                height={18}
-              />
+              {entityDetailsLoading ? (
+                <CircularProgress size={18} />
+              ) : (
+                <img
+                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                    ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
+                    : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
+                  }
+                  alt={platformAlt}
+                  width={18}
+                  height={18}
+                />
+              )}
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {currentPlatform?.name || platformAlt}
               </Typography>

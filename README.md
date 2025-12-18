@@ -221,6 +221,7 @@ xtm-browser-extension/
 │   │   │   ├── scan-handlers.ts     # Page scanning logic
 │   │   │   └── settings-handlers.ts # Settings management
 │   │   └── services/            # Background services
+│   │       ├── cache-manager.ts     # Entity cache management
 │   │       ├── client-manager.ts    # API client lifecycle
 │   │       └── message-dispatcher.ts # Message routing
 │   │

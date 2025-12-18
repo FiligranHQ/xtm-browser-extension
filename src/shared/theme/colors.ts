@@ -252,7 +252,7 @@ export const itemColor = (type: string | null | undefined, dark = true, reversed
     case 'asset':
     case 'oaev-Asset':
     case 'oaev-asset':
-      return dark ? '#00bcd4' : '#006064'; // Cyan - matching OpenAEV
+      return dark ? '#009688' : '#00695c'; // Teal - for assets
     case 'AssetGroup':
     case 'assetgroup':
     case 'asset-group':

@@ -4,7 +4,7 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedSDO } from '../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity } from '../shared/types';
 import { extractArticleContent, extractFirstParagraph } from './extraction';
 
 const log = loggers.content;
@@ -245,7 +245,7 @@ export async function getCurrentTheme(): Promise<'dark' | 'light'> {
  * Show panel with entity details
  */
 export async function showPanel(
-  entity: DetectedObservable | DetectedSDO,
+  entity: DetectedObservable | DetectedOCTIEntity,
   platformMatches?: Array<{ platformId: string; entityId: string; entityData?: unknown }>
 ): Promise<void> {
   ensurePanelElements();
@@ -264,7 +264,7 @@ export async function showPanel(
 /**
  * Show add panel for non-existing entities
  */
-export function showAddPanel(entity: DetectedObservable | DetectedSDO): void {
+export function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): void {
   ensurePanelElements();
   showPanelElements();
   
@@ -275,7 +275,7 @@ export function showAddPanel(entity: DetectedObservable | DetectedSDO): void {
  * Show preview panel with selected entities
  */
 export async function showPreviewPanel(
-  selectedEntities: Array<DetectedObservable | DetectedSDO>
+  selectedEntities: Array<DetectedObservable | DetectedOCTIEntity>
 ): Promise<void> {
   ensurePanelElements();
   showPanelElements();

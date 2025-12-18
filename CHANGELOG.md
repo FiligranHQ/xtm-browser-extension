@@ -7,22 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.7] - 2024-12-17
+## [0.0.7] - 2024-12-18
+
+### Added
+- Loading spinner in entity overview while fetching full entity details from OpenCTI/OpenAEV (spinner replaces platform logo during load)
+- Multi-entity type support in scan results: entities like "Phishing" matching multiple types (Malware, Attack Pattern) now show combined counts with visual indicators (stacked icon, "N types" chip)
+- Compact multi-type entity display with tooltips showing all matched types
 
 ### Changed
 - Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
 - Reorganized panel types: consolidated `types.ts` and `types/` directory structure
 - OpenCTI STIX types now have both `OCTI*` prefixed names and GraphQL API-matching aliases
 - Reduced `background/index.ts` from 3238 lines to ~2850 lines through service extraction
+- **Naming convention standardization**: Replaced generic terms with platform-specific naming throughout codebase:
+  - `CachedEntity` → `CachedOCTIEntity`
+  - `DetectedSDO` → `DetectedOCTIEntity` (removed alias)
+  - `DetectedPlatformEntity` → `DetectedOAEVEntity`
+  - `detectSDOsFromCache` → `detectOCTIEntitiesFromCache`
+  - `detectPlatformEntitiesFromCache` → `detectOAEVEntitiesFromCache`
+  - `getAllCachedEntityNamesForMatching` → `getAllCachedOCTIEntityNamesForMatching`
+- **Platform color standardization**: Updated platform colors to avoid confusion with status indicators:
+  - OCTI (OpenCTI): Changed from orange (#ff9800) to indigo (#5c6bc0) - distinct from green (found) and amber (new)
+  - OAEV (OpenAEV): Changed from cyan (#00bcd4) to pink (#e91e63) - distinct from primary blue
+  - Multi-type indicator: Now uses primary theme color (adapts to light/dark theme) instead of purple
 
 ### Improved
 - Enhanced PDF extraction for Shadow DOM-heavy sites like Notion
 - Content extractor now traverses Shadow DOM for better article content extraction
 - Code structure: cleaner separation between services and handlers in background script
+- Entity state management: added `entityDetailsLoading` state for better UX feedback
+- Entity navigation now always fetches fresh data to prevent stale/empty overviews
 
 ### Fixed
 - PDF generation now properly extracts content from Shadow DOM components
 - Content visibility checks now work correctly inside Shadow DOM
+- Navigation arrows in entity view now disabled during loading to prevent race conditions
+- Scan results now properly merge entities with same name but different types on the same platform
+- **Entity overview empty after navigation**: Fixed issue where navigating back and forth between entity overviews would result in empty data - now always fetches fresh details
 
 ## [0.0.6] - 2024-12-17
 

@@ -391,8 +391,8 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
                         sx={{
                           height: 16,
                           fontSize: '0.6rem',
-                          bgcolor: hexToRGB(isOpenAEV ? '#00bcd4' : '#ff9800', 0.2),
-                          color: isOpenAEV ? '#00bcd4' : '#ff9800',
+                          bgcolor: hexToRGB(isOpenAEV ? '#e91e63' : '#5c6bc0', 0.2),
+                          color: isOpenAEV ? '#e91e63' : '#5c6bc0',
                           '& .MuiChip-label': { px: 0.75 },
                         }}
                       />

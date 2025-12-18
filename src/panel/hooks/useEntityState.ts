@@ -32,6 +32,10 @@ export interface EntityStateReturn {
   entityFromSearchMode: 'unified-search' | null;
   setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   
+  // Loading state for entity details
+  entityDetailsLoading: boolean;
+  setEntityDetailsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  
   // Helper functions
   sortPlatformResults: <T extends { platformId: string }>(results: T[], availablePlatforms: PlatformInfo[]) => T[];
   clearEntityState: () => void;
@@ -58,6 +62,9 @@ export function useEntityState(): EntityStateReturn {
   
   // Navigation tracking
   const [entityFromSearchMode, setEntityFromSearchMode] = useState<'unified-search' | null>(null);
+  
+  // Loading state for entity details
+  const [entityDetailsLoading, setEntityDetailsLoading] = useState<boolean>(false);
   
   // Helper function to sort multi-platform results with OpenCTI platforms first
   // OpenCTI is the knowledge base reference, so it should always be displayed first
@@ -94,6 +101,7 @@ export function useEntityState(): EntityStateReturn {
     setCurrentPlatformIndex(0);
     currentPlatformIndexRef.current = 0;
     setEntityFromSearchMode(null);
+    setEntityDetailsLoading(false);
   }, []);
   
   return {
@@ -107,6 +115,8 @@ export function useEntityState(): EntityStateReturn {
     currentPlatformIndexRef,
     entityFromSearchMode,
     setEntityFromSearchMode,
+    entityDetailsLoading,
+    setEntityDetailsLoading,
     sortPlatformResults,
     clearEntityState,
     updateMultiPlatformResultsRef,

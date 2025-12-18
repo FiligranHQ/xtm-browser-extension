@@ -66,7 +66,7 @@ const log = loggers.background;
 import {
   getSettings,
   saveSettings,
-  // OpenCTI entity cache
+  // OpenCTI cache
   getOCTICacheStats,
   getMultiPlatformOCTICache,
   clearOCTICacheForPlatform,
@@ -78,7 +78,7 @@ import {
   clearOAEVCacheForPlatform,
   clearAllOAEVCaches,
   cleanupOrphanedOAEVCaches,
-  type CachedEntity,
+  type CachedOCTIEntity,
 } from '../shared/utils/storage';
 import type {
   ExtensionMessage,
@@ -693,14 +693,9 @@ async function handleMessage(
           // Sort by name length (longest first) to match longer names before substrings
           const sortedEntities = Array.from(oaevEntityMap.entries()).sort((a, b) => b[0].length - a[0].length);
           
-          for (const [nameLower, entity] of sortedEntities) {
-            // Skip AttackPatterns unless explicitly requested (for atomic testing)
-            if (entity.type === 'AttackPattern' && !includeAttackPatterns) continue;
-            // For regular asset scan, skip attack patterns
-            if (!includeAttackPatterns && entity.type === 'AttackPattern') continue;
-            
-            // Skip short names and already seen entities
-            if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
+          for (const [nameLower, entities] of sortedEntities) {
+            // Skip short names
+            if (nameLower.length < 4) continue;
             
             // Search in both original text and refanged text
             // This allows finding both "honey.scanme.sh" and "honey[.]scanme[.]sh"
@@ -754,20 +749,30 @@ async function handleMessage(
                   
                   if (!hasOverlap) {
                     const matchedText = target.originalText.substring(matchIndex, endIndex);
-                    log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}${target.isRefanged ? ' (refanged search)' : ''}`);
-                    openaevEntitiesResult.push({
-                      platformType: 'openaev',
-                      type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
-                      name: entity.name,
-                      value: matchedText,
-                      startIndex: matchIndex,
-                      endIndex: endIndex,
-                      found: true,
-                      entityId: entity.id,
-                      platformId: entity.platformId,
-                      entityData: entity,
-                    });
-                    seenEntities.add(entity.id);
+                    
+                    // Add ALL entities with this name (supports multiple types)
+                    for (const entity of entities) {
+                      // Skip AttackPatterns unless explicitly requested (for atomic testing)
+                      if (entity.type === 'AttackPattern' && !includeAttackPatterns) continue;
+                      // Skip already seen entities
+                      if (seenEntities.has(entity.id)) continue;
+                      
+                      log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}${target.isRefanged ? ' (refanged search)' : ''}`);
+                      openaevEntitiesResult.push({
+                        platformType: 'openaev',
+                        type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
+                        name: entity.name,
+                        value: matchedText,
+                        startIndex: matchIndex,
+                        endIndex: endIndex,
+                        found: true,
+                        entityId: entity.id,
+                        platformId: entity.platformId,
+                        entityData: entity,
+                      });
+                      seenEntities.add(entity.id);
+                    }
+                    
                     seenRanges.add(rangeKey);
                     foundMatch = true;
                     break;
@@ -853,9 +858,9 @@ async function handleMessage(
               // Sort by name length (longest first)
               const sortedEntities = Array.from(oaevEntityMap.entries()).sort((a, b) => b[0].length - a[0].length);
               
-              for (const [nameLower, entity] of sortedEntities) {
-                // Skip short names and already seen entities
-                if (nameLower.length < 4 || seenEntities.has(entity.id)) continue;
+              for (const [nameLower, entities] of sortedEntities) {
+                // Skip short names
+                if (nameLower.length < 4) continue;
                 
                 let searchStart = 0;
                 let matchIndex = textLower.indexOf(nameLower, searchStart);
@@ -895,19 +900,27 @@ async function handleMessage(
                     
                     if (!hasOverlap) {
                       const matchedText = originalText.substring(matchIndex, endIndex);
-                      openaevEntities.push({
-                        platformType: 'openaev',
-                        type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding',
-                        name: entity.name,
-                        value: matchedText,
-                        startIndex: matchIndex,
-                        endIndex: endIndex,
-                        found: true,
-                        entityId: entity.id,
-                        platformId: entity.platformId,
-                        entityData: entity,
-                      });
-                      seenEntities.add(entity.id);
+                      
+                      // Add ALL entities with this name (supports multiple types)
+                      for (const entity of entities) {
+                        // Skip already seen entities
+                        if (seenEntities.has(entity.id)) continue;
+                        
+                        openaevEntities.push({
+                          platformType: 'openaev',
+                          type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding',
+                          name: entity.name,
+                          value: matchedText,
+                          startIndex: matchIndex,
+                          endIndex: endIndex,
+                          found: true,
+                          entityId: entity.id,
+                          platformId: entity.platformId,
+                          entityData: entity,
+                        });
+                        seenEntities.add(entity.id);
+                      }
+                      
                       seenRanges.add(rangeKey);
                       break;
                     }
@@ -2421,7 +2434,7 @@ async function handleMessage(
                 ];
                 
                 if (openctiEntityTypes.includes(created.entity_type)) {
-                  const cachedEntity: CachedEntity = {
+                  const cachedEntity: CachedOCTIEntity = {
                     id: created.id,
                     name: created.name || name || '',
                     aliases: created.aliases,
@@ -2488,7 +2501,7 @@ async function handleMessage(
                   ];
                   
                   if (sdoTypes.includes(created.entity_type)) {
-                    const cachedEntity: CachedEntity = {
+                    const cachedEntity: CachedOCTIEntity = {
                       id: created.id,
                       name: created.name || entity.name || entity.value || '',
                       aliases: created.aliases,

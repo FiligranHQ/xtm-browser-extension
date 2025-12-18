@@ -7,7 +7,7 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity, ScanResultPayload } from '../shared/types';
 import { getTextNodes } from '../shared/detection/text-utils';
 import { 
   getPlatformFromEntity, 
@@ -483,7 +483,7 @@ function handleHighlightClick(event: MouseEvent): void {
 function handleFoundEntityClick(
   event: MouseEvent,
   target: HTMLElement,
-  entity: DetectedObservable | DetectedSDO,
+  entity: DetectedObservable | DetectedOCTIEntity,
   value: string,
   isMultiPlatform: boolean
 ): void {
@@ -599,7 +599,7 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
 
 function buildPlatformMatches(
   target: HTMLElement,
-  entity: DetectedObservable | DetectedSDO
+  entity: DetectedObservable | DetectedOCTIEntity
 ): Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: unknown }> {
   try {
     const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
@@ -745,8 +745,8 @@ async function scanPage(): Promise<void> {
       
       const totalFound = [
         ...data.observables.filter((o: DetectedObservable) => o.found),
-        ...data.openctiEntities.filter((s: DetectedSDO) => s.found),
-        ...(data.cves || []).filter((c: DetectedSDO) => c.found),
+        ...data.openctiEntities.filter((s: DetectedOCTIEntity) => s.found),
+        ...(data.cves || []).filter((c: DetectedOCTIEntity) => c.found),
         ...(data.openaevEntities || []).filter((e: { found?: boolean }) => e.found),
       ].length;
       const totalDetected = data.observables.length + data.openctiEntities.length + (data.cves?.length || 0) + (data.openaevEntities?.length || 0);
@@ -1128,10 +1128,10 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         return true;
       });
       
-      const foundSDOs = (data.openctiEntities || []).filter((s: DetectedSDO) => {
-        if (!s.found) return false;
+      const foundOCTIEntities = (data.openctiEntities || []).filter((e: DetectedOCTIEntity) => {
+        if (!e.found) return false;
         if (platformId) {
-          const entityPlatformId = s.platformId || (s as { _platformId?: string })._platformId;
+          const entityPlatformId = e.platformId || (e as { _platformId?: string })._platformId;
           return entityPlatformId === platformId;
         }
         return true;
@@ -1150,7 +1150,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       
       const investigationResults: ScanResultPayload = {
         observables: foundObservables,
-        openctiEntities: foundSDOs,
+        openctiEntities: foundOCTIEntities,
         cves: [],
         openaevEntities: foundOAEV,
         scanTime: data.scanTime,
@@ -1182,12 +1182,12 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
           value: o.value,
           platformId: o.platformId || (o as { _platformId?: string })._platformId,
         })),
-        ...foundSDOs.map((s: DetectedSDO) => ({
-          id: s.entityId,
-          type: s.type,
-          name: s.name,
-          value: s.name,
-          platformId: s.platformId || (s as { _platformId?: string })._platformId,
+        ...foundOCTIEntities.map((e: DetectedOCTIEntity) => ({
+          id: e.entityId,
+          type: e.type,
+          name: e.name,
+          value: e.name,
+          platformId: e.platformId || (e as { _platformId?: string })._platformId,
         })),
         ...foundOAEV.map((e: { entityId?: string; type?: string; name?: string; value?: string; platformId?: string }) => ({
           id: e.entityId,
@@ -1356,7 +1356,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       break;
       
     case 'PREVIEW_SELECTION': {
-      const entities: Array<DetectedObservable | DetectedSDO> = [];
+      const entities: Array<DetectedObservable | DetectedOCTIEntity> = [];
       selectedForImport.forEach(value => {
         const highlight = document.querySelector(`.xtm-highlight[data-value="${CSS.escape(value)}"]`);
         if (highlight) {

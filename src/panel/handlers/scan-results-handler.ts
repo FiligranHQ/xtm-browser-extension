@@ -11,7 +11,7 @@ import {
   getOAEVEntityId,
 } from '../../shared/utils/entity';
 import type { ScanResultEntity, ScanResultPlatformMatch } from '../types';
-import type { DetectedObservable, DetectedOCTIEntity, DetectedPlatformEntity } from '../../shared/types';
+import type { DetectedObservable, DetectedOCTIEntity, DetectedOAEVEntity } from '../../shared/types';
 
 /**
  * Process scan results payload and return normalized entities
@@ -20,7 +20,7 @@ export function processScanResults(payload: {
   observables?: DetectedObservable[];
   openctiEntities?: DetectedOCTIEntity[];
   cves?: DetectedOCTIEntity[];
-  openaevEntities?: DetectedPlatformEntity[];
+  openaevEntities?: DetectedOAEVEntity[];
   pageContent?: string;
   pageTitle?: string;
   pageUrl?: string;
@@ -61,8 +61,13 @@ export function processScanResults(payload: {
         if (!existing.platformMatches) {
           existing.platformMatches = [];
         }
+        // Check for exact duplicate: same platform, same type, same entity ID
+        // This allows multiple entity types (e.g., Phishing as Malware AND Attack Pattern) on the same platform
         const isDuplicate = existing.platformMatches.some(pm => 
-          pm.platformId === platformMatch.platformId && pm.platformType === platformMatch.platformType
+          pm.platformId === platformMatch.platformId && 
+          pm.platformType === platformMatch.platformType &&
+          pm.type === platformMatch.type &&
+          pm.entityId === platformMatch.entityId
         );
         if (!isDuplicate) {
           existing.platformMatches.push(platformMatch);

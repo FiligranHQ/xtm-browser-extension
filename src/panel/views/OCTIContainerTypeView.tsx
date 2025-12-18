@@ -28,19 +28,19 @@ const CONTAINER_TYPES = [
   { type: 'Case-Rfi', color: '#0c5c98', description: 'Request for information' },
 ];
 
-export interface ContainerTypeViewProps {
+export interface OCTIContainerTypeViewProps {
   mode: 'dark' | 'light';
   setPanelMode: (mode: PanelMode) => void;
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
   openctiPlatformsCount: number;
   containerSteps: string[];
   entitiesToAdd: EntityData[];
 }
 
-export const OCTIContainerTypeView: React.FC<ContainerTypeViewProps> = ({
+export const OCTIContainerTypeView: React.FC<OCTIContainerTypeViewProps> = ({
   setPanelMode,
-  setContainerType,
+  setOCTIContainerType,
   containerWorkflowOrigin,
   openctiPlatformsCount,
   containerSteps,
@@ -98,7 +98,7 @@ export const OCTIContainerTypeView: React.FC<ContainerTypeViewProps> = ({
           <Paper
             key={item.type}
             onClick={() => {
-              setContainerType(item.type);
+              setOCTIContainerType(item.type);
               setPanelMode('container-form');
             }}
             elevation={0}

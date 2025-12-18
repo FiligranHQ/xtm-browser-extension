@@ -72,7 +72,7 @@ export function isVulnerabilityType(type: string): boolean {
 /**
  * Check if entity type is a container
  */
-export function isContainerType(type: string): boolean {
+export function isOCTIContainerType(type: string): boolean {
   return CONTAINER_TYPES.some(t => 
     type.toLowerCase() === t.toLowerCase()
   );

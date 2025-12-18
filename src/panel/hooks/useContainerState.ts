@@ -47,7 +47,7 @@ export interface AuthorOption {
 export interface ContainerStateReturn {
   // Container type and form
   containerType: string;
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   containerForm: ContainerFormState;
   setContainerForm: React.Dispatch<React.SetStateAction<ContainerFormState>>;
   
@@ -133,7 +133,7 @@ export interface ContainerStateReturn {
  */
 export function useContainerState(): ContainerStateReturn {
   // Container type and form
-  const [containerType, setContainerType] = useState<string>('');
+  const [containerType, setOCTIContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState<ContainerFormState>({
     name: '',
     description: '',
@@ -201,7 +201,7 @@ export function useContainerState(): ContainerStateReturn {
   
   return {
     containerType,
-    setContainerType,
+    setOCTIContainerType,
     containerForm,
     setContainerForm,
     entityContainers,

@@ -9,7 +9,7 @@ import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { errorResponse } from '../../shared/utils/messaging';
 import { loggers } from '../../shared/utils/logger';
-import type { ContainerType } from '../../shared/types';
+import type { OCTIContainerType } from '../../shared/types';
 
 const log = loggers.background;
 
@@ -179,7 +179,7 @@ export async function handleCreateContainer(
     log.info(`${payload.updateContainerId ? 'Updating' : 'Creating'} container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
     
     const container = await client.createContainer({
-      type: payload.type as ContainerType,
+      type: payload.type as OCTIContainerType,
       name: payload.name,
       description: payload.description,
       content: payload.content,

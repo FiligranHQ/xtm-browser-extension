@@ -71,7 +71,7 @@ export interface AppContextValue {
   
   // Container state
   containerType: string;
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   containerForm: { name: string; description: string; content: string };
   setContainerForm: React.Dispatch<React.SetStateAction<{ name: string; description: string; content: string }>>;
   entityContainers: ContainerData[];

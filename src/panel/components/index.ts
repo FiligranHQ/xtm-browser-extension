@@ -1,9 +1,8 @@
 /**
  * Panel Components Index
- * Re-exports all panel components for easier imports
  * 
  * Naming convention:
- * - Common* = Common/cross-platform components
+ * - Common* = Cross-platform components
  */
 
 export { CommonEmptyView } from './CommonEmptyView';

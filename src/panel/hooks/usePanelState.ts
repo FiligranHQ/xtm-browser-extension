@@ -59,7 +59,7 @@ export interface PanelStateReturn {
   
   // Container State
   containerType: string;
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   containerForm: ContainerFormState;
   setContainerForm: (form: ContainerFormState | ((prev: ContainerFormState) => ContainerFormState)) => void;
   entityContainers: ContainerData[];
@@ -356,7 +356,7 @@ export function usePanelState(): PanelStateReturn {
   const [addSelectionText, setAddSelectionText] = useState('');
   
   // Container State
-  const [containerType, setContainerType] = useState<string>('');
+  const [containerType, setOCTIContainerType] = useState<string>('');
   const [containerForm, setContainerForm] = useState<ContainerFormState>({
     name: '',
     description: '',
@@ -589,7 +589,7 @@ export function usePanelState(): PanelStateReturn {
     
     // Container
     containerType,
-    setContainerType,
+    setOCTIContainerType,
     containerForm,
     setContainerForm,
     entityContainers,

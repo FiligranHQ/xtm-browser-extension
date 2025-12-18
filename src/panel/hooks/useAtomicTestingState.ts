@@ -8,7 +8,6 @@ import { useState } from 'react';
 import type { AtomicTestingTarget, AIGeneratedPayload } from '../types';
 import type { OAEVAsset, OAEVAssetGroup, OAEVInjectorContract } from '../../shared/types';
 
-// Re-export types for convenience
 export type { AtomicTestingTarget, AIGeneratedPayload };
 
 export interface AtomicTestingStateReturn {

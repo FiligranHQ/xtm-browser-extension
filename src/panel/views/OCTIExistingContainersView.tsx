@@ -51,7 +51,7 @@ export interface ExistingContainersViewProps {
   setEntityContainers: (containers: ContainerData[]) => void;
   fetchEntityContainers: (entityId: string, platformId: string) => void;
   setUpdatingContainerId: (id: string | null) => void;
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   setContainerForm: (form: ContainerFormState | ((prev: ContainerFormState) => ContainerFormState)) => void;
   setSelectedLabels: (labels: LabelOption[]) => void;
   setSelectedMarkings: (markings: MarkingOption[]) => void;
@@ -77,7 +77,7 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
   setEntityContainers,
   fetchEntityContainers,
   setUpdatingContainerId,
-  setContainerType,
+  setOCTIContainerType,
   setContainerForm,
   setSelectedLabels,
   setSelectedMarkings,
@@ -167,7 +167,7 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
     setUpdatingContainerId(container.id);
 
     // Set container type first
-    setContainerType(container.entity_type);
+    setOCTIContainerType(container.entity_type);
 
     // Get platform info
     const containerPlatformId = (container as any)._platformId || selectedPlatformId;

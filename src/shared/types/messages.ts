@@ -10,7 +10,7 @@ import type {
   DetectedPlatformEntity,
   ObservableType, 
   HashType, 
-  ContainerType,
+  OCTIContainerType,
 } from './index';
 
 // ============================================================================
@@ -155,7 +155,7 @@ export interface AddObservablePayload {
 }
 
 export interface CreateContainerPayload {
-  type: ContainerType;
+  type: OCTIContainerType;
   name: string;
   description?: string;
   content?: string;

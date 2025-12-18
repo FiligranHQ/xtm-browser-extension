@@ -435,13 +435,13 @@ export interface FileData {
 }
 
 // ============================================================================
-// Container Types
+// OpenCTI Container Types
 // ============================================================================
 
-export type ContainerType = 'Report' | 'Case-Incident' | 'Case-Rfi' | 'Case-Rft' | 'Grouping';
+export type OCTIContainerType = 'Report' | 'Case-Incident' | 'Case-Rfi' | 'Case-Rft' | 'Grouping';
 
-export interface ContainerCreateInput {
-  type: ContainerType;
+export interface OCTIContainerCreateInput {
+  type: OCTIContainerType;
   name: string;
   description?: string;
   content?: string;
@@ -849,7 +849,7 @@ export interface AddObservablePayload {
 }
 
 export interface CreateContainerPayload {
-  type: ContainerType;
+  type: OCTIContainerType;
   name: string;
   description?: string;
   content?: string;

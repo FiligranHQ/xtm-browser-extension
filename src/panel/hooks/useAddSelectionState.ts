@@ -21,15 +21,8 @@ export interface AddSelectionStateReturn {
   setAddSelectionFromContextMenu: (from: boolean) => void;
   
   // Helper functions
-  detectEntityType: (text: string) => string;
   clearAddSelection: () => void;
 }
-
-/**
- * Helper to detect entity type from text
- * Re-exported from shared patterns for backward compatibility
- */
-export const detectEntityType = detectObservableType;
 
 /**
  * Hook for managing add selection state
@@ -43,7 +36,7 @@ export function useAddSelectionState(): AddSelectionStateReturn {
   // Auto-detect type when addSelectionText changes
   useEffect(() => {
     if (addSelectionText) {
-      const detected = detectEntityType(addSelectionText);
+      const detected = detectObservableType(addSelectionText);
       setAddSelectionEntityType(detected);
     }
   }, [addSelectionText]);
@@ -65,7 +58,6 @@ export function useAddSelectionState(): AddSelectionStateReturn {
     setAddingSelection,
     addSelectionFromContextMenu,
     setAddSelectionFromContextMenu,
-    detectEntityType,
     clearAddSelection,
   };
 }

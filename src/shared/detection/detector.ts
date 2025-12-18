@@ -35,9 +35,6 @@ import {
   getAllCachedOAEVEntityNamesForMatching,
 } from '../utils/storage';
 
-// Re-export utilities for backwards compatibility
-export { extractTextFromHTML, getTextNodes, normalizeText } from './text-utils';
-
 const log = loggers.detection;
 
 // ============================================================================

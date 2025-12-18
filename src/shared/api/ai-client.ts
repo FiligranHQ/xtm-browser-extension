@@ -9,7 +9,6 @@
 
 import type { AIProvider, AISettings } from '../types';
 
-// Re-export types from the ai module for backwards compatibility
 export type {
   AIGenerationRequest,
   AIGenerationResponse,
@@ -28,7 +27,6 @@ export type {
   ResolvedRelationship,
 } from './ai/types';
 
-// Re-export the JSON parser
 export { parseAIJsonResponse } from './ai/json-parser';
 
 // Import types for internal use

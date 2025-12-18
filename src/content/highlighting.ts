@@ -5,7 +5,7 @@
 
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
-import { getTextNodes } from '../shared/detection/detector';
+import { getTextNodes } from '../shared/detection/text-utils';
 import {
   createPrefixedType,
   type PlatformType,

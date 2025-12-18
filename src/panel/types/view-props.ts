@@ -36,13 +36,6 @@ import type {
   OAEVInjectorContract,
 } from '../../shared/types';
 
-// Re-export atomic testing types for convenience  
-export type { AtomicTestingTarget };
-
-// Alias for backward compatibility
-export type AtomicTestingAIPayload = AIGeneratedPayload;
-
-// Re-export option types for convenience
 export type { LabelOption, MarkingOption, VocabularyOption, AuthorOption };
 
 /**
@@ -270,7 +263,7 @@ export interface ContainerFormViewProps extends BaseViewProps, PlatformViewProps
   /** Container type being created */
   containerType: string;
   /** Set container type */
-  setContainerType: (type: string) => void;
+  setOCTIContainerType: (type: string) => void;
   /** Container form data */
   containerForm: ContainerFormState;
   /** Set container form data */
@@ -479,8 +472,8 @@ export interface AtomicTestingViewProps {
   setAtomicTestingAIExecutor: (executor: string) => void;
   atomicTestingAIContext: string;
   setAtomicTestingAIContext: (context: string) => void;
-  atomicTestingAIGeneratedPayload: AtomicTestingAIPayload | null;
-  setAtomicTestingAIGeneratedPayload: (payload: AtomicTestingAIPayload | null) => void;
+  atomicTestingAIGeneratedPayload: AIGeneratedPayload | null;
+  setAtomicTestingAIGeneratedPayload: (payload: AIGeneratedPayload | null) => void;
 }
 
 /**

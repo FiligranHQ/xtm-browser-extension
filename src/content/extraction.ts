@@ -1226,6 +1226,3 @@ export function sanitizeFilename(name: string): string {
     .substring(0, 100);
 }
 
-// Re-export escapeHtml from shared formatters for backwards compatibility
-export { escapeHtml } from '../shared/utils/formatters';
-

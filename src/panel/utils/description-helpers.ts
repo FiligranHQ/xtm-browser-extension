@@ -4,9 +4,6 @@
  * Utilities for generating and cleaning descriptions from HTML content.
  */
 
-// Re-export escapeHtml from shared formatters
-export { escapeHtml } from '../../shared/utils/formatters';
-
 /**
  * Generate clean description from HTML
  * Removes non-content elements and extracts meaningful text

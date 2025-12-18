@@ -1,25 +1,9 @@
 /**
  * Panel Types Index
  * 
- * Re-exports all panel types from a single location.
+ * This directory contains view prop interfaces.
+ * Main types are in ../types.ts
  */
 
-// Re-export main types
-export * from '../types';
-
-// Re-export view props (excluding duplicates that are already in ../types)
-export type {
-  BaseViewProps,
-  PlatformViewProps,
-  OCTIEntityViewProps,
-  OAEVEntityViewProps,
-  ScanResultsViewProps,
-  UnifiedSearchViewProps,
-  ContainerFormViewProps,
-  ScenarioViewProps,
-  PreviewViewProps,
-  AtomicTestingViewProps,
-  AtomicTestingTarget,
-  AtomicTestingAIPayload,
-} from './view-props';
+export * from './view-props';
 

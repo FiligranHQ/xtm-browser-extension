@@ -50,44 +50,78 @@ export default tseslint.config(
       },
     },
     rules: {
-      // TypeScript rules
-      '@typescript-eslint/no-unused-vars': ['warn', {
+      // ============================================
+      // TypeScript Rules
+      // ============================================
+      '@typescript-eslint/no-unused-vars': ['error', {
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_|^error$|^e$',
       }],
-      '@typescript-eslint/no-explicit-any': 'off', // Too many to fix, will address incrementally
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any for API responses and dynamic data
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-non-null-assertion': 'off', // Common pattern in extension code
+      '@typescript-eslint/no-non-null-assertion': 'off', // Allow non-null assertions for known values
       '@typescript-eslint/no-empty-function': 'off',
-      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/ban-ts-comment': ['warn', {
+        'ts-expect-error': 'allow-with-description',
+        'ts-ignore': false,
+        'ts-nocheck': false,
+      }],
+      '@typescript-eslint/no-empty-interface': 'off',
       
-      // React rules
-      'react/react-in-jsx-scope': 'off', // Not needed in React 17+
-      'react/prop-types': 'off', // Using TypeScript
+      // ============================================
+      // React Rules
+      // ============================================
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
       'react/jsx-uses-react': 'off',
       'react/jsx-uses-vars': 'error',
+      'react/jsx-key': 'error',
+      'react/jsx-no-duplicate-props': 'error',
+      'react/jsx-no-undef': 'error',
+      'react/no-children-prop': 'error',
+      'react/no-danger-with-children': 'error',
+      'react/no-deprecated': 'warn',
+      'react/no-direct-mutation-state': 'error',
+      'react/no-unescaped-entities': 'off', // Too many false positives
+      'react/self-closing-comp': 'warn',
       
-      // React Hooks rules
+      // ============================================
+      // React Hooks Rules
+      // ============================================
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       
-      // General rules
+      // ============================================
+      // General JavaScript/Best Practices
+      // ============================================
       'no-console': 'off', // Extension uses console for logging
-      'no-debugger': 'warn',
-      'no-unused-vars': 'off', // Using @typescript-eslint/no-unused-vars instead
-      'prefer-const': 'warn',
+      'no-debugger': 'error',
+      'no-unused-vars': 'off',
+      'prefer-const': 'error',
       'no-var': 'error',
-      'eqeqeq': ['warn', 'always', { null: 'ignore' }],
+      'eqeqeq': ['error', 'always', { null: 'ignore' }],
       'curly': ['error', 'multi-line'],
       'no-duplicate-imports': 'error',
-      'no-case-declarations': 'off', // Common pattern with const in switch
-      'no-useless-escape': 'warn', // Some escapes in regex are intentional
+      'no-case-declarations': 'off',
+      'no-useless-escape': 'warn',
+      'no-empty': ['error', { allowEmptyCatch: true }],
+      'no-constant-condition': ['error', { checkLoops: false }],
+      'no-template-curly-in-string': 'warn',
+      'no-unreachable': 'error',
+      'no-unsafe-finally': 'error',
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-return-await': 'warn',
+      'no-throw-literal': 'error',
+      'prefer-promise-reject-errors': 'error',
+      'no-async-promise-executor': 'error',
     },
   },
   
-  // Test files configuration
+  // Test files configuration - more relaxed
   {
     files: ['tests/**/*.{ts,tsx}'],
     languageOptions: {
@@ -105,8 +139,8 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       'no-console': 'off',
     },
   }
 );
-

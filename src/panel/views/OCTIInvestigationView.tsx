@@ -29,9 +29,6 @@ import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { PlatformInfo, InvestigationEntity } from '../types';
 import { useTheme } from '@mui/material/styles';
 
-// Re-export for backward compatibility
-export type { InvestigationEntity };
-
 export interface InvestigationViewProps {
   mode: 'dark' | 'light';
   openctiPlatforms: PlatformInfo[];

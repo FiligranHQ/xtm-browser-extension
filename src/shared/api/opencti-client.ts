@@ -76,7 +76,7 @@ import type {
   StixDomainObject,
   SearchResult,
   GraphQLResponse,
-  ContainerCreateInput,
+  OCTIContainerCreateInput,
   ObservableType,
   HashType,
   Investigation,
@@ -544,7 +544,7 @@ export class OpenCTIClient {
     return data.draftWorkspaceAdd;
   }
 
-  async createContainer(input: ContainerCreateInput): Promise<StixDomainObject & { draftId?: string }> {
+  async createContainer(input: OCTIContainerCreateInput): Promise<StixDomainObject & { draftId?: string }> {
     let draftId: string | undefined;
     if (input.createAsDraft) {
       const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);

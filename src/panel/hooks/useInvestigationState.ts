@@ -7,7 +7,6 @@
 import { useState, useMemo } from 'react';
 import type { InvestigationEntity } from '../types';
 
-// Re-export type for convenience
 export type { InvestigationEntity };
 
 export interface InvestigationStateReturn {

@@ -8,7 +8,7 @@
 
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable, DetectedSDO, ScanResultPayload } from '../shared/types';
-import { getTextNodes } from '../shared/detection/detector';
+import { getTextNodes } from '../shared/detection/text-utils';
 import { 
   getPlatformFromEntity, 
   getDisplayType, 
@@ -24,9 +24,9 @@ import {
   extractArticleContent, 
   extractFirstParagraph, 
   generateArticlePDF, 
-  escapeHtml,
   getPageContentForScanning,
 } from './extraction';
+import { escapeHtml } from '../shared/utils/formatters';
 import { 
   getComprehensivePageContent, 
   detectDomainsAndHostnamesForAtomicTesting,

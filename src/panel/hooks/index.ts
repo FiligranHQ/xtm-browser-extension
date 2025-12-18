@@ -21,6 +21,6 @@ export { useInvestigationState, type InvestigationStateReturn, type Investigatio
 export { useScanResultsState, type ScanResultsStateReturn } from './useScanResultsState';
 export { useSearchState, type SearchStateReturn } from './useSearchState';
 export { useEntityState, type EntityStateReturn, type MultiPlatformResult } from './useEntityState';
-export { useAddSelectionState, type AddSelectionStateReturn, detectEntityType } from './useAddSelectionState';
+export { useAddSelectionState, type AddSelectionStateReturn } from './useAddSelectionState';
 export { useContainerActions, type ContainerActionsReturn } from './useContainerActions';
 export { useInvestigationActions, type InvestigationActionsReturn } from './useInvestigationActions';

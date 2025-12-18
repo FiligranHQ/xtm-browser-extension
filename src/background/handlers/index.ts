@@ -22,7 +22,6 @@ export {
   type TestConnectionPayload,
 } from './platform-handlers';
 
-// Re-export individual handlers from opencti-handlers
 export { 
   handleGetEntityDetails,
   handleSearchEntities,

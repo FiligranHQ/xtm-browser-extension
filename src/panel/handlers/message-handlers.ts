@@ -6,13 +6,89 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { cleanHtmlContent, generateDescription } from '../utils';
-import { SCENARIO_DEFAULT_VALUES } from '../../shared/types';
+import { SCENARIO_DEFAULT_VALUES, type OAEVAsset, type OAEVAssetGroup, type OAEVTeam, type OAEVInjectorContract, type PlatformConfig } from '../../shared/types';
 import { parsePrefixedType } from '../../shared/platform';
 import { processScanResults } from './scan-results-handler';
-import type { EntityData, PlatformInfo, PanelMode } from '../types';
+import type { 
+  EntityData, 
+  PlatformInfo, 
+  PanelMode, 
+  ContainerData,
+  ScanResultEntity,
+  UnifiedSearchResult,
+  AtomicTestingTarget,
+  InvestigationEntity,
+  ScenarioOverviewData,
+  ScenarioFormData,
+  SelectedInject,
+  AIGeneratedScenario,
+} from '../types';
 import type { MultiPlatformResult } from '../hooks/useEntityState';
 
 const log = loggers.panel;
+
+/** Attack pattern data from scan results */
+interface AttackPatternData {
+  id?: string;
+  entityId?: string;
+  name?: string;
+  externalId?: string;
+  description?: string;
+  killChainPhases?: string[];
+  platformId?: string;
+}
+
+/** Payload for showing preview */
+interface ShowPreviewPayload {
+  entities?: EntityData[];
+  pageUrl?: string;
+  pageTitle?: string;
+  pageDescription?: string;
+  pageContent?: string;
+  pageHtmlContent?: string;
+}
+
+/** Payload for showing entity */
+interface ShowEntityPayload extends EntityData {
+  entityData?: EntityData;
+  entityId?: string;
+  platformMatches?: Array<{
+    platformId: string;
+    platformType?: string;
+    entityId: string;
+    entityData?: EntityData;
+    type?: string;
+  }>;
+}
+
+/** Payload for atomic testing select */
+interface AtomicTestingSelectPayload extends AtomicTestingTarget {
+  entityId?: string;
+}
+
+/** Payload for scenario */
+interface ScenarioPayload {
+  attackPatterns?: AttackPatternData[];
+  pageTitle?: string;
+  pageUrl?: string;
+  pageDescription?: string;
+  theme?: 'dark' | 'light';
+}
+
+/** Settings response from background */
+interface SettingsResponse {
+  success: boolean;
+  data?: {
+    openctiPlatforms?: PlatformConfig[];
+    openaevPlatforms?: PlatformConfig[];
+  };
+}
+
+/** Chrome message response */
+interface ChromeMessageResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+}
 
 export interface MessageHandlerContext {
   // Mode and theme
@@ -22,7 +98,7 @@ export interface MessageHandlerContext {
   
   // Entity state
   setEntity: React.Dispatch<React.SetStateAction<EntityData | null>>;
-  setEntityContainers: (containers: any[]) => void;
+  setEntityContainers: (containers: ContainerData[]) => void;
   setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   setEntityFromScanResults: (from: boolean) => void;
   clearEntityState: () => void;
@@ -46,8 +122,8 @@ export interface MessageHandlerContext {
   setAvailablePlatforms: React.Dispatch<React.SetStateAction<PlatformInfo[]>>;
   
   // Scan results
-  scanResultsEntitiesRef: React.MutableRefObject<any[]>;
-  setScanResultsEntities: React.Dispatch<React.SetStateAction<any[]>>;
+  scanResultsEntitiesRef: React.MutableRefObject<ScanResultEntity[]>;
+  setScanResultsEntities: React.Dispatch<React.SetStateAction<ScanResultEntity[]>>;
   setScanResultsTypeFilter: (filter: string) => void;
   setScanResultsFoundFilter: (filter: 'all' | 'found' | 'not-found' | 'ai-discovered') => void;
   setSelectedScanItems: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -61,12 +137,12 @@ export interface MessageHandlerContext {
   setEntitiesToAdd: React.Dispatch<React.SetStateAction<EntityData[]>>;
   setContainerForm: React.Dispatch<React.SetStateAction<{ name: string; description: string; content: string }>>;
   setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
-  setExistingContainers: (containers: any[]) => void;
+  setExistingContainers: (containers: ContainerData[]) => void;
   setCheckingExisting: (checking: boolean) => void;
   
   // Search
   setUnifiedSearchQuery: (query: string) => void;
-  setUnifiedSearchResults: (results: any[]) => void;
+  setUnifiedSearchResults: (results: UnifiedSearchResult[]) => void;
   doUnifiedSearch: (query?: string) => Promise<void>;
   
   // Add selection
@@ -74,7 +150,7 @@ export interface MessageHandlerContext {
   setAddSelectionFromContextMenu: (from: boolean) => void;
   
   // Investigation
-  setInvestigationEntities: React.Dispatch<React.SetStateAction<any[]>>;
+  setInvestigationEntities: React.Dispatch<React.SetStateAction<InvestigationEntity[]>>;
   setInvestigationTypeFilter: (filter: string) => void;
   setInvestigationPlatformSelected: (selected: boolean) => void;
   setInvestigationPlatformId: (id: string | null) => void;
@@ -82,38 +158,38 @@ export interface MessageHandlerContext {
   handleInvestigationScan: (platformId?: string) => Promise<void>;
   
   // Atomic testing
-  setAtomicTestingTargets: (targets: any[]) => void;
-  setSelectedAtomicTarget: (target: any) => void;
+  setAtomicTestingTargets: (targets: AtomicTestingTarget[]) => void;
+  setSelectedAtomicTarget: (target: AtomicTestingTarget | null) => void;
   setAtomicTestingShowList: (show: boolean) => void;
   setAtomicTestingPlatformSelected: (selected: boolean) => void;
   setAtomicTestingPlatformId: (id: string | null) => void;
-  setAtomicTestingAssets: (assets: any[]) => void;
-  setAtomicTestingAssetGroups: (groups: any[]) => void;
-  setAtomicTestingInjectorContracts: (contracts: any[]) => void;
-  setAtomicTestingSelectedAsset: (asset: any) => void;
-  setAtomicTestingSelectedAssetGroup: (group: any) => void;
-  setAtomicTestingSelectedContract: (contract: any) => void;
+  setAtomicTestingAssets: (assets: OAEVAsset[]) => void;
+  setAtomicTestingAssetGroups: (groups: OAEVAssetGroup[]) => void;
+  setAtomicTestingInjectorContracts: (contracts: OAEVInjectorContract[]) => void;
+  setAtomicTestingSelectedAsset: (asset: OAEVAsset | null) => void;
+  setAtomicTestingSelectedAssetGroup: (group: OAEVAssetGroup | null) => void;
+  setAtomicTestingSelectedContract: (contract: OAEVInjectorContract | null) => void;
   setAtomicTestingTitle: (title: string) => void;
   setAtomicTestingTypeFilter: (filter: string) => void;
   atomicTestingPlatformId: string | null;
   
   // Scenario
-  setScenarioOverviewData: (data: any) => void;
-  setScenarioForm: (form: any) => void;
-  setSelectedInjects: (injects: any[]) => void;
+  setScenarioOverviewData: (data: ScenarioOverviewData | null) => void;
+  setScenarioForm: (form: ScenarioFormData) => void;
+  setSelectedInjects: (injects: SelectedInject[]) => void;
   setScenarioLoading: (loading: boolean) => void;
   setScenarioStep: (step: number) => void;
   setScenarioTypeAffinity: (affinity: string) => void;
   setScenarioPlatformsAffinity: (affinities: string[]) => void;
   setScenarioPlatformSelected: (selected: boolean) => void;
   setScenarioPlatformId: (id: string | null) => void;
-  setScenarioRawAttackPatterns: (patterns: any[]) => void;
-  setScenarioAssets: (assets: any[]) => void;
-  setScenarioAssetGroups: (groups: any[]) => void;
-  setScenarioTeams: (teams: any[]) => void;
-  setScenarioSelectedAsset: (asset: any) => void;
-  setScenarioSelectedAssetGroup: (group: any) => void;
-  setScenarioSelectedTeam: (team: any) => void;
+  setScenarioRawAttackPatterns: (patterns: AttackPatternData[]) => void;
+  setScenarioAssets: (assets: OAEVAsset[]) => void;
+  setScenarioAssetGroups: (groups: OAEVAssetGroup[]) => void;
+  setScenarioTeams: (teams: OAEVTeam[]) => void;
+  setScenarioSelectedAsset: (asset: OAEVAsset | null) => void;
+  setScenarioSelectedAssetGroup: (group: OAEVAssetGroup | null) => void;
+  setScenarioSelectedTeam: (team: OAEVTeam | null) => void;
   setScenarioAIMode: (mode: boolean) => void;
   setScenarioAIGenerating: (generating: boolean) => void;
   setScenarioAINumberOfInjects: (count: number) => void;
@@ -121,13 +197,13 @@ export interface MessageHandlerContext {
   setScenarioAITableTopDuration: (duration: number) => void;
   setScenarioAIEmailLanguage: (language: string) => void;
   setScenarioAIContext: (context: string) => void;
-  setScenarioAIGeneratedScenario: (scenario: any) => void;
+  setScenarioAIGeneratedScenario: (scenario: AIGeneratedScenario | null) => void;
   
   // Entity containers
   fetchEntityContainers: (entityId: string, platformId?: string) => Promise<void>;
 }
 
-export function handleShowPreview(ctx: MessageHandlerContext, payload: any) {
+export function handleShowPreview(ctx: MessageHandlerContext, payload: ShowPreviewPayload | undefined) {
   ctx.setEntitiesToAdd(payload?.entities || []);
   ctx.setCurrentPageUrl(payload?.pageUrl || '');
   ctx.setCurrentPageTitle(payload?.pageTitle || '');
@@ -137,7 +213,7 @@ export function handleShowPreview(ctx: MessageHandlerContext, payload: any) {
   ctx.setPanelMode('preview');
 }
 
-export async function handleShowContainer(ctx: MessageHandlerContext, payload: any) {
+export async function handleShowContainer(ctx: MessageHandlerContext, payload: ShowPreviewPayload | undefined) {
   const pageContent = payload?.pageContent || '';
   const pageHtmlContent = payload?.pageHtmlContent || pageContent;
   const pageUrl = payload?.pageUrl || '';
@@ -202,7 +278,7 @@ export function handleShowInvestigation(ctx: MessageHandlerContext) {
   }
 }
 
-export function handleShowAtomicTesting(ctx: MessageHandlerContext, payload: any) {
+export function handleShowAtomicTesting(ctx: MessageHandlerContext, payload: { theme?: 'dark' | 'light'; targets?: AtomicTestingTarget[] } | undefined) {
   ctx.clearEntityState();
   ctx.setEntityContainers([]);
   if (payload?.theme && (payload.theme === 'dark' || payload.theme === 'light')) ctx.setMode(payload.theme);
@@ -223,7 +299,7 @@ export function handleShowAtomicTesting(ctx: MessageHandlerContext, payload: any
   ctx.setPanelMode('atomic-testing');
 }
 
-export function handleAtomicTestingSelect(ctx: MessageHandlerContext, payload: any) {
+export function handleAtomicTestingSelect(ctx: MessageHandlerContext, payload: AtomicTestingSelectPayload | null) {
   ctx.setSelectedAtomicTarget(payload);
   ctx.setAtomicTestingTitle(`Atomic Test - ${payload?.name || ''}`);
   ctx.setAtomicTestingShowList(false);
@@ -235,19 +311,30 @@ export function handleAtomicTestingSelect(ctx: MessageHandlerContext, payload: a
     chrome.runtime.sendMessage({
       type: 'FETCH_INJECTOR_CONTRACTS',
       payload: { attackPatternId: entityId, platformId: ctx.atomicTestingPlatformId },
-    }).then((res: any) => {
+    }).then((res: ChromeMessageResponse<OAEVInjectorContract[]>) => {
       if (res?.success) ctx.setAtomicTestingInjectorContracts(res.data || []);
     });
   }
 }
 
-export function handleInvestigationResults(ctx: MessageHandlerContext, payload: any) {
+interface InvestigationResultEntity {
+  entityId?: string;
+  id?: string;
+  type?: string;
+  entity_type?: string;
+  name?: string;
+  value?: string;
+  platformId?: string;
+  _platformId?: string;
+}
+
+export function handleInvestigationResults(ctx: MessageHandlerContext, payload: { entities?: InvestigationResultEntity[] } | undefined) {
   ctx.clearEntityState();
   ctx.setEntityContainers([]);
   const entities = payload?.entities || [];
-  ctx.setInvestigationEntities(entities.map((e: any) => ({
-    id: e.entityId || e.id,
-    type: e.type || e.entity_type,
+  ctx.setInvestigationEntities(entities.map((e) => ({
+    id: e.entityId || e.id || '',
+    type: e.type || e.entity_type || '',
     name: e.name || e.value,
     value: e.value,
     platformId: e.platformId || e._platformId,
@@ -257,7 +344,7 @@ export function handleInvestigationResults(ctx: MessageHandlerContext, payload: 
   ctx.setInvestigationTypeFilter('all');
 }
 
-export function handleScanResults(ctx: MessageHandlerContext, payload: any) {
+export function handleScanResults(ctx: MessageHandlerContext, payload: Record<string, unknown> | undefined) {
   ctx.clearEntityState();
   ctx.setEntityContainers([]);
   ctx.setEntityFromSearchMode(null);
@@ -273,14 +360,14 @@ export function handleScanResults(ctx: MessageHandlerContext, payload: any) {
   ctx.setPanelMode('scan-results');
 }
 
-export function handleInvestigationToggle(ctx: MessageHandlerContext, payload: any) {
+export function handleInvestigationToggle(ctx: MessageHandlerContext, payload: { entityId?: string; selected?: boolean } | undefined) {
   const { entityId, selected } = payload || {};
   if (entityId) {
-    ctx.setInvestigationEntities(prev => prev.map(e => e.id === entityId ? { ...e, selected } : e));
+    ctx.setInvestigationEntities(prev => prev.map(e => e.id === entityId ? { ...e, selected: selected ?? false } : e));
   }
 }
 
-export function handleShowUnifiedSearch(ctx: MessageHandlerContext, payload: any) {
+export function handleShowUnifiedSearch(ctx: MessageHandlerContext, payload: { initialQuery?: string } | undefined) {
   const initialQuery = payload?.initialQuery || '';
   ctx.setUnifiedSearchQuery(initialQuery);
   ctx.setUnifiedSearchResults([]);
@@ -290,7 +377,7 @@ export function handleShowUnifiedSearch(ctx: MessageHandlerContext, payload: any
   }
 }
 
-export async function handleShowScenario(ctx: MessageHandlerContext, payload: any) {
+export async function handleShowScenario(ctx: MessageHandlerContext, payload: ScenarioPayload | undefined) {
   const { attackPatterns, pageTitle, pageUrl, pageDescription, theme: themeFromPayload } = payload || {};
   if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) ctx.setMode(themeFromPayload);
   
@@ -318,18 +405,18 @@ export async function handleShowScenario(ctx: MessageHandlerContext, payload: an
   let currentPlatforms = ctx.availablePlatformsRef.current;
   if (currentPlatforms.length === 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     try {
-      const settingsResponse = await new Promise<any>((resolve) => {
+      const settingsResponse = await new Promise<SettingsResponse>((resolve) => {
         chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, resolve);
       });
       if (settingsResponse?.success && settingsResponse.data) {
         const platforms = settingsResponse.data?.openctiPlatforms || [];
         const enabledPlatforms = platforms
-          .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
+          .filter((p) => p.enabled !== false && p.url && p.apiToken)
+          .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
         const oaevPlatformsFromSettings = settingsResponse.data?.openaevPlatforms || [];
         const enabledOAEVPlatforms = oaevPlatformsFromSettings
-          .filter((p: any) => p.enabled !== false && p.url && p.apiToken)
-          .map((p: any) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
+          .filter((p) => p.enabled !== false && p.url && p.apiToken)
+          .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
         currentPlatforms = [...enabledPlatforms, ...enabledOAEVPlatforms];
         ctx.setAvailablePlatforms(currentPlatforms);
         ctx.availablePlatformsRef.current = currentPlatforms;
@@ -354,9 +441,9 @@ export async function handleShowScenario(ctx: MessageHandlerContext, payload: an
     
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       Promise.all([
-        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }),
-        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId: singlePlatformId } }),
-        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId: singlePlatformId } }),
+        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }) as Promise<ChromeMessageResponse<OAEVAsset[]>>,
+        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSET_GROUPS', payload: { platformId: singlePlatformId } }) as Promise<ChromeMessageResponse<OAEVAssetGroup[]>>,
+        chrome.runtime.sendMessage({ type: 'FETCH_OAEV_TEAMS', payload: { platformId: singlePlatformId } }) as Promise<ChromeMessageResponse<OAEVTeam[]>>,
       ]).then(([assetsRes, assetGroupsRes, teamsRes]) => {
         if (assetsRes?.success) ctx.setScenarioAssets(assetsRes.data || []);
         if (assetGroupsRes?.success) ctx.setScenarioAssetGroups(assetGroupsRes.data || []);
@@ -368,15 +455,15 @@ export async function handleShowScenario(ctx: MessageHandlerContext, payload: an
     ctx.setScenarioSelectedAssetGroup(null);
     ctx.setScenarioSelectedTeam(null);
     
-    const filteredPatterns = (attackPatterns || []).filter((ap: any) => !ap.platformId || ap.platformId === singlePlatformId);
+    const filteredPatterns = (attackPatterns || []).filter((ap) => !ap.platformId || ap.platformId === singlePlatformId);
     if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       ctx.setScenarioLoading(true);
       ctx.setPanelMode('scenario-overview');
-      const attackPatternIds = filteredPatterns.map((ap: any) => ap.id || ap.entityId);
+      const attackPatternIds = filteredPatterns.map((ap) => ap.id || ap.entityId);
       chrome.runtime.sendMessage({
         type: 'FETCH_SCENARIO_OVERVIEW',
         payload: { attackPatternIds, platformId: singlePlatformId },
-      }, (response) => {
+      }, (response: ChromeMessageResponse<ScenarioOverviewData>) => {
         ctx.setScenarioLoading(false);
         if (response?.success && response.data) {
           ctx.setScenarioOverviewData({ ...response.data, pageTitle: pageTitle || '', pageUrl: pageUrl || '', pageDescription: pageDescription || '' });
@@ -391,8 +478,8 @@ export async function handleShowScenario(ctx: MessageHandlerContext, payload: an
   } else {
     ctx.setScenarioPlatformSelected(false);
     ctx.setScenarioPlatformId(null);
-    const rawPatternsForDisplay = (attackPatterns || []).map((ap: any) => ({
-      id: ap.id || ap.entityId, name: ap.name, externalId: ap.externalId, description: ap.description,
+    const rawPatternsForDisplay = (attackPatterns || []).map((ap) => ({
+      id: ap.id || ap.entityId || '', name: ap.name || '', externalId: ap.externalId || '', description: ap.description,
       killChainPhases: ap.killChainPhases || [], contracts: [],
     }));
     ctx.setScenarioOverviewData({ attackPatterns: rawPatternsForDisplay, killChainPhases: [], pageTitle: pageTitle || '', pageUrl: pageUrl || '', pageDescription: pageDescription || '' });
@@ -401,7 +488,7 @@ export async function handleShowScenario(ctx: MessageHandlerContext, payload: an
   }
 }
 
-export async function handleShowEntity(ctx: MessageHandlerContext, payload: any) {
+export async function handleShowEntity(ctx: MessageHandlerContext, payload: ShowEntityPayload | undefined) {
   ctx.setEntityContainers([]);
   ctx.setEntityFromSearchMode(null);
   ctx.setEntityFromScanResults(ctx.scanResultsEntitiesRef.current.length > 0);
@@ -409,14 +496,14 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: any)
   const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
   const entityType = payload?.entityData?.entity_type || payload?.type || payload?.entity_type;
   const platformId = payload?.platformId || payload?._platformId;
-  const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
+  const platformMatches = payload?.platformMatches || (payload?.entityData as ShowEntityPayload)?.platformMatches;
   
   // Handle multi-platform results
   if (platformMatches && platformMatches.length > 0) {
-    const multiResults: MultiPlatformResult[] = platformMatches.map((match: any) => {
+    const multiResults: MultiPlatformResult[] = platformMatches.map((match) => {
       const platform = ctx.availablePlatforms.find(p => p.id === match.platformId);
       const matchPlatformType = match.platformType || platform?.type || 'opencti';
-      const matchType = match.type || match.entityData?.entity_type || payload?.type || entityType || '';
+      const matchType = match.type || (match.entityData as EntityData)?.entity_type || payload?.type || entityType || '';
       const cleanType = matchType.replace(/^oaev-/, '');
       const displayType = matchPlatformType === 'openaev' && !matchType.startsWith('oaev-') ? `oaev-${cleanType}` : matchType;
       
@@ -425,7 +512,7 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: any)
         platformName: platform?.name || match.platformId,
         entity: {
           ...payload, id: match.entityId, entityId: match.entityId, type: displayType, entity_type: cleanType,
-          name: payload?.name || payload?.value || match.entityData?.name, value: payload?.value || payload?.name,
+          name: payload?.name || payload?.value || (match.entityData as EntityData)?.name, value: payload?.value || payload?.name,
           existsInPlatform: true, platformId: match.platformId, _platformId: match.platformId, _platformType: matchPlatformType,
           _isNonDefaultPlatform: matchPlatformType !== 'opencti',
           entityData: { ...(match.entityData || payload?.entityData || {}), entity_type: cleanType },
@@ -461,10 +548,11 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: any)
   const actualEntityType = parsedType ? parsedType.entityType : entityType;
   const entityPlatformType = parsedType?.platformType || 'opencti';
   
+  const entityData = payload?.entityData as Record<string, unknown> | undefined;
   const isMinimalData = entityId && payload?.existsInPlatform && (
     entityPlatformType === 'openaev' 
-      ? (!payload?.entityData?.finding_type && !payload?.entityData?.finding_created_at && !payload?.entityData?.endpoint_name)
-      : (!payload?.entityData?.description && !payload?.entityData?.objectLabel && !payload?.description)
+      ? (!entityData?.finding_type && !entityData?.finding_created_at && !entityData?.endpoint_name)
+      : (!entityData?.description && !entityData?.objectLabel && !payload?.description)
   );
   
   if (isMinimalData && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -475,7 +563,7 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: any)
     chrome.runtime.sendMessage({
       type: 'GET_ENTITY_DETAILS',
       payload: { id: entityId, entityType: actualEntityType, platformId, platformType: entityPlatformType },
-    }, (response) => {
+    }, (response: ChromeMessageResponse<EntityData>) => {
       if (chrome.runtime.lastError) return;
       if (ctx.currentPlatformIndexRef.current !== fetchStartIndex) return;
       
@@ -491,7 +579,7 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: any)
         ctx.multiPlatformResultsRef.current = ctx.multiPlatformResultsRef.current.map((r, i) =>
           i === fetchStartIndex ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } as EntityData } : r
         );
-        if (!isNonDefaultPlatform) ctx.fetchEntityContainers(entityId, platformId);
+        if (!isNonDefaultPlatform && entityId) ctx.fetchEntityContainers(entityId, platformId);
       }
     });
   } else {

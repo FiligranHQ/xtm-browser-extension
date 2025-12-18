@@ -745,11 +745,11 @@ async function scanPage(): Promise<void> {
       
       const totalFound = [
         ...data.observables.filter((o: DetectedObservable) => o.found),
-        ...data.sdos.filter((s: DetectedSDO) => s.found),
+        ...data.openctiEntities.filter((s: DetectedSDO) => s.found),
         ...(data.cves || []).filter((c: DetectedSDO) => c.found),
-        ...(data.platformEntities || []).filter((e: { found?: boolean }) => e.found),
+        ...(data.openaevEntities || []).filter((e: { found?: boolean }) => e.found),
       ].length;
-      const totalDetected = data.observables.length + data.sdos.length + (data.cves?.length || 0) + (data.platformEntities?.length || 0);
+      const totalDetected = data.observables.length + data.openctiEntities.length + (data.cves?.length || 0) + (data.openaevEntities?.length || 0);
       
       if (totalDetected === 0) {
         showToast({ type: 'info', message: 'No entities detected on this page' });
@@ -803,13 +803,13 @@ async function scanPageForOAEV(): Promise<void> {
     
     if (response.success && response.data) {
       const data = response.data;
-      const entities = data.platformEntities || [];
+      const entities = data.openaevEntities || [];
       
       scanResults = {
         observables: [],
-        sdos: [],
+        openctiEntities: [],
         cves: [],
-        platformEntities: entities,
+        openaevEntities: entities,
         scanTime: data.scanTime || 0,
         url: data.url || url,
       };
@@ -889,10 +889,10 @@ async function scanAllPlatforms(): Promise<void> {
       
       const octiFound = [
         ...data.observables.filter((o: { found?: boolean }) => o.found),
-        ...data.sdos.filter((s: { found?: boolean }) => s.found),
+        ...data.openctiEntities.filter((s: { found?: boolean }) => s.found),
       ].length;
-      const oaevFound = data.platformEntities?.length || 0;
-      const totalDetected = data.observables.length + data.sdos.length + (data.platformEntities?.length || 0);
+      const oaevFound = data.openaevEntities?.length || 0;
+      const totalDetected = data.observables.length + data.openctiEntities.length + (data.openaevEntities?.length || 0);
       
       if (totalDetected === 0) {
         showToast({ type: 'info', message: 'No entities found on this page' });
@@ -954,7 +954,7 @@ async function scanPageForAtomicTesting(): Promise<void> {
     }> = [];
     
     if (response?.success && response?.data?.platformEntities) {
-      const attackPatterns = (response.data.platformEntities || [])
+      const attackPatterns = (response.data.openaevEntities || [])
         .filter((e: { type: string }) => e.type === 'AttackPattern');
       
       for (const ap of attackPatterns) {
@@ -1047,7 +1047,7 @@ async function scanPageForScenario(): Promise<void> {
     }> = [];
     
     if (response?.success && response?.data?.platformEntities) {
-      const foundPatterns = (response.data.platformEntities || [])
+      const foundPatterns = (response.data.openaevEntities || [])
         .filter((e: { type: string }) => e.type === 'AttackPattern');
       
       for (const ap of foundPatterns) {
@@ -1128,7 +1128,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         return true;
       });
       
-      const foundSDOs = (data.sdos || []).filter((s: DetectedSDO) => {
+      const foundSDOs = (data.openctiEntities || []).filter((s: DetectedSDO) => {
         if (!s.found) return false;
         if (platformId) {
           const entityPlatformId = s.platformId || (s as { _platformId?: string })._platformId;
@@ -1137,7 +1137,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         return true;
       });
       
-      const foundOAEV = (data.platformEntities || []).filter((e: { found?: boolean; type?: string }) => {
+      const foundOAEV = (data.openaevEntities || []).filter((e: { found?: boolean; type?: string }) => {
         if (!e.found) return false;
         if (platformId) {
           const entityPlatformDef = getPlatformFromEntity(`${e.type}`);
@@ -1150,9 +1150,9 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       
       const investigationResults: ScanResultPayload = {
         observables: foundObservables,
-        sdos: foundSDOs,
+        openctiEntities: foundSDOs,
         cves: [],
-        platformEntities: foundOAEV,
+        openaevEntities: foundOAEV,
         scanTime: data.scanTime,
         url: data.url,
       };

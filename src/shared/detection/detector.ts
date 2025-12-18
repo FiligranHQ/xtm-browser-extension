@@ -46,9 +46,9 @@ const log = loggers.detection;
 
 export interface DetectionResult {
   observables: DetectedObservable[];
-  sdos: DetectedSDO[];
+  openctiEntities: DetectedSDO[];
   cves: DetectedSDO[];
-  platformEntities: DetectedPlatformEntity[];
+  openaevEntities: DetectedPlatformEntity[];
   scanTime: number;
 }
 
@@ -548,8 +548,8 @@ export class DetectionEngine {
     // Detect SDOs from cache first (fast, offline)
     const cachedSDOs = await this.detectSDOsFromCache(text);
     
-    // Detect platform entities from cache (OpenAEV, etc.)
-    const platformEntities = await this.detectPlatformEntitiesFromCache(text);
+    // Detect OpenAEV entities from cache
+    const openaevEntities = await this.detectPlatformEntitiesFromCache(text);
     
     // Also detect from provided entity names (fallback/additional)
     let additionalSDOs: DetectedSDO[] = [];
@@ -590,9 +590,9 @@ export class DetectionEngine {
 
     return {
       observables: enrichedObservables,
-      sdos: finalSDOs,
+      openctiEntities: finalSDOs,
       cves: enrichedCVEs,
-      platformEntities,
+      openaevEntities,
       scanTime,
     };
   }

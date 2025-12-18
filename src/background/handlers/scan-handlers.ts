@@ -47,15 +47,15 @@ export async function handleScanPage(
     const filteredObservables = result.observables.filter(obs => 
       !disabledObservableTypes.includes(obs.type)
     );
-    const filteredSdos = result.sdos.filter(sdo => 
-      !disabledOpenCTITypes.includes(sdo.type)
+    const filteredOpenctiEntities = result.openctiEntities.filter(entity => 
+      !disabledOpenCTITypes.includes(entity.type)
     );
     
     const scanResult: ScanResultPayload = {
       observables: filteredObservables,
-      sdos: filteredSdos,
+      openctiEntities: filteredOpenctiEntities,
       cves: result.cves,
-      platformEntities: [],
+      openaevEntities: [],
       scanTime: result.scanTime,
       url: payload.url,
     };
@@ -87,14 +87,14 @@ export async function handleScanOAEV(
     const includeAttackPatterns = payload.includeAttackPatterns === true;
     log.debug(`SCAN_OAEV: Searching for ${oaevEntityMap.size} cached OpenAEV entities (includeAttackPatterns: ${includeAttackPatterns})`);
     
-    const platformEntities = scanForOAEVEntities(
+    const openaevEntities = scanForOAEVEntities(
       payload.content,
       oaevEntityMap,
       includeAttackPatterns
     );
     
     const scanResult = {
-      platformEntities,
+      openaevEntities,
       scanTime: 0,
       url: payload.url,
     };
@@ -116,8 +116,8 @@ export function scanForOAEVEntities(
   content: string,
   entityMap: Map<string, { id: string; name: string; type: string; platformId: string }>,
   includeAttackPatterns: boolean
-): ScanResultPayload['platformEntities'] {
-  const platformEntities: ScanResultPayload['platformEntities'] = [];
+): ScanResultPayload['openaevEntities'] {
+  const openaevEntities: ScanResultPayload['openaevEntities'] = [];
   const originalText = content;
   const textLower = originalText.toLowerCase();
   const seenEntities = new Set<string>();
@@ -175,7 +175,7 @@ export function scanForOAEVEntities(
           const matchedText = originalText.substring(matchIndex, endIndex);
           log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
           
-          platformEntities.push({
+          openaevEntities.push({
             platformType: 'openaev',
             type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
             name: entity.name,
@@ -199,7 +199,7 @@ export function scanForOAEVEntities(
     }
   }
   
-  return platformEntities;
+  return openaevEntities;
 }
 
 /**
@@ -207,12 +207,12 @@ export function scanForOAEVEntities(
  */
 export function mergeScanResults(
   openCTIResult: ScanResultPayload,
-  oaevEntities: ScanResultPayload['platformEntities']
+  oaevEntities: ScanResultPayload['openaevEntities']
 ): ScanResultPayload {
   return {
     ...openCTIResult,
-    platformEntities: [
-      ...(openCTIResult.platformEntities || []),
+    openaevEntities: [
+      ...(openCTIResult.openaevEntities || []),
       ...(oaevEntities || []),
     ],
   };

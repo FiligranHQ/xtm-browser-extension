@@ -6,7 +6,7 @@
 import type { PlatformType } from '../platform';
 
 /**
- * Entity type categories for OpenCTI
+ * OpenCTI Observable Types
  */
 export const OBSERVABLE_TYPES = [
   'IPv4-Addr', 'IPv6-Addr', 'Domain-Name', 'Hostname', 'Url', 
@@ -14,7 +14,10 @@ export const OBSERVABLE_TYPES = [
   'Cryptocurrency-Wallet', 'User-Agent', 'Phone-Number', 'Bank-Account'
 ] as const;
 
-export const SDO_TYPES = [
+/**
+ * OpenCTI Entity Types (STIX Domain Objects)
+ */
+export const OPENCTI_ENTITY_TYPES = [
   'Attack-Pattern', 'Campaign', 'Course-Of-Action', 'Data-Component',
   'Data-Source', 'Grouping', 'Identity', 'Incident', 'Indicator',
   'Infrastructure', 'Intrusion-Set', 'Location', 'Malware',
@@ -24,17 +27,12 @@ export const SDO_TYPES = [
   'Position', 'Region', 'Individual', 'Organization', 'Sector', 'System'
 ] as const;
 
+/**
+ * OpenCTI Container Types
+ */
 export const CONTAINER_TYPES = [
   'Report', 'Grouping', 'Case-Incident', 'Case-Rfi', 'Case-Rft',
   'Feedback', 'Task', 'Note', 'Opinion'
-] as const;
-
-/**
- * OpenAEV Types
- */
-export const OPENAEV_TYPES = [
-  'Asset', 'AssetGroup', 'Team', 'Player', 'User', 
-  'Organization', 'Scenario', 'Exercise', 'AttackPattern', 'Finding'
 ] as const;
 
 /**
@@ -48,11 +46,11 @@ export function isObservableType(type: string): boolean {
 }
 
 /**
- * Check if entity type is an OpenCTI entity (SDO - STIX Domain Object)
+ * Check if entity type is an OpenCTI Entity Type
  * These entities can be created via the extension using AI discovery
  */
-export function isSDOType(type: string): boolean {
-  return SDO_TYPES.some(t => 
+export function isOpenCTIEntityType(type: string): boolean {
+  return OPENCTI_ENTITY_TYPES.some(t => 
     type.toLowerCase() === t.toLowerCase()
   );
 }

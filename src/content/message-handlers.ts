@@ -319,14 +319,14 @@ async function handleScanPage(ctx: MessageHandlerContext, isAutoScan: boolean): 
       ctx.setScanResults(data);
       ctx.setLastScanData(data);
       
-      const totalEntities = (data.observables?.length || 0) + (data.sdos?.length || 0);
+      const totalEntities = (data.observables?.length || 0) + (data.openctiEntities?.length || 0);
       
       if (totalEntities > 0) {
         ctx.highlightResults(data, (highlight, value) => {
           ctx.toggleSelection(highlight, value);
         });
         ctx.showPreviewPanel(
-          [...(data.observables || []), ...(data.sdos || [])],
+          [...(data.observables || []), ...(data.openctiEntities || [])],
           pageContent,
           pageUrl,
           pageTitle,
@@ -404,14 +404,14 @@ async function handleScanAll(ctx: MessageHandlerContext): Promise<void> {
       ctx.setScanResults(data);
       ctx.setLastScanData(data);
       
-      const totalEntities = (data.observables?.length || 0) + (data.sdos?.length || 0);
+      const totalEntities = (data.observables?.length || 0) + (data.openctiEntities?.length || 0);
       
       if (totalEntities > 0) {
         ctx.highlightResults(data, (highlight, value) => {
           ctx.toggleSelection(highlight, value);
         });
         ctx.showPreviewPanel(
-          [...(data.observables || []), ...(data.sdos || [])],
+          [...(data.observables || []), ...(data.openctiEntities || [])],
           pageContent,
           pageUrl,
           pageTitle,
@@ -517,7 +517,7 @@ async function handleScanForInvestigation(ctx: MessageHandlerContext): Promise<v
       ctx.setScanResults(data);
       ctx.setLastScanData(data);
       
-      const totalEntities = (data.observables?.length || 0) + (data.sdos?.length || 0);
+      const totalEntities = (data.observables?.length || 0) + (data.openctiEntities?.length || 0);
       
       if (totalEntities > 0) {
         ctx.highlightResultsForInvestigation(data, (highlight, value) => {

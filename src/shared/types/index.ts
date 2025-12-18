@@ -752,17 +752,14 @@ export interface ScanPagePayload {
 }
 
 export interface ScanResultPayload {
-  /** OpenCTI observables detected */
+  /** Observable Types detected (IPs, domains, hashes, etc.) */
   observables: DetectedObservable[];
-  /** OpenCTI entities detected */
-  sdos: DetectedOCTIEntity[];
+  /** OpenCTI Types detected (Threat Actors, Malware, etc.) */
+  openctiEntities: DetectedOCTIEntity[];
   /** CVEs (Vulnerabilities) - separate array for special handling */
   cves?: DetectedOCTIEntity[];
-  /** 
-   * Platform entities detected (non-OpenCTI platforms like OpenAEV)
-   * Each entity has a type with platform prefix (e.g., 'oaev-Asset')
-   */
-  platformEntities?: DetectedPlatformEntity[];
+  /** OpenAEV Types detected (Assets, Teams, Players, etc.) */
+  openaevEntities?: DetectedPlatformEntity[];
   scanTime: number;
   url: string;
 }

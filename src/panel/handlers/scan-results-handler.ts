@@ -17,9 +17,9 @@ import type { ScanResultEntity, ScanResultPlatformMatch } from '../types';
  */
 export function processScanResults(payload: {
   observables?: any[];
-  sdos?: any[];
+  openctiEntities?: any[];
   cves?: any[];
-  platformEntities?: any[];
+  openaevEntities?: any[];
   pageContent?: string;
   pageTitle?: string;
   pageUrl?: string;
@@ -95,8 +95,8 @@ export function processScanResults(payload: {
   }
   
   // Add OpenCTI SDOs
-  if (payload.sdos) {
-    for (const sdo of payload.sdos) {
+  if (payload.openctiEntities) {
+    for (const sdo of payload.openctiEntities) {
       addOrMergeEntity({
         id: sdo.entityId || sdo.id || `sdo-${sdo.name}`,
         type: sdo.type,
@@ -129,8 +129,8 @@ export function processScanResults(payload: {
   }
   
   // Add OpenAEV entities
-  if (payload.platformEntities) {
-    for (const entity of payload.platformEntities) {
+  if (payload.openaevEntities) {
+    for (const entity of payload.openaevEntities) {
       const platformType = entity.platformType || 'openaev';
       const entityType = entity.type || '';
       const oaevEntityId = entity.entityId || (platformType === 'openaev' 

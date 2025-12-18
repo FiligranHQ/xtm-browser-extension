@@ -1045,17 +1045,17 @@ async function handleMessage(
               !disabledObservableTypes.includes(obs.type)
             );
             
-            // Filter SDOs - exclude disabled types (empty = all enabled)
-            const filteredSdos = result.sdos.filter(sdo => 
-              !disabledOpenCTITypes.includes(sdo.type)
+            // Filter OpenCTI entities - exclude disabled types (empty = all enabled)
+            const filteredOpenctiEntities = result.openctiEntities.filter(entity => 
+              !disabledOpenCTITypes.includes(entity.type)
             );
             
-            // Return OpenCTI results - platformEntities from other platforms are handled by SCAN_ALL
+            // Return OpenCTI results - openaevEntities from other platforms are handled by SCAN_ALL
             const scanResult: ScanResultPayload = {
               observables: filteredObservables,
-              sdos: filteredSdos,
+              openctiEntities: filteredOpenctiEntities,
               cves: result.cves, // CVEs are always included
-              platformEntities: [], // OpenCTI entities are in observables/sdos/cves, not platformEntities
+              openaevEntities: [], // OpenCTI entities are in observables/openctiEntities/cves
               scanTime: result.scanTime,
               url: payload.url,
             };
@@ -1104,7 +1104,7 @@ async function handleMessage(
           const includeAttackPatterns = payload.includeAttackPatterns === true;
           log.debug(`SCAN_OAEV: Searching for ${oaevEntityMap.size} cached OpenAEV entities (includeAttackPatterns: ${includeAttackPatterns})`);
           
-          const platformEntities: ScanResultPayload['platformEntities'] = [];
+          const openaevEntitiesResult: ScanResultPayload['openaevEntities'] = [];
           const originalText = payload.content;
           // Also create a refanged version of the text for searching
           // This allows finding defanged indicators like honey[.]scanme[.]sh when cache has honey.scanme.sh
@@ -1179,7 +1179,7 @@ async function handleMessage(
                   if (!hasOverlap) {
                     const matchedText = target.originalText.substring(matchIndex, endIndex);
                     log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}${target.isRefanged ? ' (refanged search)' : ''}`);
-                    platformEntities.push({
+                    openaevEntitiesResult.push({
                       platformType: 'openaev',
                       type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
                       name: entity.name,
@@ -1204,12 +1204,12 @@ async function handleMessage(
             }
           }
           
-          const attackPatternCount = platformEntities.filter(e => e.type === 'AttackPattern').length;
-          const assetCount = platformEntities.length - attackPatternCount;
+          const attackPatternCount = openaevEntitiesResult.filter(e => e.type === 'AttackPattern').length;
+          const assetCount = openaevEntitiesResult.length - attackPatternCount;
           log.debug(`SCAN_OAEV: Found ${assetCount} assets and ${attackPatternCount} attack patterns`);
           
           const scanResult = {
-            platformEntities,
+            openaevEntities: openaevEntitiesResult,
             scanTime: 0,
             url: payload.url,
           };
@@ -1226,7 +1226,7 @@ async function handleMessage(
       
       // SCAN_ALL - Global unified scan across ALL configured platforms
       // This is the main scan action used from the popup
-      // Results include OpenCTI entities (observables/sdos/cves) and other platform entities (platformEntities)
+      // Results include: observables, openctiEntities, cves, openaevEntities
       // Each result includes platform information so the UI can differentiate where entities come from
       case 'SCAN_ALL': {
         const payload = message.payload as { content: string; url: string };
@@ -1237,24 +1237,24 @@ async function handleMessage(
           log.info(`SCAN_ALL: Starting unified scan across ALL configured platforms (${octiPlatformCount} OpenCTI, ${oaevPlatformCount} OpenAEV)...`);
           
           // Initialize results
-          let openctiResult: { observables: any[]; sdos: any[]; cves: any[] } = {
+          let openctiResult: { observables: any[]; openctiEntities: any[]; cves: any[] } = {
             observables: [],
-            sdos: [],
+            openctiEntities: [],
             cves: [],
           };
-          const platformEntities: ScanResultPayload['platformEntities'] = [];
+          const openaevEntities: ScanResultPayload['openaevEntities'] = [];
           
           // 1. Scan OpenCTI (detection engine scans ALL OpenCTI platforms' caches)
           if (detectionEngine) {
             try {
-              log.debug(`SCAN_ALL: Scanning ${octiPlatformCount} OpenCTI platform(s) for observables, SDOs, and CVEs...`);
+              log.debug(`SCAN_ALL: Scanning ${octiPlatformCount} OpenCTI platform(s) for observables, OpenCTI entities, and CVEs...`);
               const octiResult = await detectionEngine.scan(payload.content);
               openctiResult = {
                 observables: octiResult.observables || [],
-                sdos: octiResult.sdos || [],
+                openctiEntities: octiResult.openctiEntities || [],
                 cves: octiResult.cves || [],
               };
-              log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.sdos.length} SDOs, ${openctiResult.cves.length} CVEs across ${octiPlatformCount} platform(s)`);
+              log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.openctiEntities.length} OpenCTI entities, ${openctiResult.cves.length} CVEs across ${octiPlatformCount} platform(s)`);
             } catch (octiError) {
               log.warn('SCAN_ALL: OpenCTI scan failed:', octiError);
             }
@@ -1319,7 +1319,7 @@ async function handleMessage(
                     
                     if (!hasOverlap) {
                       const matchedText = originalText.substring(matchIndex, endIndex);
-                      platformEntities.push({
+                      openaevEntities.push({
                         platformType: 'openaev',
                         type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern' | 'Finding',
                         name: entity.name,
@@ -1341,7 +1341,7 @@ async function handleMessage(
                   matchIndex = textLower.indexOf(nameLower, searchStart);
                 }
               }
-              log.debug(`SCAN_ALL: OpenAEV found ${platformEntities.length} entities across ${oaevPlatformCount} platform(s)`);
+              log.debug(`SCAN_ALL: OpenAEV found ${openaevEntities.length} entities across ${oaevPlatformCount} platform(s)`);
             } else {
               log.debug(`SCAN_ALL: No OpenAEV entities in cache (scanned ${oaevPlatformCount} platform(s))`);
             }
@@ -1360,29 +1360,29 @@ async function handleMessage(
           const filteredObservables = openctiResult.observables.filter(obs => 
             !disabledObservableTypes.includes(obs.type)
           );
-          const filteredSdos = openctiResult.sdos.filter(sdo => 
-            !disabledOpenCTITypes.includes(sdo.type)
+          const filteredOpenctiEntities = openctiResult.openctiEntities.filter(entity => 
+            !disabledOpenCTITypes.includes(entity.type)
           );
           
           // Filter OpenAEV entities - exclude disabled types (empty = all enabled)
-          const filteredPlatformEntities = platformEntities.filter(entity => 
+          const filteredOpenaevEntities = openaevEntities.filter(entity => 
             !disabledOpenAEVTypes.includes(entity.type)
           );
           
           // Combine filtered results
           const scanResult: ScanResultPayload = {
             observables: filteredObservables,
-            sdos: filteredSdos,
+            openctiEntities: filteredOpenctiEntities,
             cves: openctiResult.cves, // CVEs are always included
-            platformEntities: filteredPlatformEntities,
+            openaevEntities: filteredOpenaevEntities,
             scanTime: 0,
             url: payload.url,
           };
           
           const totalFound = 
             scanResult.observables.filter(o => o.found).length +
-            scanResult.sdos.filter(s => s.found).length +
-            (scanResult.platformEntities?.length || 0);
+            scanResult.openctiEntities.filter(s => s.found).length +
+            (scanResult.openaevEntities?.length || 0);
           log.info(`SCAN_ALL: Unified scan complete across ${octiPlatformCount + oaevPlatformCount} total platforms. Found: ${totalFound} entities (after detection settings filter)`);
           
           sendResponse(successResponse(scanResult));

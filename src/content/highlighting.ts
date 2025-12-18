@@ -215,7 +215,7 @@ export function highlightResults(
   }
   
   // Collect OpenCTI SDOs by name
-  for (const sdo of results.sdos) {
+  for (const sdo of results.openctiEntities) {
     if (sdo.found) {
       const valueLower = sdo.name.toLowerCase();
       if (!valueToPlatformEntities.has(valueLower)) {
@@ -231,8 +231,8 @@ export function highlightResults(
   }
   
   // Collect platform entities
-  if (results.platformEntities) {
-    for (const entity of results.platformEntities) {
+  if (results.openaevEntities) {
+    for (const entity of results.openaevEntities) {
       const valueLower = entity.name.toLowerCase();
       if (!valueToPlatformEntities.has(valueLower)) {
         valueToPlatformEntities.set(valueLower, []);
@@ -285,7 +285,7 @@ export function highlightResults(
   }
   
   // Highlight OpenCTI entities (can be added via AI discovery when not found)
-  for (const sdo of results.sdos) {
+  for (const sdo of results.openctiEntities) {
     const textToHighlight = (sdo as { matchedValue?: string }).matchedValue || sdo.name;
     const valueLower = sdo.name.toLowerCase();
     const otherPlatformMatches = findPlatformMatchesWithSubstrings(valueLower);
@@ -313,8 +313,8 @@ export function highlightResults(
   }
   
   // Highlight platform entities
-  if (results.platformEntities) {
-    for (const entity of results.platformEntities) {
+  if (results.openaevEntities) {
+    for (const entity of results.openaevEntities) {
       const entityPlatformType = (entity.platformType || 'openaev') as PlatformType;
       const prefixedType = createPrefixedType(entity.type, entityPlatformType);
       const textToHighlight = entity.value || entity.name;
@@ -465,7 +465,7 @@ export function highlightResultsForInvestigation(
     );
   }
   
-  for (const sdo of results.sdos) {
+  for (const sdo of results.openctiEntities) {
     highlightForInvestigation(
       fullText,
       sdo.name,
@@ -477,8 +477,8 @@ export function highlightResultsForInvestigation(
     );
   }
   
-  if (results.platformEntities) {
-    for (const e of results.platformEntities) {
+  if (results.openaevEntities) {
+    for (const e of results.openaevEntities) {
       const prefixedType = createPrefixedType(e.type, 'openaev');
       highlightForInvestigation(
         fullText,

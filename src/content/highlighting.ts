@@ -479,7 +479,7 @@ export function highlightResultsForInvestigation(
       nodeMap,
       obs.type,
       obs.entityId,
-      obs.platformId || (obs as { _platformId?: string })._platformId,
+      obs.platformId || (obs as { platformId?: string }).platformId,
       onHighlightClick
     );
   }
@@ -491,7 +491,7 @@ export function highlightResultsForInvestigation(
       nodeMap,
       octiEntity.type,
       octiEntity.entityId,
-      octiEntity.platformId || (octiEntity as { _platformId?: string })._platformId,
+      octiEntity.platformId || (octiEntity as { platformId?: string }).platformId,
       onHighlightClick
     );
   }
@@ -740,18 +740,39 @@ function highlightInTextForScenario(
 // ============================================================================
 
 /**
+ * Result of highlighting AI entities
+ */
+export interface HighlightAIResult {
+  highlightedCount: number;
+  highlightedEntities: Array<{ type: string; value: string; name: string }>;
+  failedEntities: Array<{ type: string; value: string; name: string }>;
+}
+
+/**
  * Highlight AI-discovered entities on the page
+ * Returns which entities were successfully highlighted vs which failed (not found in visible DOM)
+ * @param entities - Array of entities to highlight
+ * @param onToggleSelection - Callback when entity selection is toggled
+ * @param onPanelReopen - Optional callback to re-open panel if it's hidden (called before selection toggle)
  */
 export function highlightAIEntities(
   entities: Array<{ type: string; value: string; name: string }>,
-  onToggleSelection: (highlight: HTMLElement, searchValue: string) => void
-): number {
+  onToggleSelection: (highlight: HTMLElement, searchValue: string) => void,
+  onPanelReopen?: () => void
+): HighlightAIResult {
   const textNodes = getTextNodes(document.body);
   let highlightedCount = 0;
+  const highlightedEntities: Array<{ type: string; value: string; name: string }> = [];
+  const failedEntities: Array<{ type: string; value: string; name: string }> = [];
   
   for (const entity of entities) {
     const searchValue = entity.value || entity.name;
-    if (!searchValue) continue;
+    if (!searchValue) {
+      failedEntities.push(entity);
+      continue;
+    }
+    
+    let entityHighlighted = false;
     
     for (const node of textNodes) {
       const text = node.textContent || '';
@@ -786,10 +807,15 @@ export function highlightAIEntities(
         try {
           range.surroundContents(highlightSpan);
           highlightedCount++;
+          entityHighlighted = true;
           
           highlightSpan.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            // Re-open panel if needed before toggling selection
+            if (onPanelReopen) {
+              onPanelReopen();
+            }
             onToggleSelection(highlightSpan, searchValue);
           });
         } catch {
@@ -798,10 +824,19 @@ export function highlightAIEntities(
         
         break;
       }
+      
+      // Once we've highlighted at least one instance, mark as success
+      if (entityHighlighted) break;
+    }
+    
+    if (entityHighlighted) {
+      highlightedEntities.push(entity);
+    } else {
+      failedEntities.push(entity);
     }
   }
   
-  return highlightedCount;
+  return { highlightedCount, highlightedEntities, failedEntities };
 }
 
 /**

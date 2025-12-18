@@ -252,14 +252,46 @@ function handleDeselectItem(value: string): void {
   });
 }
 
-function handleHighlightAIEntities(entities: Array<{ type: string; value: string; name: string }>): void {
+interface HighlightAIEntitiesResult {
+  highlightedCount: number;
+  highlightedEntities: Array<{ type: string; value: string; name: string }>;
+  failedEntities: Array<{ type: string; value: string; name: string }>;
+}
+
+function handleHighlightAIEntities(entities: Array<{ type: string; value: string; name: string }>): HighlightAIEntitiesResult {
   log.debug(' Highlighting AI-discovered entities:', entities.length);
   
-  const highlightedCount = highlightAIEntities(entities, (highlight, searchValue) => {
-    toggleSelection(highlight, searchValue);
-  });
+  const result = highlightAIEntities(
+    entities,
+    (highlight, searchValue) => {
+      toggleSelection(highlight, searchValue);
+    },
+    () => {
+      // Re-open panel with AI filter if it's hidden
+      if (isPanelHidden() && lastScanData) {
+        ensurePanelElements();
+        showPanelElements();
+        // Send scan results with AI filter
+        sendPanelMessage('SCAN_RESULTS_WITH_FILTER', {
+          ...lastScanData,
+          initialFilter: 'ai-discovered',
+        });
+        sendPanelMessage('SELECTION_UPDATED', {
+          selectedCount: selectedForImport.size,
+          selectedItems: Array.from(selectedForImport),
+        });
+      }
+    }
+  );
   
-  log.info(` AI entity highlighting complete: ${highlightedCount} highlights created for ${entities.length} entities`);
+  if (result.failedEntities.length > 0) {
+    log.debug(` ${result.failedEntities.length} AI entities could not be highlighted (not found in visible DOM):`, 
+      result.failedEntities.map(e => e.value || e.name));
+  }
+  
+  log.info(` AI entity highlighting complete: ${result.highlightedCount} highlights created, ${result.highlightedEntities.length}/${entities.length} entities found in DOM`);
+  
+  return result;
 }
 
 // ============================================================================
@@ -537,7 +569,7 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
       const prefixedType = entityType.startsWith('oaev-') || entityType.startsWith('ogrc-') 
         ? entityType 
         : prefixEntityType(entityType, platformType);
-      const platformId = rawData.platformId || rawData._platformId || '';
+      const platformId = rawData.platformId || rawData.platformId || '';
       
       const cacheData = rawData.entityData || {};
       const entityId = rawData.entityId || rawData.id || cacheData.id || '';
@@ -555,9 +587,8 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
         existsInPlatform: true,
         found: true,
         platformId: platformId,
-        _platformId: platformId,
-        _platformType: platformType,
-        _isNonDefaultPlatform: true,
+        platformType: platformType,
+        isNonDefaultPlatform: true,
         entityData: cacheData,
       };
       
@@ -1140,7 +1171,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       const foundObservables = (data.observables || []).filter((o: DetectedObservable) => {
         if (!o.found) return false;
         if (platformId) {
-          const entityPlatformId = o.platformId || (o as { _platformId?: string })._platformId;
+          const entityPlatformId = o.platformId || (o as { platformId?: string }).platformId;
           return entityPlatformId === platformId;
         }
         return true;
@@ -1149,7 +1180,7 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
       const foundOCTIEntities = (data.openctiEntities || []).filter((e: DetectedOCTIEntity) => {
         if (!e.found) return false;
         if (platformId) {
-          const entityPlatformId = e.platformId || (e as { _platformId?: string })._platformId;
+          const entityPlatformId = e.platformId || (e as { platformId?: string }).platformId;
           return entityPlatformId === platformId;
         }
         return true;
@@ -1198,14 +1229,14 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
           type: o.type,
           name: o.value,
           value: o.value,
-          platformId: o.platformId || (o as { _platformId?: string })._platformId,
+          platformId: o.platformId || (o as { platformId?: string }).platformId,
         })),
         ...foundOCTIEntities.map((e: DetectedOCTIEntity) => ({
           id: e.entityId,
           type: e.type,
           name: e.name,
           value: e.name,
-          platformId: e.platformId || (e as { _platformId?: string })._platformId,
+          platformId: e.platformId || (e as { platformId?: string }).platformId,
         })),
         ...foundOAEV.map((e: { entityId?: string; type?: string; name?: string; value?: string; platformId?: string }) => ({
           id: e.entityId,
@@ -1319,9 +1350,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'XTM_HIGHLIGHT_AI_ENTITIES': {
       const { entities } = message.payload || {};
       if (entities && Array.isArray(entities)) {
-        handleHighlightAIEntities(entities);
+        const result = handleHighlightAIEntities(entities);
+        // Return which entities were successfully highlighted so panel can filter
+        sendResponse({ 
+          success: true, 
+          highlightedEntities: result.highlightedEntities,
+          failedEntities: result.failedEntities,
+        });
+      } else {
+        sendResponse({ success: true, highlightedEntities: [], failedEntities: [] });
       }
-      sendResponse({ success: true });
       break;
     }
       

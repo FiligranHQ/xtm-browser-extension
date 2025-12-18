@@ -200,9 +200,9 @@ export const CommonUnifiedSearchView: React.FC<UnifiedSearchViewProps> = ({
       id: result.id,
       type: result.type,
       name: result.name,
-      _platformId: result.platformId,
-      _platformType: result.source,
-      _isNonDefaultPlatform: result.source !== 'opencti',
+      platformId: result.platformId,
+      platformType: result.source,
+      isNonDefaultPlatform: result.source !== 'opencti',
     };
 
     const multiResult: MultiPlatformResult = {

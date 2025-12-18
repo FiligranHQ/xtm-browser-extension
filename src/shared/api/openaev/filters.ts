@@ -163,6 +163,7 @@ export const ENTITY_TYPE_PATH_MAP: Record<string, string> = {
   'Exercise': 'admin/simulations',
   'AttackPattern': 'admin/attack_patterns',
   'Finding': 'admin/findings',
+  'Vulnerability': 'admin/vulnerabilities',
 };
 
 /**

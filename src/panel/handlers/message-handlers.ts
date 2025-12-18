@@ -101,6 +101,7 @@ export interface MessageHandlerContext {
   setEntityContainers: (containers: ContainerData[]) => void;
   setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   setEntityFromScanResults: (from: boolean) => void;
+  setEntityDetailsLoading?: (loading: boolean) => void;
   clearEntityState: () => void;
   
   // Multi-platform
@@ -325,7 +326,6 @@ interface InvestigationResultEntity {
   name?: string;
   value?: string;
   platformId?: string;
-  _platformId?: string;
 }
 
 export function handleInvestigationResults(ctx: MessageHandlerContext, payload: { entities?: InvestigationResultEntity[] } | undefined) {
@@ -337,7 +337,7 @@ export function handleInvestigationResults(ctx: MessageHandlerContext, payload: 
     type: e.type || e.entity_type || '',
     name: e.name || e.value,
     value: e.value,
-    platformId: e.platformId || e._platformId,
+    platformId: e.platformId || e.platformId,
     selected: false,
   })));
   ctx.setInvestigationScanning(false);
@@ -495,38 +495,53 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: Show
   
   const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
   const entityType = payload?.entityData?.entity_type || payload?.type || payload?.entity_type;
-  const platformId = payload?.platformId || payload?._platformId;
+  const platformId = payload?.platformId || payload?.platformId;
   const platformMatches = payload?.platformMatches || (payload?.entityData as ShowEntityPayload)?.platformMatches;
   
-  // Handle multi-platform results
+  // Build multi-platform results
+  let multiResults: MultiPlatformResult[] = [];
+  
+  // Handle multi-platform results with platform fallback (same as CommonScanResultsView)
   if (platformMatches && platformMatches.length > 0) {
-    const multiResults: MultiPlatformResult[] = platformMatches.map((match) => {
-      const platform = ctx.availablePlatforms.find(p => p.id === match.platformId);
+    for (const match of platformMatches) {
+      // Try to find platform by ID first, then fall back to platformType match
+      let platform = ctx.availablePlatforms.find(p => p.id === match.platformId);
+      if (!platform && match.platformType) {
+        // Fall back to finding any platform of the same type
+        platform = ctx.availablePlatforms.find(p => p.type === match.platformType);
+      }
+      
       const matchPlatformType = match.platformType || platform?.type || 'opencti';
       const matchType = match.type || (match.entityData as EntityData)?.entity_type || payload?.type || entityType || '';
       const cleanType = matchType.replace(/^oaev-/, '');
       const displayType = matchPlatformType === 'openaev' && !matchType.startsWith('oaev-') ? `oaev-${cleanType}` : matchType;
       
-      return {
-        platformId: match.platformId,
+      // Use the found platform's ID if available
+      const resolvedPlatformId = platform?.id || match.platformId;
+      
+      multiResults.push({
+        platformId: resolvedPlatformId,
         platformName: platform?.name || match.platformId,
         entity: {
           ...payload, id: match.entityId, entityId: match.entityId, type: displayType, entity_type: cleanType,
           name: payload?.name || payload?.value || (match.entityData as EntityData)?.name, value: payload?.value || payload?.name,
-          existsInPlatform: true, platformId: match.platformId, _platformId: match.platformId, _platformType: matchPlatformType,
-          _isNonDefaultPlatform: matchPlatformType !== 'opencti',
+          existsInPlatform: true, platformId: resolvedPlatformId, platformType: matchPlatformType,
+          isNonDefaultPlatform: matchPlatformType !== 'opencti',
           entityData: { ...(match.entityData || payload?.entityData || {}), entity_type: cleanType },
         } as EntityData,
-      };
-    });
+      });
+    }
+    
     const sorted = ctx.sortPlatformResults(multiResults, ctx.availablePlatforms);
+    multiResults = sorted;
     ctx.setMultiPlatformResults(sorted);
     ctx.updateMultiPlatformResultsRef(sorted);
     ctx.setCurrentPlatformIndex(0);
     ctx.updateCurrentPlatformIndexRef(0);
   } else if (platformId) {
     const platform = ctx.availablePlatforms.find(p => p.id === platformId);
-    const singleResult: MultiPlatformResult[] = [{ platformId, platformName: platform?.name || platformId, entity: { ...payload, _platformId: platformId } as EntityData }];
+    const singleResult: MultiPlatformResult[] = [{ platformId, platformName: platform?.name || platformId, entity: { ...payload, platformId: platformId } as EntityData }];
+    multiResults = singleResult;
     ctx.setMultiPlatformResults(singleResult);
     ctx.updateMultiPlatformResultsRef(singleResult);
     ctx.setCurrentPlatformIndex(0);
@@ -543,48 +558,54 @@ export async function handleShowEntity(ctx: MessageHandlerContext, payload: Show
     if (platform) { ctx.setPlatformUrl(platform.url); ctx.setSelectedPlatformId(platform.id); }
   }
   
+  // Determine platform type for initial entity
   const parsedType = entityType ? parsePrefixedType(entityType) : null;
   const isNonDefaultPlatform = parsedType !== null;
-  const actualEntityType = parsedType ? parsedType.entityType : entityType;
   const entityPlatformType = parsedType?.platformType || 'opencti';
   
-  const entityData = payload?.entityData as Record<string, unknown> | undefined;
-  const isMinimalData = entityId && payload?.existsInPlatform && (
-    entityPlatformType === 'openaev' 
-      ? (!entityData?.finding_type && !entityData?.finding_created_at && !entityData?.endpoint_name)
-      : (!entityData?.description && !entityData?.objectLabel && !payload?.description)
-  );
+  // Set initial entity and panel mode
+  const initialEntity = multiResults[0]?.entity || { ...payload, platformType: entityPlatformType, isNonDefaultPlatform };
+  ctx.setEntity(initialEntity);
+  ctx.setPanelMode(payload?.existsInPlatform || multiResults.length > 0 ? 'entity' : 'not-found');
   
-  if (isMinimalData && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-    ctx.setEntity({ ...payload, _platformId: platformId, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
-    ctx.setPanelMode('entity');
+  // Always fetch entity details for the first platform if entity exists
+  // This ensures fresh data regardless of what's in the cache
+  if (multiResults.length > 0 && multiResults[0] && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    const firstResult = multiResults[0];
+    const firstEntityId = (firstResult.entity as { entityId?: string }).entityId || firstResult.entity.id;
+    const firstEntityType = (firstResult.entity.entity_type || firstResult.entity.type || '').replace(/^oaev-/, '');
+    const firstPlatformId = firstResult.platformId;
+    const firstPlatformType = (firstResult.entity as { platformType?: string }).platformType || 'opencti';
     
-    const fetchStartIndex = ctx.currentPlatformIndexRef.current;
-    chrome.runtime.sendMessage({
-      type: 'GET_ENTITY_DETAILS',
-      payload: { id: entityId, entityType: actualEntityType, platformId, platformType: entityPlatformType },
-    }, (response: ChromeMessageResponse<EntityData>) => {
-      if (chrome.runtime.lastError) return;
-      if (ctx.currentPlatformIndexRef.current !== fetchStartIndex) return;
+    if (firstEntityId && firstPlatformId) {
+      ctx.setEntityDetailsLoading?.(true);
       
-      if (response?.success && response.data) {
-        const fullEntity = { 
-          ...payload, ...response.data, entityData: response.data, existsInPlatform: true,
-          _platformId: platformId, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform,
-        };
-        ctx.setEntity(fullEntity);
-        ctx.setMultiPlatformResults(prev => prev.map((r, i) => 
-          i === fetchStartIndex ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } } : r
-        ));
-        ctx.multiPlatformResultsRef.current = ctx.multiPlatformResultsRef.current.map((r, i) =>
-          i === fetchStartIndex ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } as EntityData } : r
-        );
-        if (!isNonDefaultPlatform && entityId) ctx.fetchEntityContainers(entityId, platformId);
-      }
-    });
-  } else {
-    ctx.setEntity({ ...payload, _platformType: entityPlatformType, _isNonDefaultPlatform: isNonDefaultPlatform });
-    ctx.setPanelMode(payload?.existsInPlatform ? 'entity' : 'not-found');
-    if (payload?.existsInPlatform && entityId && !isNonDefaultPlatform) ctx.fetchEntityContainers(entityId, platformId);
+      chrome.runtime.sendMessage({
+        type: 'GET_ENTITY_DETAILS',
+        payload: { id: firstEntityId, entityType: firstEntityType, platformId: firstPlatformId, platformType: firstPlatformType },
+      }, (response: ChromeMessageResponse<EntityData>) => {
+        ctx.setEntityDetailsLoading?.(false);
+        if (chrome.runtime.lastError) return;
+        if (ctx.currentPlatformIndexRef.current !== 0) return;
+        
+        if (response?.success && response.data) {
+          const fullEntity = { 
+            ...firstResult.entity, ...response.data, entityData: response.data, existsInPlatform: true,
+            platformId: firstPlatformId, platformType: firstPlatformType, isNonDefaultPlatform: firstPlatformType !== 'opencti',
+          };
+          ctx.setEntity(fullEntity);
+          ctx.setMultiPlatformResults(prev => prev.map((r, i) => 
+            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } } : r
+          ));
+          ctx.multiPlatformResultsRef.current = ctx.multiPlatformResultsRef.current.map((r, i) =>
+            i === 0 ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } as EntityData } : r
+          );
+          if (firstPlatformType === 'opencti' && firstEntityId) ctx.fetchEntityContainers(firstEntityId, firstPlatformId);
+        }
+      });
+    }
+  } else if (payload?.existsInPlatform && entityId && !isNonDefaultPlatform && platformId) {
+    // Single platform fallback (no multiResults)
+    ctx.fetchEntityContainers(entityId, platformId);
   }
 }

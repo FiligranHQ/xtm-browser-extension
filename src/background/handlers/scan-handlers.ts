@@ -37,11 +37,19 @@ export async function handleScanPage(
   }
   
   try {
-    const result = await detectionEngine.scan(payload.content);
+    // Get detection settings BEFORE scan to determine vulnerability detection scope
     const settings = await getSettings();
-    
     const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
     const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+    const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
+    
+    // Determine vulnerability/CVE detection settings per platform
+    const vulnSettings = {
+      enabledForOpenCTI: !disabledOpenCTITypes.includes('Vulnerability'),
+      enabledForOpenAEV: !disabledOpenAEVTypes.includes('Vulnerability'),
+    };
+    
+    const result = await detectionEngine.scan(payload.content, [], vulnSettings);
     
     // Filter - exclude disabled types (empty = all enabled)
     const filteredObservables = result.observables.filter(obs => 
@@ -54,7 +62,7 @@ export async function handleScanPage(
     const scanResult: ScanResultPayload = {
       observables: filteredObservables,
       openctiEntities: filteredOpenctiEntities,
-      cves: result.cves,
+      cves: result.cves, // CVEs already filtered by vulnSettings
       openaevEntities: [],
       scanTime: result.scanTime,
       url: payload.url,
@@ -239,6 +247,17 @@ export async function handleScanAll(
   try {
     log.info(`SCAN_ALL: Starting unified scan across all configured platforms...`);
     
+    // Get detection settings to determine vulnerability detection scope
+    const settings = await getSettings();
+    const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+    const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
+    
+    // Determine vulnerability/CVE detection settings per platform
+    const vulnSettings = {
+      enabledForOpenCTI: !disabledOpenCTITypes.includes('Vulnerability'),
+      enabledForOpenAEV: !disabledOpenAEVTypes.includes('Vulnerability'),
+    };
+    
     // Initialize results
     let openctiResult: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[]; cves: DetectedOCTIEntity[] } = {
       observables: [],
@@ -249,7 +268,7 @@ export async function handleScanAll(
     // 1. Scan OpenCTI
     if (detectionEngine) {
       try {
-        const octiResult = await detectionEngine.scan(payload.content);
+        const octiResult = await detectionEngine.scan(payload.content, [], vulnSettings);
         openctiResult = {
           observables: octiResult.observables || [],
           openctiEntities: octiResult.openctiEntities || [],
@@ -276,11 +295,8 @@ export async function handleScanAll(
       log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
     }
     
-    // Get detection settings to filter results
-    const settings = await getSettings();
+    // Filter results using detection settings (reuse settings from earlier)
     const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
-    const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
-    const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
     
     // Filter results
     const filteredObservables = openctiResult.observables.filter(obs => 

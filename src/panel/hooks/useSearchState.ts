@@ -65,14 +65,14 @@ export function useSearchState(): SearchStateReturn {
 
       if (octiResponse?.success && octiResponse.data) {
         for (const result of octiResponse.data) {
-          const platformInfo = availablePlatforms.find(p => p.id === result._platformId);
+          const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
           results.push({
-            id: `opencti-${result.id}-${result._platformId}`,
+            id: `opencti-${result.id}-${result.platformId}`,
             name: result.representative?.main || result.name || result.value || 'Unknown',
             type: result.entity_type || result.type || 'Unknown',
             description: result.description,
             source: 'opencti',
-            platformId: result._platformId,
+            platformId: result.platformId,
             platformName: platformInfo?.name || 'OpenCTI',
             entityId: result.id,
             data: result,
@@ -92,16 +92,16 @@ export function useSearchState(): SearchStateReturn {
 
       if (oaevResponse?.success && oaevResponse.data) {
         for (const result of oaevResponse.data) {
-          const platformInfo = availablePlatforms.find(p => p.id === result._platformId);
+          const platformInfo = availablePlatforms.find(p => p.id === result.platformId);
           const entityClass = result._entityClass || '';
           const oaevType = getOAEVTypeFromClass(entityClass);
           results.push({
-            id: `openaev-${result._id || result.asset_id || result.team_id || result.player_id || Math.random()}-${result._platformId}`,
+            id: `openaev-${result._id || result.asset_id || result.team_id || result.player_id || Math.random()}-${result.platformId}`,
             name: getOAEVEntityName(result, oaevType),
             type: oaevType,
             description: result.asset_description || result.team_description || result.scenario_description || undefined,
             source: 'openaev',
-            platformId: result._platformId,
+            platformId: result.platformId,
             platformName: platformInfo?.name || 'OpenAEV',
             entityId: result._id || result.asset_id || result.team_id || result.player_id || '',
             data: result,

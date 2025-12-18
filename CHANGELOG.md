@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-entity type support in scan results: entities like "Phishing" matching multiple types (Malware, Attack Pattern) now show combined counts with visual indicators (stacked icon, "N types" chip)
 - Compact multi-type entity display with tooltips showing all matched types
 - **Cross-platform type mapping**: New `CROSS_PLATFORM_TYPE_MAPPINGS` in registry for declaring equivalent types across platforms (e.g., OpenCTI `Attack-Pattern` ↔ OpenAEV `AttackPattern`). Multi-type displays now deduplicate equivalent types instead of showing duplicates like "Attack Pattern, Malware, Attack Pattern"
-- **CVE/Vulnerability support for OpenAEV**: CVEs are now searched in both OpenCTI and OpenAEV platforms. When a CVE is found in both platforms, it shows as a multi-platform match (e.g., "OCTI ×1, OAEV ×1"). Added `OAEVVulnerability` type and `getVulnerabilityByExternalId()` API method
+- **CVE/Vulnerability support for OpenAEV**: CVEs are now searched in both OpenCTI and OpenAEV platforms. When a CVE is found in both platforms, it shows as a multi-platform match (e.g., "OCTI (1), OAEV (1)"). Added `OAEVVulnerability` type and `getVulnerabilityByExternalId()` API method
+- **Per-platform Vulnerability detection settings**: Added `Vulnerability` type to both OpenCTI and OpenAEV detection settings, allowing independent control of CVE detection per platform. If disabled on all platforms, CVE regex detection is skipped entirely for performance
+- **AI highlight click re-opens panel**: Clicking on AI-discovered (purple) highlights now re-opens the panel if hidden and automatically applies the "AI Discovered" filter
 
 ### Changed
 - Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
@@ -28,10 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `detectSDOsFromCache` → `detectOCTIEntitiesFromCache`
   - `detectPlatformEntitiesFromCache` → `detectOAEVEntitiesFromCache`
   - `getAllCachedEntityNamesForMatching` → `getAllCachedOCTIEntityNamesForMatching`
+  - Removed `_` prefix from platform properties: `_platformId` → `platformId`, `_platformType` → `platformType`, `_isNonDefaultPlatform` → `isNonDefaultPlatform`
 - **Platform color standardization**: Updated platform colors to avoid confusion with status indicators:
   - OCTI (OpenCTI): Changed from orange (#ff9800) to indigo (#5c6bc0) - distinct from green (found) and amber (new)
   - OAEV (OpenAEV): Changed from cyan (#00bcd4) to pink (#e91e63) - distinct from primary blue
   - Multi-type indicator: Now uses primary theme color (adapts to light/dark theme) instead of purple
+- **Entity overview containers limited to 5**: "Latest Containers" section now shows maximum 5 containers with count indicator (e.g., "5 of 12")
+- **Description truncation**: Entity descriptions in both OpenCTI and OpenAEV overviews are now truncated to 500 characters for better readability
 
 ### Improved
 - Enhanced PDF extraction for Shadow DOM-heavy sites like Notion
@@ -39,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code structure: cleaner separation between services and handlers in background script
 - Entity state management: added `entityDetailsLoading` state for better UX feedback
 - Entity navigation now always fetches fresh data to prevent stale/empty overviews
+- **AI relationship resolution accuracy**: Completely rewritten prompts with exhaustive list of valid STIX 2.1 and OpenCTI relationship types with entity compatibility rules to prevent hallucination
+- **AI entity discovery filtering**: AI-discovered entities are now post-filtered to only include those that can actually be highlighted on the page (filters out entities from inaccessible DOM like shadow roots)
 
 ### Fixed
 - PDF generation now properly extracts content from Shadow DOM components
@@ -46,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Navigation arrows in entity view now disabled during loading to prevent race conditions
 - Scan results now properly merge entities with same name but different types on the same platform
 - **Entity overview empty after navigation**: Fixed issue where navigating back and forth between entity overviews would result in empty data - now always fetches fresh details
+- **Side panel width on certain websites**: Fixed issue where panel would open full-screen on sites with aggressive CSS (e.g., Malwarebytes) - panel now always respects its intended width using CSS isolation
 
 ## [0.0.6] - 2024-12-17
 

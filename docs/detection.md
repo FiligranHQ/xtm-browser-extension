@@ -87,6 +87,19 @@ STIX Domain Objects are detected through exact name/alias matching against a cac
 | Individual | Named individuals | ✅ Enabled |
 | Event | Named events | ✅ Enabled |
 
+### Vulnerability Detection
+
+| Type | Description | Default |
+|------|-------------|---------|
+| Vulnerability | CVE identifiers (e.g., CVE-2024-1234) | ✅ Enabled |
+
+Vulnerability detection is **cross-platform** - when enabled, CVEs are searched in both OpenCTI and OpenAEV. You can enable/disable vulnerability detection independently for each platform in the Detection Settings.
+
+**How it works:**
+- If enabled in both platforms: CVE regex runs, and both platforms are searched
+- If enabled in only one platform: CVE regex runs, only that platform is searched
+- If disabled in both platforms: **CVE regex is skipped entirely** (performance optimization)
+
 ## OpenAEV Entity Detection
 
 OpenAEV entities are detected through exact name/alias matching against a cached list from your OpenAEV instance.
@@ -116,6 +129,18 @@ Attack patterns are matched by their MITRE ATT&CK external ID using exact word-b
 | Type | Description | Matching | Default |
 |------|-------------|----------|---------|
 | Finding | Security findings from scans | Exact value match | ✅ Enabled |
+
+Findings are matched by their exact `finding_value` field. Supported finding types include:
+
+### Vulnerability Detection
+
+| Type | Description | Matching | Default |
+|------|-------------|----------|---------|
+| Vulnerability | CVE identifiers | External ID (CVE-2024-1234) | ✅ Enabled |
+
+OpenAEV vulnerability detection shares settings with OpenCTI - see the [Vulnerability Detection](#vulnerability-detection) section above for details on how cross-platform CVE detection works.
+
+### Supported Finding Types
 
 Findings are matched by their exact `finding_value` field. Supported finding types include:
 - **text**: Generic text findings

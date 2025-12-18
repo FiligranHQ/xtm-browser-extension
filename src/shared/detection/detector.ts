@@ -53,6 +53,17 @@ export interface DetectionResult {
   scanTime: number;
 }
 
+/**
+ * Settings for vulnerability/CVE detection
+ * Controls which platforms should search for CVEs
+ */
+export interface VulnerabilityDetectionSettings {
+  /** Whether to search OpenCTI platforms for CVEs */
+  enabledForOpenCTI: boolean;
+  /** Whether to search OpenAEV platforms for CVEs */
+  enabledForOpenAEV: boolean;
+}
+
 // ============================================================================
 // Detection Engine
 // ============================================================================
@@ -372,59 +383,67 @@ export class DetectionEngine {
   /**
    * Search for a vulnerability/CVE across all platforms
    * @param cveId - The CVE identifier (e.g., CVE-2024-1234)
+   * @param vulnSettings - Settings controlling which platforms to search
    * @returns Array of enrichment matches from all platforms
    */
-  private async searchVulnerabilityAcrossPlatforms(cveId: string): Promise<EnrichmentMatch[]> {
+  private async searchVulnerabilityAcrossPlatforms(
+    cveId: string,
+    vulnSettings: VulnerabilityDetectionSettings = { enabledForOpenCTI: true, enabledForOpenAEV: true }
+  ): Promise<EnrichmentMatch[]> {
     const matches: EnrichmentMatch[] = [];
 
-    // Search OpenCTI platforms
-    for (const [platformId, client] of this.clients) {
-      try {
-        const result = await client.searchSDOByNameOrAlias(cveId, ['Vulnerability']);
-        if (result) {
-          log.debug(`[Enrichment] Found ${cveId} in OpenCTI platform ${platformId}`);
-          matches.push({
-            platformId,
-            platformType: 'opencti',
-            entityId: result.id,
-            entityType: 'Vulnerability',
-            entityData: result as unknown as Record<string, unknown>,
-          });
+    // Search OpenCTI platforms (only if enabled)
+    if (vulnSettings.enabledForOpenCTI) {
+      for (const [platformId, client] of this.clients) {
+        try {
+          const result = await client.searchSDOByNameOrAlias(cveId, ['Vulnerability']);
+          if (result) {
+            log.debug(`[Enrichment] Found ${cveId} in OpenCTI platform ${platformId}`);
+            matches.push({
+              platformId,
+              platformType: 'opencti',
+              entityId: result.id,
+              entityType: 'Vulnerability',
+              entityData: result as unknown as Record<string, unknown>,
+            });
+          }
+        } catch (error) {
+          log.debug(`[Enrichment] Error searching ${cveId} in OpenCTI ${platformId}:`, error);
         }
-      } catch (error) {
-        log.debug(`[Enrichment] Error searching ${cveId} in OpenCTI ${platformId}:`, error);
       }
     }
 
-    // Search OpenAEV platforms
-    for (const [platformId, client] of this.oaevClients) {
-      try {
-        log.debug(`[Enrichment] Searching ${cveId} in OpenAEV platform ${platformId}...`);
-        const result = await client.getVulnerabilityByExternalId(cveId);
-        if (result) {
-          log.debug(`[Enrichment] Found ${cveId} in OpenAEV platform ${platformId}`);
-          matches.push({
-            platformId,
-            platformType: 'openaev',
-            entityId: result.vulnerability_id,
-            entityType: 'oaev-Vulnerability',
-            entityData: {
-              id: result.vulnerability_id,
-              entity_type: 'oaev-Vulnerability',
-              name: result.vulnerability_external_id,
-              description: result.vulnerability_description,
-              x_opencti_cvss_base_score: result.vulnerability_cvss_v31,
-              vulnerability_vuln_status: result.vulnerability_vuln_status,
-              vulnerability_cisa_vulnerability_name: result.vulnerability_cisa_vulnerability_name,
-              vulnerability_remediation: result.vulnerability_remediation,
-              vulnerability_reference_urls: result.vulnerability_reference_urls,
-            },
-          });
-        } else {
-          log.debug(`[Enrichment] ${cveId} not found in OpenAEV platform ${platformId}`);
+    // Search OpenAEV platforms (only if enabled)
+    if (vulnSettings.enabledForOpenAEV) {
+      for (const [platformId, client] of this.oaevClients) {
+        try {
+          log.debug(`[Enrichment] Searching ${cveId} in OpenAEV platform ${platformId}...`);
+          const result = await client.getVulnerabilityByExternalId(cveId);
+          if (result) {
+            log.debug(`[Enrichment] Found ${cveId} in OpenAEV platform ${platformId}`);
+            matches.push({
+              platformId,
+              platformType: 'openaev',
+              entityId: result.vulnerability_id,
+              entityType: 'oaev-Vulnerability',
+              entityData: {
+                id: result.vulnerability_id,
+                entity_type: 'oaev-Vulnerability',
+                name: result.vulnerability_external_id,
+                description: result.vulnerability_description,
+                x_opencti_cvss_base_score: result.vulnerability_cvss_v31,
+                vulnerability_vuln_status: result.vulnerability_vuln_status,
+                vulnerability_cisa_vulnerability_name: result.vulnerability_cisa_vulnerability_name,
+                vulnerability_remediation: result.vulnerability_remediation,
+                vulnerability_reference_urls: result.vulnerability_reference_urls,
+              },
+            });
+          } else {
+            log.debug(`[Enrichment] ${cveId} not found in OpenAEV platform ${platformId}`);
+          }
+        } catch (error) {
+          log.debug(`[Enrichment] Error searching ${cveId} in OpenAEV ${platformId}:`, error);
         }
-      } catch (error) {
-        log.debug(`[Enrichment] Error searching ${cveId} in OpenAEV ${platformId}:`, error);
       }
     }
 
@@ -497,27 +516,40 @@ export class DetectionEngine {
   }
 
   /**
-   * Enrich CVEs/Vulnerabilities with data from both OpenCTI and OpenAEV platforms
+   * Enrich CVEs/Vulnerabilities with data from OpenCTI and/or OpenAEV platforms
    * Supports multi-platform matches (CVE found in both platforms)
+   * @param cves - Detected CVEs to enrich
+   * @param vulnSettings - Settings controlling which platforms to search
    */
-  async enrichCVEs(cves: DetectedOCTIEntity[]): Promise<DetectedOCTIEntity[]> {
+  async enrichCVEs(
+    cves: DetectedOCTIEntity[],
+    vulnSettings: VulnerabilityDetectionSettings = { enabledForOpenCTI: true, enabledForOpenAEV: true }
+  ): Promise<DetectedOCTIEntity[]> {
+    // If vulnerability detection is disabled for all platforms, return as-is
+    if (!vulnSettings.enabledForOpenCTI && !vulnSettings.enabledForOpenAEV) {
+      log.debug('[CVE Enrichment] Vulnerability detection disabled for all platforms, skipping enrichment');
+      return cves;
+    }
+
     const uniqueCVEs = [...new Set(cves.map((c) => c.name))];
     const searchResults = new Map<string, EnrichmentMatch[]>();
 
-    log.info(`[CVE Enrichment] Enriching ${uniqueCVEs.length} CVEs across ${this.clients.size} OpenCTI and ${this.oaevClients.size} OpenAEV clients`);
+    const octiCount = vulnSettings.enabledForOpenCTI ? this.clients.size : 0;
+    const oaevCount = vulnSettings.enabledForOpenAEV ? this.oaevClients.size : 0;
+    log.info(`[CVE Enrichment] Enriching ${uniqueCVEs.length} CVEs across ${octiCount} OpenCTI and ${oaevCount} OpenAEV clients`);
     
     // Log available platforms for debugging
-    if (this.oaevClients.size > 0) {
+    if (vulnSettings.enabledForOpenAEV && this.oaevClients.size > 0) {
       for (const [platformId] of this.oaevClients) {
         log.info(`[CVE Enrichment] OpenAEV client available: ${platformId}`);
       }
-    } else {
+    } else if (vulnSettings.enabledForOpenAEV) {
       log.warn('[CVE Enrichment] No OpenAEV clients available for CVE enrichment!');
     }
 
-    // Search each CVE across all platforms using the generic infrastructure
+    // Search each CVE across enabled platforms
     for (const cve of uniqueCVEs) {
-      const matches = await this.searchVulnerabilityAcrossPlatforms(cve);
+      const matches = await this.searchVulnerabilityAcrossPlatforms(cve, vulnSettings);
       if (matches.length > 0) {
         searchResults.set(cve.toUpperCase(), matches);
         log.info(`[CVE Enrichment] ${cve}: Found in ${matches.length} platform(s)`);
@@ -758,15 +790,26 @@ export class DetectionEngine {
 
   /**
    * Full scan of text content
+   * @param text - Text content to scan
+   * @param knownEntityNames - Optional array of known entity names to search for
+   * @param vulnSettings - Optional settings for vulnerability/CVE detection
    */
-  async scan(text: string, knownEntityNames: string[] = []): Promise<DetectionResult> {
+  async scan(
+    text: string,
+    knownEntityNames: string[] = [],
+    vulnSettings: VulnerabilityDetectionSettings = { enabledForOpenCTI: true, enabledForOpenAEV: true }
+  ): Promise<DetectionResult> {
     const startTime = performance.now();
 
     // Detect all observables
     const observables = this.detectObservables(text);
     
-    // Detect CVEs
-    const cves = this.detectCVEs(text);
+    // Detect CVEs - only if vulnerability detection is enabled for at least one platform
+    const vulnEnabled = vulnSettings.enabledForOpenCTI || vulnSettings.enabledForOpenAEV;
+    const cves = vulnEnabled ? this.detectCVEs(text) : [];
+    if (!vulnEnabled) {
+      log.debug('[Scan] CVE detection skipped - Vulnerability disabled for all platforms');
+    }
     
     // Detect OpenCTI entities from cache first (fast, offline)
     const cachedOCTIEntities = await this.detectOCTIEntitiesFromCache(text);
@@ -790,10 +833,10 @@ export class DetectionEngine {
       }
     }
 
-    // Enrich observables (OpenCTI) and CVEs (both OpenCTI and OpenAEV)
+    // Enrich observables (OpenCTI) and CVEs (OpenCTI and/or OpenAEV based on settings)
     const [enrichedObservables, enrichedCVEs] = await Promise.all([
       this.enrichObservables(observables),
-      this.enrichCVEs(cves),
+      vulnEnabled ? this.enrichCVEs(cves, vulnSettings) : Promise.resolve([]),
     ]);
     
     // For OCTI entities not from cache, enrich them

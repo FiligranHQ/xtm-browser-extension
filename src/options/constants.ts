@@ -41,6 +41,7 @@ export const OPENCTI_TYPES = [
   { value: 'Sector', label: 'Sectors' },
   { value: 'Threat-Actor-Group', label: 'Threat Actor Groups' },
   { value: 'Threat-Actor-Individual', label: 'Threat Actor Individuals' },
+  { value: 'Vulnerability', label: 'Vulnerabilities (CVE)' },
 ];
 
 // OpenAEV Types - sorted alphabetically by label
@@ -51,6 +52,7 @@ export const OPENAEV_TYPES = [
   { value: 'Finding', label: 'Findings' },
   { value: 'Player', label: 'People' },
   { value: 'Team', label: 'Teams' },
+  { value: 'Vulnerability', label: 'Vulnerabilities (CVE)' },
 ];
 
 export const DEFAULT_DETECTION = {

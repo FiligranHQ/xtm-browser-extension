@@ -224,7 +224,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
 
     if (response?.success && response.data) {
       const createdContainer = response.data;
-      const createdPlatformId = createdContainer._platformId || selectedPlatformId;
+      const createdPlatformId = createdContainer.platformId || selectedPlatformId;
       if (createdPlatformId) {
         const platform = availablePlatforms.find(p => p.id === createdPlatformId);
         if (platform) {
@@ -244,9 +244,9 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
         objectLabel: createdContainer.objectLabel,
         objectMarking: createdContainer.objectMarking,
         existsInPlatform: true,
-        _platformId: createdPlatformId,
-        _platformType: 'opencti',
-        _isNonDefaultPlatform: false,
+        platformId: createdPlatformId,
+        platformType: 'opencti',
+        isNonDefaultPlatform: false,
         _draftId: createdContainer.draftId,
       });
       setEntityContainers([]);

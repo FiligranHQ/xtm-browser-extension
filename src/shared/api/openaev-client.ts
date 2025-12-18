@@ -957,6 +957,7 @@ export class OpenAEVClient {
       case 'Exercise': return this.getExercise(entityId);
       case 'AttackPattern': return this.getAttackPattern(entityId);
       case 'Finding': return this.getFinding(entityId);
+      case 'Vulnerability': return this.getVulnerability(entityId);
       default:
         log.warn(`Unknown entity type: ${normalizedType}`);
         return null;

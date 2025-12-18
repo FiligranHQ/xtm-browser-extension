@@ -62,7 +62,7 @@ While fetching entity details from OpenCTI/OpenAEV, a loading spinner replaces t
 ### Entity Information
 - **Type Badge**: Entity type with icon and color coding
 - **Name**: Entity name or observable value
-- **Description**: Truncated description (if available)
+- **Description**: Truncated to 500 characters for readability (full description available in platform)
 - **Aliases**: Alternative names for the entity
 
 ### Metadata
@@ -88,11 +88,12 @@ While fetching entity details from OpenCTI/OpenAEV, a loading spinner replaces t
 - First Seen/Last Seen (for applicable entities)
 
 ### Related Containers
-A list of the most recent containers (Reports, Cases, Groupings) that include this entity:
+A list of the 5 most recent containers (Reports, Cases, Groupings) that include this entity:
 - Container type with icon
 - Container name
 - Last modified date
 - Click to open in OpenCTI
+- Shows count indicator (e.g., "5 of 12") if more containers exist
 
 ### Actions
 - **Open in OpenCTI**: Direct link to the entity in your platform
@@ -327,15 +328,23 @@ AI can help identify entities that pattern matching might miss:
 1. During container creation, click **AI Discover Entities**
 2. AI analyzes the full page context
 3. Additional threat actors, campaigns, and techniques are suggested
-4. Review and select entities to include
+4. **Visibility filtering**: Only entities that can be highlighted on the visible page are included (filters out entities from inaccessible content like shadow DOM)
+5. Review and select entities to include
+6. Click on AI-discovered (purple) highlights to re-open the panel with AI filter applied
 
 ### AI Relationship Resolution
 AI can identify relationships between detected entities:
 1. Select entities for import
 2. Click **Resolve Relationships with AI**
-3. AI analyzes page context to find relationships
+3. AI analyzes page context to find relationships using **valid STIX 2.1 and OpenCTI relationship types only**
 4. Relationships are displayed with confidence levels and explanations
 5. Select which relationships to include in import
+
+**Supported Relationship Types:**
+The AI only suggests relationships that are valid in OpenCTI. This includes:
+- **STIX 2.1 Standard**: `uses`, `targets`, `attributed-to`, `delivers`, `drops`, `downloads`, `exploits`, `variant-of`, `controls`, `authored-by`, `communicates-with`, `beacons-to`, `exfiltrates-to`, `hosts`, `owns`, `consists-of`, `indicates`, `based-on`, `derived-from`, `mitigates`, `remediates`, `located-at`, `originates-from`, `impersonates`, `compromises`, `resolves-to`, `belongs-to`
+- **OpenCTI Extensions**: `part-of`, `cooperates-with`, `participates-in`, `subtechnique-of`, `has`, `amplifies`, `publishes`, `demonstrates`, `detects`
+- **Fallback**: `related-to` (used only when no specific relationship applies)
 
 ## Context Menu
 
@@ -398,6 +407,13 @@ When an entity exists as multiple types within a single platform (e.g., "Phishin
 - Results are grouped under a single entry with a "N types" indicator
 - Navigate through all matching types using the same arrow navigation
 - Each type view shows the specific entity details for that type
+
+### CVE/Vulnerability Detection
+CVEs are detected via regex patterns and can be searched in both OpenCTI and OpenAEV:
+- **Cross-platform detection**: When a CVE like `CVE-2024-1234` is found on a page, it's searched in both platforms
+- **Per-platform settings**: Enable/disable vulnerability detection independently for each platform in Settings → Detection
+- **Performance optimization**: If vulnerability detection is disabled for all platforms, the CVE regex is skipped entirely
+- **Multi-platform results**: CVEs found in both platforms show combined results (e.g., "OCTI (1), OAEV (1)")
 
 ## Clear Highlights
 

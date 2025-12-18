@@ -106,8 +106,8 @@ export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'open
  */
 export const sortPlatformResults = (results: MultiPlatformResult[]): MultiPlatformResult[] => {
   return [...results].sort((a, b) => {
-    const aIsOpenCTI = a.entity._platformType === 'opencti' || !a.entity._platformType;
-    const bIsOpenCTI = b.entity._platformType === 'opencti' || !b.entity._platformType;
+    const aIsOpenCTI = a.entity.platformType === 'opencti' || !a.entity.platformType;
+    const bIsOpenCTI = b.entity.platformType === 'opencti' || !b.entity.platformType;
     if (aIsOpenCTI && !bIsOpenCTI) return -1;
     if (!aIsOpenCTI && bIsOpenCTI) return 1;
     return 0;

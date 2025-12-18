@@ -105,16 +105,17 @@ export function getEntityType(entity: Record<string, unknown>): string {
 
 /**
  * Extract platform ID from entity
+ * Note: We only use camelCase 'platformId' - the extension doesn't use snake_case 'platform_id'
  */
 export function getEntityPlatformId(entity: Record<string, unknown>): string | undefined {
-  return (entity._platformId || entity.platformId || entity.platform_id) as string | undefined;
+  return entity.platformId as string | undefined;
 }
 
 /**
  * Extract platform type from entity
  */
 export function getEntityPlatformType(entity: Record<string, unknown>): PlatformType {
-  return (entity._platformType || entity.platformType || 'opencti') as PlatformType;
+  return (entity.platformType || 'opencti') as PlatformType;
 }
 
 /**
@@ -152,6 +153,8 @@ export function getOAEVEntityName(entity: Record<string, unknown>, type: string)
       return (entity.attack_pattern_name || entity.name || 'Unknown Attack Pattern') as string;
     case 'Finding':
       return (entity.finding_value || entity.name || 'Unknown Finding') as string;
+    case 'Vulnerability':
+      return (entity.vulnerability_external_id || entity.vulnerability_cisa_vulnerability_name || entity.name || 'Unknown Vulnerability') as string;
     default:
       return (entity.name || 'Unknown') as string;
   }
@@ -181,6 +184,8 @@ export function getOAEVEntityId(entity: Record<string, unknown>, type: string): 
       return (entity.attack_pattern_id || entity.id || '') as string;
     case 'Finding':
       return (entity.finding_id || entity.id || '') as string;
+    case 'Vulnerability':
+      return (entity.vulnerability_id || entity.id || '') as string;
     default:
       return (entity._id || entity.id || '') as string;
   }
@@ -212,6 +217,8 @@ export function getOAEVEntityUrl(platformUrl: string, type: string, entityId: st
       return `${baseUrl}/admin/attack_patterns/${entityId}`;
     case 'Finding':
       return `${baseUrl}/admin/findings/${entityId}`;
+    case 'Vulnerability':
+      return `${baseUrl}/admin/vulnerabilities/${entityId}`;
     default:
       return baseUrl;
   }
@@ -233,6 +240,7 @@ export function getOAEVTypeFromClass(className: string): string {
     case 'Scenario': return 'Scenario';
     case 'Exercise': return 'Exercise';
     case 'Finding': return 'Finding';
+    case 'Vulnerability': return 'Vulnerability';
     default: return simpleName;
   }
 }
@@ -252,6 +260,7 @@ export function getOAEVEntityColor(type: string): string {
     case 'Exercise': return '#ff7043'; // Deep Orange
     case 'AttackPattern': return '#d4e157'; // Yellow-green
     case 'Finding': return '#ec407a'; // Pink
+    case 'Vulnerability': return '#795548'; // Brown (same as OpenCTI CVE)
     default: return '#e91e63'; // Pink (OAEV platform color)
   }
 }

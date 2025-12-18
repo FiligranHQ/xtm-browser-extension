@@ -76,8 +76,8 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 
   // Check if this is a non-default platform entity (any platform other than OpenCTI)
   const entityType = (entity as any).type || '';
-  const isNonDefaultPlatformEntity = (entity as any)._isNonDefaultPlatform || 
-    (entity as any)._platformType !== 'opencti' ||
+  const isNonDefaultPlatformEntity = (entity as any).isNonDefaultPlatform || 
+    (entity as any).platformType !== 'opencti' ||
     parsePrefixedType(entityType) !== null;
   
   // If non-default platform entity, this component shouldn't render it
@@ -89,12 +89,16 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   // Entity might be a DetectedOCTIEntity/DetectedObservable with entityData, or direct entity data
   const entityData = (entity as any).entityData || entity || {};
   const entityId = (entity as any).entityId || entityData?.id || entity?.id;
-  const entityPlatformId = (entity as any)._platformId || (entity as any).platformId;
+  const entityPlatformId = (entity as any).platformId || (entity as any).platformId;
   
   const type = entityData.entity_type || entity.type || 'unknown';
   const color = itemColor(type, mode === 'dark');
   const name = entityData.representative?.main || entityData.name || entity.value || entity.name || 'Unknown';
-  const description = entityData.description || entity.description;
+  const rawDescription = entityData.description || entity.description || '';
+  // Truncate description to 500 characters
+  const description = rawDescription.length > 500 
+    ? rawDescription.slice(0, 500) + '...' 
+    : rawDescription;
   const aliases = entityData.aliases || entity.aliases;
   
   // Attack Pattern specific: x_mitre_id
@@ -136,7 +140,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 
   // Fire-and-forget fetch for entity details
   const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
-    const platformType = targetEntity._platformType || inferPlatformTypeFromEntityType(targetEntity.type);
+    const platformType = targetEntity.platformType || inferPlatformTypeFromEntityType(targetEntity.type);
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
     const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
     
@@ -162,9 +166,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           ...response.data,
           entityData: response.data,
           existsInPlatform: true,
-          _platformId: targetPlatformId,
-          _platformType: platformType,
-          _isNonDefaultPlatform: platformType !== 'opencti',
+          platformId: targetPlatformId,
+          platformType: platformType,
+          isNonDefaultPlatform: platformType !== 'opencti',
         };
         setEntity(fullEntity);
         multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
@@ -754,14 +758,14 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
         </Paper>
       )}
 
-      {/* Containers Section */}
+      {/* Containers Section - Show max 5 */}
       {entityContainers.length > 0 && (
         <Box sx={{ mb: 2.5 }}>
           <Typography variant="caption" sx={sectionTitleStyle}>
-            Latest Containers ({entityContainers.length})
+            Latest Containers ({Math.min(entityContainers.length, 5)}{entityContainers.length > 5 ? ` of ${entityContainers.length}` : ''})
           </Typography>
           <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-            {entityContainers.map((container, idx) => {
+            {entityContainers.slice(0, 5).map((container, idx) => {
               const containerColor = itemColor(container.entity_type, mode === 'dark');
               return (
                 <Box
@@ -773,7 +777,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                     gap: 1.5,
                     p: 1.5,
                     cursor: 'pointer',
-                    borderBottom: idx < entityContainers.length - 1 ? 1 : 0,
+                    borderBottom: idx < Math.min(entityContainers.length, 5) - 1 ? 1 : 0,
                     borderColor: 'divider',
                     transition: 'background-color 0.2s',
                     '&:hover': { bgcolor: 'action.hover' },

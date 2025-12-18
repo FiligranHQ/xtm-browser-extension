@@ -82,7 +82,7 @@ export const handleGetEntityDetails: MessageHandler = async (payload, sendRespon
 
         const entity = await Promise.race([entityPromise, timeoutPromise]);
         if (entity) {
-          sendResponse({ success: true, data: { ...entity, _platformId: specificPlatformId } });
+          sendResponse({ success: true, data: { ...entity, platformId: specificPlatformId } });
         } else {
           sendResponse(errorResponse('Entity not found'));
         }
@@ -113,7 +113,7 @@ export const handleGetEntityDetails: MessageHandler = async (payload, sendRespon
       const found = results.find(r => r.entity !== null);
 
       if (found && found.entity) {
-        sendResponse({ success: true, data: { ...found.entity, _platformId: found.platformId } });
+        sendResponse({ success: true, data: { ...found.entity, platformId: found.platformId } });
       } else {
         sendResponse(errorResponse('Entity not found in any platform'));
       }
@@ -160,7 +160,7 @@ export const handleSearchEntities: MessageHandler = async (payload, sendResponse
           setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
         );
         const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-        return { platformId: pId, results: results.map((r: unknown) => ({ ...(r as object), _platformId: pId })) };
+        return { platformId: pId, results: results.map((r: unknown) => ({ ...(r as object), platformId: pId })) };
       } catch (e) {
         log.warn(`Search timeout/error for platform ${pId}:`, e);
         return { platformId: pId, results: [] };
@@ -301,7 +301,7 @@ export const handleFetchLabels: MessageHandler = async (payload, sendResponse) =
       }
 
       const labels = await client.fetchLabels();
-      sendResponse({ success: true, data: labels.map(l => ({ ...l, _platformId: labelsPlatformId })) });
+      sendResponse({ success: true, data: labels.map(l => ({ ...l, platformId: labelsPlatformId })) });
     } else {
       // Fetch from all platforms in parallel
       const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
@@ -325,7 +325,7 @@ export const handleFetchLabels: MessageHandler = async (payload, sendResponse) =
         for (const label of result.labels) {
           if (!seenIds.has(label.id)) {
             seenIds.add(label.id);
-            allLabels.push({ ...label, _platformId: result.platformId });
+            allLabels.push({ ...label, platformId: result.platformId });
           }
         }
       }
@@ -361,7 +361,7 @@ export const handleFetchMarkings: MessageHandler = async (payload, sendResponse)
       }
 
       const markings = await client.fetchMarkingDefinitions();
-      sendResponse({ success: true, data: markings.map(m => ({ ...m, _platformId: markingsPlatformId })) });
+      sendResponse({ success: true, data: markings.map(m => ({ ...m, platformId: markingsPlatformId })) });
     } else {
       // Fetch from all platforms in parallel
       const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
@@ -385,7 +385,7 @@ export const handleFetchMarkings: MessageHandler = async (payload, sendResponse)
         for (const marking of result.markings) {
           if (!seenIds.has(marking.id)) {
             seenIds.add(marking.id);
-            allMarkings.push({ ...marking, _platformId: result.platformId });
+            allMarkings.push({ ...marking, platformId: result.platformId });
           }
         }
       }
@@ -504,7 +504,7 @@ export const handleFetchEntityContainers: MessageHandler = async (payload, sendR
         );
         const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
         log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers in ${pId}`);
-        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), _platformId: pId })) };
+        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), platformId: pId })) };
       } catch (e) {
         log.debug(`No containers/timeout for ${entityId} in platform ${pId}:`, e);
         return { platformId: pId, containers: [] };
@@ -547,7 +547,7 @@ export const handleFindContainersByUrl: MessageHandler = async (payload, sendRes
           client.findContainersByExternalReferenceUrl(url),
           timeoutPromise
         ]);
-        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), _platformId: pId })) };
+        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), platformId: pId })) };
       } catch {
         log.debug(`No containers found/timeout for URL in platform ${pId}`);
         return { platformId: pId, containers: [] };
@@ -606,7 +606,7 @@ export const handleCreateWorkbench: MessageHandler = async (payload, sendRespons
       data: {
         ...investigation,
         url,
-        _platformId: targetPlatformId,
+        platformId: targetPlatformId,
       },
     });
   } catch (error) {
@@ -644,13 +644,13 @@ export const handleGetLabelsAndMarkings: MessageHandler = async (_payload, sendR
         for (const label of labels) {
           if (!seenLabelIds.has(label.id)) {
             seenLabelIds.add(label.id);
-            allLabels.push({ ...label, _platformId: pId });
+            allLabels.push({ ...label, platformId: pId });
           }
         }
         for (const marking of markings) {
           if (!seenMarkingIds.has(marking.id)) {
             seenMarkingIds.add(marking.id);
-            allMarkings.push({ ...marking, _platformId: pId });
+            allMarkings.push({ ...marking, platformId: pId });
           }
         }
       } catch (e) {

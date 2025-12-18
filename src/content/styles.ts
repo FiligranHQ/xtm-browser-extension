@@ -590,38 +590,72 @@ export const HIGHLIGHT_STYLES = `
   
   /* ========================================
      SIDE PANEL FRAME
+     All styles use !important to prevent page CSS from overriding
      ======================================== */
   .xtm-panel-frame {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 560px;
-    height: 100vh;
-    border: none;
-    z-index: 2147483646;
-    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4);
-    transition: transform 0.3s ease;
-    background: #070d19;
+    all: initial !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    width: 560px !important;
+    min-width: 560px !important;
+    max-width: 560px !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 2147483646 !important;
+    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4) !important;
+    transition: transform 0.3s ease !important;
+    background: #070d19 !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    overflow: hidden !important;
+    transform: translateX(0) !important;
+    box-sizing: border-box !important;
+    float: none !important;
+    clear: none !important;
+    flex: none !important;
+    grid-area: auto !important;
+    clip: auto !important;
+    clip-path: none !important;
   }
   
   .xtm-panel-frame.hidden {
-    transform: translateX(100%);
+    transform: translateX(100%) !important;
+    visibility: hidden !important;
   }
   
   /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */
   .xtm-panel-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 560px;
-    bottom: 0;
-    z-index: 2147483635;
-    background: transparent;
-    pointer-events: none;
+    all: initial !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 560px !important;
+    bottom: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    z-index: 2147483635 !important;
+    background: transparent !important;
+    pointer-events: none !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-sizing: border-box !important;
   }
   
   .xtm-panel-overlay.hidden {
-    display: none;
+    display: none !important;
+    visibility: hidden !important;
   }
 
   /* ========================================

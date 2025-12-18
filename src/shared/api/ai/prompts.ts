@@ -58,59 +58,99 @@ WHAT TO AVOID (DO NOT EXTRACT):
 
 Output ONLY valid JSON, no additional text.`,
 
-  relationshipResolution: `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling. Your task is to identify PRECISE and RELEVANT relationships between threat intelligence entities based on contextual evidence from the page content.
+  relationshipResolution: `You are an expert cybersecurity threat intelligence analyst specializing in STIX 2.1 data modeling for OpenCTI. Your task is to identify PRECISE and RELEVANT relationships between threat intelligence entities based on contextual evidence from the page content.
 
 CRITICAL REQUIREMENTS:
 1. PRECISION: Only suggest relationships with clear evidence in the text - NEVER hallucinate or assume
-2. RELEVANCE: Choose the most semantically accurate relationship type for each connection
-3. SPECIFICITY: Prefer specific relationship types over generic ones (avoid "related-to" unless no other type fits)
+2. USE ONLY VALID RELATIONSHIPS: You MUST use ONLY the relationship types listed below - ANY OTHER RELATIONSHIP TYPE IS INVALID
+3. CHECK ENTITY COMPATIBILITY: Each relationship is only valid for specific source→target entity type combinations
 4. EVIDENCE-BASED: Every relationship must be supported by explicit or strongly implied textual evidence
-5. DIRECTION MATTERS: Relationships are directional - ensure from/to entities are correct
+5. DIRECTION MATTERS: Relationships are directional - ensure from/to entities match the allowed combinations
 
-COMPLETE STIX 2.1 RELATIONSHIP TYPES (use the most precise type):
+COMPLETE LIST OF VALID RELATIONSHIP TYPES (use ONLY these - anything else is INVALID):
 
-ATTACK & THREAT RELATIONSHIPS:
-- "uses": Threat actors, intrusion sets, campaigns, or malware USE attack patterns, tools, malware, or infrastructure
-- "targets": Threat actors, intrusion sets, campaigns, or malware TARGET identity (organizations, sectors, individuals), locations, or vulnerabilities
-- "attributed-to": Intrusion sets or campaigns are ATTRIBUTED TO threat actors; threat actors ATTRIBUTED TO locations/countries
-- "impersonates": Threat actors or campaigns IMPERSONATE identities (organizations, individuals)
+STIX 2.1 STANDARD RELATIONSHIPS:
+- "uses": Source USES target (Attack-Pattern, Malware, Tool, Infrastructure, Channel, Narrative)
+  Valid: Threat-Actor→Attack-Pattern/Tool/Malware/Infrastructure | Campaign→Attack-Pattern/Tool/Malware/Infrastructure | Intrusion-Set→Attack-Pattern/Tool/Malware/Infrastructure | Malware→Attack-Pattern/Infrastructure/Tool/Malware | Incident→Attack-Pattern/Tool/Malware/Infrastructure
+- "targets": Source TARGETS target
+  Valid: Threat-Actor/Campaign/Intrusion-Set/Malware/Tool/Incident/Attack-Pattern→Identity/Sector/Location/Vulnerability/Infrastructure/Event
+- "attributed-to": Source is ATTRIBUTED TO target
+  Valid: Campaign→Intrusion-Set/Threat-Actor | Intrusion-Set→Threat-Actor | Incident→Campaign/Intrusion-Set/Threat-Actor
+- "delivers": Source DELIVERS target malware
+  Valid: Attack-Pattern→Malware | Infrastructure→Malware | Tool→Malware
+- "drops": Source DROPS target
+  Valid: Malware→Malware/Tool/File | Hostname→File | Tool→Malware
+- "downloads": Source DOWNLOADS target
+  Valid: Malware→Malware/Tool/File
+- "exploits": Source EXPLOITS vulnerability
+  Valid: Malware→Vulnerability
+- "variant-of": Malware is VARIANT OF another malware
+  Valid: Malware→Malware
+- "controls": Source CONTROLS target
+  Valid: Malware→Malware/Infrastructure | Infrastructure→Infrastructure
+- "authored-by": Source AUTHORED BY target
+  Valid: Malware→Threat-Actor/Intrusion-Set
+- "communicates-with": Source COMMUNICATES WITH target
+  Valid: Malware→Domain-Name/IPv4-Addr/IPv6-Addr/URL/Infrastructure | Infrastructure→Domain-Name/IPv4-Addr/IPv6-Addr/URL/Infrastructure
+- "beacons-to": Malware BEACONS TO infrastructure
+  Valid: Malware→Infrastructure
+- "exfiltrates-to": Malware EXFILTRATES TO infrastructure
+  Valid: Malware→Infrastructure
+- "hosts": Source HOSTS target
+  Valid: Infrastructure→Malware/Tool/Infrastructure | Intrusion-Set→Infrastructure | Threat-Actor→Infrastructure
+- "owns": Source OWNS target
+  Valid: Intrusion-Set/Threat-Actor/Organization→Infrastructure
+- "consists-of": Source CONSISTS OF target
+  Valid: Infrastructure→Observable/Infrastructure
+- "indicates": Indicator INDICATES target
+  Valid: Indicator→Attack-Pattern/Campaign/Incident/Intrusion-Set/Malware/Threat-Actor/Tool/Vulnerability/Infrastructure
+- "based-on": Indicator BASED ON observable
+  Valid: Indicator→Observable/Observed-Data
+- "derived-from": Source DERIVED FROM target (same type)
+  Valid: Any-SDO→Same-Type-SDO
+- "mitigates": Course-of-Action MITIGATES target
+  Valid: Course-of-Action→Attack-Pattern/Indicator/Malware/Tool/Vulnerability
+- "remediates": Course-of-Action REMEDIATES target
+  Valid: Course-of-Action→Malware/Vulnerability
+- "investigates": Course-of-Action INVESTIGATES target
+  Valid: Course-of-Action→Indicator
+- "located-at": Source LOCATED AT location
+  Valid: Identity/Threat-Actor/Infrastructure/IPv4-Addr/IPv6-Addr→Location
+- "originates-from": Source ORIGINATES FROM location
+  Valid: Campaign/Intrusion-Set/Malware/Incident/Threat-Actor→Location
+- "impersonates": Threat-Actor IMPERSONATES identity
+  Valid: Threat-Actor→Identity
+- "compromises": Source COMPROMISES infrastructure
+  Valid: Campaign/Intrusion-Set/Incident/Threat-Actor→Infrastructure
+- "resolves-to": Domain RESOLVES TO IP
+  Valid: Domain-Name/Hostname→IPv4-Addr/IPv6-Addr/Domain-Name/Hostname
+- "belongs-to": Source BELONGS TO target
+  Valid: IPv4-Addr/IPv6-Addr→Autonomous-System/Organization | Channel→Organization/Threat-Actor/Intrusion-Set | Domain-Name→Organization
 
-MALWARE & TOOL RELATIONSHIPS:
-- "delivers": Malware DELIVERS other malware (e.g., dropper delivers payload)
-- "drops": Malware DROPS other malware or tools
-- "downloads": Malware or tools DOWNLOAD files, other malware, or tools
-- "exploits": Malware or tools EXPLOIT vulnerabilities
-- "variant-of": Malware is a VARIANT OF another malware family
-- "controls": Malware CONTROLS infrastructure
-- "authored-by": Malware or tools AUTHORED BY threat actors or identities
+OPENCTI EXTENSION RELATIONSHIPS:
+- "part-of": Source is PART OF target
+  Valid: Identity→Identity/Organization | Sector→Sector | Threat-Actor-Group→Threat-Actor-Group
+- "cooperates-with": Threat actors COOPERATE WITH each other
+  Valid: Threat-Actor-Group→Threat-Actor-Group/Threat-Actor-Individual
+- "participates-in": Threat actor PARTICIPATES IN campaign
+  Valid: Threat-Actor→Campaign
+- "subtechnique-of": Attack pattern is SUBTECHNIQUE OF another
+  Valid: Attack-Pattern→Attack-Pattern
+- "has": Source HAS target
+  Valid: Infrastructure/Tool/System→Vulnerability
+- "amplifies": Channel AMPLIFIES content
+  Valid: Channel→Media-Content
+- "publishes": Source PUBLISHES content
+  Valid: Individual/User-Account→Media-Content
+- "demonstrates": File DEMONSTRATES vulnerability
+  Valid: StixFile→Vulnerability
+- "detects": Infrastructure DETECTS attack pattern
+  Valid: Infrastructure→Attack-Pattern
 
-INFRASTRUCTURE & OBSERVABLE RELATIONSHIPS:
-- "communicates-with": Malware or tools COMMUNICATE WITH infrastructure (IPs, domains, URLs)
-- "beacons-to": Malware BEACONS TO C2 infrastructure (specific periodic communication)
-- "exfiltrates-to": Malware EXFILTRATES data TO infrastructure
-- "hosts": Infrastructure HOSTS malware, tools, or other infrastructure
-- "owns": Identity OWNS infrastructure
-- "consists-of": Infrastructure CONSISTS OF other infrastructure components
-- "resolves-to": Domain RESOLVES TO IP addresses
+FALLBACK (use sparingly):
+- "related-to": Use ONLY when no other relationship type fits AND there is clear evidence of a connection
 
-INDICATOR & DETECTION RELATIONSHIPS:
-- "indicates": Indicators INDICATE malware, attack patterns, threat actors, campaigns, or intrusion sets
-- "based-on": Indicators BASED ON observables (the observable evidence for the indicator)
-- "derived-from": Objects DERIVED FROM other objects (analysis products)
-
-DEFENSE & MITIGATION RELATIONSHIPS:
-- "mitigates": Courses of action MITIGATE attack patterns, malware, vulnerabilities, or tools
-- "remediates": Courses of action REMEDIATE vulnerabilities or malware
-- "investigates": Identities (analysts) INVESTIGATE incidents, campaigns, or intrusion sets
-
-LOCATION & IDENTITY RELATIONSHIPS:
-- "located-at": Identities, threat actors, or infrastructure LOCATED AT locations
-- "originates-from": Threat actors or malware ORIGINATE FROM locations/countries
-
-GENERAL RELATIONSHIPS:
-- "related-to": Use ONLY when no other relationship type accurately describes the connection
-- "duplicate-of": Object is a DUPLICATE OF another object
-- "part-of": Entity is PART OF another entity (e.g., sub-campaign)
+DO NOT USE ANY OTHER RELATIONSHIP TYPE - they will be rejected by the platform.
 
 Output ONLY valid JSON, no markdown, no explanation.`,
 } as const;
@@ -515,7 +555,7 @@ export function buildRelationshipResolutionPrompt(request: RelationshipResolutio
     `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
   ).join('\n');
 
-  return `Analyze the page content and identify PRECISE STIX 2.1 relationships between the entities listed below.
+  return `Analyze the page content and identify relationships between the entities listed below.
 
 PAGE TITLE: ${request.pageTitle}
 PAGE URL: ${request.pageUrl}
@@ -526,13 +566,47 @@ ${entityList}
 PAGE CONTENT:
 ${request.pageContent.substring(0, 10000)}
 
+VALID RELATIONSHIP TYPES (use ONLY these exact strings - any other value will be REJECTED):
+- "uses" (Threat-Actor/Campaign/Intrusion-Set/Malware/Incident → Attack-Pattern/Tool/Malware/Infrastructure)
+- "targets" (Threat-Actor/Campaign/Intrusion-Set/Malware/Tool/Incident/Attack-Pattern → Identity/Sector/Location/Vulnerability)
+- "attributed-to" (Campaign/Intrusion-Set/Incident → Intrusion-Set/Threat-Actor)
+- "delivers" (Attack-Pattern/Infrastructure/Tool → Malware)
+- "drops" (Malware/Tool → Malware/Tool/File)
+- "downloads" (Malware → Malware/Tool/File)
+- "exploits" (Malware → Vulnerability)
+- "variant-of" (Malware → Malware)
+- "controls" (Malware/Infrastructure → Malware/Infrastructure)
+- "authored-by" (Malware → Threat-Actor/Intrusion-Set)
+- "communicates-with" (Malware/Infrastructure → Domain/IP/URL/Infrastructure)
+- "beacons-to" (Malware → Infrastructure)
+- "exfiltrates-to" (Malware → Infrastructure)
+- "hosts" (Infrastructure/Intrusion-Set/Threat-Actor → Malware/Tool/Infrastructure)
+- "owns" (Intrusion-Set/Threat-Actor/Organization → Infrastructure)
+- "consists-of" (Infrastructure → Observable/Infrastructure)
+- "indicates" (Indicator → Attack-Pattern/Campaign/Intrusion-Set/Malware/Threat-Actor/Tool)
+- "based-on" (Indicator → Observable)
+- "derived-from" (Any-SDO → Same-Type-SDO)
+- "mitigates" (Course-of-Action → Attack-Pattern/Malware/Tool/Vulnerability)
+- "remediates" (Course-of-Action → Malware/Vulnerability)
+- "located-at" (Identity/Threat-Actor/Infrastructure → Location)
+- "originates-from" (Campaign/Intrusion-Set/Malware/Threat-Actor → Location)
+- "impersonates" (Threat-Actor → Identity)
+- "compromises" (Campaign/Intrusion-Set/Incident/Threat-Actor → Infrastructure)
+- "resolves-to" (Domain/Hostname → IP/Domain/Hostname)
+- "belongs-to" (IP/Domain/Channel → Autonomous-System/Organization/Threat-Actor)
+- "part-of" (Identity → Identity/Organization | Sector → Sector | Threat-Actor-Group → Threat-Actor-Group)
+- "cooperates-with" (Threat-Actor-Group → Threat-Actor-Group/Threat-Actor-Individual)
+- "participates-in" (Threat-Actor → Campaign)
+- "subtechnique-of" (Attack-Pattern → Attack-Pattern)
+- "has" (Infrastructure/Tool/System → Vulnerability)
+- "related-to" (ONLY if no other type fits)
+
 INSTRUCTIONS:
-1. Carefully read the page content for evidence of relationships between the listed entities
-2. For each relationship found, select the MOST PRECISE relationship type from STIX 2.1
-3. Ensure the direction (from → to) is semantically correct
+1. Read the page content for evidence of relationships between the listed entities
+2. Check that the source and target entity types are COMPATIBLE with the relationship type
+3. Ensure the direction (from → to) matches the allowed combinations above
 4. Only include relationships with clear textual evidence
-5. Provide a specific reason citing the evidence
-6. Include the exact text excerpt that supports the relationship
+5. Do NOT invent or hallucinate relationships - if unsure, do not include it
 
 Return JSON in this EXACT format:
 {
@@ -542,22 +616,21 @@ Return JSON in this EXACT format:
       "toIndex": 1,
       "relationshipType": "uses",
       "confidence": "high",
-      "reason": "The article explicitly states APT29 deployed SUNBURST in the SolarWinds attack",
-      "excerpt": "APT29 deployed the SUNBURST backdoor through compromised SolarWinds updates"
+      "reason": "The article explicitly states APT29 deployed SUNBURST",
+      "excerpt": "APT29 deployed the SUNBURST backdoor"
     }
   ]
 }
 
 CONFIDENCE LEVELS:
-- "high": Explicit statement in text (e.g., "APT29 uses Cobalt Strike")
-- "medium": Strongly implied by context (e.g., malware and C2 IP mentioned together in attack description)
-- "low": Reasonable inference from overall context (use sparingly)
+- "high": Explicit statement in text
+- "medium": Strongly implied by context
+- "low": Reasonable inference (use sparingly)
 
-CRITICAL: 
-- Prefer specific relationship types over "related-to"
-- Verify entity type compatibility before suggesting a relationship
-- Direction matters: "Malware uses Attack-Pattern" NOT "Attack-Pattern uses Malware"
-- If no confident relationships exist, return: {"relationships": []}
-
-Quality over quantity - only include relationships you are confident about.`;
+CRITICAL VALIDATION RULES:
+- ONLY use relationship types from the list above - anything else is INVALID
+- Verify source→target entity type compatibility BEFORE adding a relationship
+- Direction matters: e.g., "Malware uses Attack-Pattern" is valid, "Attack-Pattern uses Malware" is NOT
+- If no valid relationships exist, return: {"relationships": []}
+- Quality over quantity - only include relationships you are confident about`;
 }

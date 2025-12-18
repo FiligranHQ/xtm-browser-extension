@@ -82,7 +82,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   const entityData = (entity as any).entityData || entity || {};
   const rawType = (entity as any).type || '';
   const oaevType = rawType.replace('oaev-', '');
-  const entityPlatformId = (entity as any)._platformId || (entity as any).platformId;
+  const entityPlatformId = (entity as any).platformId || (entity as any).platformId;
   
   // Find the platform
   const platform = entityPlatformId 
@@ -115,7 +115,11 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
       default: return entityData.description || '';
     }
   };
-  const description = getDescription();
+  const rawDescription = getDescription();
+  // Truncate description to 500 characters
+  const description = rawDescription.length > 500 
+    ? rawDescription.slice(0, 500) + '...' 
+    : rawDescription;
   
   // Get OpenAEV icon based on type
   const getOAEVIcon = () => {
@@ -161,9 +165,9 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
           ...response.data,
           entityData: response.data,
           existsInPlatform: true,
-          _platformId: targetPlatformId,
-          _platformType: 'openaev',
-          _isNonDefaultPlatform: true,
+          platformId: targetPlatformId,
+          platformType: 'openaev',
+          isNonDefaultPlatform: true,
         };
         setEntity(fullEntity);
         multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
@@ -213,7 +217,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   // Determine display
   const currentResult = multiPlatformResults[currentPlatformIndex];
   const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
-  const currentPlatformType = currentResult?.entity?._platformType || currentPlatform?.type || 'openaev';
+  const currentPlatformType = currentResult?.entity?.platformType || currentPlatform?.type || 'openaev';
   const platformLogo = getPlatformLogoName(currentPlatformType);
   const hasMultiplePlatforms = multiPlatformResults.length > 1;
   

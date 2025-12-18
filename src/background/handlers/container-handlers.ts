@@ -238,7 +238,7 @@ export async function handleCreateContainer(
       success: true, 
       data: { 
         ...container, 
-        _platformId: platformId,
+        platformId: platformId,
         _createdRelationships: createdRelationships,
       } 
     });

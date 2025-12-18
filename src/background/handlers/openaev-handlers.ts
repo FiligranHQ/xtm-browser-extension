@@ -561,7 +561,7 @@ export const handleSearchOAEV: MessageHandler = async (payload, sendResponse) =>
 
             results.push(...classResults.content.map((r: unknown) => ({
               ...(r as object),
-              _platformId: pId,
+              platformId: pId,
               _platform: platformInfo,
               _entityClass: className,
             })));
@@ -648,8 +648,8 @@ export const handleGetOAEVEntityDetails: MessageHandler = async (payload, sendRe
         success: true,
         data: {
           ...entity,
-          _platformId: requestedPlatformId,
-          _platformType: 'openaev',
+          platformId: requestedPlatformId,
+          platformType: 'openaev',
           _entityType: entityType,
         }
       });

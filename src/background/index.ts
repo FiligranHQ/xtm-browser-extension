@@ -615,12 +615,19 @@ async function handleMessage(
         const payload = message.payload as { content: string; url: string };
         try {
           if (detectionEngine) {
-            const result = await detectionEngine.scan(payload.content);
-            
-            // Get detection settings to filter results (using disabled arrays)
+            // Get detection settings BEFORE scan to determine vulnerability detection scope
             const settings = await getSettings();
             const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
             const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+            const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
+            
+            // Determine vulnerability/CVE detection settings per platform
+            const vulnSettings = {
+              enabledForOpenCTI: !disabledOpenCTITypes.includes('Vulnerability'),
+              enabledForOpenAEV: !disabledOpenAEVTypes.includes('Vulnerability'),
+            };
+            
+            const result = await detectionEngine.scan(payload.content, [], vulnSettings);
             
             // Filter observables - exclude disabled types (empty = all enabled)
             const filteredObservables = result.observables.filter(obs => 
@@ -636,7 +643,7 @@ async function handleMessage(
             const scanResult: ScanResultPayload = {
               observables: filteredObservables,
               openctiEntities: filteredOpenctiEntities,
-              cves: result.cves, // CVEs are always included
+              cves: result.cves, // CVEs already filtered by vulnSettings
               openaevEntities: [], // OpenCTI entities are in observables/openctiEntities/cves
               scanTime: result.scanTime,
               url: payload.url,
@@ -823,6 +830,17 @@ async function handleMessage(
           const oaevPlatformCount = openAEVClients.size;
           log.info(`SCAN_ALL: Starting unified scan across ALL configured platforms (${octiPlatformCount} OpenCTI, ${oaevPlatformCount} OpenAEV)...`);
           
+          // Get detection settings to determine vulnerability detection scope
+          const scanAllSettings = await getSettings();
+          const scanAllDisabledOCTI = scanAllSettings.detection?.disabledOpenCTITypes || [];
+          const scanAllDisabledOAEV = scanAllSettings.detection?.disabledOpenAEVTypes || [];
+          
+          // Determine vulnerability/CVE detection settings per platform
+          const vulnSettings = {
+            enabledForOpenCTI: !scanAllDisabledOCTI.includes('Vulnerability'),
+            enabledForOpenAEV: !scanAllDisabledOAEV.includes('Vulnerability'),
+          };
+          
           // Initialize results
           let openctiResult: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[]; cves: DetectedOCTIEntity[] } = {
             observables: [],
@@ -835,7 +853,7 @@ async function handleMessage(
           if (detectionEngine) {
             try {
               log.debug(`SCAN_ALL: Scanning ${octiPlatformCount} OpenCTI platform(s) for observables, OpenCTI entities, and CVEs...`);
-              const octiResult = await detectionEngine.scan(payload.content);
+              const octiResult = await detectionEngine.scan(payload.content, [], vulnSettings);
               openctiResult = {
                 observables: octiResult.observables || [],
                 openctiEntities: octiResult.openctiEntities || [],
@@ -944,24 +962,21 @@ async function handleMessage(
             log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);
           }
           
-          // Get detection settings to filter results (using disabled arrays)
+          // Filter results using detection settings (reuse scanAllSettings from earlier)
           // Note: Detection settings only affect global scan, NOT atomic testing or scenario generation
-          const settings = await getSettings();
-          const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
-          const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
-          const disabledOpenAEVTypes = settings.detection?.disabledOpenAEVTypes || [];
+          const scanAllDisabledObs = scanAllSettings.detection?.disabledObservableTypes || [];
           
           // Filter OpenCTI results - exclude disabled types (empty = all enabled)
           const filteredObservables = openctiResult.observables.filter(obs => 
-            !disabledObservableTypes.includes(obs.type)
+            !scanAllDisabledObs.includes(obs.type)
           );
           const filteredOpenctiEntities = openctiResult.openctiEntities.filter(entity => 
-            !disabledOpenCTITypes.includes(entity.type)
+            !scanAllDisabledOCTI.includes(entity.type)
           );
           
           // Filter OpenAEV entities - exclude disabled types (empty = all enabled)
           const filteredOpenaevEntities = openaevEntities.filter(entity => 
-            !disabledOpenAEVTypes.includes(entity.type)
+            !scanAllDisabledOAEV.includes(entity.type)
           );
           
           // Combine filtered results
@@ -1500,7 +1515,7 @@ async function handleMessage(
                   
                   const entity = await Promise.race([entityPromise, timeoutPromise]);
                   if (entity) {
-                    sendResponse({ success: true, data: { ...entity, _platformId: specificPlatformId, _platformType: 'opencti' } });
+                    sendResponse({ success: true, data: { ...entity, platformId: specificPlatformId, platformType: 'opencti' } });
                   } else {
                     sendResponse(errorResponse('Entity not found'));
                   }
@@ -1541,7 +1556,7 @@ async function handleMessage(
                 const found = results.find(r => r.entity !== null);
                 
                 if (found && found.entity) {
-                  sendResponse({ success: true, data: { ...found.entity, _platformId: found.platformId, _platformType: 'opencti' } });
+                  sendResponse({ success: true, data: { ...found.entity, platformId: found.platformId, platformType: 'opencti' } });
                 } else {
                   sendResponse(errorResponse('Entity not found in any OpenCTI platform'));
                 }
@@ -1617,8 +1632,8 @@ async function handleMessage(
                   success: true, 
                   data: {
                     ...oaevEntity,
-                    _platformId: specificPlatformId,
-                    _platformType: 'openaev',
+                    platformId: specificPlatformId,
+                    platformType: 'openaev',
                     _entityType: entityType,
                   }
                 });
@@ -1754,7 +1769,7 @@ async function handleMessage(
                     setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
                   );
                   const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-                  return { platformId: pId, results: results.map((r) => ({ ...r, _platformId: pId })) };
+                  return { platformId: pId, results: results.map((r) => ({ ...r, platformId: pId })) };
                 } catch (e) {
                   log.warn(`Search timeout/error for platform ${pId}:`, e);
                   return { platformId: pId, results: [] };
@@ -1805,7 +1820,7 @@ async function handleMessage(
                       
                       results.push(...classResults.content.map((r: Record<string, unknown>) => ({
                         ...r,
-                        _platformId: pId,
+                        platformId: pId,
                         _platform: platformInfo,
                         _entityClass: className,
                       })));
@@ -2182,8 +2197,8 @@ async function handleMessage(
         
         try {
           // Aggregate labels and markings from all platforms
-          const allOCTILabels: (OCTILabel & { _platformId: string })[] = [];
-          const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; _platformId: string })[] = [];
+          const allOCTILabels: (OCTILabel & { platformId: string })[] = [];
+          const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; platformId: string })[] = [];
           const seenOCTILabelIds = new Set<string>();
           const seenMarkingIds = new Set<string>();
           
@@ -2197,13 +2212,13 @@ async function handleMessage(
               for (const label of labels) {
                 if (!seenOCTILabelIds.has(label.id)) {
                   seenOCTILabelIds.add(label.id);
-                  allOCTILabels.push({ ...label, _platformId: pId });
+                  allOCTILabels.push({ ...label, platformId: pId });
                 }
               }
               for (const marking of markings) {
                 if (!seenMarkingIds.has(marking.id)) {
                   seenMarkingIds.add(marking.id);
-                  allMarkings.push({ ...marking, _platformId: pId });
+                  allMarkings.push({ ...marking, platformId: pId });
                 }
               }
             } catch (e) {
@@ -2239,7 +2254,7 @@ async function handleMessage(
             }
             
             const labels = await client.fetchLabels();
-            sendResponse({ success: true, data: labels.map(l => ({ ...l, _platformId: labelsPlatformId })) });
+            sendResponse({ success: true, data: labels.map(l => ({ ...l, platformId: labelsPlatformId })) });
           } else {
             // Fetch from all platforms in parallel with timeout
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
@@ -2257,13 +2272,13 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allOCTILabels: (OCTILabel & { _platformId: string })[] = [];
+            const allOCTILabels: (OCTILabel & { platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const label of result.labels) {
                 if (!seenIds.has(label.id)) {
                   seenIds.add(label.id);
-                  allOCTILabels.push({ ...label, _platformId: result.platformId });
+                  allOCTILabels.push({ ...label, platformId: result.platformId });
                 }
               }
             }
@@ -2297,7 +2312,7 @@ async function handleMessage(
             }
             
             const markings = await client.fetchMarkingDefinitions();
-            sendResponse({ success: true, data: markings.map(m => ({ ...m, _platformId: markingsPlatformId })) });
+            sendResponse({ success: true, data: markings.map(m => ({ ...m, platformId: markingsPlatformId })) });
           } else {
             // Fetch from all platforms in parallel with timeout
             const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
@@ -2315,13 +2330,13 @@ async function handleMessage(
             
             const results = await Promise.all(fetchPromises);
             
-            const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; _platformId: string })[] = [];
+            const allMarkings: (Partial<OCTIMarkingDefinition> & { id: string; platformId: string })[] = [];
             const seenIds = new Set<string>();
             for (const result of results) {
               for (const marking of result.markings) {
                 if (!seenIds.has(marking.id)) {
                   seenIds.add(marking.id);
-                  allMarkings.push({ ...marking, _platformId: result.platformId });
+                  allMarkings.push({ ...marking, platformId: result.platformId });
                 }
               }
             }
@@ -2580,7 +2595,7 @@ async function handleMessage(
             data: { 
               ...investigation, 
               url,
-              _platformId: targetPlatformId,
+              platformId: targetPlatformId,
             },
           });
         } catch (error) {
@@ -2630,7 +2645,7 @@ async function handleMessage(
               );
               const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
               log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers for ${entityId} in platform ${pId}`);
-              return { platformId: pId, containers: containers.map((c) => ({ ...c, _platformId: pId })) };
+              return { platformId: pId, containers: containers.map((c) => ({ ...c, platformId: pId })) };
             } catch (e) {
               // Entity might not exist or timeout
               log.debug(`No containers/timeout for ${entityId} in platform ${pId}:`, e);
@@ -2672,7 +2687,7 @@ async function handleMessage(
                 client.findContainersByExternalReferenceUrl(url),
                 timeoutPromise
               ]);
-              return { platformId: pId, containers: containers.map((c) => ({ ...c, _platformId: pId })) };
+              return { platformId: pId, containers: containers.map((c) => ({ ...c, platformId: pId })) };
             } catch (e) {
               log.debug(`No containers found/timeout for URL in platform ${pId}`);
               return { platformId: pId, containers: [] };

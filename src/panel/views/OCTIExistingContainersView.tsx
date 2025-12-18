@@ -89,7 +89,7 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
 }) => {
   const handleOpenExistingContainer = async (container: ContainerData) => {
     // Show this container in entity view - fetch full details
-    const containerPlatformId = (container as any)._platformId || selectedPlatformId;
+    const containerPlatformId = (container as any).platformId || selectedPlatformId;
     if (containerPlatformId) {
       const platform = availablePlatforms.find(p => p.id === containerPlatformId);
       if (platform) {
@@ -118,14 +118,14 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
             ...response.data,
             type: response.data.entity_type || container.entity_type,
             existsInPlatform: true,
-            _platformId: containerPlatformId,
-            _platformType: 'opencti',
-            _isNonDefaultPlatform: false,
+            platformId: containerPlatformId,
+            platformType: 'opencti',
+            isNonDefaultPlatform: false,
           });
           setMultiPlatformResults([{
             platformId: containerPlatformId,
             platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-            entity: { ...response.data, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
+            entity: { ...response.data, existsInPlatform: true, platformType: 'opencti', isNonDefaultPlatform: false },
           }]);
           setCurrentPlatformIndex(0);
           setEntityContainers([]);
@@ -148,14 +148,14 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
       name: container.name,
       description: (container as any).description,
       existsInPlatform: true,
-      _platformId: containerPlatformId,
-      _platformType: 'opencti',
-      _isNonDefaultPlatform: false,
+      platformId: containerPlatformId,
+      platformType: 'opencti',
+      isNonDefaultPlatform: false,
     });
     setMultiPlatformResults([{
       platformId: containerPlatformId,
       platformName: availablePlatforms.find(p => p.id === containerPlatformId)?.name || 'OpenCTI',
-      entity: { id: container.id, entity_type: container.entity_type, type: container.entity_type, name: container.name, existsInPlatform: true, _platformType: 'opencti', _isNonDefaultPlatform: false },
+      entity: { id: container.id, entity_type: container.entity_type, type: container.entity_type, name: container.name, existsInPlatform: true, platformType: 'opencti', isNonDefaultPlatform: false },
     }]);
     setCurrentPlatformIndex(0);
     setEntityContainers([]);
@@ -170,7 +170,7 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
     setOCTIContainerType(container.entity_type);
 
     // Get platform info
-    const containerPlatformId = (container as any)._platformId || selectedPlatformId;
+    const containerPlatformId = (container as any).platformId || selectedPlatformId;
     if (containerPlatformId) {
       const platform = availablePlatforms.find(p => p.id === containerPlatformId);
       if (platform) {
@@ -320,7 +320,7 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
       <Box sx={{ mb: 2 }}>
         {existingContainers.map((container, idx) => {
           const containerColor = itemColor(container.entity_type, mode === 'dark');
-          const containerPlatform = availablePlatforms.find(p => p.id === (container as any)._platformId);
+          const containerPlatform = availablePlatforms.find(p => p.id === (container as any).platformId);
 
           return (
             <Paper

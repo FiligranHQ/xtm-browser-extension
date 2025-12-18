@@ -217,9 +217,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               entityId: match.entityId,
               entityData: match.entityData,
               type: match.type,
-              _platformId: platform.id,
-              _platformType: match.platformType || platform.type,
-              _isNonDefaultPlatform: (match.platformType || platform.type) !== 'opencti',
+              platformId: platform.id,
+              platformType: match.platformType || platform.type,
+              isNonDefaultPlatform: (match.platformType || platform.type) !== 'opencti',
             } as EntityData,
           });
         }
@@ -233,9 +233,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           platformName: platform.name,
           entity: {
             ...entity,
-            _platformId: entity.platformId,
-            _platformType: entity.platformType || 'opencti',
-            _isNonDefaultPlatform: entity.platformType !== 'opencti',
+            platformId: entity.platformId,
+            platformType: entity.platformType || 'opencti',
+            isNonDefaultPlatform: entity.platformType !== 'opencti',
           } as EntityData,
         });
       }
@@ -282,7 +282,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       const entityId = (firstResult.entity as any).entityId || (firstResult.entity as any).id;
       const entityType = firstResult.entity.type || entity.type;
       const platformId = firstResult.platformId;
-      const platformType = (firstResult.entity as any)._platformType || 'opencti';
+      const platformType = (firstResult.entity as any).platformType || 'opencti';
       
       if (entityId && platformId) {
         try {
@@ -312,9 +312,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               // Update the entity with full details, preserving platform metadata
               const updatedEntity: EntityData = {
                 ...fullEntityData,
-                _platformId: platformId,
-                _platformType: platformType,
-                _isNonDefaultPlatform: platformType !== 'opencti',
+                platformId: platformId,
+                platformType: platformType,
+                isNonDefaultPlatform: platformType !== 'opencti',
                 existsInPlatform: true,
               };
               
@@ -439,27 +439,60 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             }));
 
             if (newEntities.length > 0) {
-              setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
-              showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
-              
-              // Highlight AI-discovered entities on the page
+              // Try to highlight AI-discovered entities and only add those that can be highlighted
               (async () => {
                 try {
                   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                   if (tab?.id) {
-                    chrome.tabs.sendMessage(tab.id, {
-                      type: 'XTM_HIGHLIGHT_AI_ENTITIES',
-                      payload: {
-                        entities: newEntities.map(e => ({
-                          type: e.type,
-                          value: e.value,
-                          name: e.name,
-                        })),
+                    chrome.tabs.sendMessage(
+                      tab.id, 
+                      {
+                        type: 'XTM_HIGHLIGHT_AI_ENTITIES',
+                        payload: {
+                          entities: newEntities.map(e => ({
+                            type: e.type,
+                            value: e.value,
+                            name: e.name,
+                          })),
+                        },
                       },
-                    });
+                      (highlightResponse) => {
+                        // Filter to only include entities that were successfully highlighted
+                        const highlightedValues = new Set(
+                          (highlightResponse?.highlightedEntities || []).map((e: { value: string; name: string }) => e.value || e.name)
+                        );
+                        
+                        const visibleEntities = newEntities.filter(e => 
+                          highlightedValues.has(e.value || e.name)
+                        );
+                        
+                        if (visibleEntities.length > 0) {
+                          setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...visibleEntities]);
+                          showToast({ 
+                            type: 'success', 
+                            message: `AI discovered ${visibleEntities.length} additional entit${visibleEntities.length === 1 ? 'y' : 'ies'}${
+                              newEntities.length > visibleEntities.length 
+                                ? ` (${newEntities.length - visibleEntities.length} not visible on page)` 
+                                : ''
+                            }` 
+                          });
+                        } else if (newEntities.length > 0) {
+                          // AI found entities but none could be highlighted
+                          showToast({ type: 'info', message: `AI found ${newEntities.length} entities but none are visible on the page` });
+                        } else {
+                          showToast({ type: 'info', message: 'AI found no additional entities' });
+                        }
+                      }
+                    );
+                  } else {
+                    // No tab - add all entities (can't verify highlighting)
+                    setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
+                    showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
                   }
                 } catch {
-                  // Silently handle highlighting errors
+                  // On error, add all entities (fallback)
+                  setScanResultsEntities((prev: ScanResultEntity[]) => [...prev, ...newEntities]);
+                  showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
                 }
               })();
             } else {

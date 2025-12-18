@@ -146,17 +146,21 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // ============================================================================
 
 // CVE identifier
-// Matches: CVE-2021-44228, CVE-2022-0001, CVE-2024-38178
+// Matches: CVE-2021-44228, CVE-2022-0001, CVE-2024-38178, CVE-2025-66478
 // Handles various dash-like characters that may appear in web content:
-// - Regular hyphen-minus (-)
+// - Regular hyphen-minus (-) \u002D
 // - Non-breaking hyphen (‑) \u2010
-// - Figure dash (‒) \u2012
+// - Figure dash (‒) \u2011
 // - En dash (–) \u2013
 // - Em dash (—) \u2014
+// - Horizontal bar (―) \u2015
 // - Minus sign (−) \u2212
 // - Soft hyphen \u00AD
+// - Small hyphen-minus \uFE63
+// - Fullwidth hyphen-minus \uFF0D
 // Also allows optional spaces around dashes for malformed content
-export const CVE_PATTERN = /CVE\s*[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\s*\d{4}\s*[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\s*\d{4,}/gi;
+// CVE sequence numbers can have 4 to 7 digits (officially up to 7)
+export const CVE_PATTERN = /CVE\s*[-\u002D\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u00AD\uFE63\uFF0D]\s*\d{4}\s*[-\u002D\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u00AD\uFE63\uFF0D]\s*\d{4,7}/gi;
 
 // ============================================================================
 // ASN Pattern

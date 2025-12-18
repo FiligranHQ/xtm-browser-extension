@@ -668,24 +668,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         </Typography>
       </Box>
 
-      {scanResultsEntities.length === 0 ? (
-        <Box sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flex: 1,
-          color: 'text.secondary',
-        }}>
-          <SearchOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-          <Typography variant="body1">No entities detected</Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Scan a page to see detected entities here
-          </Typography>
-        </Box>
-      ) : (
-        <>
-          {/* Stats - Clickable for filtering */}
+      {/* Stats - Clickable for filtering */}
+      {scanResultsEntities.length > 0 && (
           <Box sx={{
             display: 'flex',
             gap: 0,
@@ -769,8 +753,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               </>
             )}
           </Box>
+      )}
 
-          {/* Search and Type filter */}
+      {/* Search and Type filter */}
           <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'flex-end' }}>
             {/* Search field */}
             <TextField
@@ -929,9 +914,32 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             );
           })()}
 
-          {/* Entity list */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
-            {filteredScanResultsEntities.map((entity, index) => {
+      {/* Entity list */}
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        {filteredScanResultsEntities.length === 0 ? (
+          <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            minHeight: 150,
+            color: 'text.secondary',
+          }}>
+            <SearchOutlined sx={{ fontSize: 40, mb: 1.5, opacity: 0.5 }} />
+            <Typography variant="body2">
+              {scanResultsEntities.length === 0 
+                ? 'No entities detected on this page' 
+                : 'No results match your filters'}
+            </Typography>
+            <Typography variant="caption" sx={{ mt: 0.5, opacity: 0.7 }}>
+              {scanResultsEntities.length === 0 
+                ? 'Try using AI discovery above' 
+                : 'Adjust your search or filters'}
+            </Typography>
+          </Box>
+        ) : (
+          filteredScanResultsEntities.map((entity, index) => {
               const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
               const { types: uniqueTypes, hasMultipleTypes } = getUniqueTypesFromMatches(entity);
               const primaryType = uniqueTypes[0] || entity.type;
@@ -1145,10 +1153,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
                 </Paper>
               );
-            })}
-          </Box>
-        </>
-      )}
+            })
+        )}
+      </Box>
     </Box>
   );
 };

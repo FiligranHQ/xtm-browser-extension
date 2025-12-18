@@ -236,7 +236,7 @@ export class DetectionEngine {
     let match;
     while ((match = pattern.exec(text)) !== null) {
       // Normalize various dash characters to standard hyphen for consistent lookup
-      const normalizedName = match[0].toUpperCase().replace(/[\u2010\u2011\u2012\u2013]/g, '-');
+      const normalizedName = match[0].toUpperCase().replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u00AD\uFE63\uFF0D]/g, '-');
       detected.push({
         type: 'Vulnerability',
         name: normalizedName,

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7] - 2024-12-17
+
+### Changed
+- Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
+- Reorganized panel types: consolidated `types.ts` and `types/` directory structure
+- OpenCTI STIX types now have both `OCTI*` prefixed names and GraphQL API-matching aliases
+- Reduced `background/index.ts` from 3238 lines to ~2850 lines through service extraction
+
+### Improved
+- Enhanced PDF extraction for Shadow DOM-heavy sites like Notion
+- Content extractor now traverses Shadow DOM for better article content extraction
+- Code structure: cleaner separation between services and handlers in background script
+
+### Fixed
+- PDF generation now properly extracts content from Shadow DOM components
+- Content visibility checks now work correctly inside Shadow DOM
+
 ## [0.0.6] - 2024-12-17
 
 ### Added
@@ -122,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.3...v0.0.4

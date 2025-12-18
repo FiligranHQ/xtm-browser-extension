@@ -86,6 +86,14 @@ const CONTENT_SELECTORS = [
 export function extractContent(): ExtractedContent {
   log.debug('[ContentExtractor] Starting extraction for:', window.location.href);
   
+  // Check if the page uses Shadow DOM heavily (like Notion, VirusTotal)
+  const shadowDOMContent = extractFromShadowDOM();
+  const hasShadowContent = shadowDOMContent && shadowDOMContent.textContent.length > 500;
+  
+  if (hasShadowContent) {
+    log.debug('[ContentExtractor] Page uses Shadow DOM, extracted:', shadowDOMContent.textContent.length, 'chars');
+  }
+  
   // Try Readability first (it's quite good at finding content)
   let result = extractWithReadability();
   
@@ -99,8 +107,279 @@ export function extractContent(): ExtractedContent {
     }
   }
   
+  // If Shadow DOM content is substantially more, use it instead
+  if (hasShadowContent && shadowDOMContent!.textContent.length > result.textContent.length * 1.5) {
+    log.debug('[ContentExtractor] Using Shadow DOM content (more complete)');
+    result = shadowDOMContent!;
+  }
+  
   log.debug('[ContentExtractor] Final extraction:', result.title, 'text length:', result.textContent.length);
   return result;
+}
+
+/**
+ * Extract content from Shadow DOM
+ * Sites like Notion, VirusTotal render everything in Shadow DOM
+ */
+function extractFromShadowDOM(): ExtractedContent | null {
+  try {
+    const shadowRoots: ShadowRoot[] = [];
+    
+    // Find all shadow roots in the document
+    function findShadowRoots(root: Document | ShadowRoot | Element): void {
+      const elements = root.querySelectorAll('*');
+      elements.forEach(el => {
+        if (el.shadowRoot) {
+          shadowRoots.push(el.shadowRoot);
+          // Recursively check inside shadow roots
+          findShadowRoots(el.shadowRoot);
+        }
+      });
+    }
+    
+    findShadowRoots(document);
+    
+    if (shadowRoots.length === 0) {
+      return null;
+    }
+    
+    log.debug('[ContentExtractor] Found', shadowRoots.length, 'shadow roots');
+    
+    // Extract content from all shadow roots
+    const contentParts: string[] = [];
+    const htmlParts: string[] = [];
+    const images: ExtractedImage[] = [];
+    const seenImages = new Set<string>();
+    
+    for (const shadowRoot of shadowRoots) {
+      // Get text content
+      const visibleText = getVisibleTextFromShadowRoot(shadowRoot);
+      if (visibleText.trim().length > 50) {
+        contentParts.push(visibleText);
+      }
+      
+      // Clone and clean the shadow root for HTML extraction
+      const clonedContent = extractHtmlFromShadowRoot(shadowRoot);
+      if (clonedContent.trim().length > 100) {
+        htmlParts.push(clonedContent);
+      }
+      
+      // Extract images from shadow root
+      shadowRoot.querySelectorAll('img').forEach(img => {
+        const imgEl = img as HTMLImageElement;
+        const src = getImageSrc(imgEl);
+        if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
+          seenImages.add(src);
+          images.push({
+            src: makeAbsoluteUrl(src),
+            alt: imgEl.alt || '',
+            caption: getFigureCaption(imgEl),
+            width: imgEl.naturalWidth || imgEl.width || 0,
+            height: imgEl.naturalHeight || imgEl.height || 0,
+          });
+        }
+      });
+    }
+    
+    const textContent = cleanText(contentParts.join('\n\n'));
+    const htmlContent = htmlParts.join('\n');
+    
+    if (textContent.length < 200) {
+      return null;
+    }
+    
+    return {
+      title: extractTitle(),
+      byline: extractByline(),
+      excerpt: textContent.substring(0, 200).trim() + '...',
+      content: htmlContent || `<div>${textContent.split('\n\n').map(p => `<p>${escapeHtml(p)}</p>`).join('')}</div>`,
+      textContent,
+      images,
+      url: window.location.href,
+      siteName: extractSiteName(),
+      publishedDate: extractDate(),
+      readingTime: estimateReadingTime(textContent),
+    };
+  } catch (error) {
+    log.error('[ContentExtractor] Shadow DOM extraction failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Get visible text from a shadow root (respects visibility)
+ */
+function getVisibleTextFromShadowRoot(shadowRoot: ShadowRoot): string {
+  const textParts: string[] = [];
+  
+  function walkNode(node: Node): void {
+    // Text node
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim();
+      if (text && text.length > 0) {
+        // Check if parent is visible
+        const parent = node.parentElement;
+        if (parent && isElementVisible(parent)) {
+          textParts.push(text);
+        }
+      }
+      return;
+    }
+    
+    // Element node
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as Element;
+      const tagName = el.tagName?.toLowerCase();
+      
+      // Skip non-content tags
+      if (['script', 'style', 'noscript', 'template', 'svg', 'canvas'].includes(tagName)) {
+        return;
+      }
+      
+      // Skip invisible elements
+      if (!isElementVisible(el)) {
+        return;
+      }
+      
+      // Recurse into children
+      for (const child of Array.from(node.childNodes)) {
+        walkNode(child);
+      }
+      
+      // Add line breaks after block elements
+      if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'br', 'tr'].includes(tagName)) {
+        textParts.push('\n');
+      }
+    }
+  }
+  
+  walkNode(shadowRoot);
+  
+  return textParts.join(' ')
+    .replace(/\n\s+\n/g, '\n\n')
+    .replace(/ +/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract clean HTML from shadow root
+ */
+function extractHtmlFromShadowRoot(shadowRoot: ShadowRoot): string {
+  // Find main content areas within shadow root
+  const contentSelectors = [
+    'article', 'main', '[role="main"]', '[role="article"]',
+    '.content', '.article', '.post', '.entry',
+    '[class*="content"]', '[class*="article"]', '[class*="body"]',
+  ];
+  
+  let contentElement: Element | null = null;
+  for (const selector of contentSelectors) {
+    try {
+      contentElement = shadowRoot.querySelector(selector);
+      if (contentElement && contentElement.textContent && contentElement.textContent.trim().length > 200) {
+        break;
+      }
+    } catch { /* Skip */ }
+  }
+  
+  // Clone and clean
+  const tempDiv = document.createElement('div');
+  
+  // Manually copy content (can't use cloneNode on shadow root)
+  function copyElement(source: Element, target: HTMLElement): void {
+    for (const child of Array.from(source.children)) {
+      const tagName = child.tagName.toLowerCase();
+      
+      // Skip non-content elements
+      if (['script', 'style', 'noscript', 'template', 'nav', 'aside', 'footer', 'header'].includes(tagName)) {
+        continue;
+      }
+      
+      // Skip invisible elements
+      if (!isElementVisible(child)) {
+        continue;
+      }
+      
+      const cloned = document.createElement(tagName);
+      
+      // Copy relevant attributes
+      if (tagName === 'img') {
+        const imgSrc = getImageSrc(child as HTMLImageElement);
+        if (imgSrc) {
+          cloned.setAttribute('src', makeAbsoluteUrl(imgSrc));
+          cloned.setAttribute('alt', (child as HTMLImageElement).alt || '');
+          cloned.setAttribute('style', 'max-width: 100%; height: auto;');
+        }
+      } else if (tagName === 'a') {
+        const href = (child as HTMLAnchorElement).href;
+        if (href) {
+          cloned.setAttribute('href', href);
+        }
+      }
+      
+      // Copy text content or recurse
+      if (child.children.length === 0) {
+        const text = child.textContent?.trim();
+        if (text) {
+          cloned.textContent = text;
+        }
+      } else {
+        copyElement(child, cloned);
+      }
+      
+      // Only add if has content
+      if (cloned.innerHTML || cloned.textContent?.trim()) {
+        target.appendChild(cloned);
+      }
+    }
+  }
+  
+  if (contentElement) {
+    copyElement(contentElement, tempDiv);
+  } else {
+    // For shadow root, iterate children
+    const container = shadowRoot.querySelector('*');
+    if (container) {
+      copyElement(container.parentElement || container as Element, tempDiv);
+    }
+  }
+  
+  return tempDiv.innerHTML;
+}
+
+/**
+ * Check if element is visible
+ */
+function isElementVisible(el: Element): boolean {
+  const htmlEl = el as HTMLElement;
+  
+  // Check dimensions
+  try {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      return false;
+    }
+  } catch { /* Continue */ }
+  
+  // Check styles
+  try {
+    const style = window.getComputedStyle(htmlEl);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+  } catch { /* Continue */ }
+  
+  // Check hidden attribute
+  if (htmlEl.hidden) {
+    return false;
+  }
+  
+  // Check aria-hidden
+  if (htmlEl.getAttribute('aria-hidden') === 'true') {
+    return false;
+  }
+  
+  return true;
 }
 
 /**

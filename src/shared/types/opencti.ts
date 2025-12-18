@@ -221,18 +221,18 @@ export interface OCTIEntityMatch {
 }
 
 // ============================================================================
-// Type Aliases for backward compatibility (deprecated, use OCTI* versions)
+// Type Aliases (match OpenCTI GraphQL API naming)
 // ============================================================================
 
-/** @deprecated Use OCTIStixBaseObject */
+/** Alias matching OpenCTI GraphQL API naming */
 export type StixBaseObject = OCTIStixBaseObject;
-/** @deprecated Use OCTIStixCyberObservable */
+/** Alias matching OpenCTI GraphQL API naming */
 export type StixCyberObservable = OCTIStixCyberObservable;
-/** @deprecated Use OCTIStixDomainObject */
+/** Alias matching OpenCTI GraphQL API naming */
 export type StixDomainObject = OCTIStixDomainObject;
-/** @deprecated Use OCTIStixRelationship */
+/** Alias matching OpenCTI GraphQL API naming */
 export type StixRelationship = OCTIStixRelationship;
-/** @deprecated Use OCTIContainerType */
+/** Alias matching OpenCTI GraphQL API naming */
 export type ContainerType = OCTIContainerType;
-/** @deprecated Use OCTIContainerCreateInput */
+/** Alias matching OpenCTI GraphQL API naming */
 export type ContainerCreateInput = OCTIContainerCreateInput;

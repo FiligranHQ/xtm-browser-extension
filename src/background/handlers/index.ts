@@ -7,7 +7,7 @@
 export * from './types';
 export { openctiHandlers } from './opencti-handlers';
 export { openaevHandlers } from './openaev-handlers';
-export { aiHandlers } from './message-ai-handlers';
+export { aiHandlers } from './ai-handlers';
 export { cacheHandlers } from './cache-handlers';
 export { scanHandlers, scanForOAEVEntities, mergeScanResults, handleScanPage, handleScanOAEV, handleScanAll } from './scan-handlers';
 export { settingsHandlers, type SettingsHandlerDependencies } from './settings-handlers';
@@ -22,7 +22,7 @@ export {
   type TestConnectionPayload,
 } from './platform-handlers';
 
-// Re-export individual handlers for direct use
+// Re-export individual handlers from opencti-handlers
 export { 
   handleGetEntityDetails,
   handleSearchEntities,
@@ -71,7 +71,7 @@ export {
   handleAIGenerateEmails,
   handleAIDiscoverEntities,
   handleAIResolveRelationships,
-} from './message-ai-handlers';
+} from './ai-handlers';
 
 export {
   handleClearOCTICache,
@@ -83,7 +83,7 @@ export {
  */
 import { openctiHandlers } from './opencti-handlers';
 import { openaevHandlers } from './openaev-handlers';
-import { aiHandlers } from './message-ai-handlers';
+import { aiHandlers } from './ai-handlers';
 import { cacheHandlers } from './cache-handlers';
 import { miscHandlers } from './misc-handlers';
 import type { MessageHandler } from './types';
@@ -92,20 +92,18 @@ export function createHandlerRegistry(): Map<string, MessageHandler> {
   const registry = new Map<string, MessageHandler>();
   
   // Add all handlers to registry
-  for (const [type, handler] of Object.entries(openctiHandlers)) {
-    registry.set(type, handler);
-  }
-  for (const [type, handler] of Object.entries(openaevHandlers)) {
-    registry.set(type, handler);
-  }
-  for (const [type, handler] of Object.entries(aiHandlers)) {
-    registry.set(type, handler);
-  }
-  for (const [type, handler] of Object.entries(cacheHandlers)) {
-    registry.set(type, handler);
-  }
-  for (const [type, handler] of Object.entries(miscHandlers)) {
-    registry.set(type, handler);
+  const allHandlers = [
+    openctiHandlers,
+    openaevHandlers,
+    aiHandlers,
+    cacheHandlers,
+    miscHandlers,
+  ];
+  
+  for (const handlers of allHandlers) {
+    for (const [type, handler] of Object.entries(handlers)) {
+      registry.set(type, handler as MessageHandler);
+    }
   }
   
   return registry;

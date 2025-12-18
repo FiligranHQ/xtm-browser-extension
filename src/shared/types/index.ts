@@ -600,6 +600,65 @@ export interface OAEVScenario {
   scenario_updated_at?: string;
 }
 
+// ============================================================================
+// OpenAEV Asset Types
+// ============================================================================
+
+export type OAEVPlatform = 'Linux' | 'Windows' | 'MacOS' | 'Container' | 'Service' | 'Generic' | 'Internal' | 'Unknown';
+export type OAEVArch = 'x86_64' | 'arm64' | 'Unknown' | 'ALL_ARCHITECTURES';
+
+/**
+ * OpenAEV Asset (Endpoint)
+ */
+export interface OAEVAsset {
+  asset_id: string;
+  asset_name: string;
+  asset_description?: string;
+  asset_type?: string;
+  asset_tags?: string[];
+  asset_created_at?: string;
+  asset_updated_at?: string;
+  asset_external_reference?: string;
+  // Endpoint-specific fields
+  endpoint_hostname?: string;
+  endpoint_ips?: string[];
+  endpoint_mac_addresses?: string[];
+  endpoint_platform?: OAEVPlatform | string;
+  endpoint_arch?: OAEVArch | string;
+  endpoint_seen_ip?: string;
+  endpoint_is_eol?: boolean;
+}
+
+/**
+ * OpenAEV Asset Group
+ */
+export interface OAEVAssetGroup {
+  asset_group_id: string;
+  asset_group_name: string;
+  asset_group_description?: string;
+  asset_group_assets?: string[];
+  asset_group_dynamic_assets?: string[];
+  asset_group_tags?: string[];
+  asset_group_created_at?: string;
+  asset_group_updated_at?: string;
+  asset_group_external_reference?: string;
+}
+
+/**
+ * OpenAEV Team
+ */
+export interface OAEVTeam {
+  team_id: string;
+  team_name: string;
+  team_description?: string;
+  team_tags?: string[];
+  team_created_at?: string;
+  team_updated_at?: string;
+  team_contextual?: boolean;
+  team_users?: string[];
+  team_users_number?: number;
+}
+
 export interface OAEVKillChainPhase {
   phase_id: string;
   phase_kill_chain_name: string;
@@ -615,6 +674,14 @@ export interface OAEVInjectorContract {
   injector_contract_kill_chain_phases?: string[];
   injector_contract_content?: string;
   injector_contract_payload_type?: string;
+  injector_contract_injector_type?: string;
+  injector_contract_arch?: OAEVArch | string;
+  injector_contract_atomic_testing?: boolean;
+  injector_contract_payload?: {
+    payload_id?: string;
+    payload_name?: string;
+    payload_type?: string;
+  };
   injector_name?: string;
   injector_type?: string;
 }
@@ -623,7 +690,7 @@ export interface OAEVInjectInput {
   inject_title: string;
   inject_description?: string;
   inject_injector_contract: string;
-  inject_content?: Record<string, any>;
+  inject_content?: Record<string, unknown>;
   inject_depends_duration?: number; // Relative time from scenario start in seconds
 }
 

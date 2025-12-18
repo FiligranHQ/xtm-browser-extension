@@ -18,7 +18,7 @@ import {
   handleAIResolveRelationships,
   type FullScenarioRequest,
   type EmailGenerationRequest,
-} from './handlers/message-ai-handlers';
+} from './handlers/ai-handlers';
 import {
   handleCreateScenario,
   handleAddInjectToScenario,
@@ -28,11 +28,11 @@ import {
   type AddInjectPayload,
   type AddEmailInjectPayload,
   type AddTechnicalInjectPayload,
-} from './handlers/message-scenario-handlers';
+} from './handlers/scenario-handlers';
 import {
   handleCreateContainer,
   type CreateContainerPayload,
-} from './handlers/message-container-handlers';
+} from './handlers/container-handlers';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -3103,7 +3103,7 @@ async function handleMessage(
       }
       
       // ========================================================================
-      // AI Feature Handlers (extracted to handlers/message-ai-handlers.ts)
+      // AI Feature Handlers (extracted to handlers/ai-handlers.ts)
       // ========================================================================
       
       case 'AI_CHECK_STATUS':

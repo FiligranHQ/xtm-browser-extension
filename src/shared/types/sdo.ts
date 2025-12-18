@@ -5,7 +5,7 @@
  */
 
 import type { StixDomainObject } from './stix';
-import type { PlatformMatch } from './observable';
+import type { PlatformMatch } from './index';
 
 /**
  * OpenCTI entity type enum

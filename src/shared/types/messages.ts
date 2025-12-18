@@ -4,8 +4,14 @@
  * Types for extension communication between background, content script, and UI.
  */
 
-import type { DetectedObservable, DetectedOCTIEntity, DetectedPlatformEntity } from './detection';
-import type { ObservableType, HashType, ContainerType } from './index';
+import type { 
+  DetectedObservable, 
+  DetectedOCTIEntity, 
+  DetectedPlatformEntity,
+  ObservableType, 
+  HashType, 
+  ContainerType,
+} from './index';
 
 // ============================================================================
 // Message Type Definitions

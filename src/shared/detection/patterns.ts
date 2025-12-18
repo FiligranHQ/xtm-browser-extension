@@ -457,3 +457,75 @@ export function createNamePattern(name: string): RegExp {
     return new RegExp(`\\b${escaped}\\b`, 'gi');
 }
 
+// ============================================================================
+// Single Value Detection (for context menu / manual input)
+// ============================================================================
+
+// Simplified patterns for exact match detection (no lookbehind/lookahead)
+const EXACT_IPV4 = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.|\[\.\]|\(\.\))){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+const EXACT_IPV6 = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^(?:[0-9a-fA-F]{1,4}:)+(?::[0-9a-fA-F]{1,4}){1,6}$/;
+const EXACT_DOMAIN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+const EXACT_URL = /^(?:https?|hxxps?|h\[xx\]ps?):\/\/.+$/i;
+const EXACT_EMAIL = /^[\w.+-]+(?:@|\[@\]|\(@\))(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.|\[\.\]|\(\.\)))+[a-zA-Z]{2,}$/;
+const EXACT_CVE = /^CVE[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\d{4}[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\d{4,}$/i;
+const EXACT_MD5 = /^[a-fA-F0-9]{32}$/;
+const EXACT_SHA1 = /^[a-fA-F0-9]{40}$/;
+const EXACT_SHA256 = /^[a-fA-F0-9]{64}$/;
+const EXACT_SHA512 = /^[a-fA-F0-9]{128}$/;
+const EXACT_MITRE = /^T\d{4}(?:\.\d{3})?$/;
+const EXACT_MAC = /^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^(?:[0-9A-Fa-f]{4}\.){2}[0-9A-Fa-f]{4}$/;
+const EXACT_BITCOIN = /^(?:[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})$/;
+const EXACT_ETHEREUM = /^0x[a-fA-F0-9]{40}$/;
+const EXACT_ASN = /^AS[N]?\d{1,10}$/i;
+
+/**
+ * Detect the observable/entity type from a single text value.
+ * Used by context menu "Add to OpenCTI" and manual input fields.
+ * 
+ * Returns the ObservableType or entity type string, or empty string if unknown.
+ */
+export function detectObservableType(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    
+    // Check patterns in order of specificity
+    
+    // URL first (most specific with protocol)
+    if (EXACT_URL.test(trimmed)) return 'Url';
+    
+    // Email
+    if (EXACT_EMAIL.test(trimmed)) return 'Email-Addr';
+    
+    // CVE (Vulnerability)
+    if (EXACT_CVE.test(trimmed)) return 'Vulnerability';
+    
+    // MITRE ATT&CK (Attack-Pattern)
+    if (EXACT_MITRE.test(trimmed)) return 'Attack-Pattern';
+    
+    // Hashes (ordered by length)
+    if (EXACT_SHA512.test(trimmed)) return 'StixFile';
+    if (EXACT_SHA256.test(trimmed)) return 'StixFile';
+    if (EXACT_SHA1.test(trimmed)) return 'StixFile';
+    if (EXACT_MD5.test(trimmed)) return 'StixFile';
+    
+    // IP addresses
+    if (EXACT_IPV6.test(trimmed)) return 'IPv6-Addr';
+    if (EXACT_IPV4.test(trimmed)) return 'IPv4-Addr';
+    
+    // MAC address
+    if (EXACT_MAC.test(trimmed)) return 'Mac-Addr';
+    
+    // Cryptocurrency
+    if (EXACT_BITCOIN.test(trimmed)) return 'Cryptocurrency-Wallet';
+    if (EXACT_ETHEREUM.test(trimmed)) return 'Cryptocurrency-Wallet';
+    
+    // ASN
+    if (EXACT_ASN.test(trimmed)) return 'Autonomous-System';
+    
+    // Domain (must be last as it's the most generic)
+    if (EXACT_DOMAIN.test(trimmed)) return 'Domain-Name';
+    
+    // Unknown type - user must select manually
+    return '';
+}
+

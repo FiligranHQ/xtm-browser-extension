@@ -5,7 +5,13 @@
  */
 
 import { useState } from 'react';
-import { SCENARIO_DEFAULT_VALUES } from '../../shared/types';
+import { 
+  SCENARIO_DEFAULT_VALUES,
+  type OAEVAsset, 
+  type OAEVAssetGroup, 
+  type OAEVTeam, 
+  type OAEVInjectorContract,
+} from '../../shared/types';
 
 export interface ScenarioOverviewData {
   attackPatterns: Array<{
@@ -14,7 +20,7 @@ export interface ScenarioOverviewData {
     externalId: string;
     description?: string;
     killChainPhases: string[];
-    contracts: any[];
+    contracts: OAEVInjectorContract[];
     entityId?: string;
     platformId?: string;
   }>;
@@ -148,12 +154,12 @@ export interface ScenarioStateReturn {
   // Target selection
   scenarioTargetType: 'asset' | 'asset_group';
   setScenarioTargetType: (type: 'asset' | 'asset_group') => void;
-  scenarioAssets: any[];
-  setScenarioAssets: (assets: any[]) => void;
-  scenarioAssetGroups: any[];
-  setScenarioAssetGroups: (groups: any[]) => void;
-  scenarioTeams: any[];
-  setScenarioTeams: (teams: any[]) => void;
+  scenarioAssets: OAEVAsset[];
+  setScenarioAssets: (assets: OAEVAsset[]) => void;
+  scenarioAssetGroups: OAEVAssetGroup[];
+  setScenarioAssetGroups: (groups: OAEVAssetGroup[]) => void;
+  scenarioTeams: OAEVTeam[];
+  setScenarioTeams: (teams: OAEVTeam[]) => void;
   scenarioSelectedAsset: string | null;
   setScenarioSelectedAsset: (id: string | null) => void;
   scenarioSelectedAssetGroup: string | null;
@@ -236,9 +242,9 @@ export function useScenarioState(): ScenarioStateReturn {
   
   // Target selection
   const [scenarioTargetType, setScenarioTargetType] = useState<'asset' | 'asset_group'>('asset');
-  const [scenarioAssets, setScenarioAssets] = useState<any[]>([]);
-  const [scenarioAssetGroups, setScenarioAssetGroups] = useState<any[]>([]);
-  const [scenarioTeams, setScenarioTeams] = useState<any[]>([]);
+  const [scenarioAssets, setScenarioAssets] = useState<OAEVAsset[]>([]);
+  const [scenarioAssetGroups, setScenarioAssetGroups] = useState<OAEVAssetGroup[]>([]);
+  const [scenarioTeams, setScenarioTeams] = useState<OAEVTeam[]>([]);
   const [scenarioSelectedAsset, setScenarioSelectedAsset] = useState<string | null>(null);
   const [scenarioSelectedAssetGroup, setScenarioSelectedAssetGroup] = useState<string | null>(null);
   const [scenarioSelectedTeam, setScenarioSelectedTeam] = useState<string | null>(null);

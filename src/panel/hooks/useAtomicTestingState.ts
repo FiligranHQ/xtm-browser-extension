@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import type { AtomicTestingTarget, AIGeneratedPayload } from '../types';
+import type { OAEVAsset, OAEVAssetGroup, OAEVInjectorContract } from '../../shared/types';
 
 // Re-export types for convenience
 export type { AtomicTestingTarget, AIGeneratedPayload };
@@ -34,18 +35,18 @@ export interface AtomicTestingStateReturn {
   setAtomicTestingTargetType: (type: 'asset' | 'asset_group') => void;
   
   // Assets and asset groups
-  atomicTestingAssets: any[];
-  setAtomicTestingAssets: (assets: any[]) => void;
-  atomicTestingAssetGroups: any[];
-  setAtomicTestingAssetGroups: (groups: any[]) => void;
+  atomicTestingAssets: OAEVAsset[];
+  setAtomicTestingAssets: (assets: OAEVAsset[]) => void;
+  atomicTestingAssetGroups: OAEVAssetGroup[];
+  setAtomicTestingAssetGroups: (groups: OAEVAssetGroup[]) => void;
   
   // Type filter
   atomicTestingTypeFilter: 'all' | 'attack-pattern' | 'domain';
   setAtomicTestingTypeFilter: (filter: 'all' | 'attack-pattern' | 'domain') => void;
   
   // Injector contracts
-  atomicTestingInjectorContracts: any[];
-  setAtomicTestingInjectorContracts: (contracts: any[]) => void;
+  atomicTestingInjectorContracts: OAEVInjectorContract[];
+  setAtomicTestingInjectorContracts: (contracts: OAEVInjectorContract[]) => void;
   
   // Selections
   atomicTestingSelectedAsset: string | null;
@@ -104,14 +105,14 @@ export function useAtomicTestingState(): AtomicTestingStateReturn {
   const [atomicTestingTargetType, setAtomicTestingTargetType] = useState<'asset' | 'asset_group'>('asset');
   
   // Assets and asset groups
-  const [atomicTestingAssets, setAtomicTestingAssets] = useState<any[]>([]);
-  const [atomicTestingAssetGroups, setAtomicTestingAssetGroups] = useState<any[]>([]);
+  const [atomicTestingAssets, setAtomicTestingAssets] = useState<OAEVAsset[]>([]);
+  const [atomicTestingAssetGroups, setAtomicTestingAssetGroups] = useState<OAEVAssetGroup[]>([]);
   
   // Type filter
   const [atomicTestingTypeFilter, setAtomicTestingTypeFilter] = useState<'all' | 'attack-pattern' | 'domain'>('all');
   
   // Injector contracts
-  const [atomicTestingInjectorContracts, setAtomicTestingInjectorContracts] = useState<any[]>([]);
+  const [atomicTestingInjectorContracts, setAtomicTestingInjectorContracts] = useState<OAEVInjectorContract[]>([]);
   
   // Selections
   const [atomicTestingSelectedAsset, setAtomicTestingSelectedAsset] = useState<string | null>(null);

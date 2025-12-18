@@ -24,7 +24,17 @@ import type {
   UnifiedSearchResult,
   AtomicTestingTarget,
   AIGeneratedPayload,
+  LabelOption,
+  MarkingOption,
+  VocabularyOption,
+  AuthorOption,
 } from '../types';
+import type {
+  OAEVAsset,
+  OAEVAssetGroup,
+  OAEVTeam,
+  OAEVInjectorContract,
+} from '../../shared/types';
 
 // Re-export atomic testing types for convenience  
 export type { AtomicTestingTarget };
@@ -32,39 +42,8 @@ export type { AtomicTestingTarget };
 // Alias for backward compatibility
 export type AtomicTestingAIPayload = AIGeneratedPayload;
 
-/**
- * Label option for autocomplete
- */
-export interface LabelOption {
-  id: string;
-  value: string;
-  color: string;
-}
-
-/**
- * Marking option for autocomplete
- */
-export interface MarkingOption {
-  id: string;
-  definition: string;
-}
-
-/**
- * Vocabulary option for dropdowns
- */
-export interface VocabularyOption {
-  id: string;
-  name: string;
-}
-
-/**
- * Author option for autocomplete
- */
-export interface AuthorOption {
-  id: string;
-  name: string;
-  entity_type: string;
-}
+// Re-export option types for convenience
+export type { LabelOption, MarkingOption, VocabularyOption, AuthorOption };
 
 /**
  * Common props shared by most views
@@ -422,12 +401,12 @@ export interface ScenarioViewProps extends BaseViewProps, PlatformViewProps {
   /** Target selection */
   scenarioTargetType: 'asset' | 'asset_group';
   setScenarioTargetType: (type: 'asset' | 'asset_group') => void;
-  scenarioAssets: unknown[];
-  setScenarioAssets: (assets: unknown[]) => void;
-  scenarioAssetGroups: unknown[];
-  setScenarioAssetGroups: (groups: unknown[]) => void;
-  scenarioTeams: unknown[];
-  setScenarioTeams: (teams: unknown[]) => void;
+  scenarioAssets: OAEVAsset[];
+  setScenarioAssets: (assets: OAEVAsset[]) => void;
+  scenarioAssetGroups: OAEVAssetGroup[];
+  setScenarioAssetGroups: (groups: OAEVAssetGroup[]) => void;
+  scenarioTeams: OAEVTeam[];
+  setScenarioTeams: (teams: OAEVTeam[]) => void;
   scenarioSelectedAsset: string | null;
   setScenarioSelectedAsset: (id: string | null) => void;
   scenarioSelectedAssetGroup: string | null;
@@ -469,14 +448,14 @@ export interface AtomicTestingViewProps {
   setAtomicTestingPlatformSelected: (selected: boolean) => void;
   atomicTestingTargetType: 'asset' | 'asset_group';
   setAtomicTestingTargetType: (type: 'asset' | 'asset_group') => void;
-  atomicTestingAssets: unknown[];
-  setAtomicTestingAssets: (assets: unknown[]) => void;
-  atomicTestingAssetGroups: unknown[];
-  setAtomicTestingAssetGroups: (groups: unknown[]) => void;
+  atomicTestingAssets: OAEVAsset[];
+  setAtomicTestingAssets: (assets: OAEVAsset[]) => void;
+  atomicTestingAssetGroups: OAEVAssetGroup[];
+  setAtomicTestingAssetGroups: (groups: OAEVAssetGroup[]) => void;
   atomicTestingTypeFilter: 'all' | 'attack-pattern' | 'domain';
   setAtomicTestingTypeFilter: (filter: 'all' | 'attack-pattern' | 'domain') => void;
-  atomicTestingInjectorContracts: unknown[];
-  setAtomicTestingInjectorContracts: (contracts: unknown[]) => void;
+  atomicTestingInjectorContracts: OAEVInjectorContract[];
+  setAtomicTestingInjectorContracts: (contracts: OAEVInjectorContract[]) => void;
   atomicTestingSelectedAsset: string | null;
   setAtomicTestingSelectedAsset: (id: string | null) => void;
   atomicTestingSelectedAssetGroup: string | null;

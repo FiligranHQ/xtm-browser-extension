@@ -324,7 +324,7 @@ const App: React.FC = () => {
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'FETCH_ENTITY_CONTAINERS',
-        payload: { entityId, limit: 10, platformId },
+        payload: { entityId, limit: 5, platformId },
       });
       if (response?.success && response.data) {
         setEntityContainers(response.data);

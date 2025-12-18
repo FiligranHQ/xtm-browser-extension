@@ -169,10 +169,12 @@ export const ETHEREUM_PATTERN = /(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9]
 // Pattern: CVE + optional invisible chars + dash + optional invisible chars + 4 digits (year) + optional invisible chars + dash + optional invisible chars + 4-7 digits (sequence)
 const CVE_DASH_CLASS = '[-\\u002D\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212\\u00AD\\uFE63\\uFF0D]';
 const CVE_INVISIBLE_CLASS = '[\\s\\u200B\\u200C\\u200D\\u2060\\uFEFF]*';
+/* eslint-disable no-misleading-character-class -- Intentionally matching various Unicode dash and invisible characters for CVE detection */
 export const CVE_PATTERN = new RegExp(
   `CVE${CVE_INVISIBLE_CLASS}${CVE_DASH_CLASS}${CVE_INVISIBLE_CLASS}\\d{4}${CVE_INVISIBLE_CLASS}${CVE_DASH_CLASS}${CVE_INVISIBLE_CLASS}\\d{4,7}`,
   'gi'
 );
+/* eslint-enable no-misleading-character-class */
 
 // ============================================================================
 // ASN Pattern

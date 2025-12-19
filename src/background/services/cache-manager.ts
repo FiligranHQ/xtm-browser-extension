@@ -205,23 +205,13 @@ export async function checkAndRefreshAllOCTICaches(forceRefresh: boolean = false
     return true;
   }
   
-  // When force refresh is requested, wait for existing refresh to complete or skip the check
-  if (isCacheRefreshing && !forceRefresh) {
-    log.debug('OCTI cache refresh already in progress, skipping');
-    return allOCTICachesCreatedSuccessfully;
-  }
-  
-  // If force refresh while already refreshing, log but continue
-  if (isCacheRefreshing && forceRefresh) {
-    log.debug('Force OCTI refresh requested while refresh in progress, will proceed after current refresh');
-    // Wait a bit for the current refresh to complete
-    let waitAttempts = 0;
-    while (isCacheRefreshing && waitAttempts < 30) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      waitAttempts++;
-    }
-    if (isCacheRefreshing) {
-      log.warn('Current OCTI refresh taking too long, proceeding anyway');
+  // Skip if already refreshing (unless force refresh)
+  if (isCacheRefreshing) {
+    if (forceRefresh) {
+      log.debug('Force OCTI refresh requested while refresh in progress, queuing after current refresh');
+    } else {
+      log.debug('OCTI cache refresh already in progress, skipping');
+      return allOCTICachesCreatedSuccessfully;
     }
   }
   
@@ -482,23 +472,13 @@ export async function checkAndRefreshAllOAEVCaches(forceRefresh: boolean = false
     return true;
   }
 
-  // When force refresh is requested, wait for existing refresh to complete or skip the check
-  if (isOAEVCacheRefreshing && !forceRefresh) {
-    log.debug('OAEV cache refresh already in progress, skipping');
-    return allOAEVCachesCreatedSuccessfully;
-  }
-
-  // If force refresh while already refreshing, log but continue
-  if (isOAEVCacheRefreshing && forceRefresh) {
-    log.debug('Force OAEV refresh requested while refresh in progress, will proceed after current refresh');
-    // Wait a bit for the current refresh to complete
-    let waitAttempts = 0;
-    while (isOAEVCacheRefreshing && waitAttempts < 30) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      waitAttempts++;
-    }
-    if (isOAEVCacheRefreshing) {
-      log.warn('Current OAEV refresh taking too long, proceeding anyway');
+  // Skip if already refreshing (unless force refresh)
+  if (isOAEVCacheRefreshing) {
+    if (forceRefresh) {
+      log.debug('Force OAEV refresh requested while refresh in progress, queuing after current refresh');
+    } else {
+      log.debug('OAEV cache refresh already in progress, skipping');
+      return allOAEVCachesCreatedSuccessfully;
     }
   }
 

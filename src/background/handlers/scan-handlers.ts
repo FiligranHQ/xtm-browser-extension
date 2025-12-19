@@ -6,7 +6,7 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
-import { getSettings } from '../../shared/utils/storage';
+import { getSettings, getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
 import type { DetectedObservable } from '../../shared/types/observables';
 import type { DetectedOCTIEntity } from '../../shared/types/opencti';
@@ -87,7 +87,6 @@ export async function handleScanOAEV(
   sendResponse: SendResponseFn
 ): Promise<void> {
   try {
-    const { getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } = await import('../../shared/utils/storage');
     const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
     
     // Debug: Log cache contents
@@ -285,7 +284,6 @@ export async function handleScanAll(
     // 2. Scan OpenAEV using existing helper
     let openaevEntities: ScanResultPayload['openaevEntities'] = [];
     try {
-      const { getAllCachedOAEVEntityNamesForMatching } = await import('../../shared/utils/storage');
       const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
       
       if (oaevEntityMap.size > 0) {

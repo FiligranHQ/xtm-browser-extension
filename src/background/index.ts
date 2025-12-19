@@ -82,6 +82,7 @@ import {
   addEntityToOCTICache,
   // OpenAEV cache
   getMultiPlatformOAEVCache,
+  getAllCachedOAEVEntityNamesForMatching,
   clearOAEVCacheForPlatform,
   clearAllOAEVCaches,
   cleanupOrphanedOAEVCaches,
@@ -775,7 +776,6 @@ async function handleMessage(
       case 'SCAN_PLATFORM': {
         const payload = message.payload as { content: string; url: string; includeAttackPatterns?: boolean };
         try {
-          const { getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } = await import('../shared/utils/storage');
           const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
           
           // Debug: Log cache contents
@@ -976,7 +976,6 @@ async function handleMessage(
           // 2. Scan OpenAEV (from ALL OpenAEV platforms' caches)
           try {
             log.debug(`SCAN_ALL: Scanning ${oaevPlatformCount} OpenAEV platform(s) for assets, teams, findings, etc...`);
-            const { getAllCachedOAEVEntityNamesForMatching } = await import('../shared/utils/storage');
             const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
             
             if (oaevEntityMap.size > 0) {

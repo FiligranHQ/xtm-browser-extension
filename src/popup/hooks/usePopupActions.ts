@@ -36,9 +36,29 @@ export const usePopupActions = ({
   setShowEETrialDialog,
 }: UsePopupActionsProps): UsePopupActionsReturn => {
   
+  // Open side panel IMMEDIATELY in user gesture context (required by Chrome API)
+  // This must be called synchronously from the click handler, before any async operations
+  const openSidePanelNow = useCallback(async (tabId: number): Promise<void> => {
+    try {
+      // Only Chrome/Edge support native side panel
+      if (!chrome.sidePanel) {
+        return; // Firefox - uses iframe panel, no action needed
+      }
+      
+      // Check if split screen mode is enabled
+      const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      if (response?.success && response.data?.splitScreenMode) {
+        // Open side panel IMMEDIATELY - this is in user gesture context
+        await chrome.sidePanel.open({ tabId });
+        log.debug('Chrome side panel opened from popup (user gesture context)');
+      }
+    } catch (error) {
+      // Side panel open failed - content script will fall back to iframe
+      log.debug('Side panel open failed from popup:', error);
+    }
+  }, []);
+  
   // Helper function to ensure content script is loaded before sending messages
-  // Note: Panel opening is handled by the content script via openPanel() after operations complete.
-  // This avoids conflicts between popup and content script both trying to open panels.
   const ensureContentScriptAndSendMessage = useCallback(async (tabId: number, message: { type: string; payload?: unknown }) => {
     try {
       // First try to send the message directly
@@ -67,62 +87,74 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context) - this is critical for Chrome API
+      await openSidePanelNow(tab.id);
+      // Then send message - don't await, let content script handle the rest
       ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   // Unified search across ALL platforms
   const handleUnifiedSearch = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context)
+      await openSidePanelNow(tab.id);
+      // Then send message
       ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   const handleCreateContainer = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context)
+      await openSidePanelNow(tab.id);
+      // Then send message
       ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   const handleInvestigate = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context)
+      await openSidePanelNow(tab.id);
+      // Then send message
       ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   const handleAtomicTesting = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context)
+      await openSidePanelNow(tab.id);
+      // Then send message
       ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   const handleGenerateScenario = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      // Don't await - close popup immediately, let content script handle the rest
+      // Open side panel FIRST (in user gesture context)
+      await openSidePanelNow(tab.id);
+      // Then send message
       ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, openSidePanelNow]);
 
   const handleClear = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;

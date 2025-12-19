@@ -36,30 +36,10 @@ export const usePopupActions = ({
   setShowEETrialDialog,
 }: UsePopupActionsProps): UsePopupActionsReturn => {
   
-  // Helper function to open side panel (Chrome/Edge only - Firefox uses iframe panel)
-  const openSidePanelIfEnabled = useCallback(async (tabId: number): Promise<void> => {
-    try {
-      // Only Chrome/Edge support native side panel
-      if (!chrome.sidePanel) {
-        return; // Firefox - uses iframe panel, no action needed
-      }
-      
-      // Chrome/Edge: Open side panel if split screen mode is enabled
-      const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-      if (response?.success && response.data?.splitScreenMode) {
-        await chrome.sidePanel.open({ tabId });
-        log.debug('Chrome side panel opened');
-      }
-    } catch (error) {
-      log.debug('Side panel open failed or not supported:', error);
-    }
-  }, []);
-
   // Helper function to ensure content script is loaded before sending messages
+  // Note: Panel opening is handled by the content script via openPanel() after operations complete.
+  // This avoids conflicts between popup and content script both trying to open panels.
   const ensureContentScriptAndSendMessage = useCallback(async (tabId: number, message: { type: string; payload?: unknown }) => {
-    // Open side panel if split screen mode is enabled (before sending message)
-    await openSidePanelIfEnabled(tabId);
-    
     try {
       // First try to send the message directly
       await chrome.tabs.sendMessage(tabId, message);
@@ -80,14 +60,15 @@ export const usePopupActions = ({
         log.error('Failed to inject content script or send message:', error);
       }
     }
-  }, [openSidePanelIfEnabled]);
+  }, []);
 
   // Unified scan across ALL platforms
   const handleUnifiedScan = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -97,7 +78,8 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -106,7 +88,8 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -115,7 +98,8 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -124,7 +108,8 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -133,7 +118,8 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
+      // Don't await - close popup immediately, let content script handle the rest
+      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);

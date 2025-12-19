@@ -470,10 +470,14 @@ const App: React.FC = () => {
     window.addEventListener('message', handleMessage);
     window.parent.postMessage({ type: 'XTM_PANEL_READY' }, '*');
     
-    chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
-      if (chrome.runtime.lastError) return;
-      if (response?.success && response.data) handlePanelState(response.data);
-    });
+    // Small delay before GET_PANEL_STATE to ensure React is fully initialized
+    // This helps with native side panel where timing can be critical
+    setTimeout(() => {
+      chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
+        if (chrome.runtime.lastError) return;
+        if (response?.success && response.data) handlePanelState(response.data);
+      });
+    }, 50);
     
     // Listen for runtime messages (for split screen mode)
     // In split screen mode, content script sends messages via chrome.runtime
@@ -492,22 +496,21 @@ const App: React.FC = () => {
     const checkPendingState = () => {
       sessionStorage.get<{ type: string; payload?: unknown }>('pendingPanelState').then((pendingState) => {
         if (pendingState) {
-          log.debug('[PANEL] Found pending panel state:', pendingState.type);
           handlePanelState(pendingState);
-          // Clear the pending state after processing
           sessionStorage.remove('pendingPanelState');
         }
-      }).catch((err) => {
-        log.debug('[PANEL] Could not check pending panel state:', err);
+      }).catch(() => {
+        // Session storage not available
       });
     };
     
-    // Initial check
-    checkPendingState();
+    // Initial check after a small delay (same as GET_PANEL_STATE)
+    setTimeout(() => checkPendingState(), 100);
     
     // Poll for pending state a few times (for split screen mode in Chrome/Edge)
+    // Use shorter intervals for faster response
     let pollCount = 0;
-    const maxPolls = 3;
+    const maxPolls = 5;
     const pollInterval = setInterval(() => {
       pollCount++;
       if (pollCount >= maxPolls) {
@@ -515,7 +518,7 @@ const App: React.FC = () => {
         return;
       }
       checkPendingState();
-    }, 500);
+    }, 200);
     
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
@@ -663,7 +666,19 @@ const App: React.FC = () => {
   const handleShowEntity = async (payload: any) => {
     setEntityContainers([]);
     setEntityFromSearchMode(null);
-    setEntityFromScanResults(scanResultsEntitiesRef.current.length > 0);
+    
+    // Restore scan results from payload if available (needed when panel was closed and reopened)
+    if (payload?.scanResults) {
+      const { entities } = processScanResults(payload.scanResults);
+      if (entities.length > 0) {
+        setScanResultsEntities(entities);
+        scanResultsEntitiesRef.current = entities;
+      }
+    }
+    
+    // Use fromScanResults flag from payload if available, otherwise check local scan results
+    const hasScanResults = payload?.fromScanResults === true || scanResultsEntitiesRef.current.length > 0;
+    setEntityFromScanResults(hasScanResults);
     
     const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
     const entityType = payload?.entityData?.entity_type || payload?.type || payload?.entity_type;

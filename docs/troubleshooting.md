@@ -103,7 +103,7 @@
 
 **Solutions:**
 1. Chrome/Edge: Ensure side panel is enabled in browser
-2. Firefox: Check sidebar permissions
+2. Firefox: Uses floating panel only (no native sidebar)
 3. Reload the extension
 4. Try clicking the extension icon first
 
@@ -213,7 +213,8 @@ Log levels: `debug`, `info`, `warn`, `error`
 - Side panel requires Chrome 114+
 
 ### Firefox
-- Use sidebar instead of side panel
+- Uses floating panel only (native side panel not supported)
+- Split screen mode is disabled on Firefox
 - Temporary add-ons are removed on browser restart
 
 ### Edge

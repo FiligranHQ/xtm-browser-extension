@@ -28,7 +28,6 @@ import {
   generateArticlePDF, 
   getPageContentForScanning,
 } from './extraction';
-import { escapeHtml } from '../shared/utils/formatters';
 import { 
   getComprehensivePageContent, 
   detectDomainsAndHostnamesForAtomicTesting,
@@ -96,16 +95,101 @@ function injectStyles(): boolean {
   return true;
 }
 
+// Store reference to shadow root for tooltip
+let tooltipShadowRoot: ShadowRoot | null = null;
+
 function createTooltip(): HTMLElement | null {
   if (!document.body) {
     return null;
   }
   
+  // Create a host element for the shadow DOM
+  const host = document.createElement('div');
+  host.id = 'xtm-tooltip-host';
+  host.style.cssText = 'position: fixed; z-index: 2147483647; pointer-events: none;';
+  document.body.appendChild(host);
+  
+  // Attach shadow root to protect from page interference
+  tooltipShadowRoot = host.attachShadow({ mode: 'closed' });
+  
+  // Add styles inside shadow DOM
+  const style = document.createElement('style');
+  style.textContent = `
+    .xtm-tooltip {
+      position: fixed;
+      background: #070d19;
+      color: rgba(255, 255, 255, 0.9);
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 2147483647;
+      pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      max-width: 320px;
+      min-width: 150px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .xtm-tooltip.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .xtm-tooltip-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .xtm-tooltip-type {
+      color: #0fbcff;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      background: rgba(15, 188, 255, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .xtm-tooltip-value {
+      word-break: break-all;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .xtm-tooltip-status {
+      font-size: 12px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .xtm-tooltip-status.found {
+      color: #00c853;
+    }
+    .xtm-tooltip-status.not-found {
+      color: #ffa726;
+    }
+  `;
+  tooltipShadowRoot.appendChild(style);
+  
+  // Create the actual tooltip element inside shadow DOM
   const tooltip = document.createElement('div');
   tooltip.className = 'xtm-tooltip';
-  tooltip.id = 'xtm-tooltip';
-  document.body.appendChild(tooltip);
+  tooltip.id = 'xtm-tooltip-inner';
+  tooltipShadowRoot.appendChild(tooltip);
+  
   return tooltip;
+}
+
+function getTooltipElement(): HTMLElement | null {
+  if (tooltipShadowRoot) {
+    return tooltipShadowRoot.getElementById('xtm-tooltip-inner');
+  }
+  // Fallback to regular DOM
+  return document.getElementById('xtm-tooltip');
 }
 
 async function initialize(): Promise<void> {
@@ -360,108 +444,135 @@ function toggleSelection(_element: HTMLElement, value: string): void {
 // ============================================================================
 
 function handleHighlightHover(event: MouseEvent): void {
-  const target = event.target as HTMLElement;
-  const tooltip = document.getElementById('xtm-tooltip');
-  if (!tooltip) return;
+  // Find the highlight element - try multiple approaches for Edge compatibility
+  let target: HTMLElement | null = null;
   
-  const rawType = target.dataset.type || 'Unknown';
-  const value = target.dataset.value || '';
-  const found = target.dataset.found === 'true';
-  const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
-  const isMixedState = target.dataset.mixedState === 'true';
-  const isMultiPlatform = target.dataset.multiPlatform === 'true';
+  // First try currentTarget (the element the listener is attached to)
+  if (event.currentTarget instanceof HTMLElement) {
+    target = event.currentTarget;
+  }
   
-  const platformDef = getPlatformFromEntity(rawType);
-  const platformName = platformDef.name;
-  const displayType = getDisplayType(rawType);
-  
-  let statusIcon: string;
-  let statusText: string;
-  let additionalInfo = '';
-  
-  if (isMixedState) {
-    try {
-      const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-      const platformNames = platformEntities.map((p: { type: string; platformType?: string }) => {
-        // First try to get name from platformType field
-        if (p.platformType) {
-          return getPlatformName(p.platformType);
-        }
-        // Fall back to extracting from type prefix
-        const def = getPlatformFromEntity(p.type);
-        return def.name;
-      }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
-      
-      statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-      statusText = `Not in ${platformName}`;
-      
-      const foundPlatformText = platformNames.length > 0 ? platformNames.join(', ') : 'other platform';
-      additionalInfo = `
-        <div class="xtm-tooltip-status found" style="margin-top: 4px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-          Found in ${foundPlatformText}
-        </div>
-      `;
-    } catch {
-      statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-      statusText = 'Not in platform';
+  // Fallback: walk up from event.target to find the highlight
+  if (!target || !target.getAttribute('data-type')) {
+    let el = event.target as Node;
+    while (el && el !== document.body) {
+      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
+        target = el;
+        break;
+      }
+      el = el.parentNode as Node;
     }
-  } else if (found) {
-    statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#00c853"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+  }
+  
+  const tooltip = getTooltipElement();
+  if (!tooltip || !target) return;
+  
+  // Use getAttribute for more reliable data access in Edge
+  const rawType = target.getAttribute('data-type') || 'Unknown';
+  const value = target.getAttribute('data-value') || '';
+  const found = target.getAttribute('data-found') === 'true';
+  
+  try {
+    const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
+    const isMixedState = target.getAttribute('data-mixed-state') === 'true';
+    const isMultiPlatform = target.getAttribute('data-multi-platform') === 'true';
+    const platformEntitiesJson = target.getAttribute('data-platform-entities') || '[]';
     
-    if (isMultiPlatform) {
+    const platformDef = getPlatformFromEntity(rawType);
+    const platformName = platformDef.name;
+    const displayType = getDisplayType(rawType);
+  
+    // Determine status text based on entity state
+    let statusText: string;
+    
+    if (isMixedState) {
       try {
-        const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
-        const otherPlatformNames = otherPlatformEntities.map((p: { type: string; platformType?: string }) => {
-          // First try to get name from platformType field (for CVEs and other multi-platform entities)
+        const platformEntities = JSON.parse(platformEntitiesJson);
+        const platformNames = platformEntities.map((p: { type: string; platformType?: string }) => {
           if (p.platformType) {
             return getPlatformName(p.platformType);
           }
-          // Fall back to extracting from type prefix
           const def = getPlatformFromEntity(p.type);
           return def.name;
         }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
         
-        const allPlatformNames = [platformName, ...otherPlatformNames];
-        // Deduplicate platform names (in case primary platform is also in other platforms)
-        const uniquePlatformNames = [...new Set(allPlatformNames)];
-        statusText = `Found in ${uniquePlatformNames.join(' and ')}`;
+        const foundPlatformText = platformNames.length > 0 ? platformNames.join(', ') : 'other platform';
+        statusText = `Not in ${platformName}, but found in ${foundPlatformText}`;
       } catch {
+        statusText = 'Not in platform';
+      }
+    } else if (found) {
+      if (isMultiPlatform) {
+        try {
+          const otherPlatformEntities = JSON.parse(platformEntitiesJson);
+          const otherPlatformNames = otherPlatformEntities.map((p: { type: string; platformType?: string }) => {
+            if (p.platformType) {
+              return getPlatformName(p.platformType);
+            }
+            const def = getPlatformFromEntity(p.type);
+            return def.name;
+          }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
+          
+          const allPlatformNames = [platformName, ...otherPlatformNames];
+          const uniquePlatformNames = [...new Set(allPlatformNames)];
+          statusText = `Found in ${uniquePlatformNames.join(' and ')}`;
+        } catch {
+          statusText = `Found in ${platformName}`;
+        }
+      } else {
         statusText = `Found in ${platformName}`;
       }
+    } else if (isEntityNotAddable) {
+      statusText = `Not in ${platformName}`;
     } else {
-      statusText = `Found in ${platformName}`;
+      statusText = `Not in ${platformName}`;
     }
-  } else if (isEntityNotAddable) {
-    statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9e9e9e"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-    statusText = `Not in ${platformName}`;
-  } else {
-    statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#ffa726"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-    statusText = `Not in ${platformName}`;
+    
+    // Clear existing content first
+    while (tooltip.firstChild) {
+      tooltip.removeChild(tooltip.firstChild);
+    }
+    
+    // Create elements using DOM API instead of innerHTML (more reliable in Edge)
+    const header = document.createElement('div');
+    header.className = 'xtm-tooltip-header';
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'xtm-tooltip-type';
+    typeSpan.textContent = displayType;
+    header.appendChild(typeSpan);
+    
+    const valueDiv = document.createElement('div');
+    valueDiv.className = 'xtm-tooltip-value';
+    valueDiv.textContent = value;
+    
+    const statusDiv = document.createElement('div');
+    statusDiv.className = `xtm-tooltip-status ${found ? 'found' : 'not-found'}`;
+    // Use text symbols instead of SVG for Edge compatibility
+    const statusSymbol = found ? '✓ ' : '⚠ ';
+    statusDiv.textContent = statusSymbol + statusText;
+    
+    tooltip.appendChild(header);
+    tooltip.appendChild(valueDiv);
+    tooltip.appendChild(statusDiv);
+    
+    const rect = target.getBoundingClientRect();
+    tooltip.style.left = `${rect.left}px`;
+    tooltip.style.top = `${rect.bottom + 8}px`;
+    tooltip.style.opacity = '1';
+    tooltip.style.visibility = 'visible';
+    tooltip.classList.add('visible');
+  } catch (error) {
+    log.error('Error in handleHighlightHover:', error);
   }
-  
-  tooltip.innerHTML = `
-    <div class="xtm-tooltip-header">
-      <span class="xtm-tooltip-type">${displayType}</span>
-    </div>
-    <div class="xtm-tooltip-value">${escapeHtml(value)}</div>
-    <div class="xtm-tooltip-status ${found ? 'found' : 'not-found'}">
-      ${statusIcon}
-      ${statusText}
-    </div>
-    ${additionalInfo}
-  `;
-  
-  const rect = target.getBoundingClientRect();
-  tooltip.style.left = `${rect.left}px`;
-  tooltip.style.top = `${rect.bottom + 8}px`;
-  tooltip.classList.add('visible');
 }
 
 function handleHighlightLeave(): void {
-  const tooltip = document.getElementById('xtm-tooltip');
+  const tooltip = getTooltipElement();
   if (tooltip) {
     tooltip.classList.remove('visible');
+    // Also reset inline styles for Edge compatibility
+    tooltip.style.opacity = '0';
+    tooltip.style.visibility = 'hidden';
   }
 }
 
@@ -481,12 +592,38 @@ function handleHighlightClick(event: MouseEvent): void {
     event.returnValue = false;
   }
   
-  // Re-open panel if in scan mode and panel is closed (or in split screen mode)
-  if (currentScanMode === 'scan' && lastScanData) {
+  // Find the highlight element - try multiple approaches for Edge compatibility
+  let target: HTMLElement | null = null;
+  
+  // First try currentTarget (the element the listener is attached to)
+  if (event.currentTarget instanceof HTMLElement) {
+    target = event.currentTarget;
+  }
+  
+  // Fallback: walk up from event.target to find the highlight
+  if (!target || !target.getAttribute('data-type')) {
+    let el = event.target as Node;
+    while (el && el !== document.body) {
+      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
+        target = el;
+        break;
+      }
+      el = el.parentNode as Node;
+    }
+  }
+  
+  if (!target) return;
+  
+  const isFoundEntity = target.getAttribute('data-found') === 'true';
+  
+  // Re-open panel if in scan mode and panel is closed
+  // For found entities, showPanel() will handle opening the panel and sending SHOW_ENTITY
+  // For new entities (not found), we need to show scan results for selection
+  if (currentScanMode === 'scan' && lastScanData && !isFoundEntity) {
     if (getSplitScreenMode()) {
-      // In split screen mode, request background to open native side panel
-      // Then send the scan data through the forward mechanism
-      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).then(() => {
+      // In split screen mode, request background to open native side panel immediately
+      // Use OPEN_SIDE_PANEL_IMMEDIATE to preserve user gesture context for Edge
+      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL_IMMEDIATE' }).then(() => {
         // Give the panel time to open before sending data
         setTimeout(() => {
           sendPanelMessage('SCAN_RESULTS', lastScanData);
@@ -516,7 +653,7 @@ function handleHighlightClick(event: MouseEvent): void {
   }
   
   // Block parent anchor navigation
-  let parent: HTMLElement | null = (event.target as HTMLElement).parentElement;
+  let parent: HTMLElement | null = target.parentElement;
   while (parent && parent !== document.body) {
     if (parent.tagName === 'A') {
       const href = parent.getAttribute('href');
@@ -530,14 +667,12 @@ function handleHighlightClick(event: MouseEvent): void {
     parent = parent.parentElement;
   }
   
-  const target = event.target as HTMLElement;
-  const entityData = target.dataset.entity;
-  const value = target.dataset.value || '';
-  const found = target.dataset.found === 'true';
+  const entityData = target.getAttribute('data-entity');
+  const value = target.getAttribute('data-value') || '';
   const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
-  const isMixedState = target.dataset.mixedState === 'true';
-  const isMultiPlatform = target.dataset.multiPlatform === 'true';
-  const highlightType = target.dataset.type || '';
+  const isMixedState = target.getAttribute('data-mixed-state') === 'true';
+  const isMultiPlatform = target.getAttribute('data-multi-platform') === 'true';
+  const highlightType = target.getAttribute('data-type') || '';
   
   // Handle mixed state - click on green badge area
   if (isMixedState) {
@@ -559,7 +694,7 @@ function handleHighlightClick(event: MouseEvent): void {
         entity.type = highlightType;
       }
       
-      if (found) {
+      if (isFoundEntity) {
         handleFoundEntityClick(event, target, entity, value, isMultiPlatform);
       } else if (isEntityNotAddable) {
         return;
@@ -572,13 +707,13 @@ function handleHighlightClick(event: MouseEvent): void {
   }
 }
 
-function handleFoundEntityClick(
+async function handleFoundEntityClick(
   event: MouseEvent,
   target: HTMLElement,
   entity: DetectedObservable | DetectedOCTIEntity,
   value: string,
   isMultiPlatform: boolean
-): void {
+): Promise<void> {
   const rect = target.getBoundingClientRect();
   const clickX = event.clientX;
   const leftAreaEnd = rect.left + 30;
@@ -596,22 +731,19 @@ function handleFoundEntityClick(
     platformMatches = buildPlatformMatches(target, entity);
   }
   
-  chrome.runtime.sendMessage({
-    type: 'SHOW_ENTITY_PANEL',
-    payload: {
-      ...entity,
-      entityType: entity.type?.includes('-') && !('name' in entity) ? 'observable' : 'sdo',
-      existsInPlatform: true,
-      platformMatches,
-    },
-  });
-  
-  showPanel(entity, platformMatches);
+  // Pass fromScanResults flag and scan results to restore panel state when reopened
+  // showPanel() handles all messaging including FORWARD_TO_PANEL for split screen mode
+  const hasScanResults = lastScanData !== null;
+  const scanResultsToRestore = hasScanResults ? {
+    observables: lastScanData!.observables,
+    openctiEntities: lastScanData!.openctiEntities,
+  } : null;
+  await showPanel(entity, platformMatches, hasScanResults, scanResultsToRestore);
 }
 
-function handleMixedStatePlatformClick(target: HTMLElement, value: string): void {
+async function handleMixedStatePlatformClick(target: HTMLElement, value: string): Promise<void> {
   try {
-    const platformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+    const platformEntities = JSON.parse(target.getAttribute('data-platform-entities') || '[]');
     if (platformEntities.length > 0) {
       const platformEntity = platformEntities[0];
       const rawData = platformEntity.data || {};
@@ -673,15 +805,14 @@ function handleMixedStatePlatformClick(target: HTMLElement, value: string): void
           return true;
         });
       
-      chrome.runtime.sendMessage({
-        type: 'SHOW_ENTITY_PANEL',
-        payload: {
-          ...entity,
-          platformMatches,
-        },
-      });
-      
-      showPanel(entity, platformMatches);
+      // Pass fromScanResults flag and scan results to restore panel state when reopened
+      // showPanel() handles all messaging including FORWARD_TO_PANEL for split screen mode
+      const hasScanResults = lastScanData !== null;
+      const scanResultsToRestore = hasScanResults ? {
+        observables: lastScanData!.observables,
+        openctiEntities: lastScanData!.openctiEntities,
+      } : null;
+      await showPanel(entity, platformMatches, hasScanResults, scanResultsToRestore);
     }
   } catch (e) {
     log.error(' Failed to parse platform entities for mixed state:', e);
@@ -693,7 +824,7 @@ function buildPlatformMatches(
   entity: DetectedObservable | DetectedOCTIEntity
 ): Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: unknown }> {
   try {
-    const otherPlatformEntities = JSON.parse(target.dataset.platformEntities || '[]');
+    const otherPlatformEntities = JSON.parse(target.getAttribute('data-platform-entities') || '[]');
     const primaryPlatformType = inferPlatformTypeFromEntityType(entity.type);
     const primaryType = entity.type || '';
     const primaryCleanType = primaryType.replace(/^(oaev|ogrc)-/, '');
@@ -769,9 +900,30 @@ function handleHighlightRightClick(event: MouseEvent): void {
   event.preventDefault();
   event.stopPropagation();
   
-  const target = event.target as HTMLElement;
-  const entityData = target.dataset.entity;
-  const found = target.dataset.found === 'true';
+  // Find the highlight element - try multiple approaches for Edge compatibility
+  let target: HTMLElement | null = null;
+  
+  // First try currentTarget (the element the listener is attached to)
+  if (event.currentTarget instanceof HTMLElement) {
+    target = event.currentTarget;
+  }
+  
+  // Fallback: walk up from event.target to find the highlight
+  if (!target || !target.getAttribute('data-type')) {
+    let el = event.target as Node;
+    while (el && el !== document.body) {
+      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
+        target = el;
+        break;
+      }
+      el = el.parentNode as Node;
+    }
+  }
+  
+  if (!target) return;
+  
+  const entityData = target.getAttribute('data-entity');
+  const found = target.getAttribute('data-found') === 'true';
   const isEntityNotAddable = target.classList.contains('xtm-entity-not-addable');
   
   if (entityData && !found && !isEntityNotAddable) {

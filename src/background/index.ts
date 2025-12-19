@@ -419,8 +419,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // Handle messages from content scripts and popup
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  handleMessage(message, sendResponse);
+chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+  handleMessage(message, sendResponse, sender);
   return true; // Keep channel open for async response
 });
 
@@ -430,7 +430,8 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
 
 async function handleMessage(
   message: ExtensionMessage,
-  sendResponse: (response: unknown) => void
+  sendResponse: (response: unknown) => void,
+  sender?: chrome.runtime.MessageSender
 ): Promise<void> {
   try {
     switch (message.type) {
@@ -2270,7 +2271,6 @@ async function handleMessage(
       case 'SHOW_ENTITY_PANEL':
       case 'SHOW_INVESTIGATION_PANEL':
       case 'SHOW_BULK_IMPORT_PANEL': {
-        // Store in session storage for panel to retrieve
         await sessionStorage.set('pendingPanelState', {
           type: message.type,
           payload: message.payload,
@@ -2283,7 +2283,6 @@ async function handleMessage(
       case 'GET_PANEL_STATE': {
         const pendingState = await sessionStorage.get('pendingPanelState');
         if (pendingState) {
-          // Clear after retrieving
           await sessionStorage.remove('pendingPanelState');
           sendResponse({ success: true, data: pendingState });
         } else {
@@ -2298,21 +2297,74 @@ async function handleMessage(
         try {
           // Chrome/Edge: Use chrome.sidePanel.open()
           const settings = await getSettings();
+          
           if (settings.splitScreenMode && chrome.sidePanel) {
-            // Get the active tab to open the side panel for
-            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (activeTab?.id) {
-              await chrome.sidePanel.open({ tabId: activeTab.id });
+            // Use sender's tab if available, otherwise query for active tab
+            let tabId = sender?.tab?.id;
+            
+            if (!tabId) {
+              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              tabId = activeTab?.id;
+            }
+            
+            if (tabId) {
+              await chrome.sidePanel.open({ tabId });
               sendResponse(successResponse({ opened: true, browser: 'chrome' }));
             } else {
-              sendResponse(successResponse({ opened: false, reason: 'No active tab' }));
+              sendResponse(successResponse({ opened: false, reason: 'No tab found' }));
             }
           } else {
-            // Firefox or split screen mode not enabled
             sendResponse(successResponse({ opened: false, reason: 'Not applicable' }));
           }
         } catch (error) {
-          log.debug('Failed to open side panel:', error);
+          log.error('Failed to open side panel:', error);
+          sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
+        }
+        break;
+      }
+      
+      case 'OPEN_SIDE_PANEL_IMMEDIATE': {
+        // Open the native side panel immediately without checking settings
+        // Content script should only send this when split screen mode is confirmed
+        // This preserves the user gesture context for Edge compatibility
+        try {
+          if (chrome.sidePanel) {
+            // Use sender's tab if available, otherwise query for active tab
+            let tabId = sender?.tab?.id;
+            
+            if (!tabId) {
+              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              tabId = activeTab?.id;
+            }
+            
+            if (tabId) {
+              // Try opening with tabId first
+              try {
+                await chrome.sidePanel.open({ tabId });
+                sendResponse(successResponse({ opened: true, browser: 'chrome' }));
+              } catch (tabError) {
+                // Fallback: try with windowId for Edge
+                try {
+                  const tab = await chrome.tabs.get(tabId);
+                  if (tab.windowId) {
+                    await chrome.sidePanel.open({ windowId: tab.windowId });
+                    sendResponse(successResponse({ opened: true, browser: 'edge' }));
+                  } else {
+                    throw tabError;
+                  }
+                } catch {
+                  log.error('Failed to open side panel with both tabId and windowId');
+                  sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
+                }
+              }
+            } else {
+              sendResponse(successResponse({ opened: false, reason: 'No tab found' }));
+            }
+          } else {
+            sendResponse(successResponse({ opened: false, reason: 'sidePanel API not available' }));
+          }
+        } catch (error) {
+          log.error('Failed to open side panel:', error);
           sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
         }
         break;
@@ -2320,7 +2372,6 @@ async function handleMessage(
       
       case 'FORWARD_TO_PANEL': {
         // Forward messages to the native side panel in split screen mode
-        // Store the message for the panel to retrieve
         const panelMessage = message.payload as { type: string; payload?: unknown };
         if (panelMessage) {
           await sessionStorage.set('pendingPanelState', panelMessage);

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9] - 2024-12-18
+
+### Added
+- **Cross-browser iframe compatibility**: Floating panel now works correctly on Chrome, Firefox, and Edge with unified iframe loading approach using `requestAnimationFrame` for Edge compatibility
+
+### Changed
+- **Extension renamed**: Extension name changed from "Filigran Threat Management" to "Filigran XTM" across all browsers for consistency
+- **Firefox split screen disabled**: Split screen mode toggle is now visible but disabled on Firefox with explanation that it requires Chrome or Edge. Firefox uses the floating iframe panel exclusively
+- **Panel display mode always visible**: The "Panel Display Mode" setting section is now shown on all browsers (previously hidden on Firefox), with clear indication when not supported
+- **Unified panel messaging**: Consolidated panel message handling to use `FORWARD_TO_PANEL` exclusively in split screen mode, eliminating redundant message paths that caused state conflicts
+
+### Fixed
+- **Edge floating panel not loading**: Fixed iframe content not loading on Edge browser due to timing issues with iframe src and DOM attachment
+- **Firefox floating panel**: Removed Firefox sidebar action dependency - Firefox now uses the same floating iframe approach as Chrome/Edge for consistent cross-browser experience
+- **Edge scan never completing**: Fixed race condition where panel messages were sent before iframe contentWindow was available
+- **Split screen mode highlight click**: Fixed clicking on highlights in native side panel mode not showing entity overview - the `SCAN_RESULTS` message was overwriting the `SHOW_ENTITY` message due to a timing issue
+- **Split screen mode panel not opening**: Fixed native side panel not opening when clicking on highlights with panel closed - panel functions now explicitly open the native side panel in split screen mode
+- **Split screen "Back to scan results" link**: Fixed "Back to scan results" link not appearing when clicking highlights after closing the native side panel. The issue was caused by duplicate message paths (`SHOW_ENTITY` via `FORWARD_TO_PANEL` and `SHOW_ENTITY_PANEL` directly) where the second message overwrote the `fromScanResults` flag. Now only `FORWARD_TO_PANEL` is used for consistent state management
+- **Scan results restoration**: When reopening the native side panel via highlight click, scan results are now properly restored from the message payload, allowing navigation back to results even after the panel was closed
+- **Edge tooltip rendering**: Fixed highlight tooltips showing as empty black squares on Edge by using Shadow DOM for proper style isolation
+
+### Removed
+- Removed verbose debug logging from panel.ts that was added during Edge troubleshooting
+- Removed `visibility: hidden` from hidden panel CSS (was preventing Edge from loading iframe content)
+- Removed redundant `SHOW_ENTITY_PANEL` message sends from highlight click handlers (now handled by `showPanel()` function)
+
 ## [0.0.8] - 2024-12-18
 
 ### Added
@@ -233,7 +259,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.5...v0.0.6

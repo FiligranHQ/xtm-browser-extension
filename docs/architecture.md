@@ -1047,10 +1047,12 @@ The panel is rendered as an injected iframe in the content script:
 
 When enabled, the panel uses the browser's native side panel APIs:
 - **Chrome/Edge**: Uses `chrome.sidePanel.open()` API (Chrome 114+)
-- **Firefox**: Uses `browser.sidebarAction` API (Firefox 109+)
+- **Firefox**: Not supported - Firefox uses the floating panel exclusively
 - Panel persists until closed via browser's UI
 - Close button in panel header is hidden (browser controls closing)
 - Better integration with browser's window management
+
+> **Note**: Firefox does not support the `chrome.sidePanel` API, so split screen mode is disabled on Firefox. The toggle is visible in settings but cannot be enabled.
 
 The panel application (`src/panel/App.tsx`) detects which mode it's running in by checking `window.parent === window`:
 - **In iframe**: `window.parent !== window` (floating mode)

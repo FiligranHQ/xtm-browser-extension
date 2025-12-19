@@ -197,14 +197,15 @@ Enable the "Split Screen Mode" toggle to use your browser's native side panel in
 - The close (X) button in the panel header is hidden
 - Panel is opened/closed via the browser's side panel controls
 - Chrome/Edge: Use the side panel icon in the toolbar or keyboard shortcut
-- Firefox: Use the sidebar button in the toolbar or View → Sidebar
 
 **Browser Support:**
-| Browser | API Used | Minimum Version |
-|---------|----------|-----------------|
-| Chrome | `chrome.sidePanel` | Chrome 114+ |
-| Edge | `chrome.sidePanel` | Edge 114+ |
-| Firefox | `browser.sidebarAction` | Firefox 109+ |
+| Browser | API Used | Status |
+|---------|----------|--------|
+| Chrome | `chrome.sidePanel` | ✅ Supported (Chrome 114+) |
+| Edge | `chrome.sidePanel` | ✅ Supported (Edge 114+) |
+| Firefox | N/A | ❌ Not supported (uses floating panel only) |
+
+> **Note**: On Firefox, the split screen mode toggle is visible but disabled in settings. Firefox uses the floating iframe panel exclusively.
 
 > **Note**: When disabled (default), the extension uses a floating iframe panel that appears on the right side of the page. This mode allows closing the panel by clicking outside of it or using the X button.
 

@@ -177,9 +177,9 @@ Full documentation is available in the [docs](./docs) folder:
 
 | Browser | Status | Notes |
 |---------|--------|-------|
-| Chrome  | ✅ Full Support | Side panel supported |
-| Edge    | ✅ Full Support | Side panel supported |
-| Firefox | ✅ Full Support | Sidebar action |
+| Chrome  | ✅ Full Support | Native side panel + floating panel |
+| Edge    | ✅ Full Support | Native side panel + floating panel |
+| Firefox | ✅ Full Support | Floating panel only |
 | Safari  | ⚠️ Experimental | Requires wrapper |
 
 ## API Requirements

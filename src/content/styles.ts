@@ -517,23 +517,26 @@ export const HIGHLIGHT_STYLES = `
      ======================================== */
   .xtm-tooltip {
     position: fixed;
-    background: #070d19;
-    color: rgba(255, 255, 255, 0.9);
-    padding: 12px 16px;
-    border-radius: 4px;
-    font-size: 13px;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    z-index: 2147483647;
-    pointer-events: none;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 320px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
+    background: #070d19 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    padding: 12px 16px !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    z-index: 2147483647 !important;
+    pointer-events: none !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    max-width: 320px !important;
+    min-width: 150px !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: opacity 0.2s ease, visibility 0.2s ease !important;
   }
   
   .xtm-tooltip.visible {
-    opacity: 1;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
   
   .xtm-tooltip-header {

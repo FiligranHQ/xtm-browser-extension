@@ -111,6 +111,34 @@ export async function initializeSplitScreenMode(): Promise<boolean> {
   return checkSplitScreenMode();
 }
 
+/**
+ * Open the native side panel (Chrome/Edge only, split screen mode)
+ * Returns a promise that resolves when the panel is opened (or failed)
+ * Note: This should be called only when splitScreenMode is already confirmed,
+ * so the background can open the panel immediately without checking settings.
+ */
+async function openNativeSidePanel(): Promise<boolean> {
+  if (!splitScreenMode) {
+    return false;
+  }
+  
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      // Send OPEN_SIDE_PANEL_IMMEDIATE - background will open immediately without settings check
+      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL_IMMEDIATE' }, (response) => {
+        if (chrome.runtime.lastError) {
+          log.warn('Failed to open native side panel:', chrome.runtime.lastError.message);
+          resolve(false);
+          return;
+        }
+        resolve(response?.success && response.data?.opened === true);
+      });
+    } else {
+      resolve(false);
+    }
+  });
+}
+
 // ============================================================================
 // Panel Communication
 // ============================================================================
@@ -144,6 +172,36 @@ export function sendPanelMessage(type: string, payload?: unknown): void {
   }
   
   panelFrame.contentWindow.postMessage({ type, payload }, '*');
+}
+
+/**
+ * Send a message to the panel and wait for confirmation (split screen mode only).
+ * This ensures the message is stored in pendingPanelState before returning.
+ * In floating mode, behaves like sendPanelMessage.
+ */
+export async function sendPanelMessageAndWait(type: string, payload?: unknown): Promise<void> {
+  // In split screen mode, wait for the background to confirm message storage
+  if (splitScreenMode) {
+    return new Promise((resolve) => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ 
+          type: 'FORWARD_TO_PANEL', 
+          payload: { type, payload } 
+        }, () => {
+          // Message has been processed by background and stored
+          if (chrome.runtime.lastError) {
+            log.warn('Failed to forward message to panel:', chrome.runtime.lastError.message);
+          }
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+  
+  // Floating mode - same as sendPanelMessage (synchronous)
+  sendPanelMessage(type, payload);
 }
 
 /**
@@ -336,25 +394,39 @@ export async function getCurrentTheme(): Promise<'dark' | 'light'> {
 
 /**
  * Show panel with entity details
+ * @param entity The entity to show
+ * @param platformMatches Optional platform matches for multi-platform entities
+ * @param fromScanResults Whether we're navigating from scan results (shows "Back to scan results" link)
+ * @param scanResults The full scan results to restore in panel (needed when panel was closed and reopened)
  */
 export async function showPanel(
   entity: DetectedObservable | DetectedOCTIEntity,
-  platformMatches?: Array<{ platformId: string; entityId: string; entityData?: unknown }>
+  platformMatches?: Array<{ platformId: string; entityId: string; entityData?: unknown }>,
+  fromScanResults?: boolean,
+  scanResults?: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[] } | null
 ): Promise<void> {
-  // Ensure split screen mode is checked first
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const theme = await getCurrentTheme();
-  
-  sendPanelMessage('SHOW_ENTITY', { 
+  const messagePayload = { 
     ...entity, 
     existsInPlatform: entity.found ?? false, 
     theme,
     platformMatches,
-  });
+    fromScanResults: fromScanResults ?? false,
+    scanResults: scanResults ?? null,
+  };
+  
+  if (splitScreenMode) {
+    // In split screen mode, send message BEFORE opening panel to avoid race condition
+    await sendPanelMessageAndWait('SHOW_ENTITY', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    // Floating mode - create elements, show, then send message
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_ENTITY', messagePayload);
+  }
 }
 
 /**
@@ -363,10 +435,14 @@ export async function showPanel(
 export async function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
-  sendPanelMessage('SHOW_ADD_ENTITY', entity);
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_ADD_ENTITY', entity);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_ADD_ENTITY', entity);
+  }
 }
 
 /**
@@ -377,14 +453,11 @@ export async function showPreviewPanel(
 ): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const article = extractArticleContent();
   const description = extractFirstParagraph(article.textContent);
   const theme = await getCurrentTheme();
   
-  sendPanelMessage('SHOW_PREVIEW', { 
+  const messagePayload = { 
     entities: selectedEntities, 
     pageUrl: window.location.href, 
     pageTitle: article.title,
@@ -393,7 +466,16 @@ export async function showPreviewPanel(
     pageDescription: description,
     pageExcerpt: article.excerpt,
     theme: theme,
-  });
+  };
+  
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_PREVIEW', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_PREVIEW', messagePayload);
+  }
 }
 
 /**
@@ -402,14 +484,11 @@ export async function showPreviewPanel(
 export async function showContainerPanel(): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const article = extractArticleContent();
   const description = extractFirstParagraph(article.textContent);
   const theme = await getCurrentTheme();
   
-  sendPanelMessage('SHOW_CREATE_CONTAINER', { 
+  const messagePayload = { 
     pageUrl: window.location.href, 
     pageTitle: article.title,
     pageContent: article.textContent,
@@ -417,7 +496,16 @@ export async function showContainerPanel(): Promise<void> {
     pageDescription: description,
     pageExcerpt: article.excerpt,
     theme: theme,
-  });
+  };
+  
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_CREATE_CONTAINER', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_CREATE_CONTAINER', messagePayload);
+  }
 }
 
 /**
@@ -426,12 +514,17 @@ export async function showContainerPanel(): Promise<void> {
 export async function showInvestigationPanel(): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const theme = await getCurrentTheme();
+  const messagePayload = { theme };
   
-  sendPanelMessage('SHOW_INVESTIGATION_PANEL', { theme });
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_INVESTIGATION_PANEL', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_INVESTIGATION_PANEL', messagePayload);
+  }
 }
 
 /**
@@ -440,12 +533,17 @@ export async function showInvestigationPanel(): Promise<void> {
 export async function showSearchPanel(): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const theme = await getCurrentTheme();
+  const messagePayload = { theme };
   
-  sendPanelMessage('SHOW_SEARCH_PANEL', { theme });
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_SEARCH_PANEL', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_SEARCH_PANEL', messagePayload);
+  }
 }
 
 /**
@@ -454,12 +552,17 @@ export async function showSearchPanel(): Promise<void> {
 export async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const theme = await getCurrentTheme();
+  const messagePayload = { theme, initialQuery };
   
-  sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', { theme, initialQuery });
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_UNIFIED_SEARCH_PANEL', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_UNIFIED_SEARCH_PANEL', messagePayload);
+  }
 }
 
 /**
@@ -468,11 +571,16 @@ export async function showUnifiedSearchPanel(initialQuery?: string): Promise<voi
 export async function showAddSelectionPanel(selectedText: string): Promise<void> {
   await checkSplitScreenMode();
   
-  ensurePanelElements();
-  showPanelElements();
-  
   const theme = await getCurrentTheme();
+  const messagePayload = { theme, selectedText };
   
-  sendPanelMessage('SHOW_ADD_SELECTION', { theme, selectedText });
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_ADD_SELECTION', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_ADD_SELECTION', messagePayload);
+  }
 }
 

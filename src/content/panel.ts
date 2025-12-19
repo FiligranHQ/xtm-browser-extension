@@ -194,19 +194,25 @@ export async function openPanel(): Promise<void> {
   await checkSplitScreenMode(true); // forceRefresh = true
   log.info('[IFRAME-DEBUG] splitScreenMode (after FRESH check):', splitScreenMode);
   
+  let useIframe = !splitScreenMode;
+  
   if (splitScreenMode) {
-    // In split screen mode, open the native side panel
+    // In split screen mode, try to open the native side panel
     log.info('[IFRAME-DEBUG] Mode: NATIVE SIDE PANEL (split screen)');
     log.info('[IFRAME-DEBUG] Attempting to open native side panel...');
     const opened = await openNativeSidePanel();
-    if (!opened) {
-      log.warn('[IFRAME-DEBUG] Native side panel FAILED to open');
-    } else {
+    if (opened) {
       log.info('[IFRAME-DEBUG] Native side panel opened SUCCESSFULLY');
+      return; // Successfully opened, no need for iframe
     }
-  } else {
-    // Floating mode - create and show iframe elements
-    log.info('[IFRAME-DEBUG] Mode: FLOATING IFRAME');
+    // Native panel failed - fall back to iframe
+    log.warn('[IFRAME-DEBUG] Native side panel FAILED to open - FALLING BACK TO IFRAME');
+    useIframe = true;
+  }
+  
+  if (useIframe) {
+    // Floating mode OR fallback from failed native panel
+    log.info('[IFRAME-DEBUG] Mode: FLOATING IFRAME', splitScreenMode ? '(fallback)' : '');
     
     // Ensure body exists
     if (!document.body) {

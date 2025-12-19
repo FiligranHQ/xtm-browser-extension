@@ -87,7 +87,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -97,7 +97,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'OPEN_UNIFIED_SEARCH_PANEL' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -106,7 +106,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_CONTAINER_FROM_PAGE' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -115,7 +115,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_INVESTIGATION' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -124,7 +124,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ATOMIC_TESTING' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);
@@ -133,7 +133,7 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
+      await ensureContentScriptAndSendMessage(tab.id, { type: 'CREATE_SCENARIO_FROM_PAGE' });
     }
     window.close();
   }, [ensureContentScriptAndSendMessage]);

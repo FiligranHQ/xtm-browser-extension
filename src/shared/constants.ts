@@ -111,7 +111,7 @@ export const OPENAEV_DOCS_URL = 'https://docs.openaev.io';
 // ============================================================================
 
 /** Extension version - SINGLE SOURCE OF TRUTH for version number */
-export const EXTENSION_VERSION = '0.0.8';
+export const EXTENSION_VERSION = '0.0.9';
 
 /** Extension name */
 export const EXTENSION_NAME = 'XTM Browser Extension';

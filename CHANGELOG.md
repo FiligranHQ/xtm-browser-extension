@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10] - 2024-12-19
+
+### Fixed
+- **Split screen mode on MacOS**: Fixed native side panel not opening reliably on Chrome and Edge on MacOS. The popup now opens the side panel immediately in user gesture context before sending scan messages, which is required by the Chrome sidePanel API
+- **Dual panel opening**: Fixed both native side panel and floating iframe opening simultaneously in split screen mode. The content script now correctly skips iframe creation when split screen mode is enabled
+
 ## [0.0.9] - 2024-12-18
 
 ### Added

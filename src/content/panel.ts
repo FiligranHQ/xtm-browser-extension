@@ -64,47 +64,34 @@ export function getSplitScreenMode(): boolean {
 // ============================================================================
 
 /**
- * Check if the browser supports Chrome's native side panel API (Chrome/Edge only)
- * Firefox doesn't have chrome.sidePanel API
- */
-function isSidePanelSupported(): boolean {
-  return typeof chrome !== 'undefined' && typeof chrome.sidePanel !== 'undefined';
-}
-
-/**
  * Check if split screen mode is enabled (cached after first check)
- * - Firefox: Always false (no native side panel, use iframe)
- * - Chrome/Edge: Based on user setting (only if sidePanel API available)
+ * Note: chrome.sidePanel API is NOT available in content scripts, only in background.
+ * So we must always ask the background script for the actual setting.
+ * The background script handles Firefox detection and returns splitScreenMode: false for it.
  */
 async function checkSplitScreenMode(): Promise<boolean> {
   if (splitScreenModeChecked) {
     return splitScreenMode;
   }
   
-  // Firefox doesn't support native side panel, always use floating iframe
-  if (!isSidePanelSupported()) {
-    splitScreenMode = false;
-    splitScreenModeChecked = true;
-    log.debug('[PANEL] Split screen mode: false (sidePanel API not supported)');
-    return false;
-  }
-  
-  // Chrome/Edge: Check user settings for split screen mode
+  // Always ask the background script for split screen mode setting
+  // The background script has access to chrome.sidePanel and handles browser detection
   return new Promise((resolve) => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
         if (chrome.runtime.lastError) {
           splitScreenModeChecked = true;
+          splitScreenMode = false;
           resolve(false);
           return;
         }
         splitScreenMode = response?.success && response.data?.splitScreenMode === true;
         splitScreenModeChecked = true;
-        log.debug('[PANEL] Split screen mode:', splitScreenMode);
         resolve(splitScreenMode);
       });
     } else {
       splitScreenModeChecked = true;
+      splitScreenMode = false;
       resolve(false);
     }
   });
@@ -131,17 +118,11 @@ export async function initializeSplitScreenMode(): Promise<boolean> {
 /**
  * Send a message to the panel.
  * In floating mode: sends via postMessage to iframe
- * In split screen mode / Firefox: sends via chrome.runtime to native side panel
+ * In split screen mode: sends via chrome.runtime to native side panel
  */
 export function sendPanelMessage(type: string, payload?: unknown): void {
-  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
-  if (!isSidePanelSupported()) {
-    splitScreenMode = false;
-  }
-  
   // In split screen mode, send via chrome.runtime to the native side panel
   if (splitScreenMode) {
-    log.debug(` sendPanelMessage [SPLIT]: Sending '${type}' via runtime`);
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ 
         type: 'FORWARD_TO_PANEL', 
@@ -152,21 +133,16 @@ export function sendPanelMessage(type: string, payload?: unknown): void {
   }
   
   // Floating mode - send via postMessage to iframe
-  // Queue message if panel iframe doesn't exist or isn't ready yet
-  // This handles race conditions where iframe was just created but contentWindow isn't ready
   if (!panelFrame) {
-    log.debug(`Cannot send panel message '${type}': panel frame not created yet`);
     return;
   }
   
-  // Queue message if panel isn't ready (contentWindow not available or not initialized)
+  // Queue message if panel isn't ready
   if (!isPanelReady || !panelFrame.contentWindow) {
-    log.debug(` sendPanelMessage: Panel not ready, queuing '${type}'`);
     panelMessageQueue.push({ type, payload });
     return;
   }
   
-  log.debug(` sendPanelMessage: Sending '${type}' to panel iframe`);
   panelFrame.contentWindow.postMessage({ type, payload }, '*');
 }
 
@@ -204,17 +180,11 @@ export function flushPanelMessageQueue(retryCount = 0): void {
 
 /**
  * Ensure panel elements exist (only in floating mode)
- * In split screen mode / Firefox, the browser handles the panel
+ * In split screen mode, the browser handles the panel via native side panel
  */
 export function ensurePanelElements(): void {
-  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
-  if (!isSidePanelSupported()) {
-    splitScreenMode = false;
-  }
-  
   // In split screen mode, don't create floating iframe elements
   if (splitScreenMode) {
-    log.debug('[PANEL] Split screen mode - skipping floating panel elements');
     return;
   }
   
@@ -232,8 +202,25 @@ export function ensurePanelElements(): void {
     
     panelFrame = document.createElement('iframe');
     panelFrame.className = 'xtm-panel-frame hidden';
-    panelFrame.src = chrome.runtime.getURL('panel/index.html');
+    panelFrame.setAttribute('allow', 'clipboard-read; clipboard-write');
+    panelFrame.setAttribute('frameBorder', '0');
+    panelFrame.setAttribute('scrolling', 'no');
+    
+    panelFrame.addEventListener('error', (err) => {
+      log.error('Iframe error event:', err);
+    });
+    
+    const panelUrl = chrome.runtime.getURL('panel/index.html');
+    
+    // Append to DOM first, then set src - required for Edge compatibility
     document.body.appendChild(panelFrame);
+    
+    // Use requestAnimationFrame to set src - helps Edge process the iframe
+    requestAnimationFrame(() => {
+      if (panelFrame) {
+        panelFrame.src = panelUrl;
+      }
+    });
   }
   
   // Install document click handler
@@ -245,47 +232,16 @@ export function ensurePanelElements(): void {
 
 /**
  * Show panel elements (only in floating mode)
- * In split screen mode / Firefox, the browser handles showing the panel
+ * In split screen mode, the browser handles showing the panel via native side panel
  */
 export function showPanelElements(): void {
-  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
-  if (!isSidePanelSupported()) {
-    splitScreenMode = false;
-  }
-  
   // In split screen mode, don't show floating panel elements
   if (splitScreenMode) {
-    log.debug('[SHOW-PANEL-ELEMENTS] Split screen mode - skipping floating panel show');
     return;
-  }
-  
-  log.debug('[SHOW-PANEL-ELEMENTS] Called, panelOverlay:', !!panelOverlay, 'panelFrame:', !!panelFrame);
-  
-  // Check if styles are injected
-  const styleEl = document.getElementById('xtm-styles');
-  log.debug('[SHOW-PANEL-ELEMENTS] Style element exists:', !!styleEl);
-  if (styleEl) {
-    const hasFrameStyle = styleEl.textContent?.includes('xtm-panel-frame');
-    log.debug('[SHOW-PANEL-ELEMENTS] Style contains xtm-panel-frame:', hasFrameStyle);
   }
   
   panelOverlay?.classList.remove('hidden');
   panelFrame?.classList.remove('hidden');
-  
-  // Log computed styles to debug
-  if (panelFrame) {
-    const computed = window.getComputedStyle(panelFrame);
-    log.debug('[SHOW-PANEL-ELEMENTS] panelFrame computed:', {
-      transform: computed.transform,
-      visibility: computed.visibility,
-      display: computed.display,
-      position: computed.position,
-      right: computed.right,
-      width: computed.width,
-    });
-  }
-  
-  log.debug('[SHOW-PANEL-ELEMENTS] After removing hidden class, panelFrame.classList:', panelFrame?.classList.toString());
 }
 
 /**
@@ -302,14 +258,9 @@ export function hidePanel(): void {
 
 /**
  * Check if panel is hidden
- * In split screen mode / Firefox, always returns false (browser manages panel visibility)
+ * In split screen mode, always returns false (browser manages panel visibility)
  */
 export function isPanelHidden(): boolean {
-  // Force splitScreenMode to false if sidePanel API is not supported (Firefox)
-  if (!isSidePanelSupported()) {
-    splitScreenMode = false;
-  }
-  
   // In split screen mode, the panel is managed by the browser
   // We return false to prevent the content script from trying to re-open it
   if (splitScreenMode) {
@@ -433,8 +384,6 @@ export async function showPreviewPanel(
   const description = extractFirstParagraph(article.textContent);
   const theme = await getCurrentTheme();
   
-  log.debug(' showPreviewPanel - title:', article.title, 'textContent length:', article.textContent?.length);
-  
   sendPanelMessage('SHOW_PREVIEW', { 
     entities: selectedEntities, 
     pageUrl: window.location.href, 
@@ -459,8 +408,6 @@ export async function showContainerPanel(): Promise<void> {
   const article = extractArticleContent();
   const description = extractFirstParagraph(article.textContent);
   const theme = await getCurrentTheme();
-  
-  log.debug(' showContainerPanel - title:', article.title, 'textContent length:', article.textContent?.length);
   
   sendPanelMessage('SHOW_CREATE_CONTAINER', { 
     pageUrl: window.location.href, 

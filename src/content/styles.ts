@@ -629,7 +629,8 @@ export const HIGHLIGHT_STYLES = `
   
   .xtm-panel-frame.hidden {
     transform: translateX(100%) !important;
-    visibility: hidden !important;
+    /* Note: Do NOT use visibility:hidden here - Edge won't load iframe content if hidden */
+    pointer-events: none !important;
   }
   
   /* Panel overlay - purely visual, pointer-events none so highlights remain clickable */

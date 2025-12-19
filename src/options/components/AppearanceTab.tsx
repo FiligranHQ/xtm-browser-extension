@@ -45,7 +45,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
   onSave,
 }) => {
   // Split screen mode is only available on Chrome/Edge (not Firefox)
-  const isSplitScreenSupported = useMemo(() => !isFirefox(), []);
+  const isFirefoxBrowser = useMemo(() => isFirefox(), []);
   
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -106,31 +106,32 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           </Typography>
         </Paper>
 
-        {isSplitScreenSupported && (
-          <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-              <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
-            </Box>
-            
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.splitScreenMode ?? false}
-                  onChange={(e) => onSetSplitScreenMode(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label="Enable split screen mode"
-              sx={{ mb: 1 }}
-            />
-            
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
-              When enabled, the panel will use your browser's native side panel instead of a floating window.
-              The panel will be controlled by the browser and remain open until you close it via the browser's UI.
-            </Typography>
-          </Paper>
-        )}
+        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3, opacity: isFirefoxBrowser ? 0.6 : 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
+          </Box>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isFirefoxBrowser ? false : (settings.splitScreenMode ?? false)}
+                onChange={(e) => onSetSplitScreenMode(e.target.checked)}
+                color="primary"
+                disabled={isFirefoxBrowser}
+              />
+            }
+            label="Enable split screen mode"
+            sx={{ mb: 1 }}
+          />
+          
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
+            {isFirefoxBrowser 
+              ? 'Split screen mode is not available on Firefox. This feature requires Chrome or Edge.'
+              : 'When enabled, the panel will use your browser\'s native side panel instead of a floating window. The panel will be controlled by the browser and remain open until you close it via the browser\'s UI.'
+            }
+          </Typography>
+        </Paper>
       </Box>
 
       <Divider sx={{ my: 3 }} />

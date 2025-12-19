@@ -228,6 +228,7 @@ async function initializeClient(): Promise<void> {
   }
   
   // Set up side panel (Chrome/Edge)
+  // Note: Panel title comes from the HTML <title> tag in panel/index.html
   if (chrome.sidePanel) {
     chrome.sidePanel.setOptions({
       enabled: true,

@@ -6,6 +6,9 @@
  * This is the main entry point that coordinates all content script functionality.
  */
 
+// Immediate logging to verify content script is loading
+console.log('[XTM] [CONTENT-DEBUG] Content script file starting to load...', window.location.href);
+
 import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable } from '../shared/types/observables';
 import type { DetectedOCTIEntity } from '../shared/types/opencti';
@@ -194,29 +197,40 @@ function getTooltipElement(): HTMLElement | null {
 }
 
 async function initialize(): Promise<void> {
+  console.log('[XTM] [CONTENT-DEBUG] initialize() called');
+  console.log('[XTM] [CONTENT-DEBUG] document.head exists:', !!document.head);
+  console.log('[XTM] [CONTENT-DEBUG] document.body exists:', !!document.body);
+  console.log('[XTM] [CONTENT-DEBUG] URL:', window.location.href);
+  
   if (!document.head || !document.body) {
-    log.debug(' Not a valid HTML page, skipping initialization');
+    console.log('[XTM] [CONTENT-DEBUG] Not a valid HTML page, skipping initialization');
     return;
   }
   
   if (document.getElementById('xtm-styles')) {
+    console.log('[XTM] [CONTENT-DEBUG] Already initialized (xtm-styles exists)');
     return;
   }
   
+  console.log('[XTM] [CONTENT-DEBUG] Injecting styles...');
   if (!injectStyles()) {
+    console.log('[XTM] [CONTENT-DEBUG] Failed to inject styles');
     return;
   }
+  console.log('[XTM] [CONTENT-DEBUG] Styles injected successfully');
   
   createTooltip();
+  console.log('[XTM] [CONTENT-DEBUG] Tooltip created');
   
   // Initialize split screen mode early (before any panel operations)
+  console.log('[XTM] [CONTENT-DEBUG] Initializing split screen mode...');
   const isSplitScreen = await initializeSplitScreenMode();
-  log.debug(' Split screen mode:', isSplitScreen);
+  console.log('[XTM] [CONTENT-DEBUG] Split screen mode:', isSplitScreen);
   
   // Listen for messages from the panel iframe
   window.addEventListener('message', handlePanelMessage);
   
-  log.debug(' Content script initialized');
+  console.log('[XTM] [CONTENT-DEBUG] Content script fully initialized');
 }
 
 // ============================================================================
@@ -1508,22 +1522,37 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
 // ============================================================================
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  console.log('[XTM] [CONTENT-DEBUG] Received message:', message.type);
+  
   switch (message.type) {
     case 'PING':
+      console.log('[XTM] [CONTENT-DEBUG] Responding to PING');
       sendResponse({ success: true, loaded: true });
       break;
       
     case 'SCAN_PAGE':
     case 'AUTO_SCAN_PAGE':
-      scanPage().then(() => sendResponse({ success: true }));
+      console.log('[XTM] [CONTENT-DEBUG] Starting SCAN_PAGE...');
+      scanPage().then(() => {
+        console.log('[XTM] [CONTENT-DEBUG] SCAN_PAGE completed');
+        sendResponse({ success: true });
+      });
       return true;
     
     case 'SCAN_OAEV':
-      scanPageForOAEV().then(() => sendResponse({ success: true }));
+      console.log('[XTM] [CONTENT-DEBUG] Starting SCAN_OAEV...');
+      scanPageForOAEV().then(() => {
+        console.log('[XTM] [CONTENT-DEBUG] SCAN_OAEV completed');
+        sendResponse({ success: true });
+      });
       return true;
     
     case 'SCAN_ALL':
-      scanAllPlatforms().then(() => sendResponse({ success: true }));
+      console.log('[XTM] [CONTENT-DEBUG] Starting SCAN_ALL...');
+      scanAllPlatforms().then(() => {
+        console.log('[XTM] [CONTENT-DEBUG] SCAN_ALL completed');
+        sendResponse({ success: true });
+      });
       return true;
     
     case 'SCAN_ATOMIC_TESTING':
@@ -1774,4 +1803,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // Initialize
 // ============================================================================
 
-initialize();
+console.log('[XTM] [CONTENT-DEBUG] About to call initialize()...');
+initialize().then(() => {
+  console.log('[XTM] [CONTENT-DEBUG] initialize() completed');
+}).catch((err) => {
+  console.error('[XTM] [CONTENT-DEBUG] initialize() failed:', err);
+});
+console.log('[XTM] [CONTENT-DEBUG] Content script module fully loaded');

@@ -64,18 +64,20 @@ export function getSplitScreenMode(): boolean {
 // ============================================================================
 
 /**
- * Check if split screen mode is enabled (cached after first check)
+ * Check if split screen mode is enabled
  * Note: chrome.sidePanel API is NOT available in content scripts, only in background.
  * So we must always ask the background script for the actual setting.
  * The background script handles Firefox detection and returns splitScreenMode: false for it.
+ * 
+ * @param forceRefresh - If true, always fetch fresh value from background (don't use cache)
  */
-async function checkSplitScreenMode(): Promise<boolean> {
-  if (splitScreenModeChecked) {
+async function checkSplitScreenMode(forceRefresh = false): Promise<boolean> {
+  if (splitScreenModeChecked && !forceRefresh) {
     log.debug('[checkSplitScreenMode] Using cached value:', splitScreenMode);
     return splitScreenMode;
   }
   
-  log.debug('[checkSplitScreenMode] Fetching split screen mode from background...');
+  log.debug('[checkSplitScreenMode] Fetching split screen mode from background... (forceRefresh:', forceRefresh, ')');
   
   // Always ask the background script for split screen mode setting
   // The background script has access to chrome.sidePanel and handles browser detection
@@ -89,7 +91,11 @@ async function checkSplitScreenMode(): Promise<boolean> {
           resolve(false);
           return;
         }
-        splitScreenMode = response?.success && response.data?.splitScreenMode === true;
+        const newValue = response?.success && response.data?.splitScreenMode === true;
+        if (splitScreenModeChecked && newValue !== splitScreenMode) {
+          log.info('[checkSplitScreenMode] Split screen mode CHANGED from', splitScreenMode, 'to', newValue);
+        }
+        splitScreenMode = newValue;
         splitScreenModeChecked = true;
         log.debug('[checkSplitScreenMode] Split screen mode from settings:', splitScreenMode);
         resolve(splitScreenMode);
@@ -174,6 +180,8 @@ async function openNativeSidePanel(retryCount = 0): Promise<boolean> {
  * Open the panel (either native side panel or floating iframe)
  * This is a unified function that handles both modes automatically.
  * Should be called after scan operations complete to show results.
+ * 
+ * IMPORTANT: Always fetches fresh settings to avoid stale cache issues.
  */
 export async function openPanel(): Promise<void> {
   log.info('[IFRAME-DEBUG] ===== openPanel() called =====');
@@ -181,8 +189,10 @@ export async function openPanel(): Promise<void> {
   log.info('[IFRAME-DEBUG] splitScreenMode (before check):', splitScreenMode);
   log.info('[IFRAME-DEBUG] splitScreenModeChecked:', splitScreenModeChecked);
   
-  await checkSplitScreenMode();
-  log.info('[IFRAME-DEBUG] splitScreenMode (after check):', splitScreenMode);
+  // ALWAYS fetch fresh settings to avoid stale cache issues
+  // This is critical because settings can change and the initial check might have been wrong
+  await checkSplitScreenMode(true); // forceRefresh = true
+  log.info('[IFRAME-DEBUG] splitScreenMode (after FRESH check):', splitScreenMode);
   
   if (splitScreenMode) {
     // In split screen mode, open the native side panel
@@ -690,7 +700,7 @@ export async function showPanel(
   fromScanResults?: boolean,
   scanResults?: { observables: DetectedObservable[]; openctiEntities: DetectedOCTIEntity[] } | null
 ): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const theme = await getCurrentTheme();
   const messagePayload = { 
@@ -718,7 +728,7 @@ export async function showPanel(
  * Show add panel for non-existing entities
  */
 export async function showAddPanel(entity: DetectedObservable | DetectedOCTIEntity): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   if (splitScreenMode) {
     await sendPanelMessageAndWait('SHOW_ADD_ENTITY', entity);
@@ -736,7 +746,7 @@ export async function showAddPanel(entity: DetectedObservable | DetectedOCTIEnti
 export async function showPreviewPanel(
   selectedEntities: Array<DetectedObservable | DetectedOCTIEntity>
 ): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const article = extractArticleContent();
   const description = extractFirstParagraph(article.textContent);
@@ -767,7 +777,7 @@ export async function showPreviewPanel(
  * Show container creation panel
  */
 export async function showContainerPanel(): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const article = extractArticleContent();
   const description = extractFirstParagraph(article.textContent);
@@ -797,7 +807,7 @@ export async function showContainerPanel(): Promise<void> {
  * Show investigation panel
  */
 export async function showInvestigationPanel(): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const theme = await getCurrentTheme();
   const messagePayload = { theme };
@@ -816,7 +826,7 @@ export async function showInvestigationPanel(): Promise<void> {
  * Show search panel
  */
 export async function showSearchPanel(): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const theme = await getCurrentTheme();
   const messagePayload = { theme };
@@ -835,7 +845,7 @@ export async function showSearchPanel(): Promise<void> {
  * Show unified search panel
  */
 export async function showUnifiedSearchPanel(initialQuery?: string): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const theme = await getCurrentTheme();
   const messagePayload = { theme, initialQuery };
@@ -854,7 +864,7 @@ export async function showUnifiedSearchPanel(initialQuery?: string): Promise<voi
  * Show add selection panel (context menu)
  */
 export async function showAddSelectionPanel(selectedText: string): Promise<void> {
-  await checkSplitScreenMode();
+  await checkSplitScreenMode(true); // Always fetch fresh settings
   
   const theme = await getCurrentTheme();
   const messagePayload = { theme, selectedText };

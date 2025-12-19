@@ -65,6 +65,7 @@ import {
   initializeSplitScreenMode,
   refreshSplitScreenMode,
   getSplitScreenMode,
+  openPanel,
 } from './panel';
 
 const log = loggers.content;
@@ -380,11 +381,11 @@ function handleHighlightAIEntities(entities: Array<{ type: string; value: string
     (highlight, searchValue) => {
       toggleSelection(highlight, searchValue);
     },
-    () => {
+    async () => {
       // Re-open panel with AI filter if it's hidden
       if (isPanelHidden() && lastScanData) {
-        ensurePanelElements();
-        showPanelElements();
+        // openPanel() handles both split screen (native) and floating (iframe) modes
+        await openPanel();
         // Send scan results with AI filter
         sendPanelMessage('SCAN_RESULTS_WITH_FILTER', {
           ...lastScanData,
@@ -1008,8 +1009,8 @@ async function scanPage(): Promise<void> {
       }
       
       // Always open panel (even with no results) so users can use search/AI features
-      ensurePanelElements();
-      showPanelElements();
+      // openPanel() handles both split screen (native) and floating (iframe) modes
+      await openPanel();
       
       // Include page content in scan results for AI features (relationship resolution, etc.)
       sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });
@@ -1080,8 +1081,8 @@ async function scanPageForOAEV(): Promise<void> {
       }
       
       // Always open panel (even with no results) so users can use search/AI features
-      ensurePanelElements();
-      showPanelElements();
+      // openPanel() handles both split screen (native) and floating (iframe) modes
+      await openPanel();
       
       // Include page content in scan results for AI features
       sendPanelMessage('SCAN_RESULTS', { ...scanResults, pageContent: content, pageTitle: document.title, pageUrl: url });
@@ -1168,8 +1169,8 @@ async function scanAllPlatforms(): Promise<void> {
       }
       
       // Always open panel (even with no results) so users can use search/AI features
-      ensurePanelElements();
-      showPanelElements();
+      // openPanel() handles both split screen (native) and floating (iframe) modes
+      await openPanel();
       
       // Include page content in scan results for AI features
       sendPanelMessage('SCAN_RESULTS', { ...data, pageContent: content, pageTitle: document.title, pageUrl: url });
@@ -1261,8 +1262,8 @@ async function scanPageForAtomicTesting(): Promise<void> {
       });
     }
     
-    ensurePanelElements();
-    showPanelElements();
+    // openPanel() handles both split screen (native) and floating (iframe) modes
+    await openPanel();
     
     const theme = await getCurrentTheme();
     
@@ -1340,8 +1341,8 @@ async function scanPageForScenario(): Promise<void> {
       });
     }
     
-    ensurePanelElements();
-    showPanelElements();
+    // openPanel() handles both split screen (native) and floating (iframe) modes
+    await openPanel();
     
     const theme = await getCurrentTheme();
     
@@ -1435,12 +1436,13 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
         url: data.url,
       };
       
-      highlightResultsForInvestigation(investigationResults, (highlight) => {
+      highlightResultsForInvestigation(investigationResults, async (highlight) => {
         setHighlightClickInProgress(true);
         setTimeout(() => setHighlightClickInProgress(false), 500);
         
         if (isPanelHidden()) {
-          showPanelElements();
+          // openPanel() handles both split screen (native) and floating (iframe) modes
+          await openPanel();
         }
         
         const isNowSelected = !highlight.classList.contains('xtm-selected');

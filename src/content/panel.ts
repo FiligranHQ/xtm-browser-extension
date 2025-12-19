@@ -71,8 +71,11 @@ export function getSplitScreenMode(): boolean {
  */
 async function checkSplitScreenMode(): Promise<boolean> {
   if (splitScreenModeChecked) {
+    log.debug('[checkSplitScreenMode] Using cached value:', splitScreenMode);
     return splitScreenMode;
   }
+  
+  log.debug('[checkSplitScreenMode] Fetching split screen mode from background...');
   
   // Always ask the background script for split screen mode setting
   // The background script has access to chrome.sidePanel and handles browser detection
@@ -80,6 +83,7 @@ async function checkSplitScreenMode(): Promise<boolean> {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
         if (chrome.runtime.lastError) {
+          log.warn('[checkSplitScreenMode] Error getting settings:', chrome.runtime.lastError.message);
           splitScreenModeChecked = true;
           splitScreenMode = false;
           resolve(false);
@@ -87,9 +91,11 @@ async function checkSplitScreenMode(): Promise<boolean> {
         }
         splitScreenMode = response?.success && response.data?.splitScreenMode === true;
         splitScreenModeChecked = true;
+        log.debug('[checkSplitScreenMode] Split screen mode from settings:', splitScreenMode);
         resolve(splitScreenMode);
       });
     } else {
+      log.warn('[checkSplitScreenMode] chrome.runtime.sendMessage not available');
       splitScreenModeChecked = true;
       splitScreenMode = false;
       resolve(false);
@@ -116,8 +122,13 @@ export async function initializeSplitScreenMode(): Promise<boolean> {
  * Returns a promise that resolves when the panel is opened (or failed)
  * Note: This should be called only when splitScreenMode is already confirmed,
  * so the background can open the panel immediately without checking settings.
+ * 
+ * On MacOS Chrome/Edge, the sidePanel API can be more restrictive.
+ * This function includes retry logic to handle transient failures.
  */
-async function openNativeSidePanel(): Promise<boolean> {
+async function openNativeSidePanel(retryCount = 0): Promise<boolean> {
+  const MAX_RETRIES = 2;
+  
   if (!splitScreenMode) {
     return false;
   }
@@ -128,15 +139,128 @@ async function openNativeSidePanel(): Promise<boolean> {
       chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL_IMMEDIATE' }, (response) => {
         if (chrome.runtime.lastError) {
           log.warn('Failed to open native side panel:', chrome.runtime.lastError.message);
-          resolve(false);
+          // Retry on failure (helps with MacOS timing issues)
+          if (retryCount < MAX_RETRIES) {
+            setTimeout(() => {
+              openNativeSidePanel(retryCount + 1).then(resolve);
+            }, 100 * (retryCount + 1));
+          } else {
+            resolve(false);
+          }
           return;
         }
-        resolve(response?.success && response.data?.opened === true);
+        
+        const opened = response?.success && response.data?.opened === true;
+        if (!opened && retryCount < MAX_RETRIES) {
+          // Retry if not opened (MacOS may need multiple attempts)
+          log.debug(`Side panel open returned false, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+          setTimeout(() => {
+            openNativeSidePanel(retryCount + 1).then(resolve);
+          }, 100 * (retryCount + 1));
+        } else {
+          if (!opened) {
+            log.warn('Failed to open native side panel after retries, reason:', response?.data?.reason);
+          }
+          resolve(opened);
+        }
       });
     } else {
       resolve(false);
     }
   });
+}
+
+/**
+ * Open the panel (either native side panel or floating iframe)
+ * This is a unified function that handles both modes automatically.
+ * Should be called after scan operations complete to show results.
+ */
+export async function openPanel(): Promise<void> {
+  log.info('[IFRAME-DEBUG] ===== openPanel() called =====');
+  log.info('[IFRAME-DEBUG] Current URL:', window.location.href);
+  log.info('[IFRAME-DEBUG] splitScreenMode (before check):', splitScreenMode);
+  log.info('[IFRAME-DEBUG] splitScreenModeChecked:', splitScreenModeChecked);
+  
+  await checkSplitScreenMode();
+  log.info('[IFRAME-DEBUG] splitScreenMode (after check):', splitScreenMode);
+  
+  if (splitScreenMode) {
+    // In split screen mode, open the native side panel
+    log.info('[IFRAME-DEBUG] Mode: NATIVE SIDE PANEL (split screen)');
+    log.info('[IFRAME-DEBUG] Attempting to open native side panel...');
+    const opened = await openNativeSidePanel();
+    if (!opened) {
+      log.warn('[IFRAME-DEBUG] Native side panel FAILED to open');
+    } else {
+      log.info('[IFRAME-DEBUG] Native side panel opened SUCCESSFULLY');
+    }
+  } else {
+    // Floating mode - create and show iframe elements
+    log.info('[IFRAME-DEBUG] Mode: FLOATING IFRAME');
+    
+    // Ensure body exists
+    if (!document.body) {
+      log.error('[IFRAME-DEBUG] CRITICAL ERROR: document.body not available!');
+      return;
+    }
+    
+    log.info('[IFRAME-DEBUG] Calling ensurePanelElements()...');
+    ensurePanelElements();
+    
+    // Wait for iframe src to be set and for a paint cycle
+    log.info('[IFRAME-DEBUG] Waiting for iframe src to be set...');
+    await new Promise<void>(resolve => {
+      let checkCount = 0;
+      const checkAndResolve = () => {
+        checkCount++;
+        if (panelFrame && panelFrame.src) {
+          log.info('[IFRAME-DEBUG] Iframe src is set after', checkCount, 'checks');
+          resolve();
+        } else {
+          if (checkCount < 20) {
+            requestAnimationFrame(checkAndResolve);
+          }
+        }
+      };
+      
+      requestAnimationFrame(checkAndResolve);
+      
+      // Resolve after timeout to avoid infinite wait
+      setTimeout(() => {
+        log.info('[IFRAME-DEBUG] Wait timeout reached, panelFrame exists:', !!panelFrame, 'src:', panelFrame?.src);
+        resolve();
+      }, 100);
+    });
+    
+    log.info('[IFRAME-DEBUG] Calling showPanelElements()...');
+    showPanelElements();
+    log.info('[IFRAME-DEBUG] ===== openPanel() complete =====');
+  }
+}
+
+/**
+ * Force reopen the floating panel iframe (useful for debugging)
+ * Destroys and recreates the iframe
+ */
+export function forceReopenFloatingPanel(): void {
+  log.debug('[forceReopenFloatingPanel] Forcing panel recreation...');
+  
+  // Remove existing elements
+  if (panelFrame) {
+    panelFrame.remove();
+    panelFrame = null;
+  }
+  if (panelOverlay) {
+    panelOverlay.remove();
+    panelOverlay = null;
+  }
+  
+  isPanelReady = false;
+  panelMessageQueue.length = 0;
+  
+  // Recreate
+  ensurePanelElements();
+  showPanelElements();
 }
 
 // ============================================================================
@@ -241,20 +365,54 @@ export function flushPanelMessageQueue(retryCount = 0): void {
  * In split screen mode, the browser handles the panel via native side panel
  */
 export function ensurePanelElements(): void {
+  // Log browser info for debugging
+  const userAgent = navigator.userAgent;
+  const isMac = userAgent.includes('Mac');
+  const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
+  const isEdge = userAgent.includes('Edg');
+  log.info('[IFRAME-DEBUG] ensurePanelElements called - Browser:', isChrome ? 'Chrome' : isEdge ? 'Edge' : 'Other', '| MacOS:', isMac);
+  log.info('[IFRAME-DEBUG] User Agent:', userAgent);
+  log.info('[IFRAME-DEBUG] splitScreenMode:', splitScreenMode, '| splitScreenModeChecked:', splitScreenModeChecked);
+  
   // In split screen mode, don't create floating iframe elements
   if (splitScreenMode) {
+    log.info('[IFRAME-DEBUG] Skipping iframe creation - split screen mode is enabled');
     return;
+  }
+  
+  log.info('[IFRAME-DEBUG] Creating floating panel elements (iframe mode)...');
+  
+  // Check document state
+  log.info('[IFRAME-DEBUG] document.readyState:', document.readyState);
+  log.info('[IFRAME-DEBUG] document.body exists:', !!document.body);
+  log.info('[IFRAME-DEBUG] document.head exists:', !!document.head);
+  
+  // Check if styles are injected
+  const styleEl = document.getElementById('xtm-styles');
+  log.info('[IFRAME-DEBUG] XTM styles element exists:', !!styleEl);
+  if (!styleEl) {
+    log.warn('[IFRAME-DEBUG] WARNING: XTM styles not found in document! Panel may not display correctly.');
+  } else {
+    // Check if panel-frame styles are present
+    const hasFrameStyle = styleEl.textContent?.includes('xtm-panel-frame');
+    log.info('[IFRAME-DEBUG] Styles contain xtm-panel-frame:', hasFrameStyle);
   }
   
   // Create overlay
   if (!panelOverlay) {
+    log.info('[IFRAME-DEBUG] Creating overlay element...');
     panelOverlay = document.createElement('div');
     panelOverlay.className = 'xtm-panel-overlay hidden';
+    panelOverlay.id = 'xtm-panel-overlay';
     document.body.appendChild(panelOverlay);
+    log.info('[IFRAME-DEBUG] Overlay created and appended to body');
+  } else {
+    log.info('[IFRAME-DEBUG] Overlay already exists');
   }
   
   // Create inline panel
   if (!panelFrame) {
+    log.info('[IFRAME-DEBUG] Creating iframe element...');
     isPanelReady = false;
     panelMessageQueue.length = 0;
     
@@ -263,28 +421,83 @@ export function ensurePanelElements(): void {
     panelFrame.setAttribute('allow', 'clipboard-read; clipboard-write');
     panelFrame.setAttribute('frameBorder', '0');
     panelFrame.setAttribute('scrolling', 'no');
+    panelFrame.id = 'xtm-panel-iframe';
     
+    // Add detailed event listeners
     panelFrame.addEventListener('error', (err) => {
-      log.error('Iframe error event:', err);
+      log.error('[IFRAME-DEBUG] Iframe ERROR event:', err);
+      log.error('[IFRAME-DEBUG] Error type:', err.type);
+    });
+    
+    panelFrame.addEventListener('load', () => {
+      log.info('[IFRAME-DEBUG] Iframe LOAD event fired - content should be loaded');
+      log.info('[IFRAME-DEBUG] Iframe src after load:', panelFrame?.src);
+      log.info('[IFRAME-DEBUG] Iframe contentWindow exists:', !!panelFrame?.contentWindow);
+    });
+    
+    panelFrame.addEventListener('abort', () => {
+      log.warn('[IFRAME-DEBUG] Iframe ABORT event - loading was aborted');
     });
     
     const panelUrl = chrome.runtime.getURL('panel/index.html');
+    log.info('[IFRAME-DEBUG] Panel URL:', panelUrl);
+    log.info('[IFRAME-DEBUG] chrome.runtime.id:', chrome.runtime.id);
     
     // Append to DOM first, then set src - required for Edge compatibility
     document.body.appendChild(panelFrame);
+    log.info('[IFRAME-DEBUG] Iframe appended to body');
+    log.info('[IFRAME-DEBUG] Iframe in DOM:', document.getElementById('xtm-panel-iframe') !== null);
     
-    // Use requestAnimationFrame to set src - helps Edge process the iframe
-    requestAnimationFrame(() => {
-      if (panelFrame) {
+    // Set src immediately after appending (more reliable across browsers)
+    // Use a microtask to ensure DOM is updated
+    Promise.resolve().then(() => {
+      if (panelFrame && !panelFrame.src) {
+        log.info('[IFRAME-DEBUG] Setting iframe src via Promise.resolve() microtask');
         panelFrame.src = panelUrl;
+        log.info('[IFRAME-DEBUG] Iframe src set to:', panelFrame.src);
+      } else if (panelFrame) {
+        log.info('[IFRAME-DEBUG] Promise.resolve: src already set:', panelFrame.src);
       }
     });
+    
+    // Also use requestAnimationFrame as fallback for Edge
+    requestAnimationFrame(() => {
+      if (panelFrame && !panelFrame.src) {
+        log.info('[IFRAME-DEBUG] Setting iframe src via requestAnimationFrame (fallback)');
+        panelFrame.src = panelUrl;
+      } else if (panelFrame) {
+        log.info('[IFRAME-DEBUG] requestAnimationFrame: src already set:', panelFrame.src);
+      }
+    });
+    
+    // Final fallback with setTimeout for very slow browsers
+    setTimeout(() => {
+      if (panelFrame && !panelFrame.src) {
+        log.info('[IFRAME-DEBUG] Setting iframe src via setTimeout (final fallback)');
+        panelFrame.src = panelUrl;
+      } else if (panelFrame) {
+        log.info('[IFRAME-DEBUG] setTimeout: src is:', panelFrame.src);
+      }
+      
+      // Log final state after all attempts
+      if (panelFrame) {
+        const rect = panelFrame.getBoundingClientRect();
+        log.info('[IFRAME-DEBUG] Final iframe state - src:', panelFrame.src);
+        log.info('[IFRAME-DEBUG] Final iframe rect:', JSON.stringify({ top: rect.top, right: rect.right, width: rect.width, height: rect.height }));
+        log.info('[IFRAME-DEBUG] Final iframe classList:', panelFrame.classList.toString());
+      }
+    }, 100);
+  } else {
+    log.info('[IFRAME-DEBUG] Iframe already exists');
+    log.info('[IFRAME-DEBUG] Existing iframe src:', panelFrame.src);
+    log.info('[IFRAME-DEBUG] Existing iframe classList:', panelFrame.classList.toString());
   }
   
   // Install document click handler
   if (!documentClickHandlerInstalled) {
     document.addEventListener('click', handleDocumentClickForPanel, true);
     documentClickHandlerInstalled = true;
+    log.info('[IFRAME-DEBUG] Document click handler installed');
   }
 }
 
@@ -293,13 +506,85 @@ export function ensurePanelElements(): void {
  * In split screen mode, the browser handles showing the panel via native side panel
  */
 export function showPanelElements(): void {
+  log.info('[IFRAME-DEBUG] showPanelElements called');
+  log.info('[IFRAME-DEBUG] splitScreenMode:', splitScreenMode);
+  
   // In split screen mode, don't show floating panel elements
   if (splitScreenMode) {
+    log.info('[IFRAME-DEBUG] Skipping show - split screen mode is enabled');
     return;
   }
   
+  log.info('[IFRAME-DEBUG] Showing floating panel...');
+  log.info('[IFRAME-DEBUG] panelOverlay exists:', !!panelOverlay);
+  log.info('[IFRAME-DEBUG] panelFrame exists:', !!panelFrame);
+  
+  if (!panelFrame) {
+    log.error('[IFRAME-DEBUG] ERROR: panelFrame is null! Cannot show panel. Call ensurePanelElements() first.');
+    return;
+  }
+  
+  if (!panelOverlay) {
+    log.warn('[IFRAME-DEBUG] WARNING: panelOverlay is null');
+  }
+  
+  // Log state BEFORE removing hidden class
+  log.info('[IFRAME-DEBUG] Before show - panelFrame.classList:', panelFrame.classList.toString());
+  log.info('[IFRAME-DEBUG] Before show - panelFrame.src:', panelFrame.src);
+  
+  const computedBefore = window.getComputedStyle(panelFrame);
+  log.info('[IFRAME-DEBUG] Before show - computed styles:', JSON.stringify({
+    transform: computedBefore.transform,
+    visibility: computedBefore.visibility,
+    display: computedBefore.display,
+    opacity: computedBefore.opacity,
+    position: computedBefore.position,
+    right: computedBefore.right,
+    width: computedBefore.width,
+    height: computedBefore.height,
+    zIndex: computedBefore.zIndex,
+  }));
+  
+  // Remove hidden class
   panelOverlay?.classList.remove('hidden');
-  panelFrame?.classList.remove('hidden');
+  panelFrame.classList.remove('hidden');
+  
+  // Log state AFTER removing hidden class
+  log.info('[IFRAME-DEBUG] After show - panelFrame.classList:', panelFrame.classList.toString());
+  
+  const computedAfter = window.getComputedStyle(panelFrame);
+  log.info('[IFRAME-DEBUG] After show - computed styles:', JSON.stringify({
+    transform: computedAfter.transform,
+    visibility: computedAfter.visibility,
+    display: computedAfter.display,
+    opacity: computedAfter.opacity,
+    position: computedAfter.position,
+    right: computedAfter.right,
+    width: computedAfter.width,
+    height: computedAfter.height,
+    zIndex: computedAfter.zIndex,
+  }));
+  
+  // Log bounding rect
+  const rect = panelFrame.getBoundingClientRect();
+  log.info('[IFRAME-DEBUG] After show - bounding rect:', JSON.stringify({
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  }));
+  
+  // Check if panel is actually visible on screen
+  const isOnScreen = rect.right > 0 && rect.width > 0 && rect.height > 0;
+  log.info('[IFRAME-DEBUG] Panel appears to be on screen:', isOnScreen);
+  
+  // Log viewport info
+  log.info('[IFRAME-DEBUG] Viewport:', JSON.stringify({
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+  }));
 }
 
 /**

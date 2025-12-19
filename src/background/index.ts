@@ -335,14 +335,29 @@ if (!isInitialized) {
 /**
  * Open the side panel if split screen mode is enabled
  * Returns true if side panel was opened, false otherwise
+ * 
+ * On MacOS Chrome/Edge, the sidePanel API may require windowId instead of tabId
  */
 async function openSidePanelIfEnabled(tabId: number): Promise<boolean> {
   try {
     const settings = await getSettings();
     if (settings.splitScreenMode && chrome.sidePanel) {
-      // Open the browser's native side panel
-      await chrome.sidePanel.open({ tabId });
-      return true;
+      // Try with tabId first (works best on Windows Chrome)
+      try {
+        await chrome.sidePanel.open({ tabId });
+        return true;
+      } catch {
+        // Fallback: try with windowId (works better on MacOS Chrome/Edge)
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          if (tab.windowId) {
+            await chrome.sidePanel.open({ windowId: tab.windowId });
+            return true;
+          }
+        } catch (e) {
+          log.debug('Side panel open failed with both tabId and windowId:', e);
+        }
+      }
     }
   } catch (error) {
     log.debug('Side panel open failed or not supported:', error);
@@ -2300,15 +2315,53 @@ async function handleMessage(
           if (settings.splitScreenMode && chrome.sidePanel) {
             // Use sender's tab if available, otherwise query for active tab
             let tabId = sender?.tab?.id;
+            let windowId: number | undefined;
             
             if (!tabId) {
               const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
               tabId = activeTab?.id;
+              windowId = activeTab?.windowId;
+            } else if (sender?.tab?.windowId) {
+              windowId = sender.tab.windowId;
             }
             
-            if (tabId) {
-              await chrome.sidePanel.open({ tabId });
-              sendResponse(successResponse({ opened: true, browser: 'chrome' }));
+            if (tabId || windowId) {
+              let opened = false;
+              
+              // Try with tabId first (works best on Windows Chrome)
+              if (tabId) {
+                try {
+                  await chrome.sidePanel.open({ tabId });
+                  opened = true;
+                } catch {
+                  // Fallback to windowId
+                }
+              }
+              
+              // Try with windowId (works better on MacOS Chrome/Edge)
+              if (!opened && windowId) {
+                try {
+                  await chrome.sidePanel.open({ windowId });
+                  opened = true;
+                } catch {
+                  // Both methods failed
+                }
+              }
+              
+              // Last resort: get fresh tab info and try windowId
+              if (!opened && tabId) {
+                try {
+                  const tab = await chrome.tabs.get(tabId);
+                  if (tab.windowId) {
+                    await chrome.sidePanel.open({ windowId: tab.windowId });
+                    opened = true;
+                  }
+                } catch {
+                  // All methods failed
+                }
+              }
+              
+              sendResponse(successResponse({ opened }));
             } else {
               sendResponse(successResponse({ opened: false, reason: 'No tab found' }));
             }
@@ -2326,44 +2379,83 @@ async function handleMessage(
         // Open the native side panel immediately without checking settings
         // Content script should only send this when split screen mode is confirmed
         // This preserves the user gesture context for Edge compatibility
+        // 
+        // MacOS Chrome/Edge behavior:
+        // - Chrome on MacOS may require windowId instead of tabId
+        // - Edge on MacOS may have additional restrictions
+        // - We try multiple approaches with delays to handle timing issues
         try {
           if (chrome.sidePanel) {
             // Use sender's tab if available, otherwise query for active tab
             let tabId = sender?.tab?.id;
+            let windowId: number | undefined;
             
             if (!tabId) {
               const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
               tabId = activeTab?.id;
+              windowId = activeTab?.windowId;
+            } else if (sender?.tab?.windowId) {
+              windowId = sender.tab.windowId;
             }
             
-            if (tabId) {
-              // Try opening with tabId first
-              try {
-                await chrome.sidePanel.open({ tabId });
-                sendResponse(successResponse({ opened: true, browser: 'chrome' }));
-              } catch (tabError) {
-                // Fallback: try with windowId for Edge
+            if (tabId || windowId) {
+              // Strategy 1: Try with tabId first (works best on Windows Chrome)
+              let opened = false;
+              let lastError: unknown;
+              
+              if (tabId) {
                 try {
-                  const tab = await chrome.tabs.get(tabId);
-                  if (tab.windowId) {
-                    await chrome.sidePanel.open({ windowId: tab.windowId });
-                    sendResponse(successResponse({ opened: true, browser: 'edge' }));
-                  } else {
-                    throw tabError;
-                  }
-                } catch {
-                  log.error('Failed to open side panel with both tabId and windowId');
-                  sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
+                  await chrome.sidePanel.open({ tabId });
+                  opened = true;
+                  log.debug('Side panel opened with tabId:', tabId);
+                } catch (tabError) {
+                  lastError = tabError;
+                  log.debug('Failed to open side panel with tabId, will try windowId:', tabError);
                 }
               }
+              
+              // Strategy 2: Try with windowId (works better on MacOS Chrome/Edge)
+              if (!opened && windowId) {
+                try {
+                  await chrome.sidePanel.open({ windowId });
+                  opened = true;
+                  log.debug('Side panel opened with windowId:', windowId);
+                } catch (windowError) {
+                  lastError = windowError;
+                  log.debug('Failed to open side panel with windowId:', windowError);
+                }
+              }
+              
+              // Strategy 3: If both failed, get fresh tab info and retry with windowId
+              if (!opened && tabId) {
+                try {
+                  const freshTab = await chrome.tabs.get(tabId);
+                  if (freshTab.windowId) {
+                    await chrome.sidePanel.open({ windowId: freshTab.windowId });
+                    opened = true;
+                    log.debug('Side panel opened with fresh windowId:', freshTab.windowId);
+                  }
+                } catch (retryError) {
+                  lastError = retryError;
+                  log.debug('Failed to open side panel with fresh windowId:', retryError);
+                }
+              }
+              
+              if (opened) {
+                sendResponse(successResponse({ opened: true }));
+              } else {
+                log.error('Failed to open side panel with all strategies. Last error:', lastError);
+                sendResponse(successResponse({ opened: false, reason: 'Failed to open with all strategies' }));
+              }
             } else {
-              sendResponse(successResponse({ opened: false, reason: 'No tab found' }));
+              log.warn('No tab or window found for side panel');
+              sendResponse(successResponse({ opened: false, reason: 'No tab or window found' }));
             }
           } else {
             sendResponse(successResponse({ opened: false, reason: 'sidePanel API not available' }));
           }
         } catch (error) {
-          log.error('Failed to open side panel:', error);
+          log.error('Failed to open side panel (outer catch):', error);
           sendResponse(successResponse({ opened: false, reason: 'Failed to open' }));
         }
         break;

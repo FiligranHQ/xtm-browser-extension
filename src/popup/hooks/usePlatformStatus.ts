@@ -21,6 +21,9 @@ interface UsePlatformStatusReturn {
   hasAnyOpenAEVConfigured: boolean;
   hasAnyPlatformConfigured: boolean;
   hasEnterprise: boolean;
+  isPdfPage: boolean;
+  isPdfScannerPage: boolean;
+  pdfUrl: string | null;
 }
 
 export const usePlatformStatus = (): UsePlatformStatusReturn => {
@@ -31,6 +34,47 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
   });
   const [aiConfigured, setAiConfigured] = useState(false);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
+  const [isPdfPage, setIsPdfPage] = useState(false);
+  const [isPdfScannerPage, setIsPdfScannerPage] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  // Check if current tab is a PDF or PDF scanner page
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+
+    // First check if we're on the PDF scanner page
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError) return;
+      const tab = tabs[0];
+      if (tab?.url) {
+        // Check if this is our PDF scanner extension page (Chrome or Firefox)
+        const extensionId = chrome.runtime.id;
+        const isPdfScanner = tab.url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
+                            tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
+        setIsPdfScannerPage(isPdfScanner);
+        
+        if (isPdfScanner) {
+          // Extract the original PDF URL from the scanner URL
+          const urlParams = new URLSearchParams(tab.url.split('?')[1] || '');
+          const originalPdfUrl = urlParams.get('url');
+          setPdfUrl(originalPdfUrl);
+          log.debug('PDF scanner page detected, original URL:', originalPdfUrl);
+        }
+      }
+    });
+
+    // Also check for raw PDF pages (not in our scanner)
+    chrome.runtime.sendMessage({ type: 'CHECK_IF_PDF' }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (response?.success && response.data) {
+        setIsPdfPage(response.data.isPdf);
+        if (response.data.isPdf && response.data.url) {
+          setPdfUrl(response.data.url);
+        }
+        log.debug('PDF detection:', response.data.isPdf, response.data.url);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     // Check if we're running in an extension context
@@ -226,6 +270,9 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
     hasAnyOpenAEVConfigured,
     hasAnyPlatformConfigured,
     hasEnterprise,
+    isPdfPage,
+    isPdfScannerPage,
+    pdfUrl,
   };
 };
 

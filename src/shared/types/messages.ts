@@ -100,6 +100,7 @@ export type MessageType =
   | 'AI_GENERATE_EMAILS'
   | 'AI_DISCOVER_ENTITIES'
   | 'AI_RESOLVE_RELATIONSHIPS'
+  | 'AI_SCAN_ALL'
   | 'AI_CHECK_STATUS'
   // AI Scenario Creation
   | 'ADD_EMAIL_INJECT_TO_SCENARIO'
@@ -121,7 +122,14 @@ export type MessageType =
   // PDF Generation
   | 'GENERATE_NATIVE_PDF'
   // Image fetching (for CORS bypass)
-  | 'FETCH_IMAGE_AS_DATA_URL';
+  | 'FETCH_IMAGE_AS_DATA_URL'
+  // PDF Scanner
+  | 'CHECK_IF_PDF'
+  | 'OPEN_PDF_SCANNER'
+  | 'SCAN_PDF_CONTENT'
+  | 'OPEN_PDF_SCANNER_PANEL'
+  | 'PDF_SCANNER_RESCAN'
+  | 'FORWARD_TO_PDF_SCANNER';
 
 // ============================================================================
 // Message Interfaces

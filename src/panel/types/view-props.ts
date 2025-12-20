@@ -225,6 +225,14 @@ export interface ScanResultsViewProps extends BaseViewProps, PlatformViewProps {
   aiDiscoveringEntities: boolean;
   /** Set AI discovering entities */
   setAiDiscoveringEntities: (discovering: boolean) => void;
+  /** AI resolving relationships state */
+  aiResolvingRelationships: boolean;
+  /** Set AI resolving relationships */
+  setAiResolvingRelationships: (resolving: boolean) => void;
+  /** Resolved relationships from AI */
+  resolvedRelationships: ResolvedRelationship[];
+  /** Set resolved relationships */
+  setResolvedRelationships: (relationships: ResolvedRelationship[] | ((prev: ResolvedRelationship[]) => ResolvedRelationship[])) => void;
   /** Scan page content for AI */
   scanPageContent: string;
 }

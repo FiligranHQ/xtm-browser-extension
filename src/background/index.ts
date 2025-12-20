@@ -16,6 +16,7 @@ import {
   handleAIGenerateEmails,
   handleAIDiscoverEntities,
   handleAIResolveRelationships,
+  handleAIScanAll,
   type FullScenarioRequest,
   type EmailGenerationRequest,
 } from './handlers/ai-handlers';
@@ -148,6 +149,33 @@ function getOpenAEVClient(platformId?: string): OpenAEVClient | undefined {
   return platformId ? openAEVClients.get(platformId) : openAEVClients.values().next().value;
 }
 
+/**
+ * Check if a URL is a PDF file
+ * Detects PDF URLs by extension or common PDF viewer patterns
+ */
+function isPdfUrl(url: string): boolean {
+  if (!url) return false;
+  
+  const lowerUrl = url.toLowerCase();
+  
+  // Check file extension
+  if (lowerUrl.endsWith('.pdf')) return true;
+  
+  // Check for .pdf with query params
+  if (lowerUrl.includes('.pdf?') || lowerUrl.includes('.pdf#')) return true;
+  
+  // Check for common PDF viewer URLs (Chrome's built-in viewer)
+  // Chrome PDF viewer URLs look like: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/...
+  if (lowerUrl.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai')) return true;
+  
+  // Check for blob URLs with PDF content (common for dynamically loaded PDFs)
+  if (lowerUrl.startsWith('blob:') && lowerUrl.includes('.pdf')) return true;
+  
+  // Check for file:// URLs with .pdf
+  if (lowerUrl.startsWith('file://') && lowerUrl.includes('.pdf')) return true;
+  
+  return false;
+}
 
 // ============================================================================
 // Initialization
@@ -3207,6 +3235,10 @@ async function handleMessage(
         await handleAIResolveRelationships(message.payload as RelationshipResolutionRequest, sendResponse);
         break;
       
+      case 'AI_SCAN_ALL':
+        await handleAIScanAll(message.payload as EntityDiscoveryRequest, sendResponse);
+        break;
+      
       case 'GENERATE_NATIVE_PDF': {
         // Generate PDF using Chrome's native print-to-PDF via Debugger API
         const { tabId } = message.payload as { tabId: number };
@@ -3290,6 +3322,267 @@ async function handleMessage(
             success: false, 
             error: error instanceof Error ? error.message : 'Fetch failed' 
           });
+        }
+        break;
+      }
+      
+      // ============================================================================
+      // PDF Scanner Handlers
+      // ============================================================================
+      
+      case 'CHECK_IF_PDF': {
+        // Check if the current active tab is viewing a PDF
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.url) {
+            sendResponse(successResponse({ isPdf: false }));
+            break;
+          }
+          
+          const isPdf = isPdfUrl(tab.url);
+          log.debug(`CHECK_IF_PDF: ${tab.url} -> ${isPdf}`);
+          sendResponse(successResponse({ isPdf, url: tab.url }));
+        } catch (error) {
+          log.error('CHECK_IF_PDF error:', error);
+          sendResponse(errorResponse('Failed to check if PDF'));
+        }
+        break;
+      }
+      
+      case 'OPEN_PDF_SCANNER': {
+        // Open the PDF scanner page in a new tab
+        const { pdfUrl } = message.payload as { pdfUrl: string };
+        
+        if (!pdfUrl) {
+          sendResponse(errorResponse('No PDF URL provided'));
+          break;
+        }
+        
+        try {
+          const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html') + 
+            '?url=' + encodeURIComponent(pdfUrl);
+          
+          const tab = await chrome.tabs.create({ url: scannerUrl });
+          log.debug(`Opened PDF scanner for: ${pdfUrl}, tab: ${tab.id}`);
+          sendResponse(successResponse({ tabId: tab.id }));
+        } catch (error) {
+          log.error('OPEN_PDF_SCANNER error:', error);
+          sendResponse(errorResponse('Failed to open PDF scanner'));
+        }
+        break;
+      }
+      
+      case 'SCAN_PDF_CONTENT': {
+        // Scan PDF text content for entities (reuses existing detection logic - same as SCAN_PAGE)
+        const { content, url } = message.payload as { content: string; url: string };
+        
+        if (!content) {
+          sendResponse(errorResponse('No content provided'));
+          break;
+        }
+        
+        try {
+          log.debug(`Scanning PDF content, length: ${content.length}`);
+          
+          if (!detectionEngine) {
+            sendResponse(errorResponse('Detection engine not initialized'));
+            break;
+          }
+          
+          // Get detection settings to respect user preferences
+          const settings = await getSettings();
+          const disabledObservableTypes = settings.detection?.disabledObservableTypes || [];
+          const disabledOpenCTITypes = settings.detection?.disabledOpenCTITypes || [];
+          
+          // Determine vulnerability/CVE detection settings per platform
+          const vulnSettings = {
+            enabledForOpenCTI: !disabledOpenCTITypes.includes('Vulnerability'),
+            enabledForOpenAEV: !(settings.detection?.disabledOpenAEVTypes || []).includes('Vulnerability'),
+          };
+          
+          // Use the same scan method as SCAN_PAGE
+          const result = await detectionEngine.scan(content, [], vulnSettings);
+          
+          // Filter observables - exclude disabled types
+          const filteredObservables = result.observables.filter(obs => 
+            !disabledObservableTypes.includes(obs.type)
+          );
+          
+          // Filter OpenCTI entities - exclude disabled types
+          const filteredOpenctiEntities = result.openctiEntities.filter(entity => 
+            !disabledOpenCTITypes.includes(entity.type)
+          );
+          
+          const scanResult: ScanResultPayload = {
+            observables: filteredObservables,
+            openctiEntities: filteredOpenctiEntities,
+            cves: result.cves,
+            openaevEntities: [],
+            scanTime: result.scanTime,
+            url,
+          };
+          
+          log.debug(`PDF scan complete: ${filteredObservables.length} observables, ${filteredOpenctiEntities.length} entities`);
+          sendResponse(successResponse(scanResult));
+        } catch (error) {
+          log.error('SCAN_PDF_CONTENT error:', error);
+          sendResponse(errorResponse('Failed to scan PDF content'));
+        }
+        break;
+      }
+      
+      case 'OPEN_PDF_SCANNER_PANEL': {
+        // Open the side panel for the PDF scanner tab
+        // PDF scanner is an extension page so we always use native side panel
+        try {
+          // Get the sender's tab (PDF scanner tab) or query for active tab
+          let tabId = sender?.tab?.id;
+          let windowId: number | undefined;
+          
+          if (!tabId) {
+            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            tabId = activeTab?.id;
+            windowId = activeTab?.windowId;
+          } else if (sender?.tab?.windowId) {
+            windowId = sender.tab.windowId;
+          }
+          
+          if (!tabId && !windowId) {
+            sendResponse(errorResponse('Could not determine tab'));
+            break;
+          }
+          
+          // Open side panel
+          if (chrome.sidePanel) {
+            let opened = false;
+            
+            if (tabId) {
+              try {
+                await chrome.sidePanel.open({ tabId });
+                opened = true;
+                log.debug(`PDF scanner: side panel opened for tab ${tabId}`);
+              } catch (tabError) {
+                log.debug(`PDF scanner: tabId approach failed, trying windowId`, tabError);
+              }
+            }
+            
+            if (!opened && windowId) {
+              try {
+                await chrome.sidePanel.open({ windowId });
+                opened = true;
+                log.debug(`PDF scanner: side panel opened for window ${windowId}`);
+              } catch (windowError) {
+                log.warn('PDF scanner: Failed to open side panel with windowId', windowError);
+              }
+            }
+            
+            sendResponse(successResponse({ opened }));
+          } else {
+            sendResponse(errorResponse('Side panel API not available'));
+          }
+        } catch (error) {
+          log.error('OPEN_PDF_SCANNER_PANEL error:', error);
+          sendResponse(errorResponse('Failed to open panel'));
+        }
+        break;
+      }
+      
+      case 'PDF_SCANNER_RESCAN': {
+        // Trigger a rescan on the PDF scanner tab
+        // Called from popup/panel when user clicks scan while on PDF scanner page
+        try {
+          // Use tabId from payload if provided, otherwise query for active tab
+          const payload = message.payload as { tabId?: number } | undefined;
+          let targetTabId = payload?.tabId;
+          
+          if (!targetTabId) {
+            // Fallback: try to find the PDF scanner tab
+            const extensionId = chrome.runtime.id;
+            const tabs = await chrome.tabs.query({});
+            const pdfScannerTab = tabs.find(t => 
+              t.url?.includes(`${extensionId}/pdf-scanner/`)
+            );
+            targetTabId = pdfScannerTab?.id;
+            
+            // If still no tab found, try active tab
+            if (!targetTabId) {
+              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              targetTabId = activeTab?.id;
+            }
+          }
+          
+          if (targetTabId) {
+            // Open side panel first (might fail if not from user gesture, that's okay)
+            if (chrome.sidePanel) {
+              try {
+                await chrome.sidePanel.open({ tabId: targetTabId });
+                log.debug('Side panel opened for PDF scanner rescan');
+              } catch (e) {
+                log.debug('Side panel may already be open or user gesture required:', e);
+              }
+            }
+            
+            // Send rescan trigger to the PDF scanner page
+            await chrome.tabs.sendMessage(targetTabId, { type: 'PDF_SCANNER_RESCAN_TRIGGER' });
+            log.debug('PDF scanner rescan triggered for tab:', targetTabId);
+            sendResponse(successResponse({ triggered: true }));
+          } else {
+            sendResponse(errorResponse('No PDF scanner tab found'));
+          }
+        } catch (error) {
+          log.error('PDF_SCANNER_RESCAN error:', error);
+          sendResponse(errorResponse('Failed to trigger rescan'));
+        }
+        break;
+      }
+      
+      case 'FORWARD_TO_PDF_SCANNER': {
+        // Forward a message to the PDF scanner tab (e.g., AI entities discovered)
+        try {
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (activeTab?.id && activeTab.url) {
+            const extensionId = chrome.runtime.id;
+            // Check if active tab is PDF scanner
+            if (activeTab.url.includes(`${extensionId}/pdf-scanner/`)) {
+              const innerPayload = (message.payload as { type: string; payload: unknown });
+              await chrome.tabs.sendMessage(activeTab.id, innerPayload);
+              log.debug('Message forwarded to PDF scanner:', innerPayload.type);
+              sendResponse(successResponse({ forwarded: true }));
+            } else {
+              // Not a PDF scanner tab - silently succeed (message not applicable)
+              sendResponse(successResponse({ forwarded: false, reason: 'Not PDF scanner tab' }));
+            }
+          } else {
+            sendResponse(successResponse({ forwarded: false, reason: 'No active tab' }));
+          }
+        } catch (error) {
+          log.error('FORWARD_TO_PDF_SCANNER error:', error);
+          sendResponse(errorResponse('Failed to forward to PDF scanner'));
+        }
+        break;
+      }
+      
+      case 'GET_PDF_CONTENT_FROM_PDF_SCANNER': {
+        // Get PDF content from the PDF scanner tab for AI analysis
+        // This is used when panel is in iframe and needs PDF text content
+        try {
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (activeTab?.id && activeTab.url) {
+            const extensionId = chrome.runtime.id;
+            // Check if active tab is PDF scanner
+            if (activeTab.url.includes(`${extensionId}/pdf-scanner/`)) {
+              // Send message to PDF scanner and wait for response
+              const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'GET_PDF_CONTENT' });
+              sendResponse(response);
+            } else {
+              sendResponse({ success: false, error: 'Not a PDF scanner tab' });
+            }
+          } else {
+            sendResponse({ success: false, error: 'No active tab' });
+          }
+        } catch (error) {
+          log.error('GET_PDF_CONTENT_FROM_PDF_SCANNER error:', error);
+          sendResponse({ success: false, error: 'Failed to get PDF content' });
         }
         break;
       }

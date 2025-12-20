@@ -151,19 +151,24 @@ export function parseAIJsonResponse<T>(content: string): T | null {
     },
   ];
   
+  const errors: string[] = [];
   for (let i = 0; i < strategies.length; i++) {
     try {
       const result = strategies[i]();
       if (result !== null && result !== undefined) {
         return result as T;
       }
-    } catch {
-      // Continue to next strategy
+    } catch (e) {
+      errors.push(`Strategy ${i + 1}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   
-  log.error('[parseAIJsonResponse] All parsing strategies failed. Content preview:', 
-    trimmed.substring(0, 500) + (trimmed.length > 500 ? '...' : ''));
+  log.error('[parseAIJsonResponse] All parsing strategies failed.');
+  log.error('[parseAIJsonResponse] Strategy errors:', errors.join(' | '));
+  log.error('[parseAIJsonResponse] Content length:', trimmed.length);
+  log.error('[parseAIJsonResponse] FULL CONTENT START >>>');
+  log.error(trimmed);
+  log.error('[parseAIJsonResponse] <<< FULL CONTENT END');
   
   return null;
 }
@@ -241,17 +246,9 @@ function tryCompleteJson(content: string): string | null {
 }
 
 /**
- * Try to extract complete array items from truncated JSON
- * This handles cases where the array is truncated mid-item
+ * Extract complete objects from an array in truncated JSON
  */
-function tryExtractCompleteItems(content: string): string | null {
-  // Find the start of the relationships array
-  const arrayMatch = content.match(/"relationships"\s*:\s*\[/);
-  if (!arrayMatch) return null;
-  
-  const arrayStart = content.indexOf(arrayMatch[0]) + arrayMatch[0].length;
-  
-  // Find all complete objects in the array
+function extractCompleteObjectsFromArray(content: string, arrayStart: number): string[] {
   const completeObjects: string[] = [];
   let depth = 0;
   let objectStart = -1;
@@ -286,12 +283,56 @@ function tryExtractCompleteItems(content: string): string | null {
           completeObjects.push(content.substring(objectStart, i + 1));
           objectStart = -1;
         }
+      } else if (char === ']' && depth === 0) {
+        // End of array
+        break;
       }
     }
   }
   
-  if (completeObjects.length > 0) {
-    return `{"relationships": [${completeObjects.join(',')}]}`;
+  return completeObjects;
+}
+
+/**
+ * Try to extract complete array items from truncated JSON
+ * This handles cases where the array is truncated mid-item
+ * Works for both entities and relationships arrays
+ */
+function tryExtractCompleteItems(content: string): string | null {
+  const result: Record<string, unknown[]> = {};
+  
+  // Try to extract entities array
+  const entitiesMatch = content.match(/"entities"\s*:\s*\[/);
+  if (entitiesMatch) {
+    const arrayStart = content.indexOf(entitiesMatch[0]) + entitiesMatch[0].length;
+    const entities = extractCompleteObjectsFromArray(content, arrayStart);
+    if (entities.length > 0) {
+      result.entities = entities.map(e => {
+        try { return JSON.parse(e); } catch { return null; }
+      }).filter(e => e !== null);
+    }
+  }
+  
+  // Try to extract relationships array
+  const relationshipsMatch = content.match(/"relationships"\s*:\s*\[/);
+  if (relationshipsMatch) {
+    const arrayStart = content.indexOf(relationshipsMatch[0]) + relationshipsMatch[0].length;
+    const relationships = extractCompleteObjectsFromArray(content, arrayStart);
+    if (relationships.length > 0) {
+      result.relationships = relationships.map(r => {
+        try { return JSON.parse(r); } catch { return null; }
+      }).filter(r => r !== null);
+    }
+  }
+  
+  // If we found at least one array with items, return the result
+  if (Object.keys(result).length > 0 && 
+      ((result.entities && (result.entities as unknown[]).length > 0) || 
+       (result.relationships && (result.relationships as unknown[]).length > 0))) {
+    // Ensure both arrays exist (even if empty)
+    if (!result.entities) result.entities = [];
+    if (!result.relationships) result.relationships = [];
+    return JSON.stringify(result);
   }
   
   return null;

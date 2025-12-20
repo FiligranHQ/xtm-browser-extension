@@ -53,6 +53,18 @@ export default defineConfig({
           });
         }
 
+        // Copy PDF.js worker file for Chrome Web Store compliance
+        // This ensures the worker is embedded in the extension, not loaded from CDN
+        const pdfWorkerSrc = resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+        const pdfWorkerDest = resolve(distDir, 'pdf-scanner/pdf.worker.min.mjs');
+        if (existsSync(pdfWorkerSrc)) {
+          mkdirSync(resolve(distDir, 'pdf-scanner'), { recursive: true });
+          copyFileSync(pdfWorkerSrc, pdfWorkerDest);
+          console.log('✓ PDF.js worker copied for Chrome Web Store compliance');
+        } else {
+          console.warn('⚠ PDF.js worker not found at:', pdfWorkerSrc);
+        }
+
         console.log(`✓ Manifest and assets copied for ${browser}`);
       },
     },
@@ -102,6 +114,15 @@ export default defineConfig({
           mkdirSync(panelDest, { recursive: true });
           const content = fixHtmlPaths(panelSrc);
           writeFileSync(resolve(panelDest, 'index.html'), content);
+        }
+
+        // Move pdf-scanner
+        const pdfScannerSrc = resolve(srcDir, 'pdf-scanner/index.html');
+        if (existsSync(pdfScannerSrc)) {
+          const pdfScannerDest = resolve(distDir, 'pdf-scanner');
+          mkdirSync(pdfScannerDest, { recursive: true });
+          const content = fixHtmlPaths(pdfScannerSrc);
+          writeFileSync(resolve(pdfScannerDest, 'index.html'), content);
         }
 
         // Clean up src directory
@@ -156,6 +177,7 @@ export default defineConfig({
         popup: resolve(__dirname, 'src/popup/index.html'),
         options: resolve(__dirname, 'src/options/index.html'),
         panel: resolve(__dirname, 'src/panel/index.html'),
+        'pdf-scanner': resolve(__dirname, 'src/pdf-scanner/index.html'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
@@ -175,5 +197,11 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+  },
+  optimizeDeps: {
+    include: ['pdfjs-dist'],
+  },
+  worker: {
+    format: 'es',
   },
 });

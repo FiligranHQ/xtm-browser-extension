@@ -515,6 +515,229 @@ export async function handleAIResolveRelationships(
   }
 }
 
+/**
+ * AI_SCAN_ALL handler - discovers both entities and relationships in one call
+ */
+export async function handleAIScanAll(
+  payload: EntityDiscoveryRequest,
+  sendResponse: SendResponse
+): Promise<void> {
+  const settings = await getSettings();
+  if (!isAIAvailable(settings.ai)) {
+    sendResponse(errorResponse('AI not configured'));
+    return;
+  }
+  
+  try {
+    const aiClient = new AIClient(settings.ai!);
+    
+    log.debug('AI_SCAN_ALL request:', {
+      pageTitle: payload.pageTitle,
+      alreadyDetectedCount: payload.alreadyDetected?.length || 0,
+      contentLength: payload.pageContent?.length || 0,
+    });
+    
+    // Build a combined prompt for both entity discovery and relationship resolution
+    const alreadyDetectedList = payload.alreadyDetected || [];
+    const entitiesContext = alreadyDetectedList.length > 0
+      ? `\n\nALREADY DETECTED ENTITIES (indices 0 to ${alreadyDetectedList.length - 1}):\n${alreadyDetectedList.map((e, idx) => `[${idx}] ${e.type}: ${e.value || e.name}`).join('\n')}`
+      : '\n\nNo entities detected yet - you need to discover ALL entities from scratch.';
+    
+    // Build example that matches the current indexing context
+    const exampleStartIdx = alreadyDetectedList.length;
+    const relationshipExample = alreadyDetectedList.length > 0
+      ? `{
+      "fromIndex": ${exampleStartIdx + 1},
+      "toIndex": ${exampleStartIdx},
+      "relationshipType": "targets",
+      "confidence": "high",
+      "reason": "The article states APT29 has been targeting financial sector"
+    }`
+      : `{
+      "fromIndex": 1,
+      "toIndex": 0,
+      "relationshipType": "targets",
+      "confidence": "high",
+      "reason": "The article states APT29 has been targeting financial sector"
+    }`;
+
+    const indexingExplanation = alreadyDetectedList.length > 0
+      ? `IMPORTANT - INDEX NUMBERING:
+- Already detected entities use indices 0 to ${alreadyDetectedList.length - 1} (as shown above)
+- NEW entities you discover use indices starting at ${alreadyDetectedList.length}
+- In your response, your FIRST new entity = index ${alreadyDetectedList.length}, SECOND = index ${alreadyDetectedList.length + 1}, etc.
+- Relationships can reference BOTH already detected entities AND new entities using their respective indices`
+      : `For relationships, use the indices of the entities you discover (first entity = index 0, second = index 1, etc).`;
+
+    const combinedPrompt = `Analyze this content thoroughly for cyber threat intelligence.
+
+PAGE TITLE: ${payload.pageTitle}
+PAGE URL: ${payload.pageUrl}
+${entitiesContext}
+
+=== YOUR TASK ===
+
+1. DISCOVER all relevant entities from the content (excluding any already listed above)
+2. IDENTIFY relationships between ALL entities (both already detected and newly discovered)
+
+=== ENTITY TYPES TO EXTRACT ===
+
+THREAT ENTITIES:
+- Intrusion-Set: APT groups and tracked threat activity clusters (e.g., APT29, APT28, Lazarus Group, FIN7, Cozy Bear, Fancy Bear, Midnight Blizzard). Use this for any group tracked with an APT number or codename.
+- Threat-Actor-Group: ONLY for real-world organizations/groups that exist (e.g., Russian GRU, Chinese MSS, North Korean RGB, Anonymous). These are the actual entities behind intrusion sets.
+- Threat-Actor-Individual: ONLY for real-world individuals with known identities
+- Campaign: Named attack campaigns (e.g., SolarWinds, Operation Aurora)
+- Malware: Named malware families (e.g., Emotet, TrickBot, Cobalt Strike, SUNBURST)
+- Tool: Hacking/security tools (e.g., Mimikatz, Metasploit)
+- Attack-Pattern: MITRE ATT&CK techniques (e.g., T1055, T1566)
+- Vulnerability: CVE identifiers (e.g., CVE-2024-1234)
+
+CONTEXT ENTITIES (IMPORTANT - don't skip these):
+- Sector: Industries mentioned (e.g., Financial Services, Healthcare, Energy, Government, Defense, Manufacturing)
+- Organization: Companies, agencies (e.g., Microsoft, CISA, specific victim organizations)
+- Country: Countries (e.g., Russia, China, United States, Iran, North Korea)
+- Region: Geographic regions (e.g., Eastern Europe, Middle East, Asia-Pacific)
+- City: Cities mentioned
+- Software: Software products (e.g., Microsoft Exchange, VMware ESXi)
+
+OBSERVABLES (if present):
+- Domain-Name, IPv4-Addr, IPv6-Addr, Url, Email-Addr, File (hashes), Hostname
+
+=== RELATIONSHIP TYPES ===
+Use STIX types: targets, uses, indicates, attributed-to, related-to, located-at, part-of, exploits, delivers, drops, communicates-with, originates-from
+
+${indexingExplanation}
+
+=== RULES ===
+1. Extract ALL named entities from the content - be thorough
+2. Do NOT include entities already listed above (check carefully by value)
+3. Do NOT include OpenAEV-only types: Team, AssetGroup, Asset, Player
+4. For each relationship, explain WHY based on the content
+5. Include relationships between already-detected entities too (using their indices 0 to ${alreadyDetectedList.length - 1})
+
+=== PAGE CONTENT ===
+${payload.pageContent.substring(0, 15000)}
+
+=== RESPONSE FORMAT ===
+Return JSON only:
+{
+  "entities": [
+    {
+      "type": "Sector",
+      "value": "Financial Services",
+      "reason": "Article discusses attacks targeting financial institutions",
+      "confidence": "high"
+    },
+    {
+      "type": "Intrusion-Set",
+      "value": "APT29",
+      "reason": "Main threat activity cluster discussed in the article",
+      "confidence": "high"
+    }
+  ],
+  "relationships": [
+    ${relationshipExample}
+  ]
+}
+
+If the content has no CTI entities, return: {"entities": [], "relationships": []}`;
+
+    const response = await aiClient.generate({
+      systemPrompt: 'You are a cyber threat intelligence analyst. Extract entities and their relationships from the provided content. Return valid JSON only.',
+      prompt: combinedPrompt,
+    });
+    
+    log.debug('AI scan all response success:', response.success);
+    
+    if (response.success && response.content) {
+      const parsed = parseAIJsonResponse<{
+        entities: Array<{
+          type: string;
+          value: string;
+          reason?: string;
+          confidence?: 'high' | 'medium' | 'low';
+        }>;
+        relationships: Array<{
+          fromIndex: number;
+          toIndex: number;
+          relationshipType: string;
+          confidence: 'high' | 'medium' | 'low';
+          reason: string;
+        }>;
+      }>(response.content);
+      
+      log.debug('Parsed AI scan all response:', parsed);
+      
+      const entities = parsed?.entities || [];
+      const relationships = parsed?.relationships || [];
+      
+      // Build combined entity list for index lookup:
+      // Indices [0, alreadyDetectedList.length) = already detected entities
+      // Indices [alreadyDetectedList.length, ...] = new entities from AI (before filtering)
+      const combinedEntities: Array<{ value: string; type: string }> = [
+        ...alreadyDetectedList.map(e => ({ value: e.value || e.name || '', type: e.type })),
+        ...entities.map(e => ({ value: e.value || '', type: e.type })),
+      ];
+      
+      // Filter out entities that were already detected
+      const alreadyDetectedValues = new Set<string>();
+      alreadyDetectedList.forEach(e => {
+        if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
+        if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
+        if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
+        if (e.aliases && Array.isArray(e.aliases)) {
+          e.aliases.forEach((alias: string) => {
+            if (alias) alreadyDetectedValues.add(alias.toLowerCase());
+          });
+        }
+      });
+      
+      const newEntities = entities.filter(e => {
+        const valueLC = (e.value || '').toLowerCase();
+        return !alreadyDetectedValues.has(valueLC);
+      });
+      
+      // Convert relationship indices to entity values using the combined list
+      // This ensures relationships are correct even if entities are filtered out
+      const totalCombinedCount = combinedEntities.length;
+      const validRelationships = relationships
+        .filter(r => 
+          r.fromIndex >= 0 && r.fromIndex < totalCombinedCount &&
+          r.toIndex >= 0 && r.toIndex < totalCombinedCount &&
+          r.fromIndex !== r.toIndex &&
+          r.relationshipType && typeof r.relationshipType === 'string'
+        )
+        .map(r => {
+          const fromEntity = combinedEntities[r.fromIndex];
+          const toEntity = combinedEntities[r.toIndex];
+          return {
+            ...r,
+            fromEntityValue: fromEntity?.value || '',
+            toEntityValue: toEntity?.value || '',
+          };
+        })
+        // Filter out relationships where we couldn't resolve entity values
+        .filter(r => r.fromEntityValue && r.toEntityValue);
+      
+      log.info(`AI scan all: ${newEntities.length} new entities, ${validRelationships.length} relationships`);
+      
+      sendResponse(successResponse({ 
+        entities: newEntities,
+        relationships: validRelationships,
+      }));
+    } else {
+      log.error('AI scan all failed:', response.error);
+      sendResponse({ success: false, error: response.error || 'Failed to scan' });
+    }
+  } catch (error) {
+    log.error('AI scan all exception:', error);
+    sendResponse({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'AI scan failed' 
+    });
+  }
+}
+
 // ============================================================================
 // Handler Registry Export (for message dispatcher pattern)
 // ============================================================================
@@ -550,5 +773,8 @@ export const aiHandlers: Record<string, MessageHandler> = {
   },
   AI_RESOLVE_RELATIONSHIPS: async (payload, sendResponse) => {
     await handleAIResolveRelationships(payload as RelationshipResolutionRequest, sendResponse);
+  },
+  AI_SCAN_ALL: async (payload, sendResponse) => {
+    await handleAIScanAll(payload as EntityDiscoveryRequest, sendResponse);
   },
 };

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Filigran XTM",
   "short_name": "XTM",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Detect threat indicators and entities on web pages. Create reports and integrate with OpenCTI/OpenAEV.",
   "author": "Filigran",
   "homepage_url": "https://filigran.io",
@@ -58,7 +58,8 @@
       "resources": [
         "assets/*",
         "panel/*",
-        "shared/*"
+        "shared/*",
+        "pdf-scanner/*"
       ],
       "matches": ["<all_urls>"]
     }

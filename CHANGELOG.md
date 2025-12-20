@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12] - 2024-12-20
+
+### Added
+- **PDF Scanning**: Full PDF document scanning with integrated viewer. When clicking "Scan" on a PDF page, the extension opens a dedicated PDF viewer with:
+  - Vertical scrolling through all pages (no page-by-page navigation)
+  - Real-time entity highlighting directly on PDF content with color-coded overlays (green for found, amber for new, purple for AI-discovered)
+  - Interactive highlights with selection checkboxes matching web page behavior
+  - Clickable highlights that open entity overview in side panel
+  - Tooltips on hover showing entity details, AI confidence, and reasons
+  - Native side panel integration for scan results (same behavior as regular page scanning)
+  - Toolbar with rescan, clear highlights, zoom controls, and panel toggle
+  - Original PDF link to open in browser's native viewer
+- **PDF Worker Embedding**: PDF.js worker is now fully embedded in the extension bundle for Chrome Web Store compliance (no external resource loading)
+- **Clear Highlights for PDFs**: The "Clear highlights" action from popup, panel, and PDF viewer toolbar now properly clears PDF canvas highlights
+- **AI Discovery in PDF Viewer**: AI entity discovery now works in the PDF viewer, with proper text extraction and AI highlight colors
+- **OpenAEV-Only Entity Display**: Entities found only in OpenAEV (not importable to OpenCTI) now display correctly without selection checkboxes
+
+### Changed
+- **PDF Viewer Styling**: Clean, minimal interface matching the extension's theme (dark/light mode support)
+- **PDF Entity Detection**: Uses same detection engine as page scanning for consistent results across formats
+- **PDF Highlight Sizing**: Highlights are now more precise, sticking closely to text boundaries to reduce overlaps
+- **Disabled Actions on PDF View**: Container, Investigate, Atomic Test, and Scenario buttons are disabled on both native PDF pages and PDF scanner view
+
+### Fixed
+- **PDF Scanner Panel Communication**: PDF scanner now properly communicates with side panel for scan results display
+- **PDF Rescan from Popup**: Clicking scan while on PDF scanner page now triggers rescan instead of opening new tab
+- **PDF Rescan from Side Panel**: Clicking "Scan" in side panel while on PDF scanner now properly rescans the PDF
+- **PDF Highlight Click to Entity Overview**: Clicking a highlight in the PDF scanner now correctly opens the entity overview with full data
+- **Firefox PDF Scanner Detection**: Popup now correctly detects PDF scanner pages in Firefox (`moz-extension://` URLs)
+- **AI Discovery Content Retrieval**: AI discovery now properly retrieves PDF content when triggered from the side panel
+
 ## [0.0.11] - 2024-12-19
 
 ### Added
@@ -305,7 +336,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.8...v0.0.9

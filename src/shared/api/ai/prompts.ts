@@ -558,7 +558,7 @@ export function buildEntityDiscoveryPrompt(request: EntityDiscoveryRequest): str
       }).join('\n')
     : 'None detected yet';
 
-  return `Analyze this cybersecurity article and extract ONLY high-confidence, actionable threat intelligence entities that the regex detection missed.
+  return `Analyze this cybersecurity/threat intelligence content and extract entities that the regex detection missed.
 
 PAGE: ${request.pageTitle}
 URL: ${request.pageUrl}
@@ -567,32 +567,57 @@ ALREADY DETECTED (DO NOT INCLUDE THESE OR VARIATIONS):
 ${alreadyDetectedSummary}
 
 CONTENT:
-${request.pageContent.substring(0, 6000)}
+${request.pageContent.substring(0, 8000)}
 
-STRICT EXTRACTION RULES:
-1. Return ONLY entities that are NAMED THREAT ACTORS, NAMED MALWARE FAMILIES, or NAMED CAMPAIGNS
-2. The entity must be discussed as a THREAT in the text - not just mentioned
-3. Must be a KNOWN, DOCUMENTED threat (not a generic term)
-4. Return MAXIMUM 5 entities - prefer quality over quantity
-5. If uncertain about ANY entity, DO NOT include it
+ENTITY TYPES TO EXTRACT (OpenCTI compatible):
+
+THREAT ENTITIES:
+- Intrusion-Set: APT groups and tracked threat activity clusters (e.g., APT29, APT28, Lazarus Group, FIN7, Cozy Bear, Fancy Bear, Midnight Blizzard). Use this for any group tracked with an APT number or codename.
+- Threat-Actor-Group: ONLY for real-world organizations/groups that exist (e.g., Russian GRU, Chinese MSS, North Korean RGB, Anonymous collective). These are the actual entities behind intrusion sets.
+- Threat-Actor-Individual: ONLY for real-world individuals (e.g., specific hackers with known identities)
+- Campaign: Named attack campaigns (e.g., SolarWinds attack, Operation Aurora)
+- Malware: Named malware families (e.g., Emotet, TrickBot, Cobalt Strike, SUNBURST)
+- Tool: Security tools, hacking tools (e.g., Mimikatz, Metasploit)
+- Attack-Pattern: MITRE ATT&CK techniques (e.g., T1055 Process Injection, T1566 Phishing)
+
+CONTEXT ENTITIES:
+- Sector: Industries, sectors (e.g., Financial Services, Healthcare, Energy, Government, Defense)
+- Organization: Companies, agencies, institutions (e.g., Microsoft, CISA, FBI)
+- Country: Countries (e.g., Russia, China, United States, Iran, North Korea)
+- Region: Geographic regions (e.g., Eastern Europe, Middle East, Southeast Asia)
+- City: Cities (e.g., Moscow, Beijing, Washington D.C.)
+- Vulnerability: CVE identifiers (e.g., CVE-2024-1234)
+- Software: Software products mentioned as targets or tools (e.g., Microsoft Exchange, VMware)
+
+OBSERVABLES (if not already caught by regex):
+- Domain-Name: Domain names
+- IPv4-Addr, IPv6-Addr: IP addresses
+- Url: URLs
+- Email-Addr: Email addresses
+- File: File hashes (MD5, SHA1, SHA256)
+
+EXTRACTION RULES:
+1. Extract entities that are SPECIFICALLY NAMED in the content (not generic terms)
+2. Do NOT include entities already listed above
+3. Return MAXIMUM 15 entities - prefer quality over quantity
+4. Focus on entities that are DISCUSSED or ANALYZED in the text, not just mentioned in passing
+5. For Attack-Pattern, include MITRE ATT&CK ID if mentioned (e.g., T1055)
 
 Return JSON in this EXACT format:
 {
   "entities": [
     {
-      "type": "Malware|Threat-Actor-Group|Intrusion-Set|Campaign|Tool",
-      "name": "Official name of the threat",
+      "type": "Entity type from list above",
+      "name": "Official name",
       "value": "exact text match from content",
-      "reason": "Why this is a genuine threat entity (1 sentence)",
-      "confidence": "high",
-      "excerpt": "Quote from text proving this entity"
+      "reason": "Why this entity is relevant (1 sentence)",
+      "confidence": "high|medium|low",
+      "excerpt": "Quote from text"
     }
   ]
 }
 
-If you cannot find HIGH-CONFIDENCE threat entities, return: {"entities": []}
-
-IMPORTANT: An empty result is preferred over false positives. Only return entities you are CERTAIN about.`;
+If you cannot find relevant entities, return: {"entities": []}`;
 }
 
 export function buildRelationshipResolutionPrompt(request: RelationshipResolutionRequest): string {
@@ -625,10 +650,24 @@ ${entityList}
 ${pageContent}
 === END OF PAGE CONTENT ===
 
+VALID RELATIONSHIP TYPES (STIX-based):
+- targets: Threat actor/malware/campaign → targets → Organization/Sector/Country/Region
+- uses: Threat actor/intrusion set → uses → Malware/Tool/Attack-Pattern
+- attributed-to: Campaign/Intrusion-set → attributed-to → Threat-Actor-Group
+- indicates: Observable (IP/Domain/URL/Hash) → indicates → Malware/Threat-Actor
+- located-at: Organization/Threat-Actor → located-at → Country/Region/City
+- part-of: Entity → part-of → Organization/Sector/Campaign
+- exploits: Malware/Tool/Threat-Actor → exploits → Vulnerability
+- delivers: Email/URL → delivers → Malware
+- drops: Malware → drops → Malware
+- related-to: Generic relationship when specific type doesn't apply
+- communicates-with: Malware → communicates-with → Domain/IP (C2)
+- originates-from: Threat-Actor-Group → originates-from → Country
+
 TASK:
 1. Read the page content THOROUGHLY - every relationship you suggest must come from this text
 2. For each potential relationship, identify the SPECIFIC TEXT that supports it
-3. Use ONLY the valid relationship types defined in your instructions - any other type will be REJECTED
+3. Use ONLY the valid relationship types listed above - any other type will be REJECTED
 4. Check that source and target entity types are COMPATIBLE with the relationship type
 5. Ensure the direction (from → to) matches the allowed combinations
 6. If the page doesn't describe a connection between two entities, DO NOT suggest a relationship

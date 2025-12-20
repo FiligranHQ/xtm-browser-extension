@@ -45,6 +45,10 @@ import {
   buildNodeMap,
 } from './highlighting';
 import {
+  drawRelationshipLines,
+  clearRelationshipLines,
+} from './relationship-lines';
+import {
   sendPanelMessage,
   flushPanelMessageQueue,
   ensurePanelElements,
@@ -232,10 +236,27 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     hidePanel();
   } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS') {
     clearHighlights();
+    clearRelationshipLines();
     currentScanMode = null;
     lastScanData = null;
     // Notify panel to clear scan results and reset to empty state
     sendPanelMessage('CLEAR_SCAN_RESULTS');
+  } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS_ONLY') {
+    // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
+    clearHighlights();
+    clearRelationshipLines();
+    currentScanMode = null;
+    lastScanData = null;
+  } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
+    // Draw relationship lines between highlighted entities
+    const relationships = event.data.payload?.relationships || [];
+    if (relationships.length > 0) {
+      drawRelationshipLines(relationships);
+    } else {
+      clearRelationshipLines();
+    }
+  } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
+    clearRelationshipLines();
   } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
     // Update lastScanData with AI-discovered entities so they persist when panel re-opens
     const aiEntities = event.data.payload?.entities;
@@ -788,11 +809,9 @@ async function handleFoundEntityClick(
     return;
   }
   
-  let platformMatches: Array<{ platformId: string; platformType: string; entityId: string; type: string; entityData?: unknown }> | undefined;
-  
-  if (isMultiPlatform) {
-    platformMatches = buildPlatformMatches(target, entity);
-  }
+  // Always build platformMatches for found entities to ensure panel has platform info
+  // This is important for single-platform entities (like OpenAEV-only) too
+  const platformMatches = buildPlatformMatches(target, entity);
   
   // Pass fromScanResults flag and scan results to restore panel state when reopened
   // showPanel() handles all messaging including FORWARD_TO_PANEL for split screen mode
@@ -1663,11 +1682,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       
     case 'CLEAR_HIGHLIGHTS':
       clearHighlights();
+      clearRelationshipLines();
       selectedForImport.clear();
       currentScanMode = null;
       lastScanData = null;
       // Notify panel to clear scan results and reset to empty state
       sendPanelMessage('CLEAR_SCAN_RESULTS');
+      sendResponse({ success: true });
+      break;
+    
+    case 'CLEAR_HIGHLIGHTS_ONLY':
+      // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
+      clearHighlights();
+      clearRelationshipLines();
+      selectedForImport.clear();
+      currentScanMode = null;
+      lastScanData = null;
+      sendResponse({ success: true });
+      break;
+    
+    case 'DRAW_RELATIONSHIP_LINES': {
+      // Draw relationship lines between highlighted entities
+      const relationships = message.payload?.relationships || [];
+      if (relationships.length > 0) {
+        drawRelationshipLines(relationships);
+      } else {
+        clearRelationshipLines();
+      }
+      sendResponse({ success: true });
+      break;
+    }
+    
+    case 'CLEAR_RELATIONSHIP_LINES':
+      clearRelationshipLines();
       sendResponse({ success: true });
       break;
       

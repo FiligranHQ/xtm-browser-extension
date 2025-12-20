@@ -196,6 +196,10 @@ export interface ResolvedRelationship {
   fromIndex: number;
   /** Index of the target entity in the entities array */
   toIndex: number;
+  /** Entity value for lookup (more reliable than index when list is filtered) */
+  fromEntityValue?: string;
+  /** Entity value for lookup (more reliable than index when list is filtered) */
+  toEntityValue?: string;
   /** STIX relationship type (e.g., 'uses', 'targets', 'indicates', 'related-to') */
   relationshipType: string;
   /** Confidence level: high, medium, low */

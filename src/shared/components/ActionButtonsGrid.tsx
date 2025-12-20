@@ -30,6 +30,8 @@ export interface ActionButtonsGridProps {
   compact?: boolean;
   /** Horizontal margin for dividers - default 0 */
   dividerMarginX?: number;
+  /** Whether viewing a PDF (native or scanner) - disables non-scan/search actions */
+  isPdfView?: boolean;
 }
 
 export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
@@ -45,6 +47,7 @@ export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
   onClearHighlights,
   compact = true,
   dividerMarginX = 0,
+  isPdfView = false,
 }) => {
   const sectionPadding = compact ? 1 : 2;
   const sectionMarginBottom = compact ? 1 : 1.5;
@@ -114,20 +117,20 @@ export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
             icon={<DescriptionOutlined />}
             label="Container"
             subtitle="Create report"
-            tooltip="Create container from page content"
+            tooltip={isPdfView ? "Not available for PDF documents" : "Create container from page content"}
             onClick={onCreateContainer}
             color="#4caf50"
-            disabled={!hasOpenCTI}
+            disabled={!hasOpenCTI || isPdfView}
             compact={compact}
           />
           <ActionButton
             icon={<TravelExploreOutlined />}
             label="Investigate"
             subtitle="Start an investigation"
-            tooltip="Start investigation with entities"
+            tooltip={isPdfView ? "Not available for PDF documents" : "Start investigation with entities"}
             onClick={onInvestigate}
             color="#5c6bc0"
-            disabled={!hasOpenCTI}
+            disabled={!hasOpenCTI || isPdfView}
             compact={compact}
           />
         </Box>
@@ -162,20 +165,20 @@ export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
             icon={<Target />}
             label="Atomic Test"
             subtitle="Trigger a test"
-            tooltip="Create atomic testing from attack pattern or domain"
+            tooltip={isPdfView ? "Not available for PDF documents" : "Create atomic testing from attack pattern or domain"}
             onClick={onAtomicTesting}
             color="#f44336"
-            disabled={!hasOpenAEV}
+            disabled={!hasOpenAEV || isPdfView}
             compact={compact}
           />
           <ActionButton
             icon={<MovieFilterOutlined />}
             label="Scenario"
             subtitle="Generate attack"
-            tooltip="Generate attack scenario from page"
+            tooltip={isPdfView ? "Not available for PDF documents" : "Generate attack scenario from page"}
             onClick={onGenerateScenario}
             color="#e91e63"
-            disabled={!hasOpenAEV}
+            disabled={!hasOpenAEV || isPdfView}
             compact={compact}
           />
         </Box>

@@ -10,6 +10,38 @@
 4. Entities are matched against the cached OpenCTI/OpenAEV data
 5. Results are highlighted directly on the page
 
+## PDF Scanning
+
+The extension provides full PDF document scanning with an integrated viewer.
+
+### How It Works
+
+1. Navigate to any PDF file in your browser
+2. Click **Scan** from the popup
+3. The extension opens a dedicated PDF viewer with entity detection
+4. All pages are extracted and scanned for threats
+5. Entities are highlighted directly on the PDF content
+
+### PDF Viewer Features
+
+| Feature | Description |
+|---------|-------------|
+| **Vertical Scrolling** | Scroll through all pages seamlessly (no page-by-page navigation) |
+| **Entity Highlighting** | Color-coded overlays directly on PDF content (green for found, amber for new) |
+| **Side Panel Integration** | Scan results display in native side panel (same as regular page scanning) |
+| **Zoom Controls** | Adjust zoom level for comfortable reading |
+| **Rescan** | Re-scan the PDF with one click |
+| **Clear Highlights** | Remove all highlights from the PDF |
+| **Original PDF Link** | Open the PDF in the browser's native viewer |
+| **Theme Support** | Respects dark/light mode preferences |
+
+### Technical Notes
+
+- PDF text extraction uses PDF.js library (fully embedded, no external resources)
+- All pages are rendered for scrolling and text extraction
+- Highlighting is done via canvas overlays for precise positioning
+- The PDF viewer works as an extension page with full Chrome API access
+
 ### Multi-Type Entity Support
 
 When an entity like "Phishing" is found matching multiple types (e.g., both Malware and Attack Pattern) in the same platform, the scan results show:

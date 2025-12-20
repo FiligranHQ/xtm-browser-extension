@@ -13,6 +13,9 @@ interface UsePopupActionsProps {
   splitScreenMode: boolean;
   setPopoverAnchor: (anchor: HTMLElement | null) => void;
   setShowEETrialDialog: (show: boolean) => void;
+  isPdfPage: boolean;
+  isPdfScannerPage: boolean;
+  pdfUrl: string | null;
 }
 
 interface UsePopupActionsReturn {
@@ -36,6 +39,9 @@ export const usePopupActions = ({
   splitScreenMode,
   setPopoverAnchor,
   setShowEETrialDialog,
+  isPdfPage,
+  isPdfScannerPage,
+  pdfUrl,
 }: UsePopupActionsProps): UsePopupActionsReturn => {
   
   // CRITICAL: Firefox loses user gesture context after ANY async operation
@@ -97,8 +103,73 @@ export const usePopupActions = ({
     }
   }, []);
 
-  // Unified scan across ALL platforms
+  // Open PDF scanner in a new tab (internal helper)
+  const openPdfScanner = useCallback(async (url: string) => {
+    if (typeof chrome === 'undefined' || !chrome.runtime) return;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'OPEN_PDF_SCANNER',
+        payload: { pdfUrl: url },
+      });
+      
+      if (response.success) {
+        log.debug('PDF scanner opened for:', url);
+        window.close();
+      } else {
+        log.error('Failed to open PDF scanner:', response.error);
+      }
+    } catch (error) {
+      log.error('Error opening PDF scanner:', error);
+    }
+  }, []);
+
+  // Trigger rescan on PDF scanner page
+  const triggerPdfScannerRescan = useCallback(async () => {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        // Open side panel for the PDF scanner tab
+        if (chrome.sidePanel) {
+          try {
+            await chrome.sidePanel.open({ tabId: tab.id });
+            log.debug('Side panel opened for PDF scanner');
+          } catch (error) {
+            log.debug('Side panel open failed, may already be open:', error);
+          }
+        }
+        
+        // Send rescan message to the PDF scanner page
+        // The PDF scanner page listens for this message via chrome.runtime.onMessage
+        await chrome.runtime.sendMessage({
+          type: 'PDF_SCANNER_RESCAN',
+          payload: { tabId: tab.id },
+        });
+        
+        log.debug('PDF scanner rescan triggered');
+        window.close();
+      }
+    } catch (error) {
+      log.error('Error triggering PDF scanner rescan:', error);
+    }
+  }, []);
+
+  // Unified scan across ALL platforms (or open PDF scanner if on a PDF page)
   const handleUnifiedScan = useCallback(async () => {
+    // If we're already on the PDF scanner page, trigger a rescan and open panel
+    if (isPdfScannerPage) {
+      await triggerPdfScannerRescan();
+      return;
+    }
+    
+    // If we're on a raw PDF page (browser's PDF viewer), open the PDF scanner
+    if (isPdfPage && pdfUrl) {
+      await openPdfScanner(pdfUrl);
+      return;
+    }
+    
     // CRITICAL: Open Firefox sidebar FIRST, synchronously, before any await
     openFirefoxSidebarSync();
     
@@ -111,7 +182,7 @@ export const usePopupActions = ({
       ensureContentScriptAndSendMessage(tab.id, { type: 'SCAN_ALL' });
     }
     window.close();
-  }, [ensureContentScriptAndSendMessage, openFirefoxSidebarSync, openChromeSidePanel]);
+  }, [ensureContentScriptAndSendMessage, openFirefoxSidebarSync, openChromeSidePanel, isPdfPage, isPdfScannerPage, pdfUrl, openPdfScanner, triggerPdfScannerRescan]);
 
   // Unified search across ALL platforms
   const handleUnifiedSearch = useCallback(async () => {
@@ -183,9 +254,22 @@ export const usePopupActions = ({
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
-      await ensureContentScriptAndSendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
+      // Check if this is the PDF scanner page (extension page)
+      if (isPdfScannerPage) {
+        // PDF scanner page - send message directly via chrome.tabs.sendMessage
+        // (PDF scanner listens via chrome.runtime.onMessage)
+        try {
+          await chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
+          log.debug('Sent CLEAR_HIGHLIGHTS to PDF scanner');
+        } catch (error) {
+          log.debug('Failed to send clear to PDF scanner:', error);
+        }
+      } else {
+        // Regular page - use content script
+        await ensureContentScriptAndSendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
+      }
     }
-  }, [ensureContentScriptAndSendMessage]);
+  }, [ensureContentScriptAndSendMessage, isPdfScannerPage]);
 
   const handleOpenSettings = useCallback(() => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.openOptionsPage) return;

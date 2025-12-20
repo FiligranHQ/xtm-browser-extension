@@ -49,6 +49,7 @@ const pulse = keyframes`
 
 const App: React.FC = () => {
   // Platform status management
+  const platformStatus = usePlatformStatus();
   const {
     status,
     setStatus,
@@ -61,7 +62,10 @@ const App: React.FC = () => {
     hasEnterprise,
     aiConfigured,
     splitScreenMode,
-  } = usePlatformStatus();
+    isPdfPage,
+    isPdfScannerPage,
+    pdfUrl,
+  } = platformStatus;
 
   // Popover and dialog state
   const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
@@ -103,6 +107,9 @@ const App: React.FC = () => {
     splitScreenMode,
     setPopoverAnchor,
     setShowEETrialDialog,
+    isPdfPage,
+    isPdfScannerPage,
+    pdfUrl,
   });
 
   // Theme
@@ -215,6 +222,7 @@ const App: React.FC = () => {
               onClearHighlights={handleClear}
               compact={true}
               dividerMarginX={0}
+              isPdfView={isPdfPage || isPdfScannerPage}
             />
           </Box>
         )}

@@ -27,6 +27,7 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 
 ### OpenCTI Integration
 - 🔍 **Page Scanning** - Detect observables (IPs, domains, hashes, CVEs, etc.) and STIX entities
+- 📄 **PDF Scanning** - Full PDF document scanning with integrated viewer, vertical scrolling, and entity highlighting
 - 🎯 **Visual Highlighting** - Color-coded indicators (green = found, amber = new) with scroll-to-highlight glow effect
 - 📋 **Quick Actions** - Create reports, cases, groupings, and investigations
 - 📊 **Entity Details** - View author, creator, confidence/score, labels, markings, and containers
@@ -299,6 +300,11 @@ xtm-browser-extension/
 │   │
 │   ├── popup/                   # Quick action popup
 │   │   └── App.tsx              # Popup UI
+│   │
+│   ├── pdf-scanner/             # PDF viewer with scanning
+│   │   ├── App.tsx              # PDF viewer component
+│   │   ├── index.html           # Entry point
+│   │   └── main.tsx             # React entry
 │   │
 │   └── shared/                  # Shared modules
 │       ├── api/                 # API clients

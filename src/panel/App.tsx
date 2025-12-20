@@ -61,6 +61,8 @@ const App: React.FC = () => {
   const [isSplitScreenMode, setIsSplitScreenMode] = useState<boolean>(false);
   // Scanning state - true when a scan is in progress
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  // PDF view state - true when on PDF scanner or native PDF
+  const [isPdfView, setIsPdfView] = useState<boolean>(false);
 
   // Platform state
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformInfo[]>([]);
@@ -352,6 +354,10 @@ const App: React.FC = () => {
     const targetPlatformId = platformId || investigationPlatformId;
     if (!targetPlatformId && openctiPlatforms.length > 1) return;
     
+    // Check if on PDF page first - PDF pages should use the standard scan which is shown in panel
+    const isPdf = await checkAndHandlePdfPage();
+    if (isPdf) return;
+    
     setInvestigationScanning(true);
     setInvestigationEntities([]);
     
@@ -386,8 +392,69 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper to check if current tab is a PDF or PDF scanner page
+  const checkAndHandlePdfPage = async (): Promise<boolean> => {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return false;
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.url) return false;
+      
+      const url = tab.url;
+      const extensionId = chrome.runtime.id;
+      
+      // Check if already on PDF scanner page
+      if (url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
+          url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`)) {
+        // Already on PDF scanner - trigger rescan
+        if (tab.id) {
+          log.debug('Triggering PDF scanner rescan for tab:', tab.id);
+          // Send rescan trigger to PDF scanner via background
+          try {
+            const response = await chrome.runtime.sendMessage({ 
+              type: 'PDF_SCANNER_RESCAN', 
+              payload: { tabId: tab.id } 
+            });
+            log.debug('PDF_SCANNER_RESCAN response:', response);
+          } catch (e) {
+            log.error('PDF_SCANNER_RESCAN failed:', e);
+          }
+        }
+        return true;
+      }
+      
+      // Check if on a raw PDF page
+      const isPdfPage = url.endsWith('.pdf') || 
+        url.includes('.pdf?') || 
+        url.includes('.pdf#') ||
+        url.includes('/pdf/') ||
+        url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
+      
+      if (isPdfPage) {
+        // Open PDF scanner for this URL
+        const response = await chrome.runtime.sendMessage({
+          type: 'OPEN_PDF_SCANNER',
+          payload: { url },
+        });
+        if (response?.success) {
+          log.debug('PDF scanner opened for:', url);
+        }
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      log.error('Error checking PDF page:', error);
+      return false;
+    }
+  };
+
   // Empty view action handlers
-  const handleEmptyViewScan = () => {
+  const handleEmptyViewScan = async () => {
+    // Check if on PDF page first
+    const isPdf = await checkAndHandlePdfPage();
+    if (isPdf) return;
+    
     setIsScanning(true);
     sendToContentScript('SCAN_ALL');
   };
@@ -563,6 +630,44 @@ const App: React.FC = () => {
       clearInterval(pollInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Check if we're on a PDF view (native PDF or PDF scanner)
+  useEffect(() => {
+    const checkPdfView = async () => {
+      if (typeof chrome === 'undefined' || !chrome.tabs?.query) return;
+      
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.url) {
+          const url = tab.url;
+          const extensionId = chrome.runtime.id;
+          
+          // Check if on PDF scanner page
+          const isPdfScannerPage = url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
+                                   url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
+          
+          // Check if on native PDF page
+          const isNativePdf = url.endsWith('.pdf') || 
+                              url.includes('.pdf?') || 
+                              url.includes('.pdf#') ||
+                              url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
+          
+          setIsPdfView(isPdfScannerPage || isNativePdf);
+        }
+      } catch (e) {
+        // Ignore - may not have tab access
+      }
+    };
+    
+    checkPdfView();
+    
+    // Re-check when tab changes (listen for tab activation)
+    const handleTabActivated = () => checkPdfView();
+    if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
+      chrome.tabs.onActivated.addListener(handleTabActivated);
+      return () => chrome.tabs.onActivated.removeListener(handleTabActivated);
+    }
   }, []);
 
   // Load labels and markings when container form is needed
@@ -1427,7 +1532,7 @@ const App: React.FC = () => {
       case 'container-type': return <OCTIContainerTypeView mode={mode} setPanelMode={setPanelMode} setOCTIContainerType={setOCTIContainerType} containerWorkflowOrigin={containerWorkflowOrigin} openctiPlatformsCount={openctiPlatforms.length} containerSteps={containerSteps} entitiesToAdd={entitiesToAdd} />;
       case 'container-form': return <OCTIContainerFormView mode={mode} setPanelMode={setPanelMode} containerType={containerType} containerSteps={containerSteps} containerForm={containerForm} setContainerForm={setContainerForm} containerSpecificFields={containerSpecificFields} setContainerSpecificFields={setContainerSpecificFields} updatingContainerId={updatingContainerId} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} selectedPlatformId={selectedPlatformId} aiSettings={aiSettings} aiGeneratingDescription={aiGeneratingDescription} handleGenerateAIDescription={handleGenerateAIDescription} availableLabels={availableLabels} selectedLabels={selectedLabels} setSelectedLabels={setSelectedLabels} availableMarkings={availableMarkings} selectedMarkings={selectedMarkings} setSelectedMarkings={setSelectedMarkings} availableReportTypes={availableReportTypes} availableContexts={availableContexts} availableSeverities={availableSeverities} availablePriorities={availablePriorities} availableResponseTypes={availableResponseTypes} availableAuthors={availableAuthors} attachPdf={attachPdf} setAttachPdf={setAttachPdf} createAsDraft={createAsDraft} setCreateAsDraft={setCreateAsDraft} entitiesToAdd={entitiesToAdd} handleCreateContainer={handleCreateContainer} submitting={submitting} generatingPdf={generatingPdf} />;
       case 'investigation': return <OCTIInvestigationView mode={mode} openctiPlatforms={openctiPlatforms} availablePlatforms={availablePlatforms} investigationPlatformId={investigationPlatformId} investigationPlatformSelected={investigationPlatformSelected} setInvestigationPlatformSelected={setInvestigationPlatformSelected} investigationEntities={investigationEntities} setInvestigationEntities={setInvestigationEntities} investigationScanning={investigationScanning} investigationTypeFilter={investigationTypeFilter} setInvestigationTypeFilter={setInvestigationTypeFilter} investigationEntityTypes={investigationEntityTypes} filteredInvestigationEntities={filteredInvestigationEntities} selectedInvestigationCount={selectedInvestigationCount} submitting={submitting} resetInvestigation={resetInvestigation} handleSelectInvestigationPlatform={handleSelectInvestigationPlatform} handleInvestigationScan={handleInvestigationScan} toggleInvestigationEntity={toggleInvestigationEntity} selectAllInvestigationEntities={selectAllInvestigationEntities} clearInvestigationSelection={clearInvestigationSelection} handleCreateWorkbench={handleCreateWorkbench} />;
-      case 'scan-results': return <CommonScanResultsView mode={mode} handleClose={handleClose} scanResultsEntities={scanResultsEntities} setScanResultsEntities={setScanResultsEntities} scanResultsEntitiesRef={scanResultsEntitiesRef} scanResultsTypeFilter={scanResultsTypeFilter} setScanResultsTypeFilter={setScanResultsTypeFilter} scanResultsFoundFilter={scanResultsFoundFilter} setScanResultsFoundFilter={setScanResultsFoundFilter} selectedScanItems={selectedScanItems} setSelectedScanItems={setSelectedScanItems} setPanelMode={setPanelMode} setEntitiesToAdd={setEntitiesToAdd} setEntity={setEntity} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} setEntityFromScanResults={setEntityFromScanResults} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} aiSettings={aiSettings} aiDiscoveringEntities={aiDiscoveringEntities} setAiDiscoveringEntities={setAiDiscoveringEntities} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} openaevPlatforms={openaevPlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} showToast={showToast} setContainerForm={setContainerForm} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} setCurrentPageUrl={setCurrentPageUrl} setCurrentPageTitle={setCurrentPageTitle} scanPageContent={scanPageContent} logoSuffix={logoSuffix} setEntityDetailsLoading={setEntityDetailsLoading} fetchEntityContainers={fetchEntityContainers} />;
+      case 'scan-results': return <CommonScanResultsView mode={mode} handleClose={handleClose} scanResultsEntities={scanResultsEntities} setScanResultsEntities={setScanResultsEntities} scanResultsEntitiesRef={scanResultsEntitiesRef} scanResultsTypeFilter={scanResultsTypeFilter} setScanResultsTypeFilter={setScanResultsTypeFilter} scanResultsFoundFilter={scanResultsFoundFilter} setScanResultsFoundFilter={setScanResultsFoundFilter} selectedScanItems={selectedScanItems} setSelectedScanItems={setSelectedScanItems} setPanelMode={setPanelMode} setEntitiesToAdd={setEntitiesToAdd} setEntity={setEntity} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} setEntityFromScanResults={setEntityFromScanResults} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} aiSettings={aiSettings} aiDiscoveringEntities={aiDiscoveringEntities} setAiDiscoveringEntities={setAiDiscoveringEntities} aiResolvingRelationships={aiResolvingRelationships} setAiResolvingRelationships={setAiResolvingRelationships} resolvedRelationships={resolvedRelationships} setResolvedRelationships={setResolvedRelationships} availablePlatforms={availablePlatforms} openctiPlatforms={openctiPlatforms} openaevPlatforms={openaevPlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} showToast={showToast} setContainerForm={setContainerForm} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} setCurrentPageUrl={setCurrentPageUrl} setCurrentPageTitle={setCurrentPageTitle} scanPageContent={scanPageContent} logoSuffix={logoSuffix} setEntityDetailsLoading={setEntityDetailsLoading} fetchEntityContainers={fetchEntityContainers} />;
       case 'atomic-testing': return <OAEVAtomicTestingView mode={mode} availablePlatforms={availablePlatforms} aiSettings={aiSettings} setPanelMode={setPanelMode} showToast={showToast} atomicTestingTargets={atomicTestingTargets} setAtomicTestingTargets={setAtomicTestingTargets} selectedAtomicTarget={selectedAtomicTarget} setSelectedAtomicTarget={setSelectedAtomicTarget} atomicTestingShowList={atomicTestingShowList} setAtomicTestingShowList={setAtomicTestingShowList} atomicTestingPlatformId={atomicTestingPlatformId} setAtomicTestingPlatformId={setAtomicTestingPlatformId} atomicTestingPlatformSelected={atomicTestingPlatformSelected} setAtomicTestingPlatformSelected={setAtomicTestingPlatformSelected} atomicTestingTargetType={atomicTestingTargetType} setAtomicTestingTargetType={setAtomicTestingTargetType} atomicTestingAssets={atomicTestingAssets} setAtomicTestingAssets={setAtomicTestingAssets} atomicTestingAssetGroups={atomicTestingAssetGroups} setAtomicTestingAssetGroups={setAtomicTestingAssetGroups} atomicTestingTypeFilter={atomicTestingTypeFilter} setAtomicTestingTypeFilter={setAtomicTestingTypeFilter} atomicTestingInjectorContracts={atomicTestingInjectorContracts} setAtomicTestingInjectorContracts={setAtomicTestingInjectorContracts} atomicTestingSelectedAsset={atomicTestingSelectedAsset} setAtomicTestingSelectedAsset={setAtomicTestingSelectedAsset} atomicTestingSelectedAssetGroup={atomicTestingSelectedAssetGroup} setAtomicTestingSelectedAssetGroup={setAtomicTestingSelectedAssetGroup} atomicTestingSelectedContract={atomicTestingSelectedContract} setAtomicTestingSelectedContract={setAtomicTestingSelectedContract} atomicTestingTitle={atomicTestingTitle} setAtomicTestingTitle={setAtomicTestingTitle} atomicTestingCreating={atomicTestingCreating} setAtomicTestingCreating={setAtomicTestingCreating} atomicTestingLoadingAssets={atomicTestingLoadingAssets} setAtomicTestingLoadingAssets={setAtomicTestingLoadingAssets} atomicTestingAIMode={atomicTestingAIMode} setAtomicTestingAIMode={setAtomicTestingAIMode} atomicTestingAIGenerating={atomicTestingAIGenerating} setAtomicTestingAIGenerating={setAtomicTestingAIGenerating} atomicTestingAIPlatform={atomicTestingAIPlatform} setAtomicTestingAIPlatform={setAtomicTestingAIPlatform} atomicTestingAIExecutor={atomicTestingAIExecutor} setAtomicTestingAIExecutor={setAtomicTestingAIExecutor} atomicTestingAIContext={atomicTestingAIContext} setAtomicTestingAIContext={setAtomicTestingAIContext} atomicTestingAIGeneratedPayload={atomicTestingAIGeneratedPayload} setAtomicTestingAIGeneratedPayload={setAtomicTestingAIGeneratedPayload} resetAtomicTestingState={resetAtomicTestingState} />;
       case 'unified-search': return <CommonUnifiedSearchView mode={mode} unifiedSearchQuery={unifiedSearchQuery} setUnifiedSearchQuery={setUnifiedSearchQuery} unifiedSearchResults={unifiedSearchResults} setUnifiedSearchResults={setUnifiedSearchResults} unifiedSearching={unifiedSearching} setUnifiedSearching={setUnifiedSearching} unifiedSearchPlatformFilter={unifiedSearchPlatformFilter} setUnifiedSearchPlatformFilter={setUnifiedSearchPlatformFilter} unifiedSearchTypeFilter={unifiedSearchTypeFilter} setUnifiedSearchTypeFilter={setUnifiedSearchTypeFilter} setPanelMode={setPanelMode} setEntity={setEntity} setEntityFromSearchMode={setEntityFromSearchMode} setMultiPlatformResults={setMultiPlatformResults} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} availablePlatforms={availablePlatforms} logoSuffix={logoSuffix} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} fetchEntityContainers={fetchEntityContainers} />;
       case 'add-selection': return <OCTIAddSelectionView setPanelMode={setPanelMode} addSelectionText={addSelectionText} setAddSelectionText={setAddSelectionText} addSelectionEntityType={addSelectionEntityType} setAddSelectionEntityType={setAddSelectionEntityType} addSelectionFromContextMenu={addSelectionFromContextMenu} setAddSelectionFromContextMenu={setAddSelectionFromContextMenu} addingSelection={addingSelection} handleAddSelection={handleAddSelection} openctiPlatforms={openctiPlatforms} />;
@@ -1436,7 +1541,7 @@ const App: React.FC = () => {
       case 'loading': return <CommonLoadingView />;
       default: return isScanning 
         ? <CommonLoadingView message="Scanning page..." /> 
-        : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.length > 0} hasOpenAEV={openaevPlatforms.length > 0} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} />;
+        : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.length > 0} hasOpenAEV={openaevPlatforms.length > 0} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} isPdfView={isPdfView} />;
     }
   };
 

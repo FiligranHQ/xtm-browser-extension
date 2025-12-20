@@ -171,6 +171,9 @@ export interface AISettings {
 export interface ResolvedRelationship {
   fromIndex: number;
   toIndex: number;
+  /** Entity value for lookup (more reliable than index) */
+  fromEntityValue?: string;
+  toEntityValue?: string;
   relationshipType: string;
   confidence: 'high' | 'medium' | 'low';
   reason: string;

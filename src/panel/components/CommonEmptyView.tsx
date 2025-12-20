@@ -18,6 +18,8 @@ export interface CommonEmptyViewProps {
   onAtomicTesting: () => void;
   onGenerateScenario: () => void;
   onClearHighlights: () => void;
+  /** Whether viewing a PDF (native or scanner) - disables non-scan/search actions */
+  isPdfView?: boolean;
 }
 
 export const CommonEmptyView: React.FC<CommonEmptyViewProps> = ({
@@ -31,6 +33,7 @@ export const CommonEmptyView: React.FC<CommonEmptyViewProps> = ({
   onAtomicTesting,
   onGenerateScenario,
   onClearHighlights,
+  isPdfView = false,
 }) => (
   <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
     <ActionButtonsGrid
@@ -46,6 +49,7 @@ export const CommonEmptyView: React.FC<CommonEmptyViewProps> = ({
       onClearHighlights={onClearHighlights}
       compact={true}
       dividerMarginX={0}
+      isPdfView={isPdfView}
     />
   </Box>
 );

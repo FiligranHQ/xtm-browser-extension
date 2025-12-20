@@ -108,7 +108,41 @@ export const OPENAEV_DOCS_URL = 'https://docs.openaev.io';
 // ============================================================================
 
 /** Extension version - SINGLE SOURCE OF TRUTH for version number */
-export const EXTENSION_VERSION = '0.0.11';
+export const EXTENSION_VERSION = '0.0.12';
 
 /** Extension name */
 export const EXTENSION_NAME = 'XTM Browser Extension';
+
+// ============================================================================
+// Highlight Colors - Shared between web page and PDF highlighting
+// ============================================================================
+
+/** Highlight colors for entities found in the platform */
+export const HIGHLIGHT_FOUND = {
+  background: 'rgba(0, 200, 83, 0.2)',
+  backgroundHover: 'rgba(0, 200, 83, 0.35)',
+  outline: '#4caf50',
+  outlineHover: '#2e7d32',
+};
+
+/** Highlight colors for entities not found in the platform */
+export const HIGHLIGHT_NOT_FOUND = {
+  background: 'rgba(255, 167, 38, 0.2)',
+  backgroundHover: 'rgba(255, 167, 38, 0.35)',
+  outline: '#ffa726',
+  outlineHover: '#f57c00',
+};
+
+/** Highlight colors for selected entities */
+export const HIGHLIGHT_SELECTED = {
+  background: 'rgba(15, 188, 255, 0.25)',
+  outline: '#0fbcff',
+};
+
+/** Highlight colors for AI-discovered entities (purple theme) */
+export const HIGHLIGHT_AI_DISCOVERED = {
+  background: 'rgba(156, 39, 176, 0.2)',
+  backgroundHover: 'rgba(156, 39, 176, 0.35)',
+  outline: '#9c27b0',
+  outlineHover: '#7b1fa2',
+};

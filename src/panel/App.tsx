@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -28,6 +28,8 @@ import { useEntityState } from './hooks/useEntityState';
 import { useAddSelectionState } from './hooks/useAddSelectionState';
 import { useContainerActions } from './hooks/useContainerActions';
 import { useInvestigationActions } from './hooks/useInvestigationActions';
+import { useToast } from './hooks/useToast';
+import { usePlatforms } from './hooks/usePlatforms';
 import { CommonNotFoundView } from './components/CommonNotFoundView';
 import { CommonScanResultsView } from './views/CommonScanResultsView';
 import { CommonUnifiedSearchView } from './views/CommonUnifiedSearchView';
@@ -68,15 +70,15 @@ const App: React.FC = () => {
   // PDF view state - true when on PDF scanner or native PDF
   const [isPdfView, setIsPdfView] = useState<boolean>(false);
 
-  // Platform state
-  const [availablePlatforms, setAvailablePlatforms] = useState<PlatformInfo[]>([]);
-  const [selectedPlatformId, setSelectedPlatformId] = useState<string>('');
-  const [platformUrl, setPlatformUrl] = useState('');
-  const availablePlatformsRef = React.useRef<PlatformInfo[]>([]);
-  React.useEffect(() => { availablePlatformsRef.current = availablePlatforms; }, [availablePlatforms]);
-
-  const openctiPlatforms = useMemo(() => availablePlatforms.filter(p => p.type === 'opencti'), [availablePlatforms]);
-  const openaevPlatforms = useMemo(() => availablePlatforms.filter(p => p.type === 'openaev'), [availablePlatforms]);
+  // Platform state hook
+  const {
+    availablePlatforms, setAvailablePlatforms, availablePlatformsRef,
+    selectedPlatformId, setSelectedPlatformId,
+    platformUrl, setPlatformUrl,
+    openctiPlatforms, openaevPlatforms,
+  } = usePlatforms();
+  
+  // Keep ref for openctiPlatforms (used in event handlers)
   const openctiPlatformsRef = React.useRef<PlatformInfo[]>([]);
   React.useEffect(() => { openctiPlatformsRef.current = openctiPlatforms; }, [openctiPlatforms]);
 
@@ -250,16 +252,8 @@ const App: React.FC = () => {
     return createTheme(themeOptions);
   }, [mode]);
 
-  // Toast notification helper
-  const showToast = React.useCallback((options: {
-    type: 'success' | 'info' | 'warning' | 'error';
-    message: string;
-    action?: { label: string; type: 'scroll_to_first' | 'close_panel' | 'custom' };
-    persistent?: boolean;
-    duration?: number;
-  }) => {
-    window.parent.postMessage({ type: 'XTM_SHOW_TOAST', payload: options }, '*');
-  }, []);
+  // Toast notification hook
+  const { showToast } = useToast();
 
   // Forward declare handleInvestigationScan for the hook (will be defined below)
   const handleInvestigationScanRef = React.useRef<(platformId: string) => Promise<void>>(async () => {});
@@ -423,42 +417,8 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle investigation scan
-  const handleInvestigationScan = async (platformId?: string) => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const targetPlatformId = platformId || investigationPlatformId;
-    if (!targetPlatformId && openctiPlatforms.length > 1) return;
-    
-    // Check if on PDF page first - PDF pages should use the standard scan which is shown in panel
-    const isPdf = await checkAndHandlePdfPage();
-    if (isPdf) return;
-    
-    setInvestigationScanning(true);
-    setInvestigationEntities([]);
-    
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { 
-          type: 'SCAN_FOR_INVESTIGATION',
-          payload: { platformId: targetPlatformId || openctiPlatforms[0]?.id },
-        });
-      }
-    } catch (error) {
-      log.error('Investigation scan failed:', error);
-    }
-  };
-
-  // Wrapper for unified search that passes platforms
-  const doUnifiedSearch = async (queryOverride?: string) => {
-    await handleUnifiedSearch(availablePlatforms, queryOverride);
-  };
-
-  // Helper to send message to content script - uses shared utility
-  const sendToContentScript = sendMessageToContentScript;
-
   // Helper to check if current tab is a PDF or PDF scanner page
-  const checkAndHandlePdfPage = async (): Promise<boolean> => {
+  const checkAndHandlePdfPage = useCallback(async (): Promise<boolean> => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return false;
     
     try {
@@ -512,7 +472,41 @@ const App: React.FC = () => {
       log.error('Error checking PDF page:', error);
       return false;
     }
+  }, []);
+
+  // Handle investigation scan
+  const handleInvestigationScan = useCallback(async (platformId?: string) => {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+    const targetPlatformId = platformId || investigationPlatformId;
+    if (!targetPlatformId && openctiPlatforms.length > 1) return;
+    
+    // Check if on PDF page first - PDF pages should use the standard scan which is shown in panel
+    const isPdf = await checkAndHandlePdfPage();
+    if (isPdf) return;
+    
+    setInvestigationScanning(true);
+    setInvestigationEntities([]);
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          type: 'SCAN_FOR_INVESTIGATION',
+          payload: { platformId: targetPlatformId || openctiPlatforms[0]?.id },
+        });
+      }
+    } catch (error) {
+      log.error('Investigation scan failed:', error);
+    }
+  }, [investigationPlatformId, openctiPlatforms, checkAndHandlePdfPage, setInvestigationScanning, setInvestigationEntities]);
+
+  // Wrapper for unified search that passes platforms
+  const doUnifiedSearch = async (queryOverride?: string) => {
+    await handleUnifiedSearch(availablePlatforms, queryOverride);
   };
+
+  // Helper to send message to content script - uses shared utility
+  const sendToContentScript = sendMessageToContentScript;
 
   // Empty view action handlers
   const handleEmptyViewScan = async () => {

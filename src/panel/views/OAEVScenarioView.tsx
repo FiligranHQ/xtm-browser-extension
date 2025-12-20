@@ -32,7 +32,6 @@ import {
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
-  ChevronRightOutlined,
   ArrowForwardOutlined,
   AddOutlined,
   RefreshOutlined,
@@ -57,6 +56,9 @@ import {
   SCENARIO_DEFAULT_VALUES,
 } from '../../shared/types/openaev';
 import { ScenarioTypeSelector } from '../components/scenario/ScenarioTypeSelector';
+import { ScenarioPlatformSelector } from '../components/scenario/ScenarioPlatformSelector';
+import { ScenarioSummary } from '../components/scenario/ScenarioSummary';
+import { formatInjectorName, getContractLabel } from '../utils/injector-helpers';
 
 const log = loggers.panel;
 
@@ -375,11 +377,11 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       const scenarioId = scenarioResponse.data.scenario_id;
       
       // Now add all generated injects
-      let delayAccumulator = 0;
+      // AI returns absolute timing values (0, 15, 30, 45, 60) - use directly without accumulating
       for (let i = 0; i < scenarioAIGeneratedScenario.injects.length; i++) {
         const inject = scenarioAIGeneratedScenario.injects[i];
-        const delayMinutes = inject.delayMinutes || (i === 0 ? 0 : scenarioInjectSpacing);
-        delayAccumulator += delayMinutes;
+        // Use AI-provided delayMinutes directly (absolute timing), or fallback to calculated spacing
+        const delayMinutes = inject.delayMinutes ?? (i * scenarioInjectSpacing);
         
         if (isTableTop) {
           // For table-top, create email injects
@@ -390,7 +392,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             description: inject.description,
             subject: inject.subject || inject.title,
             body: inject.body || inject.content || inject.description,
-            delayMinutes: delayAccumulator,
+            delayMinutes,
           };
           
           // Add team if selected
@@ -416,7 +418,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             command: inject.content,
             executor: inject.executor || scenarioAIPayloadAffinity,
             platforms: scenarioPlatformsAffinity,
-            delayMinutes: delayAccumulator,
+            delayMinutes,
           };
           
           // Add asset or asset group if selected
@@ -1037,81 +1039,15 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
 
   // Platform selection step (if multiple OpenAEV platforms and not yet selected)
   if (openaevPlatforms.length > 1 && !scenarioPlatformSelected) {
-    // Count attack patterns per platform
-    const patternCountByPlatform = new Map<string, number>();
-    for (const ap of scenarioRawAttackPatterns) {
-      if (ap.platformId) {
-        patternCountByPlatform.set(ap.platformId, (patternCountByPlatform.get(ap.platformId) || 0) + 1);
-      }
-    }
-    
     return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Back to actions button */}
-        <Box sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            startIcon={<ChevronLeftOutlined />}
-            onClick={() => setPanelMode('empty')}
-            sx={{ 
-              color: 'text.secondary',
-              textTransform: 'none',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            Back to actions
-          </Button>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <img src={openaevLogoPath} alt="OpenAEV" style={{ height: 24, width: 'auto' }} />
-          <Typography variant="h6" sx={{ fontSize: 16, flex: 1, fontWeight: 600 }}>Create Scenario</Typography>
-        </Box>
-        
-        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          Select OpenAEV platform to create the scenario:
-        </Typography>
-        
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {openaevPlatforms.map((platform) => {
-            const patternCount = patternCountByPlatform.get(platform.id) || 0;
-            return (
-              <Paper
-                key={platform.id}
-                onClick={() => handleSelectScenarioPlatform(platform.id)}
-                elevation={0}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  p: 2,
-                  cursor: 'pointer',
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
-                }}
-              >
-                <img src={openaevLogoPath} alt="OpenAEV" style={{ width: 24, height: 24 }} />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                    {platform.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {platform.url}
-                  </Typography>
-                  {patternCount > 0 && (
-                    <Typography variant="caption" sx={{ color: 'primary.main', display: 'block' }}>
-                      {patternCount} attack pattern{patternCount !== 1 ? 's' : ''} found
-                    </Typography>
-                  )}
-                </Box>
-                <ChevronRightOutlined sx={{ color: 'text.secondary' }} />
-              </Paper>
-            );
-          })}
-        </Box>
-      </Box>
+      <ScenarioPlatformSelector
+        mode={mode}
+        openaevPlatforms={openaevPlatforms}
+        openaevLogoPath={openaevLogoPath}
+        scenarioRawAttackPatterns={scenarioRawAttackPatterns}
+        onSelectPlatform={handleSelectScenarioPlatform}
+        setPanelMode={setPanelMode}
+      />
     );
   }
 
@@ -1696,7 +1632,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                               attackPatternId: ap.id,
                               attackPatternName: ap.name,
                               contractId: contract.injector_contract_id,
-                              contractLabel: contract.injector_contract_labels?.en || contract.injector_name || 'Unknown',
+                              contractLabel: getContractLabel(contract),
                               delayMinutes: delayAccumulator,
                             });
                             delayAccumulator += scenarioInjectSpacing;
@@ -1784,21 +1720,9 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                             const contract = filteredContracts.find((c: any) => c.injector_contract_id === value);
                             if (!contract) return String(value);
                             
-                            const label = contract.injector_contract_labels?.en || contract.injector_name || 'Unknown';
+                            const label = getContractLabel(contract);
                             const injectorName = contract.injector_name || contract.injector_type || '';
                             const platforms = contract.injector_contract_platforms || [];
-                            
-                            const formatInjectorNameShort = (name: string) => {
-                              if (!name) return '';
-                              return name
-                                .replace(/_/g, ' ')
-                                .replace(/openaev/gi, 'OpenAEV')
-                                .replace(/caldera/gi, 'Caldera')
-                                .replace(/atomic/gi, 'Atomic')
-                                .split(' ')
-                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                .join(' ');
-                            };
                             
                             return (
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden' }}>
@@ -1807,7 +1731,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                                 </Typography>
                                 {injectorName && (
                                   <Chip
-                                    label={formatInjectorNameShort(injectorName)}
+                                    label={formatInjectorName(injectorName)}
                                     size="small"
                                     sx={{
                                       height: 18,
@@ -1839,22 +1763,9 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                       >
                         <MenuItem value=""><em>Skip this attack pattern</em></MenuItem>
                         {filteredContracts.map((contract: any) => {
-                          const label = contract.injector_contract_labels?.en || contract.injector_name || 'Unknown';
+                          const label = getContractLabel(contract);
                           const injectorName = contract.injector_name || contract.injector_type || '';
                           const platforms = contract.injector_contract_platforms || [];
-                          
-                          // Format injector name for display (e.g., "openaev_implant" -> "OpenAEV Implant")
-                          const formatInjectorName = (name: string) => {
-                            if (!name) return '';
-                            return name
-                              .replace(/_/g, ' ')
-                              .replace(/openaev/gi, 'OpenAEV')
-                              .replace(/caldera/gi, 'Caldera')
-                              .replace(/atomic/gi, 'Atomic')
-                              .split(' ')
-                              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                              .join(' ');
-                          };
                           
                           return (
                             <MenuItem 
@@ -1930,17 +1841,11 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
         )}
         
         {/* Summary */}
-        <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, mb: 2, flexShrink: 0 }}>
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {scenarioTypeAffinity === 'TABLE-TOP' 
-              ? `${selectedInjects.length} email notification${selectedInjects.length !== 1 ? 's' : ''} selected`
-              : `${selectedInjects.length} inject${selectedInjects.length !== 1 ? 's' : ''} selected`
-            }
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Total scenario duration: ~{selectedInjects.length > 0 ? (selectedInjects.length - 1) * scenarioInjectSpacing : 0} minutes
-          </Typography>
-        </Box>
+        <ScenarioSummary
+          selectedInjects={selectedInjects}
+          scenarioInjectSpacing={scenarioInjectSpacing}
+          isTableTop={scenarioTypeAffinity === 'TABLE-TOP'}
+        />
         
         {/* Actions */}
         <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>

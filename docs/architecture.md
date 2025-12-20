@@ -123,9 +123,17 @@ src/panel/
 ├── main.tsx              # React entry point
 ├── index.html            # Panel HTML shell
 ├── components/           # Reusable UI components
-│   ├── CommonEmptyView.tsx    # Empty state view
-│   ├── CommonLoadingView.tsx  # Loading state view
-│   └── CommonNotFoundView.tsx # Entity not found view
+│   ├── CommonEmptyView.tsx         # Empty state view
+│   ├── CommonLoadingView.tsx       # Loading state view
+│   ├── CommonNotFoundView.tsx      # Entity not found view
+│   ├── scan-results/               # Scan results components
+│   │   ├── ScanResultsAIButtons.tsx      # AI discovery buttons
+│   │   ├── ScanResultsEntityItem.tsx     # Entity list item
+│   │   └── ScanResultsSelectionActions.tsx # Selection actions
+│   └── scenario/                   # Scenario components
+│       ├── ScenarioPlatformSelector.tsx  # Platform selection
+│       ├── ScenarioSummary.tsx           # Summary & timeline
+│       └── ScenarioTypeSelector.tsx      # Type/affinity selection
 ├── handlers/             # Message handlers
 │   ├── message-handlers.ts      # Panel message handlers
 │   └── scan-results-handler.ts  # Scan results handler
@@ -163,10 +171,12 @@ src/panel/
 │   ├── useAddSelectionState.ts  # Add selection state
 │   └── useAIState.ts            # AI state
 ├── utils/                # Panel utilities
-│   ├── platform-helpers.tsx  # Platform icons, colors, AI theme
-│   ├── cvss-helpers.ts       # CVSS score formatting
-│   ├── description-helpers.ts # HTML content processing
-│   └── marking-helpers.ts    # TLP/PAP marking colors
+│   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
+│   ├── cvss-helpers.ts          # CVSS score formatting
+│   ├── description-helpers.ts   # HTML content processing
+│   ├── marking-helpers.ts       # TLP/PAP marking colors
+│   ├── content-messaging.ts     # Panel-content messaging
+│   └── scan-results-helpers.ts  # Entity filtering/processing
 └── types/                # Type definitions
     ├── panel-types.ts    # Panel-specific types
     └── view-props.ts     # View component prop types

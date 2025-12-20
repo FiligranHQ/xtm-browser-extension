@@ -19,12 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **PDF Viewer**: Fixed iframe panel not closing and AI scanning not working in PDF viewer mode
 - **PDF Table Highlighting**: Fixed entities in PDF tables not being highlighted when text is split across multiple PDF text items (e.g., defanged IPs like `203.91.76[.]102` in table cells)
+- **AI Scenario Timing**: Fixed table-top scenario inject timing being incorrectly accumulated instead of using absolute timing values (e.g., 5 injects over 60 minutes now correctly spans 0-60 minutes instead of 0-150 minutes)
 - **Relationship Persistence**: Resolved relationships now preserved when navigating back from import screen
 - **Select All Behavior**: Fixed "Select all" sometimes visually selecting non-importable entities
 - **AI JSON Parsing**: Enhanced parsing with more robust strategies for handling truncated AI responses
 - **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
 
 ### Improved
+- **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector) from monolithic views for better maintainability
+- **Custom Hooks**: Extracted reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
+- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout) and unused component files
 - Shared visualization constants ensure consistent appearance across all scan modes
 
 ## [0.0.12] - 2024-12-20

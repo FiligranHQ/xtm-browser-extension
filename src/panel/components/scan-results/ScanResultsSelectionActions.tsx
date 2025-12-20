@@ -16,6 +16,7 @@ import {
   ArrowForwardOutlined,
 } from '@mui/icons-material';
 import type { ScanResultEntity } from '../../types/panel-types';
+import { isSelectableForOpenCTI, isFoundInOpenCTI } from '../../utils/scan-results-helpers';
 
 interface ScanResultsSelectionActionsProps {
   filteredScanResultsEntities: ScanResultEntity[];
@@ -23,22 +24,6 @@ interface ScanResultsSelectionActionsProps {
   setSelectedScanItems: (items: Set<string>) => void;
   onImportSelected: () => void;
 }
-
-// Check if entity is selectable for OpenCTI import (not oaev-* type)
-const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {
-  return !entity.type.startsWith('oaev-');
-};
-
-// Check if entity is found in OpenCTI
-const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
-  if (entity.found) {
-    if (entity.platformMatches && entity.platformMatches.length > 0) {
-      return entity.platformMatches.some(pm => pm.platformType === 'opencti');
-    }
-    return entity.platformType === 'opencti' || !entity.platformType;
-  }
-  return false;
-};
 
 export const ScanResultsSelectionActions: React.FC<ScanResultsSelectionActionsProps> = ({
   filteredScanResultsEntities,

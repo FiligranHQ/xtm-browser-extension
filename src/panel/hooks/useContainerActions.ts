@@ -5,14 +5,13 @@
  */
 
 import { useCallback } from 'react';
-import type { EntityData, PlatformInfo, ImportResults, ContainerFormState, ContainerSpecificFields, ResolvedRelationship, PanelAIState } from '../types/panel-types';
+import type { EntityData, PlatformInfo, ImportResults, ContainerFormState, ContainerSpecificFields, ResolvedRelationship, PanelAIState, PanelMode } from '../types/panel-types';
 
 export interface ContainerActionsProps {
   // Platform state
   openctiPlatforms: PlatformInfo[];
   availablePlatforms: PlatformInfo[];
   selectedPlatformId: string;
-  platformUrl: string;
   setPlatformUrl: (url: string) => void;
   setSelectedPlatformId: (id: string) => void;
   
@@ -55,8 +54,8 @@ export interface ContainerActionsProps {
   
   // UI
   setSubmitting: (submitting: boolean) => void;
-  setPanelMode: (mode: any) => void;
-  showToast: (options: { type: string; message: string }) => void;
+  setPanelMode: React.Dispatch<React.SetStateAction<PanelMode>>;
+  showToast: (options: { type: 'success' | 'info' | 'warning' | 'error'; message: string }) => void;
 }
 
 export interface ContainerActionsReturn {
@@ -106,22 +105,17 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
 
   const handleAddEntities = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    if (openctiPlatforms.length === 0) {
-      setImportResults({
-        success: false,
-        total: entitiesToAdd.length,
-        created: [],
-        failed: entitiesToAdd.map(e => ({ type: e.type || 'unknown', value: e.value || e.name || 'unknown', error: 'No OpenCTI platform configured' })),
-        platformName: 'OpenCTI',
-      });
-      setPanelMode('import-results');
+    setSubmitting(true);
+    
+    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
+    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    
+    if (!targetPlatform) {
+      showToast({ type: 'error', message: 'No OpenCTI platform available' });
+      setSubmitting(false);
       return;
     }
-    
-    setSubmitting(true);
-    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
-    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0].id;
-    const targetPlatform = openctiPlatforms.find(p => p.id === targetPlatformId) || openctiPlatforms[0];
     
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_OBSERVABLES_BULK',
@@ -131,30 +125,68 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (response?.success && response.data) {
       const createdEntities = response.data as Array<{ id: string; entity_type?: string; observable_value?: string; value?: string; type?: string }>;
       setImportResults({
-        success: true,
+        success: true, 
         total: entitiesToAdd.length,
-        created: createdEntities.map((e, i) => ({
-          id: e.id,
-          type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown',
-          value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown',
+        created: createdEntities.map((e, i) => ({ 
+          id: e.id, 
+          type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown', 
+          value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown' 
         })),
-        failed: [],
+        failed: [], 
         platformName: targetPlatform.name,
       });
       setPanelMode('import-results');
       setEntitiesToAdd([]);
     } else {
-      setImportResults({
-        success: false,
-        total: entitiesToAdd.length,
-        created: [],
-        failed: entitiesToAdd.map(e => ({ type: e.type || 'unknown', value: e.value || e.name || 'unknown', error: response?.error || 'Failed to create entity' })),
-        platformName: targetPlatform.name,
+      setImportResults({ 
+        success: false, 
+        total: entitiesToAdd.length, 
+        created: [], 
+        failed: entitiesToAdd.map(e => ({ 
+          type: e.type || 'unknown', 
+          value: e.value || e.name || 'unknown', 
+          error: response?.error || 'Failed to create entity' 
+        })), 
+        platformName: targetPlatform.name 
       });
       setPanelMode('import-results');
     }
     setSubmitting(false);
-  }, [openctiPlatforms, selectedPlatformId, entitiesToAdd, createIndicators, setImportResults, setPanelMode, setEntitiesToAdd, setSubmitting]);
+  }, [openctiPlatforms, selectedPlatformId, availablePlatforms, entitiesToAdd, createIndicators, setImportResults, setPanelMode, setEntitiesToAdd, setSubmitting, showToast]);
+
+  const handleGenerateAIDescription = useCallback(async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
+    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    
+    if (!aiSettings.available || !targetPlatform?.isEnterprise) return;
+    
+    setAiGeneratingDescription(true);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'AI_GENERATE_DESCRIPTION',
+        payload: { 
+          pageTitle: currentPageTitle, 
+          pageUrl: currentPageUrl, 
+          pageContent: containerForm.content || '', 
+          containerType, 
+          containerName: containerForm.name, 
+          detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean) 
+        },
+      });
+      if (response?.success && response.data) {
+        setContainerForm(prev => ({ ...prev, description: response.data }));
+        showToast({ type: 'success', message: 'AI generated description' });
+      } else {
+        showToast({ type: 'error', message: 'AI description generation failed' });
+      }
+    } catch {
+      showToast({ type: 'error', message: 'AI description generation error' });
+    } finally {
+      setAiGeneratingDescription(false);
+    }
+  }, [openctiPlatforms, selectedPlatformId, availablePlatforms, aiSettings.available, currentPageTitle, currentPageUrl, containerForm.content, containerForm.name, containerType, entitiesToAdd, setAiGeneratingDescription, setContainerForm, showToast]);
 
   const handleCreateContainer = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
@@ -263,50 +295,12 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     }
     setSubmitting(false);
   }, [
-    attachPdf, entitiesToAdd, resolvedRelationships, containerType, containerForm,
+    attachPdf, setGeneratingPdf, entitiesToAdd, resolvedRelationships, containerType, containerForm,
     selectedLabels, selectedMarkings, selectedPlatformId, currentPageUrl, currentPageTitle,
     containerSpecificFields, createAsDraft, updatingContainerId, updatingContainerDates,
-    availablePlatforms, setGeneratingPdf, setSubmitting, setPlatformUrl, setSelectedPlatformId,
-    setEntity, setEntityContainers, setPanelMode, showToast, setContainerForm, setEntitiesToAdd,
-    setContainerWorkflowOrigin, setAttachPdf, setCreateAsDraft, setUpdatingContainerId, setUpdatingContainerDates,
-  ]);
-
-  const handleGenerateAIDescription = useCallback(async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
-    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
-    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-    
-    if (!aiSettings.available || !targetPlatform?.isEnterprise) return;
-    
-    setAiGeneratingDescription(true);
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'AI_GENERATE_DESCRIPTION',
-        payload: {
-          pageTitle: currentPageTitle,
-          pageUrl: currentPageUrl,
-          pageContent: containerForm.content || '',
-          containerType,
-          containerName: containerForm.name,
-          detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean),
-        },
-      });
-      if (response?.success && response.data) {
-        setContainerForm(prev => ({ ...prev, description: response.data }));
-        showToast({ type: 'success', message: 'AI generated description' });
-      } else {
-        showToast({ type: 'error', message: 'AI description generation failed' });
-      }
-    } catch {
-      showToast({ type: 'error', message: 'AI description generation error' });
-    } finally {
-      setAiGeneratingDescription(false);
-    }
-  }, [
-    openctiPlatforms, selectedPlatformId, availablePlatforms, aiSettings,
-    currentPageTitle, currentPageUrl, containerForm, containerType, entitiesToAdd,
-    setAiGeneratingDescription, setContainerForm, showToast,
+    availablePlatforms, setPlatformUrl, setSelectedPlatformId, setEntity, setEntityContainers,
+    setPanelMode, showToast, setContainerForm, setEntitiesToAdd, setContainerWorkflowOrigin,
+    setAttachPdf, setCreateAsDraft, setUpdatingContainerId, setUpdatingContainerDates, setSubmitting
   ]);
 
   return {
@@ -315,3 +309,4 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     handleGenerateAIDescription,
   };
 }
+

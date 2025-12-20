@@ -1,37 +1,35 @@
 /**
  * Investigation Actions Hook
  * 
- * Handles investigation-related actions like scanning and workbench creation.
+ * Handles investigation entity selection, workbench creation, and related actions.
  */
 
 import { useCallback } from 'react';
-import type { PlatformInfo, InvestigationEntity } from '../types/panel-types';
+import type { PlatformInfo, InvestigationEntity, PanelMode } from '../types/panel-types';
 
 export interface InvestigationActionsProps {
   // Platform state
-  openctiPlatforms: PlatformInfo[];
   availablePlatforms: PlatformInfo[];
   selectedPlatformId: string;
   
   // Investigation state
   investigationEntities: InvestigationEntity[];
   setInvestigationEntities: React.Dispatch<React.SetStateAction<InvestigationEntity[]>>;
+  filteredInvestigationEntities: InvestigationEntity[];
   investigationPlatformId: string | null;
   setInvestigationPlatformId: (id: string | null) => void;
   setInvestigationPlatformSelected: (selected: boolean) => void;
-  setInvestigationScanning: (scanning: boolean) => void;
   setInvestigationTypeFilter: (filter: string) => void;
-  filteredInvestigationEntities: InvestigationEntity[];
   resetInvestigationState: () => void;
+  handleInvestigationScan: (platformId: string) => Promise<void>;
   
   // UI
   setSubmitting: (submitting: boolean) => void;
-  setPanelMode: (mode: any) => void;
-  showToast: (options: { type: string; message: string }) => void;
+  setPanelMode: React.Dispatch<React.SetStateAction<PanelMode>>;
+  showToast: (options: { type: 'success' | 'info' | 'warning' | 'error'; message: string }) => void;
 }
 
 export interface InvestigationActionsReturn {
-  handleInvestigationScan: (platformId?: string) => Promise<void>;
   handleSelectInvestigationPlatform: (platformId: string) => void;
   toggleInvestigationEntity: (entityId: string) => Promise<void>;
   selectAllInvestigationEntities: () => Promise<void>;
@@ -42,43 +40,20 @@ export interface InvestigationActionsReturn {
 
 export function useInvestigationActions(props: InvestigationActionsProps): InvestigationActionsReturn {
   const {
-    openctiPlatforms,
     availablePlatforms,
     selectedPlatformId,
     investigationEntities,
     setInvestigationEntities,
-    investigationPlatformId,
+    filteredInvestigationEntities,
     setInvestigationPlatformId,
     setInvestigationPlatformSelected,
-    setInvestigationScanning,
     setInvestigationTypeFilter,
-    filteredInvestigationEntities,
     resetInvestigationState,
+    handleInvestigationScan,
     setSubmitting,
     setPanelMode,
     showToast,
   } = props;
-
-  const handleInvestigationScan = useCallback(async (platformId?: string) => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    const targetPlatformId = platformId || investigationPlatformId;
-    if (!targetPlatformId && openctiPlatforms.length > 1) return;
-    
-    setInvestigationScanning(true);
-    setInvestigationEntities([]);
-    
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { 
-          type: 'SCAN_FOR_INVESTIGATION',
-          payload: { platformId: targetPlatformId || openctiPlatforms[0]?.id },
-        });
-      }
-    } catch {
-      // Investigation scan failed silently
-    }
-  }, [investigationPlatformId, openctiPlatforms, setInvestigationScanning, setInvestigationEntities]);
 
   const handleSelectInvestigationPlatform = useCallback((platformId: string) => {
     setInvestigationPlatformId(platformId);
@@ -93,25 +68,42 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
     
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_SELECTION', payload: { entityId, selected: newSelected } });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          type: 'INVESTIGATION_SYNC_SELECTION', 
+          payload: { entityId, selected: newSelected } 
+        });
+      }
     }
   }, [investigationEntities, setInvestigationEntities]);
 
   const selectAllInvestigationEntities = useCallback(async () => {
     const filteredIds = filteredInvestigationEntities.map(e => e.id);
     setInvestigationEntities(prev => prev.map(e => filteredIds.includes(e.id) ? { ...e, selected: true } : e));
+    
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_ALL', payload: { entityIds: filteredIds, selected: true } });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          type: 'INVESTIGATION_SYNC_ALL', 
+          payload: { entityIds: filteredIds, selected: true } 
+        });
+      }
     }
   }, [filteredInvestigationEntities, setInvestigationEntities]);
 
   const clearInvestigationSelection = useCallback(async () => {
     const filteredIds = filteredInvestigationEntities.map(e => e.id);
     setInvestigationEntities(prev => prev.map(e => filteredIds.includes(e.id) ? { ...e, selected: false } : e));
+    
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_ALL', payload: { entityIds: filteredIds, selected: false } });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { 
+          type: 'INVESTIGATION_SYNC_ALL', 
+          payload: { entityIds: filteredIds, selected: false } 
+        });
+      }
     }
   }, [filteredInvestigationEntities, setInvestigationEntities]);
 
@@ -123,23 +115,29 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
     setSubmitting(true);
     let workbenchName = 'Investigation';
     let currentTab: chrome.tabs.Tab | undefined;
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      currentTab = tab;
-      if (tab?.title) workbenchName = tab.title;
+    
+    try { 
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); 
+      currentTab = tab; 
+      if (tab?.title) workbenchName = tab.title; 
     } catch { /* use default */ }
     
     const entityIds = selectedEntities.map(e => e.id).filter(id => id && id.length > 0);
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_WORKBENCH',
-      payload: { name: workbenchName, description: `Investigation with ${entityIds.length} entities`, entityIds, platformId: selectedPlatformId || availablePlatforms[0]?.id },
+      payload: { 
+        name: workbenchName, 
+        description: `Investigation with ${entityIds.length} entities`, 
+        entityIds, 
+        platformId: selectedPlatformId || availablePlatforms[0]?.id 
+      },
     });
     
     if (response?.success && response.data?.url) {
       chrome.tabs.create({ url: response.data.url });
-      if (currentTab?.id) {
-        chrome.tabs.sendMessage(currentTab.id, { type: 'CLEAR_HIGHLIGHTS' });
-        chrome.tabs.sendMessage(currentTab.id, { type: 'HIDE_PANEL' });
+      if (currentTab?.id) { 
+        chrome.tabs.sendMessage(currentTab.id, { type: 'CLEAR_HIGHLIGHTS' }); 
+        chrome.tabs.sendMessage(currentTab.id, { type: 'HIDE_PANEL' }); 
       }
       setInvestigationEntities([]);
       setInvestigationTypeFilter('all');
@@ -149,18 +147,17 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
       showToast({ type: 'error', message: response?.error || 'Failed to create workbench' });
     }
     setSubmitting(false);
-  }, [investigationEntities, selectedPlatformId, availablePlatforms, setSubmitting, setInvestigationEntities, setInvestigationTypeFilter, setPanelMode, showToast]);
+  }, [investigationEntities, selectedPlatformId, availablePlatforms, setInvestigationEntities, setInvestigationTypeFilter, setPanelMode, showToast, setSubmitting]);
 
   const resetInvestigation = useCallback(() => {
     resetInvestigationState();
     setPanelMode('empty');
-    chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' });
+    chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => { 
+      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' }); 
     });
   }, [resetInvestigationState, setPanelMode]);
 
   return {
-    handleInvestigationScan,
     handleSelectInvestigationPlatform,
     toggleInvestigationEntity,
     selectAllInvestigationEntities,
@@ -169,3 +166,4 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
     resetInvestigation,
   };
 }
+

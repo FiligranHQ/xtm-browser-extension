@@ -16,15 +16,21 @@ import {
 import { DeleteOutlined } from '@mui/icons-material';
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
-import type { ScanResultEntity, ResolvedRelationship } from '../../types/panel-types';
+import type { ScanResultEntity, EntityData, ResolvedRelationship } from '../../types/panel-types';
+
+// Generic entity type that works with both ScanResultEntity and EntityData
+type RelationshipEntity = ScanResultEntity | EntityData;
 
 interface ScanResultsRelationshipItemProps {
   relationship: ResolvedRelationship;
   index: number;
   mode: 'dark' | 'light';
   aiColors: { main: string; dark: string; light: string };
-  scanResultsEntities: ScanResultEntity[];
+  /** Entities array - can be ScanResultEntity[] or EntityData[] */
+  entities: RelationshipEntity[];
   onDelete: (index: number) => void;
+  /** Compact mode for smaller display (used in preview view) */
+  compact?: boolean;
 }
 
 export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemProps> = ({
@@ -32,21 +38,26 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
   index,
   mode,
   aiColors,
-  scanResultsEntities,
+  entities,
   onDelete,
+  compact = false,
 }) => {
   // Look up entities by value (more reliable) or fallback to index
   const fromEntity = rel.fromEntityValue 
-    ? scanResultsEntities.find(e => (e.value || e.name) === rel.fromEntityValue)
-    : scanResultsEntities[rel.fromIndex];
+    ? entities.find(e => (e.value || e.name) === rel.fromEntityValue)
+    : entities[rel.fromIndex];
   const toEntity = rel.toEntityValue
-    ? scanResultsEntities.find(e => (e.value || e.name) === rel.toEntityValue)
-    : scanResultsEntities[rel.toIndex];
+    ? entities.find(e => (e.value || e.name) === rel.toEntityValue)
+    : entities[rel.toIndex];
 
   if (!fromEntity || !toEntity) return null;
 
-  const fromColor = fromEntity.discoveredByAI ? aiColors.main : itemColor(fromEntity.type, mode === 'dark');
-  const toColor = toEntity.discoveredByAI ? aiColors.main : itemColor(toEntity.type, mode === 'dark');
+  // Handle discoveredByAI which may not exist on EntityData
+  const fromDiscoveredByAI = 'discoveredByAI' in fromEntity && fromEntity.discoveredByAI;
+  const toDiscoveredByAI = 'discoveredByAI' in toEntity && toEntity.discoveredByAI;
+  
+  const fromColor = fromDiscoveredByAI ? aiColors.main : itemColor(fromEntity.type, mode === 'dark');
+  const toColor = toDiscoveredByAI ? aiColors.main : itemColor(toEntity.type, mode === 'dark');
   const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
 
   return (
@@ -55,9 +66,9 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
       sx={{
         display: 'flex',
         alignItems: 'center',
-        gap: 1,
-        p: 1,
-        mb: 0.75,
+        gap: compact ? 0.75 : 1,
+        p: compact ? 0.75 : 1,
+        mb: compact ? 0.5 : 0.75,
         bgcolor: hexToRGB(aiColors.main, 0.05),
         border: 1,
         borderColor: hexToRGB(aiColors.main, 0.2),
@@ -68,14 +79,14 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
         {/* One-line relationship display */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
           {/* From entity */}
-          <Tooltip title={fromEntity.type.replace(/-/g, ' ')} placement="top">
+          <Tooltip title={fromEntity.type?.replace(/-/g, ' ') || ''} placement="top">
             <Box sx={{ 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
               bgcolor: hexToRGB(fromColor, 0.15),
               borderRadius: 0.5,
-              p: 0.3,
+              p: compact ? 0.25 : 0.3,
               flexShrink: 0,
             }}>
               <ItemIcon type={fromEntity.type} size="small" color={fromColor} />
@@ -91,6 +102,7 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
               whiteSpace: 'nowrap',
               minWidth: 0,
               flex: '0 1 auto',
+              fontSize: compact ? '0.7rem' : undefined,
             }}
           >
             {fromEntity.name || fromEntity.value}
@@ -101,24 +113,24 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
             label={rel.relationshipType}
             size="small"
             sx={{
-              height: 18,
-              fontSize: '0.65rem',
+              height: compact ? 16 : 18,
+              fontSize: compact ? '0.6rem' : '0.65rem',
               bgcolor: hexToRGB(aiColors.main, 0.2),
               color: aiColors.main,
               flexShrink: 0,
-              '& .MuiChip-label': { px: 0.75 },
+              '& .MuiChip-label': { px: compact ? 0.5 : 0.75 },
             }}
           />
           
           {/* To entity */}
-          <Tooltip title={toEntity.type.replace(/-/g, ' ')} placement="top">
+          <Tooltip title={toEntity.type?.replace(/-/g, ' ') || ''} placement="top">
             <Box sx={{ 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
               bgcolor: hexToRGB(toColor, 0.15),
               borderRadius: 0.5,
-              p: 0.3,
+              p: compact ? 0.25 : 0.3,
               flexShrink: 0,
             }}>
               <ItemIcon type={toEntity.type} size="small" color={toColor} />
@@ -134,6 +146,7 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
               whiteSpace: 'nowrap',
               minWidth: 0,
               flex: '0 1 auto',
+              fontSize: compact ? '0.7rem' : undefined,
             }}
           >
             {toEntity.name || toEntity.value}
@@ -147,8 +160,9 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
             sx={{ 
               color: 'text.secondary', 
               display: 'block', 
-              mt: 0.5,
+              mt: compact ? 0.25 : 0.5,
               fontStyle: 'italic',
+              fontSize: compact ? '0.65rem' : undefined,
             }} 
             noWrap
           >
@@ -157,13 +171,13 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
         </Tooltip>
       </Box>
       
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: compact ? 0.25 : 0.5, flexShrink: 0 }}>
         <Chip
           label={rel.confidence}
           size="small"
           sx={{
-            height: 18,
-            fontSize: '0.6rem',
+            height: compact ? 16 : 18,
+            fontSize: compact ? '0.55rem' : '0.6rem',
             color: confidenceColor,
             borderColor: confidenceColor,
           }}
@@ -178,7 +192,7 @@ export const ScanResultsRelationshipItem: React.FC<ScanResultsRelationshipItemPr
             '&:hover': { color: 'error.main' },
           }}
         >
-          <DeleteOutlined sx={{ fontSize: '0.9rem' }} />
+          <DeleteOutlined sx={{ fontSize: compact ? '0.85rem' : '0.9rem' }} />
         </IconButton>
       </Box>
     </Paper>

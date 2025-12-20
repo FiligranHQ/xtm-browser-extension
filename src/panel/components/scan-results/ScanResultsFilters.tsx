@@ -1,7 +1,7 @@
 /**
  * Scan Results Filters Component
  * 
- * Renders filter controls for entity type, found status, and search.
+ * Renders filter controls including stats boxes, search, and type filter.
  */
 
 import React from 'react';
@@ -15,21 +15,21 @@ import {
   TextField,
   InputAdornment,
   Chip,
-  IconButton,
+  Divider,
 } from '@mui/material';
 import {
   SearchOutlined,
-  ClearAllOutlined,
 } from '@mui/icons-material';
-import { hexToRGB } from '../../../shared/theme/colors';
 import type { ScanResultEntity } from '../../types/panel-types';
+
+type FoundFilterType = 'all' | 'found' | 'not-found' | 'ai-discovered';
 
 interface ScanResultsFiltersProps {
   scanResultsEntities: ScanResultEntity[];
   scanResultsTypeFilter: string;
   setScanResultsTypeFilter: (filter: string) => void;
-  scanResultsFoundFilter: string;
-  setScanResultsFoundFilter: (filter: string) => void;
+  scanResultsFoundFilter: FoundFilterType;
+  setScanResultsFoundFilter: (filter: FoundFilterType) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   scanResultsFoundCount: number;
@@ -58,108 +58,132 @@ export const ScanResultsFilters: React.FC<ScanResultsFiltersProps> = ({
     return Array.from(types).sort();
   }, [scanResultsEntities]);
 
-  const clearFilters = () => {
-    setScanResultsFoundFilter('all');
-    setScanResultsTypeFilter('all');
-    setSearchQuery('');
-  };
-
-  const hasActiveFilters = scanResultsFoundFilter !== 'all' || scanResultsTypeFilter !== 'all' || searchQuery.trim() !== '';
-
   return (
     <>
-      {/* Search input */}
-      <Box sx={{ mb: 1.5 }}>
+      {/* Stats - Clickable for filtering */}
+      {scanResultsEntities.length > 0 && (
+        <Box sx={{
+          display: 'flex',
+          gap: 0,
+          mb: 2,
+          borderRadius: 1,
+          border: 1,
+          borderColor: 'divider',
+          overflow: 'hidden',
+        }}>
+          <Box
+            onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'found' ? 'all' : 'found')}
+            sx={{
+              flex: 1,
+              textAlign: 'center',
+              p: 1.5,
+              cursor: 'pointer',
+              bgcolor: scanResultsFoundFilter === 'found' ? 'success.main' : 'action.hover',
+              color: scanResultsFoundFilter === 'found' ? 'white' : 'inherit',
+              transition: 'all 0.15s',
+              '&:hover': {
+                bgcolor: scanResultsFoundFilter === 'found' ? 'success.dark' : 'action.selected',
+              },
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'found' ? 'inherit' : 'success.main' }}>
+              {scanResultsFoundCount}
+            </Typography>
+            <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'found' ? 0.9 : 1 }}>
+              Found
+            </Typography>
+          </Box>
+          <Divider orientation="vertical" flexItem />
+          <Box
+            onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'not-found' ? 'all' : 'not-found')}
+            sx={{
+              flex: 1,
+              textAlign: 'center',
+              p: 1.5,
+              cursor: 'pointer',
+              bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.main' : 'action.hover',
+              color: scanResultsFoundFilter === 'not-found' ? 'white' : 'inherit',
+              transition: 'all 0.15s',
+              '&:hover': {
+                bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.dark' : 'action.selected',
+              },
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'warning.main' }}>
+              {scanResultsNotFoundCount}
+            </Typography>
+            <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'not-found' ? 0.9 : 1 }}>
+              Not Found
+            </Typography>
+          </Box>
+          {/* AI Findings filter - only show if there are AI discoveries */}
+          {scanResultsAICount > 0 && (
+            <>
+              <Divider orientation="vertical" flexItem />
+              <Box
+                onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'ai-discovered' ? 'all' : 'ai-discovered')}
+                sx={{
+                  flex: 1,
+                  textAlign: 'center',
+                  p: 1.5,
+                  cursor: 'pointer',
+                  bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.main : 'action.hover',
+                  color: scanResultsFoundFilter === 'ai-discovered' ? 'white' : 'inherit',
+                  transition: 'all 0.15s',
+                  '&:hover': {
+                    bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.dark : 'action.selected',
+                  },
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : aiColors.main }}>
+                  {scanResultsAICount}
+                </Typography>
+                <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'ai-discovered' ? 0.9 : 1 }}>
+                  AI Findings
+                </Typography>
+              </Box>
+            </>
+          )}
+        </Box>
+      )}
+
+      {/* Search and Type filter */}
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'flex-end' }}>
+        {/* Search field */}
         <TextField
-          fullWidth
           size="small"
-          placeholder="Search entities..."
+          placeholder="Search findings..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ flex: 1 }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
                 <SearchOutlined sx={{ fontSize: 18, color: 'text.secondary' }} />
               </InputAdornment>
             ),
-            sx: { fontSize: '0.85rem' },
           }}
         />
-      </Box>
-
-      {/* Status filter chips */}
-      <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Chip
-          label={`All (${scanResultsEntities.length})`}
-          size="small"
-          variant={scanResultsFoundFilter === 'all' ? 'filled' : 'outlined'}
-          onClick={() => setScanResultsFoundFilter('all')}
-          sx={{ cursor: 'pointer', fontSize: '0.75rem', height: 24 }}
-        />
-        <Chip
-          label={`Found (${scanResultsFoundCount})`}
-          size="small"
-          color="success"
-          variant={scanResultsFoundFilter === 'found' ? 'filled' : 'outlined'}
-          onClick={() => setScanResultsFoundFilter('found')}
-          sx={{ cursor: 'pointer', fontSize: '0.75rem', height: 24 }}
-        />
-        <Chip
-          label={`New (${scanResultsNotFoundCount})`}
-          size="small"
-          color="warning"
-          variant={scanResultsFoundFilter === 'not-found' ? 'filled' : 'outlined'}
-          onClick={() => setScanResultsFoundFilter('not-found')}
-          sx={{ cursor: 'pointer', fontSize: '0.75rem', height: 24 }}
-        />
-        {scanResultsAICount > 0 && (
-          <Chip
-            label={`AI (${scanResultsAICount})`}
-            size="small"
-            variant={scanResultsFoundFilter === 'ai-discovered' ? 'filled' : 'outlined'}
-            onClick={() => setScanResultsFoundFilter('ai-discovered')}
-            sx={{ 
-              cursor: 'pointer', 
-              fontSize: '0.75rem', 
-              height: 24,
-              bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.main : 'transparent',
-              color: scanResultsFoundFilter === 'ai-discovered' ? 'white' : aiColors.main,
-              borderColor: aiColors.main,
-              '&:hover': {
-                bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.dark : hexToRGB(aiColors.main, 0.08),
-              },
-            }}
-          />
-        )}
-        {hasActiveFilters && (
-          <IconButton
-            size="small"
-            onClick={clearFilters}
-            sx={{ p: 0.5 }}
-          >
-            <ClearAllOutlined sx={{ fontSize: 16 }} />
-          </IconButton>
-        )}
-      </Box>
-
-      {/* Type filter dropdown */}
-      <Box sx={{ mb: 1.5 }}>
+        {/* Type filter */}
         {scanResultsEntityTypes.length > 1 && (
-          <FormControl fullWidth size="small">
-            <InputLabel sx={{ fontSize: '0.85rem' }}>Filter by type</InputLabel>
+          <FormControl size="small" sx={{ flex: 1 }}>
+            <InputLabel id="scan-results-type-filter-label">Filter by type</InputLabel>
             <Select
+              labelId="scan-results-type-filter-label"
               value={scanResultsTypeFilter}
               label="Filter by type"
               onChange={(e) => setScanResultsTypeFilter(e.target.value)}
-              sx={{ fontSize: '0.85rem' }}
             >
               <MenuItem value="all">
-                <Typography variant="body2">All types</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                  <span>All types</span>
+                  <Chip label={scanResultsEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
+                </Box>
               </MenuItem>
-              {scanResultsEntityTypes.map((type) => (
+              {scanResultsEntityTypes.map(type => (
                 <MenuItem key={type} value={type}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <Typography variant="body2">{type.replace(/-/g, ' ')}</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
                     <Chip label={scanResultsEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                   </Box>
                 </MenuItem>
@@ -173,4 +197,3 @@ export const ScanResultsFilters: React.FC<ScanResultsFiltersProps> = ({
 };
 
 export default ScanResultsFilters;
-

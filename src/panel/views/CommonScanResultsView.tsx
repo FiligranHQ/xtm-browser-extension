@@ -8,19 +8,8 @@ import React, { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
-  Paper,
-  Chip,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Divider,
-  CircularProgress,
   Tooltip,
-  TextField,
-  InputAdornment,
-  IconButton,
   Tab,
   Tabs,
 } from '@mui/material';
@@ -28,16 +17,8 @@ import {
   TravelExploreOutlined,
   SearchOutlined,
   ChevronLeftOutlined,
-  ArrowForwardOutlined,
-  AutoAwesomeOutlined,
-  CheckBoxOutlined,
-  CheckBoxOutlineBlankOutlined,
-  DeleteOutlined,
   LayersClearOutlined,
-  PlaylistAddCheckOutlined,
 } from '@mui/icons-material';
-import ItemIcon from '../../shared/components/ItemIcon';
-import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { ScanResultsViewProps } from '../types/view-props';
 import type { ScanResultEntity, EntityData, MultiPlatformResult, ResolvedRelationship } from '../types/panel-types';
 import { loggers } from '../../shared/utils/logger';
@@ -52,6 +33,10 @@ import {
   buildEntitiesForAI,
 } from '../utils/scan-results-helpers';
 import { ScanResultsEntityItem } from '../components/scan-results/ScanResultsEntityItem';
+import { ScanResultsAIButtons } from '../components/scan-results/ScanResultsAIButtons';
+import { ScanResultsSelectionActions } from '../components/scan-results/ScanResultsSelectionActions';
+import { ScanResultsRelationshipItem } from '../components/scan-results/ScanResultsRelationshipItem';
+import { ScanResultsFilters } from '../components/scan-results/ScanResultsFilters';
 
 const log = loggers.panel;
 
@@ -150,13 +135,6 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     scanResultsEntities.filter(e => e.discoveredByAI).length,
     [scanResultsEntities]
   );
-
-  // Get unique entity types for filter
-  const scanResultsEntityTypes = useMemo(() => {
-    const types = new Set<string>();
-    scanResultsEntities.forEach(e => types.add(e.type));
-    return Array.from(types).sort();
-  }, [scanResultsEntities]);
 
   // Filter entities based on current filters
   const filteredScanResultsEntities = useMemo(() => {
@@ -955,334 +933,42 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         </Tooltip>
       </Box>
 
-      {/* Stats - Clickable for filtering */}
-      {scanResultsEntities.length > 0 && (
-          <Box sx={{
-            display: 'flex',
-            gap: 0,
-            mb: 2,
-            borderRadius: 1,
-            border: 1,
-            borderColor: 'divider',
-            overflow: 'hidden',
-          }}>
-            <Box
-              onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'found' ? 'all' : 'found')}
-              sx={{
-                flex: 1,
-                textAlign: 'center',
-                p: 1.5,
-                cursor: 'pointer',
-                bgcolor: scanResultsFoundFilter === 'found' ? 'success.main' : 'action.hover',
-                color: scanResultsFoundFilter === 'found' ? 'white' : 'inherit',
-                transition: 'all 0.15s',
-                '&:hover': {
-                  bgcolor: scanResultsFoundFilter === 'found' ? 'success.dark' : 'action.selected',
-                },
-              }}
-            >
-              <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'found' ? 'inherit' : 'success.main' }}>
-                {scanResultsFoundCount}
-              </Typography>
-              <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'found' ? 0.9 : 1 }}>
-                Found
-              </Typography>
-            </Box>
-            <Divider orientation="vertical" flexItem />
-            <Box
-              onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'not-found' ? 'all' : 'not-found')}
-              sx={{
-                flex: 1,
-                textAlign: 'center',
-                p: 1.5,
-                cursor: 'pointer',
-                bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.main' : 'action.hover',
-                color: scanResultsFoundFilter === 'not-found' ? 'white' : 'inherit',
-                transition: 'all 0.15s',
-                '&:hover': {
-                  bgcolor: scanResultsFoundFilter === 'not-found' ? 'warning.dark' : 'action.selected',
-                },
-              }}
-            >
-              <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'warning.main' }}>
-                {scanResultsNotFoundCount}
-              </Typography>
-              <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'not-found' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'not-found' ? 0.9 : 1 }}>
-                Not Found
-              </Typography>
-            </Box>
-            {/* AI Findings filter - only show if there are AI discoveries */}
-            {scanResultsAICount > 0 && (
-              <>
-                <Divider orientation="vertical" flexItem />
-                <Box
-                  onClick={() => setScanResultsFoundFilter(scanResultsFoundFilter === 'ai-discovered' ? 'all' : 'ai-discovered')}
-                  sx={{
-                    flex: 1,
-                    textAlign: 'center',
-                    p: 1.5,
-                    cursor: 'pointer',
-                    bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.main : 'action.hover',
-                    color: scanResultsFoundFilter === 'ai-discovered' ? 'white' : 'inherit',
-                    transition: 'all 0.15s',
-                    '&:hover': {
-                      bgcolor: scanResultsFoundFilter === 'ai-discovered' ? aiColors.dark : 'action.selected',
-                    },
-                  }}
-                >
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : aiColors.main }}>
-                    {scanResultsAICount}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: scanResultsFoundFilter === 'ai-discovered' ? 'inherit' : 'text.secondary', opacity: scanResultsFoundFilter === 'ai-discovered' ? 0.9 : 1 }}>
-                    AI Findings
-                  </Typography>
-                </Box>
-              </>
-            )}
-          </Box>
-      )}
-
-      {/* Search and Type filter */}
-          <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'flex-end' }}>
-            {/* Search field */}
-            <TextField
-              size="small"
-              placeholder="Search findings..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ flex: 1 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchOutlined sx={{ fontSize: 18, color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            {/* Type filter */}
-            {scanResultsEntityTypes.length > 1 && (
-              <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel id="scan-results-type-filter-label">Filter by type</InputLabel>
-                <Select
-                  labelId="scan-results-type-filter-label"
-                  value={scanResultsTypeFilter}
-                  label="Filter by type"
-                  onChange={(e) => setScanResultsTypeFilter(e.target.value)}
-                >
-                  <MenuItem value="all">
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <span>All types</span>
-                      <Chip label={scanResultsEntities.length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                    </Box>
-                  </MenuItem>
-                  {scanResultsEntityTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
-                        <Chip label={scanResultsEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          </Box>
+      {/* Stats and Filters */}
+      <ScanResultsFilters
+        scanResultsEntities={scanResultsEntities}
+        scanResultsTypeFilter={scanResultsTypeFilter}
+        setScanResultsTypeFilter={setScanResultsTypeFilter}
+        scanResultsFoundFilter={scanResultsFoundFilter}
+        setScanResultsFoundFilter={setScanResultsFoundFilter}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        scanResultsFoundCount={scanResultsFoundCount}
+        scanResultsNotFoundCount={scanResultsNotFoundCount}
+        scanResultsAICount={scanResultsAICount}
+        aiColors={aiColors}
+      />
 
           {/* AI Discovery buttons - Entities, Relations, and Scan All */}
-          {(() => {
-            const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
-            // Count OpenCTI-eligible entities (not oaev-* types)
-            const octiEligibleEntities = scanResultsEntities.filter(e => !e.type.startsWith('oaev-'));
-            const isEntitiesButtonDisabled = aiDiscoveringEntities || aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform;
-            const isRelationshipsButtonDisabled = aiResolvingRelationships || aiDiscoveringEntities || !aiSettings.available || !hasEnterprisePlatform || octiEligibleEntities.length < 2;
-            const isScanAllDisabled = aiDiscoveringEntities || aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform;
-
-            let entitiesToolipMessage = 'Use AI to find additional entities';
-            if (aiDiscoveringEntities) {
-              entitiesToolipMessage = 'Analyzing page content...';
-            } else if (!aiSettings.available) {
-              entitiesToolipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
-            } else if (!hasEnterprisePlatform) {
-              entitiesToolipMessage = 'Requires at least one Enterprise Edition platform';
-            }
-
-            let relationshipsTooltipMessage = 'Use AI to discover relationships between entities';
-            if (aiResolvingRelationships) {
-              relationshipsTooltipMessage = 'Analyzing relationships...';
-            } else if (!aiSettings.available) {
-              relationshipsTooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
-            } else if (!hasEnterprisePlatform) {
-              relationshipsTooltipMessage = 'Requires at least one Enterprise Edition platform';
-            } else if (octiEligibleEntities.length < 2) {
-              relationshipsTooltipMessage = 'Need at least 2 OpenCTI entities to discover relationships';
-            }
-
-            let scanAllTooltipMessage = 'Use AI to discover both entities and relationships at once';
-            if (aiDiscoveringEntities || aiResolvingRelationships) {
-              scanAllTooltipMessage = 'Analyzing...';
-            } else if (!aiSettings.available) {
-              scanAllTooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
-            } else if (!hasEnterprisePlatform) {
-              scanAllTooltipMessage = 'Requires at least one Enterprise Edition platform';
-            }
-
-            const buttonSx = {
-              textTransform: 'none',
-              fontSize: '0.75rem',
-              py: 0.6,
-              px: 1,
-              borderColor: aiColors.main,
-              color: aiColors.main,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              '& .MuiButton-startIcon': {
-                marginRight: 0.5,
-                flexShrink: 0,
-              },
-              '&:hover': {
-                borderColor: aiColors.dark,
-                bgcolor: hexToRGB(aiColors.main, 0.08),
-              },
-              '&.Mui-disabled': {
-                borderColor: hexToRGB(aiColors.main, 0.3),
-                color: hexToRGB(aiColors.main, 0.5),
-              },
-            };
-
-            return (
-              <Box sx={{ mb: 2, display: 'flex', gap: 1, alignItems: 'stretch' }}>
-                <Tooltip title={entitiesToolipMessage} placement="top">
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      onClick={handleDiscoverEntitiesWithAI}
-                      disabled={isEntitiesButtonDisabled}
-                      startIcon={aiDiscoveringEntities ? <CircularProgress size={12} color="inherit" /> : <AutoAwesomeOutlined sx={{ fontSize: '1rem' }} />}
-                      sx={buttonSx}
-                    >
-                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {aiDiscoveringEntities ? 'Scanning...' : 'Entities (AI)'}
-                      </Box>
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip title={relationshipsTooltipMessage} placement="top">
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      onClick={handleDiscoverRelationshipsWithAI}
-                      disabled={isRelationshipsButtonDisabled}
-                      startIcon={aiResolvingRelationships ? <CircularProgress size={12} color="inherit" /> : <AutoAwesomeOutlined sx={{ fontSize: '1rem' }} />}
-                      sx={buttonSx}
-                    >
-                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {aiResolvingRelationships ? 'Scanning...' : 'Relations (AI)'}
-                      </Box>
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip title={scanAllTooltipMessage} placement="top">
-                  <span style={{ display: 'flex' }}>
-                    <IconButton
-                      onClick={handleScanAllWithAI}
-                      disabled={isScanAllDisabled}
-                      sx={{
-                        border: 1,
-                        borderColor: aiColors.main,
-                        color: aiColors.main,
-                        borderRadius: 1,
-                        px: 1,
-                        py: 0.6,
-                        '&:hover': {
-                          borderColor: aiColors.dark,
-                          bgcolor: hexToRGB(aiColors.main, 0.08),
-                        },
-                        '&.Mui-disabled': {
-                          borderColor: hexToRGB(aiColors.main, 0.3),
-                          color: hexToRGB(aiColors.main, 0.5),
-                        },
-                      }}
-                    >
-                      {scanAllRunning ? <CircularProgress size={14} color="inherit" /> : <PlaylistAddCheckOutlined sx={{ fontSize: '1.1rem' }} />}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Box>
-            );
-          })()}
+          <ScanResultsAIButtons
+            aiSettings={aiSettings}
+            aiColors={aiColors}
+            availablePlatforms={availablePlatforms}
+            scanResultsEntities={scanResultsEntities}
+            aiDiscoveringEntities={aiDiscoveringEntities}
+            aiResolvingRelationships={aiResolvingRelationships}
+            scanAllRunning={scanAllRunning}
+            onDiscoverEntities={handleDiscoverEntitiesWithAI}
+            onDiscoverRelationships={handleDiscoverRelationshipsWithAI}
+            onScanAll={handleScanAllWithAI}
+          />
 
           {/* Select All / Deselect All for entities selectable for OpenCTI */}
-          {(() => {
-            const selectableEntities = filteredScanResultsEntities.filter(e => isSelectableForOpenCTI(e));
-            const selectableValues = selectableEntities.map(e => e.value || e.name);
-            const selectedCount = selectableValues.filter(v => selectedScanItems.has(v)).length;
-            const allSelected = selectedCount === selectableEntities.length && selectableEntities.length > 0;
-            const hasSelectableEntities = selectableEntities.length > 0;
-
-            const selectedNewCount = selectableEntities.filter(e => {
-              const entityValue = e.value || e.name;
-              return selectedScanItems.has(entityValue) && !isFoundInOpenCTI(e);
-            }).length;
-
-            // Always show this section to keep layout stable
-            return (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 1 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }}>
-                  {selectedCount > 0
-                    ? `${selectedCount} sel.${selectedNewCount > 0 ? ` (${selectedNewCount} new)` : ''}`
-                    : `${selectableEntities.length} available`
-                  }
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={!hasSelectableEntities}
-                    onClick={() => {
-                      if (allSelected) {
-                        window.parent.postMessage({ type: 'XTM_DESELECT_ALL' }, '*');
-                        setSelectedScanItems(new Set());
-                      } else {
-                        window.parent.postMessage({ type: 'XTM_SELECT_ALL', values: selectableValues }, '*');
-                        setSelectedScanItems(new Set(selectableValues));
-                      }
-                    }}
-                    startIcon={allSelected ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
-                    sx={{
-                      textTransform: 'none',
-                      fontSize: '0.75rem',
-                      py: 0.25,
-                      minWidth: 'auto',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {allSelected ? 'Deselect all' : 'Select all'}
-                  </Button>
-                  {selectedCount > 0 && (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      onClick={handleImportSelectedScanResults}
-                      startIcon={<ArrowForwardOutlined />}
-                      sx={{
-                        textTransform: 'none',
-                        fontSize: '0.75rem',
-                        py: 0.25,
-                        minWidth: 'auto',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Import ({selectedCount})
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-            );
-          })()}
+          <ScanResultsSelectionActions
+            filteredScanResultsEntities={filteredScanResultsEntities}
+            selectedScanItems={selectedScanItems}
+            setSelectedScanItems={setSelectedScanItems}
+            onImportSelected={handleImportSelectedScanResults}
+          />
 
       {/* Tabs for Entities/Relationships when relationships exist */}
       {resolvedRelationships.length > 0 && (
@@ -1318,154 +1004,17 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       {/* Relationships tab content */}
       {activeTab === 1 && resolvedRelationships.length > 0 && (
         <Box sx={{ flex: 1, overflow: 'auto' }}>
-          {resolvedRelationships.map((rel, index) => {
-            // Look up entities by value (more reliable) or fallback to index
-            const fromEntity = rel.fromEntityValue 
-              ? scanResultsEntities.find(e => (e.value || e.name) === rel.fromEntityValue)
-              : scanResultsEntities[rel.fromIndex];
-            const toEntity = rel.toEntityValue
-              ? scanResultsEntities.find(e => (e.value || e.name) === rel.toEntityValue)
-              : scanResultsEntities[rel.toIndex];
-            if (!fromEntity || !toEntity) return null;
-
-            const fromColor = fromEntity.discoveredByAI ? aiColors.main : itemColor(fromEntity.type, mode === 'dark');
-            const toColor = toEntity.discoveredByAI ? aiColors.main : itemColor(toEntity.type, mode === 'dark');
-            const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
-
-            return (
-              <Paper
-                key={index}
-                elevation={0}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  p: 1,
-                  mb: 0.75,
-                  bgcolor: hexToRGB(aiColors.main, 0.05),
-                  border: 1,
-                  borderColor: hexToRGB(aiColors.main, 0.2),
-                  borderRadius: 1,
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  {/* One-line relationship display */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
-                    {/* From entity */}
-                    <Tooltip title={fromEntity.type.replace(/-/g, ' ')} placement="top">
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        bgcolor: hexToRGB(fromColor, 0.15),
-                        borderRadius: 0.5,
-                        p: 0.3,
-                        flexShrink: 0,
-                      }}>
-                        <ItemIcon type={fromEntity.type} size="small" color={fromColor} />
-                      </Box>
-                    </Tooltip>
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        fontWeight: 500, 
-                        color: 'text.primary',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0,
-                        flex: '0 1 auto',
-                      }}
-                    >
-                      {fromEntity.name || fromEntity.value}
-                    </Typography>
-                    {/* Relationship type */}
-                    <Chip
-                      label={rel.relationshipType}
-                      size="small"
-                      sx={{
-                        height: 18,
-                        fontSize: '0.65rem',
-                        bgcolor: hexToRGB(aiColors.main, 0.2),
-                        color: aiColors.main,
-                        flexShrink: 0,
-                        '& .MuiChip-label': { px: 0.75 },
-                      }}
-                    />
-                    {/* To entity */}
-                    <Tooltip title={toEntity.type.replace(/-/g, ' ')} placement="top">
-                      <Box sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        bgcolor: hexToRGB(toColor, 0.15),
-                        borderRadius: 0.5,
-                        p: 0.3,
-                        flexShrink: 0,
-                      }}>
-                        <ItemIcon type={toEntity.type} size="small" color={toColor} />
-                      </Box>
-                    </Tooltip>
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        fontWeight: 500, 
-                        color: 'text.primary',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0,
-                        flex: '0 1 auto',
-                      }}
-                    >
-                      {toEntity.name || toEntity.value}
-                    </Typography>
-                  </Box>
-                  {/* Reason */}
-                  <Tooltip title={rel.reason} placement="bottom-start">
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'text.secondary', 
-                        display: 'block', 
-                        mt: 0.5,
-                        fontStyle: 'italic',
-                      }} 
-                      noWrap
-                    >
-                      {rel.reason}
-                    </Typography>
-                  </Tooltip>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                  <Chip
-                    label={rel.confidence}
-                    size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: '0.6rem',
-                      color: confidenceColor,
-                      borderColor: confidenceColor,
-                    }}
-                    variant="outlined"
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
-                    }}
-                    sx={{
-                      p: 0.25,
-                      color: 'text.secondary',
-                      '&:hover': { color: 'error.main' },
-                    }}
-                  >
-                    <DeleteOutlined sx={{ fontSize: '0.9rem' }} />
-                  </IconButton>
-                </Box>
-              </Paper>
-            );
-          })}
+          {resolvedRelationships.map((rel, index) => (
+            <ScanResultsRelationshipItem
+              key={index}
+              relationship={rel}
+              index={index}
+              mode={mode}
+              aiColors={aiColors}
+              entities={scanResultsEntities}
+              onDelete={(i) => setResolvedRelationships(prev => prev.filter((_, idx) => idx !== i))}
+            />
+          ))}
         </Box>
       )}
 

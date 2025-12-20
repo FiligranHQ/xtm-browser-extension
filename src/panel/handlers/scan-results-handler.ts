@@ -233,19 +233,3 @@ export function processScanResults(payload: {
   };
 }
 
-/**
- * Helper function to check if entity is selectable for OpenCTI
- */
-export function isEntitySelectable(entity: ScanResultEntity): boolean {
-  // OpenAEV-specific types can't be added to OpenCTI containers
-  if (entity.type.startsWith('oaev-')) return false;
-  return true;
-}
-
-/**
- * Helper function to check if entity already exists in OpenCTI
- */
-export function isFoundInOpenCTI(entity: ScanResultEntity): boolean {
-  const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
-  return octiCount > 0;
-}

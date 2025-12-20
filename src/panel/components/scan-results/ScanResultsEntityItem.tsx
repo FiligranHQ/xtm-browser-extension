@@ -23,8 +23,9 @@ import {
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
 import type { ScanResultEntity } from '../../types/panel-types';
-import { getCanonicalTypeName, getUniqueCanonicalTypes } from '../../../shared/platform/registry';
+import { getCanonicalTypeName } from '../../../shared/platform/registry';
 import { sendToContentScript } from '../../utils/content-messaging';
+import { isFoundInOpenCTI, getUniqueTypesFromMatches } from '../../utils/scan-results-helpers';
 
 interface ScanResultsEntityItemProps {
   entity: ScanResultEntity;
@@ -36,27 +37,6 @@ interface ScanResultsEntityItemProps {
   onEntityClick: (entity: ScanResultEntity) => void;
   onToggleSelection: (entityValue: string) => void;
 }
-
-// Check if entity is found in OpenCTI
-const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
-  if (entity.found) {
-    if (entity.platformMatches && entity.platformMatches.length > 0) {
-      return entity.platformMatches.some(pm => pm.platformType === 'opencti');
-    }
-    return entity.platformType === 'opencti' || !entity.platformType;
-  }
-  return false;
-};
-
-// Get unique types from platform matches
-const getUniqueTypesFromMatches = (entity: ScanResultEntity): { types: string[]; hasMultipleTypes: boolean } => {
-  if (!entity.platformMatches || entity.platformMatches.length === 0) {
-    return { types: [getCanonicalTypeName(entity.type)], hasMultipleTypes: false };
-  }
-  const allTypes = entity.platformMatches.map(pm => pm.type);
-  const uniqueCanonicalTypes = getUniqueCanonicalTypes(allTypes);
-  return { types: uniqueCanonicalTypes, hasMultipleTypes: uniqueCanonicalTypes.length > 1 };
-};
 
 // Format type name for display
 const formatTypeName = (type: string): string => {

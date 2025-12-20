@@ -26,6 +26,8 @@ import { useScanResultsState } from './hooks/useScanResultsState';
 import { useSearchState } from './hooks/useSearchState';
 import { useEntityState } from './hooks/useEntityState';
 import { useAddSelectionState } from './hooks/useAddSelectionState';
+import { useContainerActions } from './hooks/useContainerActions';
+import { useInvestigationActions } from './hooks/useInvestigationActions';
 import { CommonNotFoundView } from './components/CommonNotFoundView';
 import { CommonScanResultsView } from './views/CommonScanResultsView';
 import { CommonUnifiedSearchView } from './views/CommonUnifiedSearchView';
@@ -258,6 +260,77 @@ const App: React.FC = () => {
   }) => {
     window.parent.postMessage({ type: 'XTM_SHOW_TOAST', payload: options }, '*');
   }, []);
+
+  // Forward declare handleInvestigationScan for the hook (will be defined below)
+  const handleInvestigationScanRef = React.useRef<(platformId: string) => Promise<void>>(async () => {});
+
+  // Container actions hook
+  const { 
+    handleAddEntities, 
+    handleCreateContainer, 
+    handleGenerateAIDescription 
+  } = useContainerActions({
+    openctiPlatforms,
+    availablePlatforms,
+    selectedPlatformId,
+    setPlatformUrl,
+    setSelectedPlatformId,
+    entitiesToAdd,
+    setEntitiesToAdd,
+    containerType,
+    containerForm,
+    setContainerForm,
+    containerSpecificFields,
+    selectedLabels,
+    selectedMarkings,
+    createIndicators,
+    attachPdf,
+    setGeneratingPdf,
+    createAsDraft,
+    updatingContainerId,
+    setUpdatingContainerId,
+    updatingContainerDates,
+    setUpdatingContainerDates,
+    setContainerWorkflowOrigin,
+    setAttachPdf,
+    setCreateAsDraft,
+    setImportResults,
+    aiSettings,
+    resolvedRelationships,
+    setAiGeneratingDescription,
+    setEntity,
+    setEntityContainers,
+    currentPageUrl,
+    currentPageTitle,
+    setSubmitting,
+    setPanelMode,
+    showToast,
+  });
+
+  // Investigation actions hook
+  const {
+    handleSelectInvestigationPlatform,
+    toggleInvestigationEntity,
+    selectAllInvestigationEntities,
+    clearInvestigationSelection,
+    handleCreateWorkbench,
+    resetInvestigation,
+  } = useInvestigationActions({
+    availablePlatforms,
+    selectedPlatformId,
+    investigationEntities,
+    setInvestigationEntities,
+    filteredInvestigationEntities,
+    investigationPlatformId,
+    setInvestigationPlatformId,
+    setInvestigationPlatformSelected,
+    setInvestigationTypeFilter,
+    resetInvestigationState,
+    handleInvestigationScan: (platformId: string) => handleInvestigationScanRef.current?.(platformId) ?? Promise.resolve(),
+    setSubmitting,
+    setPanelMode,
+    showToast,
+  });
 
   // Sync entitiesToAdd with selectedScanItems when in preview mode
   React.useEffect(() => {
@@ -1224,148 +1297,7 @@ const App: React.FC = () => {
   };
   const handleCopyValue = (value: string) => window.parent.postMessage({ type: 'XTM_COPY_TO_CLIPBOARD', payload: value }, '*');
 
-  const handleAddEntities = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    if (openctiPlatforms.length === 0) {
-      setImportResults({ success: false, total: entitiesToAdd.length, created: [], failed: entitiesToAdd.map(e => ({ type: e.type || 'unknown', value: e.value || e.name || 'unknown', error: 'No OpenCTI platform configured' })), platformName: 'OpenCTI' });
-      setPanelMode('import-results');
-      return;
-    }
-    
-    setSubmitting(true);
-    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
-    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0].id;
-    const targetPlatform = openctiPlatforms.find(p => p.id === targetPlatformId) || openctiPlatforms[0];
-    
-    const response = await chrome.runtime.sendMessage({
-      type: 'CREATE_OBSERVABLES_BULK',
-      payload: { entities: entitiesToAdd, platformId: targetPlatformId, createIndicator: createIndicators },
-    });
-
-    if (response?.success && response.data) {
-      const createdEntities = response.data as Array<{ id: string; entity_type?: string; observable_value?: string; value?: string; type?: string }>;
-      setImportResults({
-        success: true, total: entitiesToAdd.length,
-        created: createdEntities.map((e, i) => ({ id: e.id, type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown', value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown' })),
-        failed: [], platformName: targetPlatform.name,
-      });
-      setPanelMode('import-results');
-      setEntitiesToAdd([]);
-    } else {
-      setImportResults({ success: false, total: entitiesToAdd.length, created: [], failed: entitiesToAdd.map(e => ({ type: e.type || 'unknown', value: e.value || e.name || 'unknown', error: response?.error || 'Failed to create entity' })), platformName: targetPlatform.name });
-      setPanelMode('import-results');
-    }
-    setSubmitting(false);
-  };
-
-  const handleGenerateAIDescription = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
-    const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
-    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-    
-    if (!aiSettings.available || !targetPlatform?.isEnterprise) return;
-    
-    setAiGeneratingDescription(true);
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'AI_GENERATE_DESCRIPTION',
-        payload: { pageTitle: currentPageTitle, pageUrl: currentPageUrl, pageContent: containerForm.content || '', containerType, containerName: containerForm.name, detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean) },
-      });
-      if (response?.success && response.data) {
-        setContainerForm(prev => ({ ...prev, description: response.data }));
-        showToast({ type: 'success', message: 'AI generated description' });
-      } else {
-        showToast({ type: 'error', message: 'AI description generation failed' });
-      }
-    } catch {
-      showToast({ type: 'error', message: 'AI description generation error' });
-    } finally {
-      setAiGeneratingDescription(false);
-    }
-  };
-
-  const handleCreateContainer = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    setSubmitting(true);
-    
-    let pdfData: { data: string; filename: string } | null = null;
-    if (attachPdf) {
-      setGeneratingPdf(true);
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
-          const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GENERATE_PDF' });
-          if (pdfResponse?.success && pdfResponse.data) pdfData = pdfResponse.data;
-        }
-      } catch { /* PDF generation failed */ }
-      setGeneratingPdf(false);
-    }
-    
-    const existingEntitiesWithIndex = entitiesToAdd.map((e, i) => ({ entity: e, originalIndex: i })).filter(({ entity }) => entity.id);
-    const entitiesToCreateWithIndex = entitiesToAdd.map((e, i) => ({ entity: e, originalIndex: i })).filter(({ entity }) => !entity.id && (entity.value || entity.observable_value));
-    const existingEntityIds = existingEntitiesWithIndex.map(({ entity }) => entity.id as string);
-    const entitiesToCreate = entitiesToCreateWithIndex.map(({ entity }) => ({ type: entity.type || entity.entity_type || 'Unknown', value: entity.value || entity.observable_value || entity.name || '' }));
-    
-    const indexMapping: Record<number, number> = {};
-    existingEntitiesWithIndex.forEach(({ originalIndex }, idx) => { indexMapping[originalIndex] = idx; });
-    entitiesToCreateWithIndex.forEach(({ originalIndex }, idx) => { indexMapping[originalIndex] = existingEntityIds.length + idx; });
-    
-    const relationshipsToCreate = resolvedRelationships.map(rel => ({
-      fromEntityIndex: indexMapping[rel.fromIndex] ?? -1,
-      toEntityIndex: indexMapping[rel.toIndex] ?? -1,
-      relationship_type: rel.relationshipType,
-      description: rel.reason,
-    })).filter(rel => rel.fromEntityIndex >= 0 && rel.toEntityIndex >= 0);
-    
-    const response = await chrome.runtime.sendMessage({
-      type: 'CREATE_CONTAINER',
-      payload: {
-        type: containerType, name: containerForm.name, description: containerForm.description, content: containerForm.content,
-        labels: selectedLabels.map(l => l.id), markings: selectedMarkings.map(m => m.id),
-        entities: existingEntityIds, entitiesToCreate, platformId: selectedPlatformId || undefined, pdfAttachment: pdfData,
-        pageUrl: currentPageUrl, pageTitle: currentPageTitle,
-        report_types: containerSpecificFields.report_types.length > 0 ? containerSpecificFields.report_types : undefined,
-        context: containerSpecificFields.context || undefined, severity: containerSpecificFields.severity || undefined,
-        priority: containerSpecificFields.priority || undefined,
-        response_types: containerSpecificFields.response_types.length > 0 ? containerSpecificFields.response_types : undefined,
-        createdBy: containerSpecificFields.createdBy || undefined, createAsDraft,
-        relationshipsToCreate: relationshipsToCreate.length > 0 ? relationshipsToCreate : undefined,
-        updateContainerId: updatingContainerId || undefined,
-        published: updatingContainerId && containerType === 'Report' ? updatingContainerDates?.published : undefined,
-        created: updatingContainerId && containerType !== 'Report' ? updatingContainerDates?.created : undefined,
-      },
-    });
-
-    if (response?.success && response.data) {
-      const createdContainer = response.data;
-      const createdPlatformId = createdContainer.platformId || selectedPlatformId;
-      if (createdPlatformId) {
-        const platform = availablePlatforms.find(p => p.id === createdPlatformId);
-        if (platform) { setPlatformUrl(platform.url); setSelectedPlatformId(platform.id); }
-      }
-      setEntity({
-        id: createdContainer.id, entity_type: createdContainer.entity_type || containerType, type: createdContainer.entity_type || containerType,
-        name: createdContainer.name || containerForm.name, description: createdContainer.description || containerForm.description,
-        created: createdContainer.created, modified: createdContainer.modified, createdBy: createdContainer.createdBy,
-        objectLabel: createdContainer.objectLabel, objectMarking: createdContainer.objectMarking, existsInPlatform: true,
-        platformId: createdPlatformId, platformType: 'opencti', isNonDefaultPlatform: false, _draftId: createdContainer.draftId,
-      });
-      setEntityContainers([]);
-      setPanelMode('entity');
-      showToast({ type: 'success', message: `${containerType} ${updatingContainerId ? 'updated' : 'created'} successfully` });
-      setContainerForm({ name: '', description: '', content: '' });
-      setEntitiesToAdd([]);
-      setContainerWorkflowOrigin(null);
-      setAttachPdf(true);
-      setCreateAsDraft(false);
-      setUpdatingContainerId(null);
-      setUpdatingContainerDates(null);
-    } else {
-      showToast({ type: 'error', message: response?.error || 'Container creation failed' });
-    }
-    setSubmitting(false);
-  };
+  // handleAddEntities, handleGenerateAIDescription, and handleCreateContainer are provided by useContainerActions hook
 
   const handleAddSelection = async () => {
     if (!addSelectionText || !addSelectionEntityType) return;
@@ -1399,76 +1331,11 @@ const App: React.FC = () => {
     setAddingSelection(false);
   };
 
-  // Investigation handlers
-  const handleSelectInvestigationPlatform = (platformId: string) => {
-    setInvestigationPlatformId(platformId);
-    setInvestigationPlatformSelected(true);
-    handleInvestigationScan(platformId);
-  };
-
-  const toggleInvestigationEntity = async (entityId: string) => {
-    const entity = investigationEntities.find(e => e.id === entityId);
-    const newSelected = entity ? !entity.selected : true;
-    setInvestigationEntities(prev => prev.map(e => e.id === entityId ? { ...e, selected: newSelected } : e));
-    
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_SELECTION', payload: { entityId, selected: newSelected } });
-    }
-  };
-
-  const selectAllInvestigationEntities = async () => {
-    const filteredIds = filteredInvestigationEntities.map(e => e.id);
-    setInvestigationEntities(prev => prev.map(e => filteredIds.includes(e.id) ? { ...e, selected: true } : e));
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_ALL', payload: { entityIds: filteredIds, selected: true } });
-    }
-  };
-
-  const clearInvestigationSelection = async () => {
-    const filteredIds = filteredInvestigationEntities.map(e => e.id);
-    setInvestigationEntities(prev => prev.map(e => filteredIds.includes(e.id) ? { ...e, selected: false } : e));
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'INVESTIGATION_SYNC_ALL', payload: { entityIds: filteredIds, selected: false } });
-    }
-  };
-
-  const handleCreateWorkbench = async () => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    const selectedEntities = investigationEntities.filter(e => e.selected);
-    if (selectedEntities.length === 0) return;
-    
-    setSubmitting(true);
-    let workbenchName = 'Investigation';
-    let currentTab: chrome.tabs.Tab | undefined;
-    try { const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); currentTab = tab; if (tab?.title) workbenchName = tab.title; } catch { /* use default */ }
-    
-    const entityIds = selectedEntities.map(e => e.id).filter(id => id && id.length > 0);
-    const response = await chrome.runtime.sendMessage({
-      type: 'CREATE_WORKBENCH',
-      payload: { name: workbenchName, description: `Investigation with ${entityIds.length} entities`, entityIds, platformId: selectedPlatformId || availablePlatforms[0]?.id },
-    });
-    
-    if (response?.success && response.data?.url) {
-      chrome.tabs.create({ url: response.data.url });
-      if (currentTab?.id) { chrome.tabs.sendMessage(currentTab.id, { type: 'CLEAR_HIGHLIGHTS' }); chrome.tabs.sendMessage(currentTab.id, { type: 'HIDE_PANEL' }); }
-      setInvestigationEntities([]);
-      setInvestigationTypeFilter('all');
-      setPanelMode('empty');
-      showToast({ type: 'success', message: 'Workbench created successfully' });
-    } else {
-      showToast({ type: 'error', message: response?.error || 'Failed to create workbench' });
-    }
-    setSubmitting(false);
-  };
-
-  const resetInvestigation = () => {
-    resetInvestigationState();
-    setPanelMode('empty');
-    chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => { if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' }); });
-  };
+  // Investigation handlers provided by useInvestigationActions hook
+  // Set up the ref for handleInvestigationScan so the hook can call it
+  React.useEffect(() => {
+    handleInvestigationScanRef.current = handleInvestigationScan;
+  }, [handleInvestigationScan]);
 
   const containerSteps = openctiPlatforms.length > 1 ? ['Select Platform', 'Select Type', 'Configure Details'] : ['Select Type', 'Configure Details'];
   const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';

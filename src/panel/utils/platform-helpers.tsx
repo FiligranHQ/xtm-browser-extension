@@ -97,3 +97,83 @@ export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'open
 // Note: For Filigran platform display (OpenCTI/OpenAEV names, logo paths),
 // use the functions from '../../shared/platform/registry' directly
 // Note: For platform sorting (sortPlatformResults), use the hook from useEntityState
+
+// ============================================================================
+// Platform Selection Flow Utilities
+// ============================================================================
+
+import type { PlatformInfo, PanelMode } from '../types/panel-types';
+
+/**
+ * Result of platform selection flow decision.
+ * Used to determine which panel mode to navigate to and which platform to select.
+ */
+export interface PlatformSelectionResult {
+  /** The panel mode to navigate to */
+  panelMode: PanelMode;
+  /** The platform to auto-select (if only one platform available) */
+  selectedPlatform?: PlatformInfo;
+}
+
+/**
+ * Determines the navigation flow for platform selection.
+ * 
+ * This consolidates the common pattern:
+ * - If multiple platforms: go to platform-select
+ * - If single platform: auto-select it and go to target mode
+ * - If no platforms: go to target mode (will show error/empty state)
+ * 
+ * @param platforms - Array of available platforms to choose from
+ * @param targetMode - The panel mode to navigate to after platform selection
+ * @returns Object containing the panelMode to set and optional platform to auto-select
+ * 
+ * @example
+ * ```tsx
+ * const result = getPlatformSelectionFlow(openctiPlatforms, 'container-type');
+ * if (result.selectedPlatform) {
+ *   setSelectedPlatformId(result.selectedPlatform.id);
+ *   setPlatformUrl(result.selectedPlatform.url);
+ * }
+ * setPanelMode(result.panelMode);
+ * ```
+ */
+export function getPlatformSelectionFlow(
+  platforms: PlatformInfo[],
+  targetMode: PanelMode
+): PlatformSelectionResult {
+  if (platforms.length > 1) {
+    return { panelMode: 'platform-select' };
+  }
+  
+  if (platforms.length === 1) {
+    return {
+      panelMode: targetMode,
+      selectedPlatform: platforms[0],
+    };
+  }
+  
+  // No platforms - proceed to target mode (component should handle this case)
+  return { panelMode: targetMode };
+}
+
+/**
+ * Applies the platform selection flow result.
+ * Convenience function that handles setting platform state and navigation.
+ * 
+ * @param result - The result from getPlatformSelectionFlow
+ * @param setSelectedPlatformId - State setter for platform ID
+ * @param setPlatformUrl - State setter for platform URL
+ * @param setPanelMode - State setter for panel mode
+ */
+export function applyPlatformSelectionFlow(
+  result: PlatformSelectionResult,
+  setSelectedPlatformId: (id: string) => void,
+  setPlatformUrl: (url: string) => void,
+  setPanelMode: (mode: PanelMode) => void
+): void {
+  if (result.selectedPlatform) {
+    setSelectedPlatformId(result.selectedPlatform.id);
+    setPlatformUrl(result.selectedPlatform.url);
+  }
+  setPanelMode(result.panelMode);
+}

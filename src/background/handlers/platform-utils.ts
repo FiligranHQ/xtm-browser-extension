@@ -64,6 +64,33 @@ export function getTargetClient<T>(
 }
 
 /**
+ * Get target platform client or send error response.
+ * Returns null and sends error response if client not found.
+ * 
+ * This is a convenience wrapper that combines getTargetClient with error handling,
+ * reducing the common pattern of:
+ * ```
+ * const { client, targetPlatformId } = getTargetClient(clients, platformId);
+ * if (!client || !targetPlatformId) {
+ *   sendResponse(errorResponse('Platform not found'));
+ *   return;
+ * }
+ * ```
+ */
+export function getTargetClientOrError<T>(
+  clients: PlatformClientMap<T>,
+  platformId: string | undefined,
+  sendResponse: SendResponse
+): { client: T; platformId: string } | null {
+  const { client, targetPlatformId } = getTargetClient(clients, platformId);
+  if (!client || !targetPlatformId) {
+    sendResponse(errorResponse('Platform not found'));
+    return null;
+  }
+  return { client, platformId: targetPlatformId };
+}
+
+/**
  * Fetch from single platform with platform ID attached to results
  */
 export async function fetchFromSinglePlatform<T, R>(

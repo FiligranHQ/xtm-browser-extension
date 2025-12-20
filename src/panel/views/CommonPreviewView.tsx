@@ -26,7 +26,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
-import { getAiColor } from '../utils/platform-helpers';
+import { getAiColor, applyPlatformSelectionFlow, getPlatformSelectionFlow } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
 import { ScanResultsRelationshipItem } from '../components/scan-results/ScanResultsRelationshipItem';
 import { getPageContent } from '../utils/scan-results-helpers';
@@ -201,6 +201,12 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
     setContainerWorkflowOrigin('preview');
     setExistingContainers([]);
 
+    // Helper to navigate to container creation flow
+    const navigateToContainerCreation = () => {
+      const result = getPlatformSelectionFlow(openctiPlatforms, 'container-type');
+      applyPlatformSelectionFlow(result, setSelectedPlatformId, setPlatformUrl, setPanelMode);
+    };
+
     // Check for existing containers first if we have a page URL
     if (currentPageUrl && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       setCheckingExisting(true);
@@ -212,15 +218,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
           setCheckingExisting(false);
           if (chrome.runtime.lastError) {
             // On error, proceed to creation
-            if (openctiPlatforms.length > 1) {
-              setPanelMode('platform-select');
-            } else {
-              if (openctiPlatforms.length === 1) {
-                setSelectedPlatformId(openctiPlatforms[0].id);
-                setPlatformUrl(openctiPlatforms[0].url);
-              }
-              setPanelMode('container-type');
-            }
+            navigateToContainerCreation();
             return;
           }
 
@@ -230,42 +228,28 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
             setPanelMode('existing-containers');
           } else {
             // No existing containers - proceed to creation
-            if (openctiPlatforms.length > 1) {
-              setPanelMode('platform-select');
-            } else {
-              if (openctiPlatforms.length === 1) {
-                setSelectedPlatformId(openctiPlatforms[0].id);
-                setPlatformUrl(openctiPlatforms[0].url);
-              }
-              setPanelMode('container-type');
-            }
+            navigateToContainerCreation();
           }
         }
       );
     } else {
       // No page URL - go directly to creation flow
-      if (openctiPlatforms.length > 1) {
-        setPanelMode('platform-select');
-      } else {
-        if (openctiPlatforms.length === 1) {
-          setSelectedPlatformId(openctiPlatforms[0].id);
-          setPlatformUrl(openctiPlatforms[0].url);
-        }
-        setPanelMode('container-type');
-      }
+      navigateToContainerCreation();
     }
   };
 
   const handleImportWithoutContainer = () => {
-    // For import without container, check if multiple OpenCTI platforms
-    if (openctiPlatforms.length > 1) {
-      // Need platform selection first
+    // For import without container, check platform selection flow
+    const result = getPlatformSelectionFlow(openctiPlatforms, 'platform-select');
+    
+    if (result.panelMode === 'platform-select') {
+      // Multiple platforms - need selection first
       setContainerWorkflowOrigin('import');
       setPanelMode('platform-select');
-    } else if (openctiPlatforms.length === 1) {
-      // Auto-select single platform and import
-      setSelectedPlatformId(openctiPlatforms[0].id);
-      setPlatformUrl(openctiPlatforms[0].url);
+    } else if (result.selectedPlatform) {
+      // Single platform - auto-select and import
+      setSelectedPlatformId(result.selectedPlatform.id);
+      setPlatformUrl(result.selectedPlatform.url);
       handleAddEntities();
     } else {
       // No OpenCTI platform - handleAddEntities will show error

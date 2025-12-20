@@ -24,6 +24,7 @@ import {
   checkClientsConfigured,
   getClientOrError,
   getTargetClient,
+  getTargetClientOrError,
   fetchFromAllPlatforms,
   searchAcrossPlatforms,
   handleError,
@@ -303,14 +304,11 @@ export const handleSearchLabels: MessageHandler = async (payload, sendResponse) 
   };
 
   try {
-    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
-    if (!client || !targetPlatformId) {
-      sendResponse(errorResponse('Platform not found'));
-      return;
-    }
+    const target = getTargetClientOrError(openCTIClients, platformId, sendResponse);
+    if (!target) return;
 
-    const labels = await client.searchLabels(search || '', first || 10);
-    sendResponse(successResponse(labels.map(l => ({ ...l, platformId: targetPlatformId }))));
+    const labels = await target.client.searchLabels(search || '', first || 10);
+    sendResponse(successResponse(labels.map(l => ({ ...l, platformId: target.platformId }))));
   } catch (error) {
     handleError(error, sendResponse, 'Failed to search labels');
   }
@@ -335,14 +333,11 @@ export const handleCreateLabel: MessageHandler = async (payload, sendResponse) =
   }
 
   try {
-    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
-    if (!client || !targetPlatformId) {
-      sendResponse(errorResponse('Platform not found'));
-      return;
-    }
+    const target = getTargetClientOrError(openCTIClients, platformId, sendResponse);
+    if (!target) return;
 
-    const label = await client.createLabel(value, color || '#000000');
-    sendResponse(successResponse({ ...label, platformId: targetPlatformId }));
+    const label = await target.client.createLabel(value, color || '#000000');
+    sendResponse(successResponse({ ...label, platformId: target.platformId }));
   } catch (error) {
     handleError(error, sendResponse, 'Failed to create label');
   }
@@ -438,14 +433,11 @@ export const handleSearchIdentities: MessageHandler = async (payload, sendRespon
   };
 
   try {
-    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
-    if (!client || !targetPlatformId) {
-      sendResponse(errorResponse('Platform not found'));
-      return;
-    }
+    const target = getTargetClientOrError(openCTIClients, platformId, sendResponse);
+    if (!target) return;
 
-    const identities = await client.searchIdentities(search || '', first || 50);
-    sendResponse(successResponse(identities.map(i => ({ ...i, platformId: targetPlatformId }))));
+    const identities = await target.client.searchIdentities(search || '', first || 50);
+    sendResponse(successResponse(identities.map(i => ({ ...i, platformId: target.platformId }))));
   } catch (error) {
     handleError(error, sendResponse, 'Failed to search identities');
   }
@@ -475,17 +467,14 @@ export const handleCreateIdentity: MessageHandler = async (payload, sendResponse
   }
 
   try {
-    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
-    if (!client || !targetPlatformId) {
-      sendResponse(errorResponse('Platform not found'));
-      return;
-    }
+    const target = getTargetClientOrError(openCTIClients, platformId, sendResponse);
+    if (!target) return;
 
     const identity = entityType === 'Organization' 
-      ? await client.createOrganization(name)
-      : await client.createIndividual(name);
+      ? await target.client.createOrganization(name)
+      : await target.client.createIndividual(name);
       
-    sendResponse(successResponse({ ...identity, platformId: targetPlatformId }));
+    sendResponse(successResponse({ ...identity, platformId: target.platformId }));
   } catch (error) {
     handleError(error, sendResponse, 'Failed to create identity');
   }
@@ -573,20 +562,17 @@ export const handleCreateWorkbench: MessageHandler = async (payload, sendRespons
   };
 
   try {
-    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
-    if (!client || !targetPlatformId) {
-      sendResponse(errorResponse('Platform not found'));
-      return;
-    }
+    const target = getTargetClientOrError(openCTIClients, platformId, sendResponse);
+    if (!target) return;
 
-    const investigation = await client.createInvestigation({
+    const investigation = await target.client.createInvestigation({
       name,
       description: description || `Investigation created from XTM Browser Extension with ${entityIds.length} entities`,
       investigated_entities_ids: entityIds,
     });
 
-    const url = client.getInvestigationUrl(investigation.id);
-    sendResponse(successResponse({ ...investigation, url, platformId: targetPlatformId }));
+    const url = target.client.getInvestigationUrl(investigation.id);
+    sendResponse(successResponse({ ...investigation, url, platformId: target.platformId }));
   } catch (error) {
     handleError(error, sendResponse, 'Failed to create workbench');
   }

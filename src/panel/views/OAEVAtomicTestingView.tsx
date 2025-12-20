@@ -30,8 +30,6 @@ import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
   RefreshOutlined,
-  ComputerOutlined,
-  LanOutlined,
   LanguageOutlined,
   DnsOutlined,
   AutoAwesomeOutlined,
@@ -40,6 +38,7 @@ import { LockPattern, Target } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
+import { AtomicTestingTargetForm } from '../components/atomic-testing/AtomicTestingTargetForm';
 import type { PlatformInfo, PanelMode, PanelAIState } from '../types/panel-types';
 import type { AtomicTestingStateReturn } from '../hooks/useAtomicTestingState';
 
@@ -1073,60 +1072,19 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
               </Box>
             )}
             
-            <TextField
-              label="Test Title"
-              value={atomicTestingTitle}
-              onChange={(e) => setAtomicTestingTitle(e.target.value)}
-              placeholder={`Atomic Test - ${atomicTestingAIGeneratedPayload.name}`}
-              size="small"
-              fullWidth
+            <AtomicTestingTargetForm
+              title={atomicTestingTitle}
+              onTitleChange={setAtomicTestingTitle}
+              titlePlaceholder={`Atomic Test - ${atomicTestingAIGeneratedPayload.name}`}
+              targetType={atomicTestingTargetType}
+              onTargetTypeChange={setAtomicTestingTargetType}
+              assets={atomicTestingAssets}
+              selectedAssetId={atomicTestingSelectedAsset}
+              onAssetSelect={setAtomicTestingSelectedAsset}
+              assetGroups={atomicTestingAssetGroups}
+              selectedAssetGroupId={atomicTestingSelectedAssetGroup}
+              onAssetGroupSelect={setAtomicTestingSelectedAssetGroup}
             />
-            
-            <Box>
-              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
-                Target Type
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant={atomicTestingTargetType === 'asset' ? 'contained' : 'outlined'}
-                  size="small"
-                  onClick={() => setAtomicTestingTargetType('asset')}
-                  startIcon={<ComputerOutlined />}
-                  sx={{ flex: 1, minWidth: 0 }}
-                >
-                  Asset
-                </Button>
-                <Button
-                  variant={atomicTestingTargetType === 'asset_group' ? 'contained' : 'outlined'}
-                  size="small"
-                  onClick={() => setAtomicTestingTargetType('asset_group')}
-                  startIcon={<LanOutlined />}
-                  sx={{ flex: 1, minWidth: 0 }}
-                >
-                  Asset Group
-                </Button>
-              </Box>
-            </Box>
-            
-            {atomicTestingTargetType === 'asset' ? (
-              <Autocomplete
-                options={atomicTestingAssets}
-                getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
-                value={atomicTestingAssets.find(a => a.asset_id === atomicTestingSelectedAsset) || null}
-                onChange={(_, value) => setAtomicTestingSelectedAsset(value?.asset_id || null)}
-                renderInput={(params) => <TextField {...params} label="Select Asset" size="small" />}
-                size="small"
-              />
-            ) : (
-              <Autocomplete
-                options={atomicTestingAssetGroups}
-                getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
-                value={atomicTestingAssetGroups.find(g => g.asset_group_id === atomicTestingSelectedAssetGroup) || null}
-                onChange={(_, value) => setAtomicTestingSelectedAssetGroup(value?.asset_group_id || null)}
-                renderInput={(params) => <TextField {...params} label="Select Asset Group" size="small" />}
-                size="small"
-              />
-            )}
             
             <Button
               variant="contained"
@@ -1296,60 +1254,19 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
         </Box>
       ) : selectedAtomicTarget && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
-          <TextField
-            label="Test Title"
-            value={atomicTestingTitle}
-            onChange={(e) => setAtomicTestingTitle(e.target.value)}
-            placeholder={`Atomic Test - ${selectedAtomicTarget.name}`}
-            size="small"
-            fullWidth
+          <AtomicTestingTargetForm
+            title={atomicTestingTitle}
+            onTitleChange={setAtomicTestingTitle}
+            titlePlaceholder={`Atomic Test - ${selectedAtomicTarget.name}`}
+            targetType={atomicTestingTargetType}
+            onTargetTypeChange={setAtomicTestingTargetType}
+            assets={atomicTestingAssets}
+            selectedAssetId={atomicTestingSelectedAsset}
+            onAssetSelect={setAtomicTestingSelectedAsset}
+            assetGroups={atomicTestingAssetGroups}
+            selectedAssetGroupId={atomicTestingSelectedAssetGroup}
+            onAssetGroupSelect={setAtomicTestingSelectedAssetGroup}
           />
-          
-          <Box>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
-              Target Type
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant={atomicTestingTargetType === 'asset' ? 'contained' : 'outlined'}
-                size="small"
-                onClick={() => setAtomicTestingTargetType('asset')}
-                startIcon={<ComputerOutlined />}
-                sx={{ flex: 1, minWidth: 0 }}
-              >
-                Asset
-              </Button>
-              <Button
-                variant={atomicTestingTargetType === 'asset_group' ? 'contained' : 'outlined'}
-                size="small"
-                onClick={() => setAtomicTestingTargetType('asset_group')}
-                startIcon={<LanOutlined />}
-                sx={{ flex: 1, minWidth: 0 }}
-              >
-                Asset Group
-              </Button>
-            </Box>
-          </Box>
-          
-          {atomicTestingTargetType === 'asset' ? (
-            <Autocomplete
-              options={atomicTestingAssets}
-              getOptionLabel={(option) => option.asset_name || option.endpoint_hostname || 'Unknown'}
-              value={atomicTestingAssets.find(a => a.asset_id === atomicTestingSelectedAsset) || null}
-              onChange={(_, value) => setAtomicTestingSelectedAsset(value?.asset_id || null)}
-              renderInput={(params) => <TextField {...params} label="Select Asset" size="small" />}
-              size="small"
-            />
-          ) : (
-            <Autocomplete
-              options={atomicTestingAssetGroups}
-              getOptionLabel={(option) => option.asset_group_name || 'Unknown'}
-              value={atomicTestingAssetGroups.find(g => g.asset_group_id === atomicTestingSelectedAssetGroup) || null}
-              onChange={(_, value) => setAtomicTestingSelectedAssetGroup(value?.asset_group_id || null)}
-              renderInput={(params) => <TextField {...params} label="Select Asset Group" size="small" />}
-              size="small"
-            />
-          )}
           
           {selectedAtomicTarget.type === 'attack-pattern' && (
             <Box>

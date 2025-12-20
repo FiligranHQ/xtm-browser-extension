@@ -824,6 +824,59 @@ function blobToDataUrl(blob: Blob): Promise<string | null> {
 }
 
 /**
+ * Common canvas image processing options
+ */
+interface ImageProcessingOptions {
+  maxWidth: number;
+  maxHeight?: number;
+  quality?: number;
+}
+
+/**
+ * Process an image through canvas with scaling and white background.
+ * Common helper for image resizing operations.
+ */
+function processImageToCanvas(
+  img: HTMLImageElement,
+  options: ImageProcessingOptions
+): string | null {
+  const { maxWidth, maxHeight, quality = 0.8 } = options;
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return null;
+  }
+  
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+  
+  // Scale down if too wide
+  if (width > maxWidth) {
+    const scale = maxWidth / width;
+    width = maxWidth;
+    height = Math.round(height * scale);
+  }
+  
+  // Scale down if too tall (when maxHeight is specified)
+  if (maxHeight && height > maxHeight) {
+    const scale = maxHeight / height;
+    height = maxHeight;
+    width = Math.round(width * scale);
+  }
+  
+  canvas.width = width;
+  canvas.height = height;
+  
+  // White background for transparency
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+  
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+/**
  * Resize image data URL if needed
  */
 async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
@@ -831,40 +884,8 @@ async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
     const img = new Image();
     img.onload = () => {
       try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(dataUrl); // Return original if can't resize
-          return;
-        }
-        
-        // Limit size for PDF
-        const maxWidth = 800;
-        const maxHeight = 1000;
-        let width = img.naturalWidth;
-        let height = img.naturalHeight;
-        
-        // Scale down if too large
-        if (width > maxWidth) {
-          const scale = maxWidth / width;
-          width = maxWidth;
-          height = Math.round(height * scale);
-        }
-        if (height > maxHeight) {
-          const scale = maxHeight / height;
-          height = maxHeight;
-          width = Math.round(width * scale);
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        // White background for transparency
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        const result = processImageToCanvas(img, { maxWidth: 800, maxHeight: 1000 });
+        resolve(result ?? dataUrl); // Return original if processing fails
       } catch (e) {
         log.debug('[PDFGenerator] Resize failed, using original');
         resolve(dataUrl);
@@ -893,33 +914,8 @@ function loadImageViaCanvas(src: string, useCors: boolean): Promise<string | nul
     img.onload = () => {
       clearTimeout(timeoutId);
       try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        
-        // Limit size
-        const maxWidth = 800;
-        let width = img.naturalWidth || img.width;
-        let height = img.naturalHeight || img.height;
-        
-        if (width > maxWidth) {
-          const scale = maxWidth / width;
-          width = maxWidth;
-          height = Math.round(height * scale);
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        resolve(dataUrl);
+        const result = processImageToCanvas(img, { maxWidth: 800 });
+        resolve(result);
       } catch (e) {
         // Canvas tainted - CORS issue
         log.debug('[PDFGenerator] Canvas tainted:', src, e);

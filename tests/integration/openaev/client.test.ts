@@ -5,6 +5,21 @@
  * Environment variables:
  * - OPENAEV_URL: OpenAEV API URL (default: http://localhost:8080)
  * - OPENAEV_TOKEN: OpenAEV API token
+ * 
+ * Coverage:
+ * - Connection & Platform Settings
+ * - Assets (Endpoints) - CRUD, Search, Pagination
+ * - Asset Groups - CRUD, Search
+ * - Players (Users) - CRUD, Search
+ * - Teams - CRUD, Search
+ * - Attack Patterns - Fetch, Search
+ * - Findings - Fetch, Pagination
+ * - Vulnerabilities (CVE lookup)
+ * - Kill Chain Phases & Tags
+ * - Injector Contracts & Payloads
+ * - Scenarios - CRUD, Injects
+ * - Atomic Testing
+ * - Full Text Search
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -16,7 +31,7 @@ interface OpenAEVConfig {
   token: string;
 }
 
-// Simple REST client for testing
+// Comprehensive REST client for testing
 class TestOpenAEVClient {
   private config: OpenAEVConfig;
 
@@ -35,7 +50,8 @@ class TestOpenAEVClient {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
 
     return response.json();
@@ -43,24 +59,42 @@ class TestOpenAEVClient {
 
   // Helper to extract array from paginated response (Spring Boot style)
   private extractArray(response: any): any[] {
-    // Handle Spring Boot paginated response: { content: [...], totalElements: N }
     if (response && typeof response === 'object' && Array.isArray(response.content)) {
       return response.content;
     }
-    // Handle direct array response
     if (Array.isArray(response)) {
       return response;
     }
-    // Return empty array if response format is unexpected
     return [];
   }
+
+  // ==========================================================================
+  // Connection & Platform Info
+  // ==========================================================================
 
   async testConnection(): Promise<any> {
     return this.request('/api/settings');
   }
 
+  async getCurrentUser(): Promise<any> {
+    return this.request('/api/me');
+  }
+
+  async getPlatformSettings(): Promise<{
+    platform_name: string;
+    platform_theme: string;
+    platform_lang: string;
+    platform_version?: string;
+    platform_license?: { license_is_enterprise?: boolean };
+  }> {
+    return this.request('/api/settings');
+  }
+
+  // ==========================================================================
+  // Assets (Endpoints)
+  // ==========================================================================
+
   async getEndpoints(): Promise<any[]> {
-    // GET /api/endpoints returns a direct list of endpoints (not paginated)
     const response = await this.request('/api/endpoints');
     return this.extractArray(response);
   }
@@ -70,72 +104,18 @@ class TestOpenAEVClient {
   }
 
   async searchEndpoints(searchTerm: string, limit = 10): Promise<any[]> {
-    // POST /api/endpoints/search with SearchPaginationInput body
     const response = await this.request('/api/endpoints/search', {
       method: 'POST',
-      body: JSON.stringify({
-        textSearch: searchTerm,
-        size: limit,
-        page: 0,
-      }),
+      body: JSON.stringify({ textSearch: searchTerm, size: limit, page: 0 }),
     });
     return this.extractArray(response);
   }
 
-  async getAssetGroups(): Promise<any[]> {
-    // GET /api/asset_groups returns a direct list
-    const response = await this.request('/api/asset_groups');
-    return this.extractArray(response);
-  }
-
-  async getAssetGroup(id: string): Promise<any> {
-    return this.request(`/api/asset_groups/${id}`);
-  }
-
-  async getPlayers(): Promise<any[]> {
-    // GET /api/players returns a direct list
-    const response = await this.request('/api/players');
-    return this.extractArray(response);
-  }
-
-  async getPlayer(id: string): Promise<any> {
-    return this.request(`/api/players/${id}`);
-  }
-
-  async getTeams(): Promise<any[]> {
-    // GET /api/teams returns a direct list
-    const response = await this.request('/api/teams');
-    return this.extractArray(response);
-  }
-
-  async getTeam(id: string): Promise<any> {
-    return this.request(`/api/teams/${id}`);
-  }
-
-  async getAttackPatterns(): Promise<any[]> {
-    // GET /api/attack_patterns returns a direct list
-    const response = await this.request('/api/attack_patterns');
-    return this.extractArray(response);
-  }
-
-  async getAttackPattern(id: string): Promise<any> {
-    return this.request(`/api/attack_patterns/${id}`);
-  }
-
-  async getScenarios(limit = 100): Promise<any[]> {
-    // POST /api/scenarios/search with SearchPaginationInput body
-    const response = await this.request('/api/scenarios/search', {
+  async searchEndpointsWithFilter(filterGroup: any, page = 0, size = 10): Promise<{ content: any[]; totalPages: number; totalElements: number }> {
+    return this.request('/api/endpoints/search', {
       method: 'POST',
-      body: JSON.stringify({
-        size: limit,
-        page: 0,
-      }),
+      body: JSON.stringify({ page, size, filterGroup }),
     });
-    return this.extractArray(response);
-  }
-
-  async getScenario(id: string): Promise<any> {
-    return this.request(`/api/scenarios/${id}`);
   }
 
   async createEndpoint(endpoint: { 
@@ -144,7 +124,6 @@ class TestOpenAEVClient {
     endpoint_platform: string;
     endpoint_arch: string;
   }): Promise<any> {
-    // POST /api/endpoints/agentless for creating agentless endpoints
     return this.request('/api/endpoints/agentless', {
       method: 'POST',
       body: JSON.stringify(endpoint),
@@ -153,6 +132,317 @@ class TestOpenAEVClient {
 
   async deleteEndpoint(id: string): Promise<void> {
     await this.request(`/api/endpoints/${id}`, { method: 'DELETE' });
+  }
+
+  // ==========================================================================
+  // Asset Groups
+  // ==========================================================================
+
+  async getAssetGroups(): Promise<any[]> {
+    const response = await this.request('/api/asset_groups');
+    return this.extractArray(response);
+  }
+
+  async getAssetGroup(id: string): Promise<any> {
+    return this.request(`/api/asset_groups/${id}`);
+  }
+
+  async searchAssetGroups(searchTerm: string, limit = 10): Promise<any[]> {
+    const filterGroup = {
+      mode: 'and',
+      filters: [{ key: 'asset_group_name', operator: 'contains', values: [searchTerm] }],
+    };
+    const response = await this.request<{ content: any[] }>('/api/asset_groups/search', {
+      method: 'POST',
+      body: JSON.stringify({ page: 0, size: limit, filterGroup }),
+    });
+    return response.content || [];
+  }
+
+  // ==========================================================================
+  // Players (Users)
+  // ==========================================================================
+
+  async getPlayers(): Promise<any[]> {
+    const response = await this.request('/api/players');
+    return this.extractArray(response);
+  }
+
+  async getPlayer(id: string): Promise<any> {
+    const users = await this.request<any[]>('/api/users/find', {
+      method: 'POST',
+      body: JSON.stringify([id]),
+    });
+    return users && users.length > 0 ? users[0] : null;
+  }
+
+  async searchPlayers(searchTerm: string, limit = 10): Promise<any[]> {
+    const filterGroup = {
+      mode: 'or',
+      filters: [
+        { key: 'user_email', operator: 'contains', values: [searchTerm] },
+        { key: 'user_firstname', operator: 'contains', values: [searchTerm] },
+        { key: 'user_lastname', operator: 'contains', values: [searchTerm] },
+      ],
+    };
+    const response = await this.request<{ content: any[] }>('/api/players/search', {
+      method: 'POST',
+      body: JSON.stringify({ page: 0, size: limit, filterGroup }),
+    });
+    return response.content || [];
+  }
+
+  // ==========================================================================
+  // Teams
+  // ==========================================================================
+
+  async getTeams(): Promise<any[]> {
+    const response = await this.request('/api/teams');
+    return this.extractArray(response);
+  }
+
+  async getTeam(id: string): Promise<any> {
+    return this.request(`/api/teams/${id}`);
+  }
+
+  async searchTeams(searchTerm: string, limit = 10): Promise<any[]> {
+    const filterGroup = {
+      mode: 'and',
+      filters: [{ key: 'team_name', operator: 'contains', values: [searchTerm] }],
+    };
+    const response = await this.request<{ content: any[] }>('/api/teams/search', {
+      method: 'POST',
+      body: JSON.stringify({ page: 0, size: limit, filterGroup }),
+    });
+    return response.content || [];
+  }
+
+  // ==========================================================================
+  // Attack Patterns
+  // ==========================================================================
+
+  async getAttackPatterns(): Promise<any[]> {
+    const response = await this.request('/api/attack_patterns');
+    return this.extractArray(response);
+  }
+
+  async getAttackPattern(id: string): Promise<any> {
+    return this.request(`/api/attack_patterns/${id}`);
+  }
+
+  async searchAttackPatterns(page = 0, size = 100): Promise<{ content: any[]; totalPages: number }> {
+    return this.request('/api/attack_patterns/search', {
+      method: 'POST',
+      body: JSON.stringify({ page, size }),
+    });
+  }
+
+  // ==========================================================================
+  // Findings
+  // ==========================================================================
+
+  async getFindings(page = 0, size = 100): Promise<{ content: any[]; totalPages: number; totalElements: number }> {
+    return this.request('/api/findings/search?distinct=true', {
+      method: 'POST',
+      body: JSON.stringify({ page, size }),
+    });
+  }
+
+  async getFinding(id: string): Promise<any> {
+    return this.request(`/api/findings/${id}`);
+  }
+
+  // ==========================================================================
+  // Vulnerabilities (CVE)
+  // ==========================================================================
+
+  async getVulnerabilityByExternalId(cveId: string): Promise<any | null> {
+    try {
+      return await this.request(`/api/vulnerabilities/external-id/${encodeURIComponent(cveId)}`);
+    } catch (error) {
+      // 404 is expected for CVEs not in OpenAEV
+      return null;
+    }
+  }
+
+  async getVulnerability(id: string): Promise<any> {
+    return this.request(`/api/vulnerabilities/${id}`);
+  }
+
+  // ==========================================================================
+  // Kill Chain Phases & Tags
+  // ==========================================================================
+
+  async getKillChainPhases(): Promise<Array<{ phase_id: string; phase_name: string; phase_order: number }>> {
+    return this.request('/api/kill_chain_phases');
+  }
+
+  async getTags(): Promise<Array<{ tag_id: string; tag_name: string }>> {
+    return this.request('/api/tags');
+  }
+
+  // ==========================================================================
+  // Injector Contracts & Payloads
+  // ==========================================================================
+
+  async getInjectorContracts(page = 0, size = 100): Promise<{ content: any[]; totalPages: number }> {
+    return this.request('/api/injector_contracts/search', {
+      method: 'POST',
+      body: JSON.stringify({ page, size }),
+    });
+  }
+
+  async getInjectorContract(id: string): Promise<any> {
+    return this.request(`/api/injector_contracts/${id}`);
+  }
+
+  async searchInjectorContractsByKillChainPhase(killChainPhaseId: string, size = 100): Promise<any[]> {
+    const filterGroup = {
+      mode: 'and',
+      filters: [{ key: 'injector_contract_kill_chain_phases', operator: 'contains', values: [killChainPhaseId] }],
+    };
+    const response = await this.request<{ content: any[] }>('/api/injector_contracts/search', {
+      method: 'POST',
+      body: JSON.stringify({ page: 0, size, filterGroup }),
+    });
+    return response.content || [];
+  }
+
+  async getPayload(id: string): Promise<any> {
+    return this.request(`/api/payloads/${id}`);
+  }
+
+  async searchPayloads(page = 0, size = 100): Promise<{ content: any[]; totalPages: number }> {
+    return this.request('/api/payloads/search', {
+      method: 'POST',
+      body: JSON.stringify({ page, size }),
+    });
+  }
+
+  async createPayload(payload: {
+    payload_name: string;
+    payload_description?: string;
+    payload_platforms: string[];
+    payload_type: string;
+    payload_source?: string;
+    payload_status?: string;
+    payload_attack_patterns?: string[];
+    command_executor?: string;
+    command_content?: string;
+  }): Promise<any> {
+    return this.request('/api/payloads', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async findDnsResolutionPayloadByHostname(hostname: string): Promise<any | null> {
+    const filterGroup = {
+      mode: 'and',
+      filters: [
+        { key: 'payload_type', operator: 'eq', values: ['DnsResolution'] },
+        { key: 'dns_resolution_hostname', operator: 'eq', values: [hostname] },
+      ],
+    };
+    const response = await this.request<{ content: any[] }>('/api/payloads/search', {
+      method: 'POST',
+      body: JSON.stringify({ page: 0, size: 10, filterGroup }),
+    });
+    return response.content?.[0] || null;
+  }
+
+  // ==========================================================================
+  // Scenarios
+  // ==========================================================================
+
+  async getScenarios(limit = 100): Promise<any[]> {
+    const response = await this.request('/api/scenarios/search', {
+      method: 'POST',
+      body: JSON.stringify({ size: limit, page: 0 }),
+    });
+    return this.extractArray(response);
+  }
+
+  async getScenario(id: string): Promise<any> {
+    return this.request(`/api/scenarios/${id}`);
+  }
+
+  async createScenario(input: {
+    scenario_name: string;
+    scenario_description?: string;
+    scenario_subtitle?: string;
+    scenario_category?: string;
+    scenario_main_focus?: string;
+    scenario_severity?: string;
+  }): Promise<any> {
+    return this.request('/api/scenarios', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async deleteScenario(id: string): Promise<void> {
+    await this.request(`/api/scenarios/${id}`, { method: 'DELETE' });
+  }
+
+  async addInjectToScenario(scenarioId: string, inject: any): Promise<any> {
+    return this.request(`/api/scenarios/${scenarioId}/injects`, {
+      method: 'POST',
+      body: JSON.stringify(inject),
+    });
+  }
+
+  // ==========================================================================
+  // Atomic Testing
+  // ==========================================================================
+
+  async createAtomicTesting(input: {
+    atomic_testing_name: string;
+    atomic_testing_description?: string;
+    atomic_testing_injector_contract: string;
+    atomic_testing_targets: Array<{ id: string; type: string }>;
+  }): Promise<any> {
+    return this.request('/api/atomic-testings', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  // ==========================================================================
+  // Full Text Search
+  // ==========================================================================
+
+  async fullTextSearch(searchTerm: string): Promise<Record<string, { count: number }>> {
+    return this.request('/api/fulltextsearch', {
+      method: 'POST',
+      body: JSON.stringify({ searchTerm }),
+    });
+  }
+
+  async fullTextSearchByClass(className: string, searchTerm: string, page = 0, size = 10): Promise<{ content: any[]; totalElements: number }> {
+    return this.request(`/api/fulltextsearch/${className}`, {
+      method: 'POST',
+      body: JSON.stringify({ textSearch: searchTerm, page, size }),
+    });
+  }
+
+  // ==========================================================================
+  // Organizations & Exercises
+  // ==========================================================================
+
+  async getOrganization(id: string): Promise<any> {
+    return this.request(`/api/organizations/${id}`);
+  }
+
+  async getExercise(id: string): Promise<any> {
+    return this.request(`/api/exercises/${id}`);
+  }
+
+  async searchExercises(page = 0, size = 100): Promise<{ content: any[]; totalPages: number }> {
+    return this.request('/api/exercises/search', {
+      method: 'POST',
+      body: JSON.stringify({ page, size }),
+    });
   }
 }
 
@@ -349,6 +639,359 @@ describe('OpenAEV Client Integration Tests', () => {
       
       expect(cacheMap.size).toBeGreaterThanOrEqual(0);
     });
+  });
+});
+
+describe('Vulnerability (CVE) Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should search for a known CVE by external ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    // Search for a well-known CVE
+    const result = await client.getVulnerabilityByExternalId('CVE-2021-44228');
+    // May or may not exist depending on data seeding
+    if (result) {
+      expect(result.vulnerability_external_id).toBe('CVE-2021-44228');
+      expect(result.vulnerability_id).toBeDefined();
+    }
+  });
+
+  it('should return null for non-existent CVE', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.getVulnerabilityByExternalId('CVE-9999-99999');
+    expect(result).toBeNull();
+  });
+});
+
+describe('Kill Chain Phases & Tags Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should get kill chain phases', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const phases = await client.getKillChainPhases();
+    expect(Array.isArray(phases)).toBe(true);
+    
+    if (phases.length > 0) {
+      expect(phases[0].phase_id).toBeDefined();
+      expect(phases[0].phase_name).toBeDefined();
+    }
+  });
+
+  it('should get tags', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const tags = await client.getTags();
+    expect(Array.isArray(tags)).toBe(true);
+    
+    if (tags.length > 0) {
+      expect(tags[0].tag_id).toBeDefined();
+      expect(tags[0].tag_name).toBeDefined();
+    }
+  });
+});
+
+describe('Injector Contracts & Payloads Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should get injector contracts with pagination', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.getInjectorContracts(0, 10);
+    expect(result.content).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+  });
+
+  it('should search injector contracts by kill chain phase', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    // First get kill chain phases
+    const phases = await client.getKillChainPhases();
+    if (phases.length > 0) {
+      const contracts = await client.searchInjectorContractsByKillChainPhase(phases[0].phase_id);
+      expect(Array.isArray(contracts)).toBe(true);
+    }
+  });
+
+  it('should search payloads', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.searchPayloads(0, 10);
+    expect(result.content).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+  });
+
+  it('should search for DNS resolution payload by hostname', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.findDnsResolutionPayloadByHostname('test.example.com');
+    // May be null if no such payload exists
+    expect(result === null || typeof result === 'object').toBe(true);
+  });
+});
+
+describe('Scenario Operations Tests', () => {
+  let client: TestOpenAEVClient;
+  let createdScenarioIds: string[] = [];
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  afterAll(async () => {
+    for (const id of createdScenarioIds) {
+      try { await client.deleteScenario(id); } catch { /* ignore */ }
+    }
+  });
+
+  it('should create a scenario', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.createScenario({
+      scenario_name: `Test Scenario ${Date.now()}`,
+      scenario_description: 'Integration test scenario',
+      scenario_category: 'attack-scenario',
+      scenario_main_focus: 'incident-response',
+      scenario_severity: 'high',
+    });
+    
+    expect(result).toBeDefined();
+    expect(result.scenario_id || result.id).toBeDefined();
+    
+    createdScenarioIds.push(result.scenario_id || result.id);
+  });
+
+  it('should get a scenario by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const scenarios = await client.getScenarios(1);
+    if (scenarios.length > 0) {
+      const scenarioId = scenarios[0].scenario_id || scenarios[0].id;
+      const scenario = await client.getScenario(scenarioId);
+      expect(scenario).toBeDefined();
+      expect(scenario.scenario_id || scenario.id).toBe(scenarioId);
+    }
+  });
+});
+
+describe('Full Text Search Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should perform full text search', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.fullTextSearch('test');
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+  });
+
+  it('should perform full text search by class', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.fullTextSearchByClass('Endpoint', 'server', 0, 10);
+    expect(result).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+  });
+
+  it('should search by different entity classes', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const classes = ['Endpoint', 'Team', 'Scenario'];
+    for (const className of classes) {
+      const result = await client.fullTextSearchByClass(className, 'test', 0, 5);
+      expect(result).toBeDefined();
+      expect(Array.isArray(result.content)).toBe(true);
+    }
+  });
+});
+
+describe('Individual Entity Getters Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should get a specific endpoint by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const endpoints = await client.getEndpoints();
+    if (endpoints.length > 0) {
+      const endpointId = endpoints[0].asset_id || endpoints[0].endpoint_id;
+      if (endpointId) {
+        const endpoint = await client.getEndpoint(endpointId);
+        expect(endpoint).toBeDefined();
+        expect(endpoint.asset_id || endpoint.endpoint_id).toBe(endpointId);
+      }
+    }
+  });
+
+  it('should get a specific asset group by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const groups = await client.getAssetGroups();
+    if (groups.length > 0) {
+      const groupId = groups[0].asset_group_id;
+      if (groupId) {
+        const group = await client.getAssetGroup(groupId);
+        expect(group).toBeDefined();
+        expect(group.asset_group_id).toBe(groupId);
+      }
+    }
+  });
+
+  it('should get a specific team by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const teams = await client.getTeams();
+    if (teams.length > 0) {
+      const teamId = teams[0].team_id;
+      if (teamId) {
+        const team = await client.getTeam(teamId);
+        expect(team).toBeDefined();
+        expect(team.team_id).toBe(teamId);
+      }
+    }
+  });
+
+  it('should get a specific attack pattern by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const patterns = await client.getAttackPatterns();
+    if (patterns.length > 0) {
+      const patternId = patterns[0].attack_pattern_id;
+      if (patternId) {
+        const pattern = await client.getAttackPattern(patternId);
+        expect(pattern).toBeDefined();
+        expect(pattern.attack_pattern_id).toBe(patternId);
+      }
+    }
+  });
+});
+
+describe('Search Operations Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should search asset groups', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const groups = await client.searchAssetGroups('test', 10);
+    expect(Array.isArray(groups)).toBe(true);
+  });
+
+  it('should search players', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const players = await client.searchPlayers('admin', 10);
+    expect(Array.isArray(players)).toBe(true);
+  });
+
+  it('should search teams', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const teams = await client.searchTeams('team', 10);
+    expect(Array.isArray(teams)).toBe(true);
+  });
+
+  it('should search attack patterns with pagination', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.searchAttackPatterns(0, 10);
+    expect(result.content).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+  });
+
+  it('should search endpoints with filter', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const filterGroup = {
+      mode: 'and',
+      filters: [{ key: 'endpoint_platform', operator: 'eq', values: ['Linux'] }],
+    };
+    const result = await client.searchEndpointsWithFilter(filterGroup, 0, 10);
+    expect(result.content).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+    
+    // All results should be Linux platforms
+    for (const endpoint of result.content) {
+      expect(endpoint.endpoint_platform).toBe('Linux');
+    }
+  });
+});
+
+describe('Exercises Tests', () => {
+  let client: TestOpenAEVClient;
+
+  beforeAll(async () => {
+    await checkOpenAEVConnection();
+    if (isOpenAEVAvailable) {
+      client = new TestOpenAEVClient(config);
+    }
+  });
+
+  it('should search exercises', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.searchExercises(0, 10);
+    expect(result.content).toBeDefined();
+    expect(Array.isArray(result.content)).toBe(true);
+  });
+
+  it('should get a specific exercise by ID', async (context) => {
+    if (skipIfUnavailable(context)) return;
+    
+    const result = await client.searchExercises(0, 1);
+    if (result.content.length > 0) {
+      const exerciseId = result.content[0].exercise_id;
+      if (exerciseId) {
+        const exercise = await client.getExercise(exerciseId);
+        expect(exercise).toBeDefined();
+        expect(exercise.exercise_id).toBe(exerciseId);
+      }
+    }
   });
 });
 

@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor } from '../../shared/theme/colors';
+import { applyPlatformSelectionFlow, getPlatformSelectionFlow } from '../utils/platform-helpers';
 import type {
   PanelMode,
   ContainerData,
@@ -289,16 +290,8 @@ export const OCTIExistingContainersView: React.FC<ExistingContainersViewProps> =
   const handleCreateNew = () => {
     // Clear existing container selection and proceed to create new
     // If multiple OpenCTI platforms, go to platform select first (containers are OpenCTI-only)
-    if (openctiPlatforms.length > 1) {
-      setPanelMode('platform-select');
-    } else {
-      // Auto-select the single OpenCTI platform
-      if (openctiPlatforms.length === 1) {
-        setSelectedPlatformId(openctiPlatforms[0].id);
-        setPlatformUrl(openctiPlatforms[0].url);
-      }
-      setPanelMode('container-type');
-    }
+    const result = getPlatformSelectionFlow(openctiPlatforms, 'container-type');
+    applyPlatformSelectionFlow(result, setSelectedPlatformId, setPlatformUrl, setPanelMode);
   };
 
   return (

@@ -12,10 +12,8 @@ import {
   createPrefixedType,
   type PlatformType,
 } from '../shared/platform/registry';
-import {
-  ensureStylesInShadowRoot,
-  isValidWordBoundary,
-} from './utils/highlight';
+import { ensureStylesInShadowRoot } from './utils/highlight';
+import { escapeRegex, isValidBoundary } from '../shared/detection/matching';
 
 const log = loggers.content;
 
@@ -37,9 +35,6 @@ export interface HighlightMeta {
 }
 
 // OpenCTI Types - these are detected from platform cache
-// When not found, they can be added via AI discovery feature
-// Note: 'Threat-Actor' is kept for backward compatibility but should not be used for new entities
-// Always use 'Threat-Actor-Group' or 'Threat-Actor-Individual' for proper STIX classification
 const OPENCTI_TYPES_SET = new Set([
   'Intrusion-Set',
   'Malware',
@@ -51,6 +46,9 @@ const OPENCTI_TYPES_SET = new Set([
   'Vulnerability',
   'Tool',
   'Infrastructure',
+  'Narrative',
+  'Channel',
+  'System',
   'Sector',
   'Organization',
   'Individual',
@@ -361,7 +359,7 @@ function createFlexibleCVEPattern(cveName: string): RegExp {
       const invisibleClass = `[\\s\\u200B\\u200C\\u200D\\u2060\\uFEFF]*`;
       return new RegExp(`CVE${invisibleClass}${dashClass}${invisibleClass}${y}${invisibleClass}${dashClass}${invisibleClass}${s}`, 'gi');
     }
-    return new RegExp(cveName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return new RegExp(escapeRegex(cveName), 'gi');
   }
   
   const [, year, seq] = match;
@@ -921,7 +919,7 @@ export function highlightForAtomicTesting(
     const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
     const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
     
-    if (!isValidWordBoundary(charBefore) || !isValidWordBoundary(charAfter)) {
+    if (!isValidBoundary(charBefore) || !isValidBoundary(charAfter)) {
       pos++;
       continue;
     }
@@ -1037,7 +1035,7 @@ function highlightInTextForScenario(
     const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
     const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
     
-    if (!isValidWordBoundary(charBefore) || !isValidWordBoundary(charAfter)) {
+    if (!isValidBoundary(charBefore) || !isValidBoundary(charAfter)) {
       pos++;
       continue;
     }

@@ -14,11 +14,6 @@ import {
   type InjectBuilderParams,
 } from './types';
 
-// Re-export types for backward compatibility
-export type { FilterGroup, SearchBody, PayloadBuilderParams as PayloadInput } from './types';
-export type { AtomicTestingBuilderParams as AtomicTestingInput } from './types';
-export type { InjectBuilderParams as InjectInput } from './types';
-export { ENTITY_TYPE_PATH_MAP };
 
 // ============================================================================
 // Asset Filters

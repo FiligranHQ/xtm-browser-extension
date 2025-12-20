@@ -29,56 +29,26 @@ const isDevelopment = typeof process !== 'undefined'
   ? process.env.NODE_ENV !== 'production'
   : true; // Browser extension context - default to development
 
-const defaultConfig: LoggerConfig = {
+const config: LoggerConfig = {
   prefix: '[XTM]',
   minLevel: isDevelopment ? 'debug' : 'warn',
   enabled: true,
 };
 
-let currentConfig: LoggerConfig = { ...defaultConfig };
-
-/**
- * Configure the logger
- */
-export function configureLogger(config: Partial<LoggerConfig>): void {
-  currentConfig = { ...currentConfig, ...config };
-}
-
-/**
- * Get the current logger configuration
- */
-export function getLoggerConfig(): LoggerConfig {
-  return { ...currentConfig };
-}
-
-/**
- * Set the minimum log level
- */
-export function setLogLevel(level: LogLevel): void {
-  currentConfig.minLevel = level;
-}
-
-/**
- * Enable or disable logging
- */
-export function setLoggingEnabled(enabled: boolean): void {
-  currentConfig.enabled = enabled;
-}
-
 /**
  * Check if a log level should be output
  */
 function shouldLog(level: LogLevel): boolean {
-  if (!currentConfig.enabled) return false;
-  return LOG_LEVELS[level] >= LOG_LEVELS[currentConfig.minLevel];
+  if (!config.enabled) return false;
+  return LOG_LEVELS[level] >= LOG_LEVELS[config.minLevel];
 }
 
 /**
  * Format a log message with prefix and optional context
  */
-function formatMessage(_level: LogLevel, context: string | undefined, message: string): string {
+function formatMessage(context: string | undefined, message: string): string {
   const contextStr = context ? ` [${context}]` : '';
-  return `${currentConfig.prefix}${contextStr} ${message}`;
+  return `${config.prefix}${contextStr} ${message}`;
 }
 
 /**
@@ -99,32 +69,29 @@ export function createLogger(context?: string): Logger {
   return {
     debug(message: string, ...args: unknown[]): void {
       if (shouldLog('debug')) {
-        console.debug(formatMessage('debug', context, message), ...args);
+        console.debug(formatMessage(context, message), ...args);
       }
     },
 
     info(message: string, ...args: unknown[]): void {
       if (shouldLog('info')) {
-        console.log(formatMessage('info', context, message), ...args);
+        console.log(formatMessage(context, message), ...args);
       }
     },
 
     warn(message: string, ...args: unknown[]): void {
       if (shouldLog('warn')) {
-        console.warn(formatMessage('warn', context, message), ...args);
+        console.warn(formatMessage(context, message), ...args);
       }
     },
 
     error(message: string, ...args: unknown[]): void {
       if (shouldLog('error')) {
-        console.error(formatMessage('error', context, message), ...args);
+        console.error(formatMessage(context, message), ...args);
       }
     },
   };
 }
-
-// Default logger instance without context
-export const logger = createLogger();
 
 // Pre-configured loggers for common contexts
 export const loggers = {
@@ -142,5 +109,3 @@ export const loggers = {
   extraction: createLogger('Extraction'),
   ai: createLogger('AI'),
 };
-
-export default logger;

@@ -49,10 +49,6 @@ import {
   clearRelationshipLines,
 } from './relationship-lines';
 import {
-  updateMinimap,
-  clearMinimap,
-} from './relationship-minimap';
-import {
   sendPanelMessage,
   flushPanelMessageQueue,
   ensurePanelElements,
@@ -240,7 +236,6 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
   } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS') {
     clearHighlights();
     clearRelationshipLines();
-    clearMinimap();
     currentScanMode = null;
     lastScanData = null;
     // Notify panel to clear scan results and reset to empty state
@@ -249,27 +244,22 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
     clearHighlights();
     clearRelationshipLines();
-    clearMinimap();
     currentScanMode = null;
     lastScanData = null;
   } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
     // Draw relationship lines between highlighted entities
     const relationships = event.data.payload?.relationships || [];
-    const entities = event.data.payload?.entities || [];
-    log.info('[XTM] Received XTM_DRAW_RELATIONSHIP_LINES:', relationships.length, 'relationships,', entities.length, 'entities');
+    log.info('[XTM] Received XTM_DRAW_RELATIONSHIP_LINES:', relationships.length, 'relationships');
     if (relationships.length > 0) {
-      log.info('[XTM] Drawing relationship lines and updating minimap...');
+      log.info('[XTM] Drawing relationship lines...');
       drawRelationshipLines(relationships);
-      updateMinimap(entities, relationships);
-      log.info('[XTM] Minimap update complete');
+      log.info('[XTM] Relationship lines drawn');
     } else {
       log.info('[XTM] No relationships to draw, clearing...');
       clearRelationshipLines();
-      clearMinimap();
     }
   } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
     clearRelationshipLines();
-    clearMinimap();
   } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
     // Update lastScanData with AI-discovered entities so they persist when panel re-opens
     const aiEntities = event.data.payload?.entities;
@@ -1692,7 +1682,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'CLEAR_HIGHLIGHTS':
       clearHighlights();
       clearRelationshipLines();
-      clearMinimap();
       selectedForImport.clear();
       currentScanMode = null;
       lastScanData = null;
@@ -1705,7 +1694,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
       clearHighlights();
       clearRelationshipLines();
-      clearMinimap();
       selectedForImport.clear();
       currentScanMode = null;
       lastScanData = null;
@@ -1715,13 +1703,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'DRAW_RELATIONSHIP_LINES': {
       // Draw relationship lines between highlighted entities
       const relationships = message.payload?.relationships || [];
-      const entities = message.payload?.entities || [];
       if (relationships.length > 0) {
         drawRelationshipLines(relationships);
-        updateMinimap(entities, relationships);
       } else {
         clearRelationshipLines();
-        clearMinimap();
       }
       sendResponse({ success: true });
       break;
@@ -1729,7 +1714,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'CLEAR_RELATIONSHIP_LINES':
       clearRelationshipLines();
-      clearMinimap();
       sendResponse({ success: true });
       break;
       

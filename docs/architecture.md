@@ -244,9 +244,8 @@ src/shared/
 │   ├── ThemeLight.ts
 │   └── colors.ts
 ├── visualization/        # Graph visualization utilities
-│   ├── entity-icons.ts       # SVG icon paths for entity types
-│   ├── graph-types.ts        # Graph node/edge interfaces
-│   ├── graph-layout.ts       # Force-directed layout algorithms
+│   ├── graph-types.ts        # Relationship data and point interfaces
+│   ├── graph-layout.ts       # Bezier curve calculation utilities
 │   └── relationship-styles.ts # Line and label styling
 ├── components/           # Shared React components
 │   ├── ItemIcon.tsx      # Entity type icons
@@ -1045,24 +1044,9 @@ The `src/shared/visualization/` module provides shared graph visualization utili
 
 ```
 src/shared/visualization/
-├── entity-icons.ts       # SVG icon paths for entity types
-├── graph-types.ts        # TypeScript interfaces for graph data
-├── graph-layout.ts       # Layout algorithms and geometry utilities
+├── graph-types.ts        # TypeScript interfaces for relationship data
+├── graph-layout.ts       # Bezier curve calculation utilities
 └── relationship-styles.ts # Styling constants and helpers
-```
-
-### Entity Icons (`entity-icons.ts`)
-
-Centralized SVG path definitions for entity type icons and color utilities:
-
-```typescript
-import { getIconPath, getEntityColor, DEFAULT_ENTITY_COLOR } from '../shared/visualization/entity-icons';
-
-// Get SVG path for a specific entity type
-const svgPath = getIconPath('Malware');
-
-// Get color for entity type (uses theme colors with fallback)
-const color = getEntityColor('Threat-Actor-Group');
 ```
 
 ### Graph Types (`graph-types.ts`)
@@ -1149,19 +1133,18 @@ const animationCSS = getLineAnimationCSS('pdf');
 
 ### Usage in Components
 
-**Content Script (relationship-lines.ts, relationship-minimap.ts):**
+**Content Script (relationship-lines.ts):**
 ```typescript
-import { calculateCurveControlPoints, calculateLabelRotation } from '../shared/visualization/graph-layout';
-import { LINE_STYLES, GRAPH_NODE_STYLES, getGraphNodeStyle } from '../shared/visualization/relationship-styles';
-import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
+import { calculateCurveControlPoints, calculateLabelRotation, getPointOnBezier } from '../shared/visualization/graph-layout';
+import { LINE_STYLES, LABEL_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
+import type { RelationshipData, Point } from '../shared/visualization/graph-types';
 ```
 
-**PDF Scanner (RelationshipLinesOverlay.tsx, RelationshipMinimap.tsx):**
+**PDF Scanner (RelationshipLinesOverlay.tsx):**
 ```typescript
-import { calculateLayout } from '../shared/visualization/graph-layout';
-import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
-import { GRAPH_NODE_STYLES, getGraphNodeStyle, ANIMATION_STYLES } from '../shared/visualization/relationship-styles';
-import type { GraphNode, GraphEdge } from '../shared/visualization/graph-types';
+import { calculateCurveControlPoints, calculateLabelRotation, getPointOnBezier } from '../shared/visualization/graph-layout';
+import { LINE_STYLES, LABEL_STYLES, ANIMATION_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
+import type { RelationshipData, HighlightPosition, Point } from '../shared/visualization/graph-types';
 ```
 
 ## Panel Display Modes

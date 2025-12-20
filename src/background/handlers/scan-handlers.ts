@@ -8,6 +8,7 @@ import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
 import { getSettings, getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } from '../../shared/utils/storage';
 import { successResponse, errorResponse } from '../../shared/utils/messaging';
+import { isValidBoundary } from '../../shared/detection/matching';
 import type { DetectedObservable } from '../../shared/types/observables';
 import type { DetectedOCTIEntity } from '../../shared/types/opencti';
 import type { ScanResultPayload } from '../../shared/types/messages';
@@ -148,13 +149,10 @@ export function scanForOAEVEntities(
       const endIndex = matchIndex + nameLower.length;
       
       // Check character boundaries to ensure exact word match
-      const charBefore = matchIndex > 0 ? originalText[matchIndex - 1] : ' ';
-      const charAfter = endIndex < originalText.length ? originalText[endIndex] : ' ';
+      const charBefore = matchIndex > 0 ? originalText[matchIndex - 1] : '';
+      const charAfter = endIndex < originalText.length ? originalText[endIndex] : '';
       
       // Valid boundary: whitespace, punctuation, or start/end of string
-      const isValidBoundary = (c: string) => 
-        /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(c) || c === '';
-      
       const beforeOk = isValidBoundary(charBefore) || !/[a-zA-Z0-9]/.test(charBefore);
       const afterOk = isValidBoundary(charAfter) || !/[a-zA-Z0-9]/.test(charAfter);
       

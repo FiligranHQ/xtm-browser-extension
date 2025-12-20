@@ -148,8 +148,8 @@ export interface UnifiedSearchResult {
   data?: Record<string, unknown>;
 }
 
-// AI settings
-export interface AISettings {
+// AI UI state for the panel (different from shared AISettings which is configuration)
+export interface PanelAIState {
   enabled: boolean;
   provider?: string;
   available: boolean;

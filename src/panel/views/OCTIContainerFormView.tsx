@@ -35,8 +35,7 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
-import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, AISettings } from '../types/panel-types';
-import type { LabelOption, MarkingOption } from '../types/view-props';
+import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, LabelOption, MarkingOption } from '../types/panel-types';
 
 // Debounce delay for search (1.2s is optimal for reducing API calls while remaining responsive)
 const SEARCH_DEBOUNCE_MS = 1200;
@@ -73,7 +72,7 @@ export interface ContainerFormViewProps {
   availablePlatforms: PlatformInfo[];
   openctiPlatforms: PlatformInfo[];
   selectedPlatformId: string;
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   aiGeneratingDescription: boolean;
   handleGenerateAIDescription: () => void;
   availableLabels: LabelOption[]; // Initial labels (may be empty, we load on demand)

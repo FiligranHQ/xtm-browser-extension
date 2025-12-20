@@ -19,11 +19,13 @@ import {
   buildPayloadBody,
   buildDnsResolutionPayloadBody,
   buildAtomicTestingBody,
-  ENTITY_TYPE_PATH_MAP,
-  type PayloadInput,
-  type AtomicTestingInput,
-  type InjectInput,
 } from './openaev/filters';
+import {
+  ENTITY_TYPE_PATH_MAP,
+  type PayloadBuilderParams,
+  type AtomicTestingBuilderParams,
+  type InjectBuilderParams,
+} from './openaev/types';
 
 import type { PlatformConfig } from '../types/settings';
 import type {
@@ -648,7 +650,7 @@ export class OpenAEVClient {
     }
   }
 
-  async addInjectToScenario(scenarioId: string, inject: InjectInput): Promise<any> {
+  async addInjectToScenario(scenarioId: string, inject: InjectBuilderParams): Promise<any> {
     log.debug(`Adding inject to scenario ${scenarioId}:`, inject);
     const result = await this.request(`/api/scenarios/${scenarioId}/injects`, {
       method: 'POST',
@@ -795,7 +797,7 @@ export class OpenAEVClient {
     });
   }
 
-  async createPayload(payload: PayloadInput): Promise<any> {
+  async createPayload(payload: PayloadBuilderParams): Promise<any> {
     return this.request('/api/payloads', {
       method: 'POST',
       body: JSON.stringify(buildPayloadBody(payload)),
@@ -870,7 +872,7 @@ export class OpenAEVClient {
     }
   }
 
-  async createAtomicTesting(input: AtomicTestingInput): Promise<any> {
+  async createAtomicTesting(input: AtomicTestingBuilderParams): Promise<any> {
     return this.request('/api/atomic-testings', {
       method: 'POST',
       body: JSON.stringify(buildAtomicTestingBody(input)),

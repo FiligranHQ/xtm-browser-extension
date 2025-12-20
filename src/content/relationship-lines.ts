@@ -457,9 +457,3 @@ export function clearRelationshipLines(): void {
   if (styleEl) styleEl.remove();
 }
 
-/**
- * Check if relationship lines are currently displayed
- */
-export function hasRelationshipLines(): boolean {
-  return currentRelationships.length > 0;
-}

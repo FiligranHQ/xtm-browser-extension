@@ -74,31 +74,6 @@ export interface OAEVFinding {
 }
 
 /**
- * OpenAEV Vulnerability (CVE)
- */
-export interface OAEVVulnerability {
-  vulnerability_id: string;
-  vulnerability_external_id: string; // CVE ID (e.g., CVE-2024-0001)
-  vulnerability_cvss_v31?: number;
-  vulnerability_published?: string;
-  // Full output fields
-  vulnerability_source_identifier?: string;
-  vulnerability_description?: string;
-  vulnerability_vuln_status?: string;
-  vulnerability_cisa_exploit_add?: string;
-  vulnerability_cisa_action_due?: string;
-  vulnerability_cisa_required_action?: string;
-  vulnerability_cisa_vulnerability_name?: string;
-  vulnerability_remediation?: string;
-  vulnerability_reference_urls?: string[];
-  vulnerability_cwes?: Array<{
-    cwe_id: string;
-    cwe_name: string;
-    cwe_description?: string;
-  }>;
-}
-
-/**
  * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenGRC)
  * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
  */
@@ -292,27 +267,5 @@ export interface OAEVInjectorContract {
   };
   injector_name?: string;
   injector_type?: string;
-}
-
-// ============================================================================
-// Atomic Testing Types
-// ============================================================================
-
-/**
- * Injector Contract (simplified version for atomic testing)
- */
-export interface InjectorContract {
-  injector_contract_id: string;
-  injector_contract_labels?: Record<string, string>;
-  injector_contract_injector_type?: string;
-  injector_contract_injector?: {
-    injector_id: string;
-    injector_name: string;
-    injector_type: string;
-  };
-  injector_contract_payload_type?: string;
-  injector_contract_platforms?: string[];
-  injector_contract_attack_patterns?: string[];
-  injector_contract_content?: Record<string, unknown>;
 }
 

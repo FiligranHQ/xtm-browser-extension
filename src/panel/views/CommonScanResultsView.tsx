@@ -179,13 +179,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           confidence: rel.confidence,
         })).filter(r => r.fromValue && r.toValue);
 
-        // Build entity data for minimap graph
-        const entityData = scanResultsEntities.map(e => ({
-          value: e.value || e.name || '',
-          type: e.type || 'Unknown',
-        })).filter(e => e.value);
-
-        const payload = { relationships: relationshipData, entities: entityData };
+        const payload = { relationships: relationshipData };
 
         // Send via postMessage for iframe mode (including PDF scanner)
         window.parent.postMessage({
@@ -199,17 +193,33 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           payload,
         }, '*');
 
-        // Send via chrome.tabs for split screen mode
+        // Send via chrome.tabs for split screen mode (regular web pages)
+        // AND forward to PDF scanner if on a PDF scanner tab
         if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
           try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-              chrome.tabs.sendMessage(tab.id, {
-                type: 'DRAW_RELATIONSHIP_LINES',
-                payload,
-              }).catch(() => {
-                // Silently ignore - content script may not be injected
-              });
+              const extensionId = chrome.runtime.id;
+              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
+              
+              if (isPdfScanner) {
+                // PDF scanner is an extension page, use runtime message forwarding
+                chrome.runtime.sendMessage({
+                  type: 'FORWARD_TO_PDF_SCANNER',
+                  payload: {
+                    type: 'DRAW_RELATIONSHIP_LINES',
+                    payload,
+                  },
+                }).catch(() => {});
+              } else {
+                // Regular web page, send directly to content script
+                chrome.tabs.sendMessage(tab.id, {
+                  type: 'DRAW_RELATIONSHIP_LINES',
+                  payload,
+                }).catch(() => {
+                  // Silently ignore - content script may not be injected
+                });
+              }
             }
           } catch {
             // Silently ignore - chrome.tabs may not be available
@@ -222,7 +232,19 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
+              const extensionId = chrome.runtime.id;
+              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
+              
+              if (isPdfScanner) {
+                chrome.runtime.sendMessage({
+                  type: 'FORWARD_TO_PDF_SCANNER',
+                  payload: {
+                    type: 'CLEAR_RELATIONSHIP_LINES',
+                  },
+                }).catch(() => {});
+              } else {
+                chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
+              }
             }
           } catch {
             // Silently handle errors
@@ -831,10 +853,26 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           }
 
           if (response?.success && response.data?.relationships) {
-            setResolvedRelationships(response.data.relationships);
-            log.info(`AI resolved ${response.data.relationships.length} relationships`);
-            if (response.data.relationships.length > 0) {
-              showToast({ type: 'success', message: `AI found ${response.data.relationships.length} relationship${response.data.relationships.length === 1 ? '' : 's'}` });
+            // The handler should enrich relationships with fromEntityValue/toEntityValue,
+            // but add defensive enrichment in case indices are present without values
+            const octiEntities = scanResultsEntities.filter(e => !e.type.startsWith('oaev-'));
+            const enrichedRelationships = response.data.relationships.map((rel: ResolvedRelationship) => {
+              // If already has values, use them; otherwise look up by index
+              if (rel.fromEntityValue && rel.toEntityValue) {
+                return rel;
+              }
+              const fromEntity = octiEntities[rel.fromIndex];
+              const toEntity = octiEntities[rel.toIndex];
+              return {
+                ...rel,
+                fromEntityValue: rel.fromEntityValue || fromEntity?.value || fromEntity?.name || '',
+                toEntityValue: rel.toEntityValue || toEntity?.value || toEntity?.name || '',
+              };
+            });
+            setResolvedRelationships(enrichedRelationships);
+            log.info(`AI resolved ${enrichedRelationships.length} relationships`);
+            if (enrichedRelationships.length > 0) {
+              showToast({ type: 'success', message: `AI found ${enrichedRelationships.length} relationship${enrichedRelationships.length === 1 ? '' : 's'}` });
               // Switch to relationships tab
               setActiveTab(1);
             } else {

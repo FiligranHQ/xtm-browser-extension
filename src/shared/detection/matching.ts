@@ -7,9 +7,11 @@
 
 /**
  * Check if a character is a valid word boundary
+ * Returns true for undefined/null, empty string, whitespace, or punctuation
  */
-export function isValidBoundary(char: string): boolean {
-  return /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t]/.test(char) || char === '';
+export function isValidBoundary(char: string | undefined | null): boolean {
+  if (!char) return true; // undefined, null, or empty string
+  return /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t.,{}'"_-]/.test(char);
 }
 
 /**

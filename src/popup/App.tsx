@@ -20,8 +20,8 @@ import {
 } from '@mui/icons-material';
 
 // Theme
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
+import themeDark from '../shared/theme/theme-dark';
+import themeLight from '../shared/theme/theme-light';
 
 // Components
 import { ActionButtonsGrid } from '../shared/components/ActionButtonsGrid';
@@ -114,7 +114,7 @@ const App: React.FC = () => {
 
   // Theme
   const theme = useMemo(() => {
-    const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
+    const themeOptions = mode === 'dark' ? themeDark() : themeLight();
     return createTheme(themeOptions);
   }, [mode]);
 

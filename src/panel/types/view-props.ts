@@ -15,7 +15,7 @@ import type {
   ImportResults,
   ContainerFormState,
   ContainerSpecificFields,
-  AISettings,
+  PanelAIState,
   ScenarioOverviewData,
   SelectedInject,
   ScenarioEmail,
@@ -35,8 +35,6 @@ import type {
   OAEVTeam,
   OAEVInjectorContract,
 } from '../../shared/types/openaev';
-
-export type { LabelOption, MarkingOption, VocabularyOption, AuthorOption };
 
 /**
  * Common props shared by most views
@@ -220,7 +218,7 @@ export interface ScanResultsViewProps extends BaseViewProps, PlatformViewProps {
   currentPlatformIndexRef: React.RefObject<number>;
   multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
   /** AI settings */
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   /** AI discovering entities state */
   aiDiscoveringEntities: boolean;
   /** Set AI discovering entities */
@@ -333,7 +331,7 @@ export interface ContainerFormViewProps extends BaseViewProps, PlatformViewProps
   updatingContainerId: string | null;
   updatingContainerDates: { published?: string; created?: string } | null;
   /** AI settings */
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   aiGeneratingDescription: boolean;
   setAiGeneratingDescription: (generating: boolean) => void;
   /** Relationships */
@@ -384,7 +382,7 @@ export interface ScenarioViewProps extends BaseViewProps, PlatformViewProps {
   /** Set panel mode */
   setPanelMode: (mode: PanelMode) => void;
   /** AI settings */
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   /** AI filling emails state */
   aiFillingEmails: boolean;
   /** Set AI filling emails */
@@ -434,7 +432,7 @@ export interface AtomicTestingViewProps {
   mode: 'dark' | 'light';
   availablePlatforms: PlatformInfo[];
   openaevPlatforms: PlatformInfo[];
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   showToast: (options: {
     type: 'success' | 'info' | 'warning' | 'error';
     message: string;
@@ -509,7 +507,7 @@ export interface PreviewViewProps extends BaseViewProps, PlatformViewProps {
   /** Set create indicators */
   setCreateIndicators: (create: boolean) => void;
   /** AI settings */
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   /** AI resolving relationships */
   aiResolvingRelationships: boolean;
   /** Set AI resolving relationships */

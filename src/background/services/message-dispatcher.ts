@@ -10,9 +10,11 @@ import { openctiHandlers } from '../handlers/opencti-handlers';
 import { openaevHandlers } from '../handlers/openaev-handlers';
 import { aiHandlers } from '../handlers/ai-handlers';
 import { miscHandlers } from '../handlers/misc-handlers';
+import { pdfHandlers } from '../handlers/pdf-handlers';
 // Note: settingsHandlers and scanHandlers are NOT included here because they have custom 
 // function signatures that require dependency injection (getDetectionEngine, getOpenCTIClients, etc.).
 // They are handled by the switch statement in index.ts.
+// Note: SCAN_PDF_CONTENT is also not included because it requires detection engine.
 import {
   errorResponse,
   createHandlerContext,
@@ -31,6 +33,7 @@ const allHandlers = [
   openaevHandlers,
   aiHandlers,
   miscHandlers,
+  pdfHandlers,
 ];
 
 for (const handlers of allHandlers) {

@@ -350,12 +350,10 @@ xtm-browser-extension/
 │       │   ├── ThemeDark.ts
 │       │   ├── ThemeLight.ts
 │       │   └── colors.ts
-│       ├── visualization/       # Graph visualization utilities
-│       │   ├── entity-icons.ts      # SVG icon paths for entity types
-│       │   ├── graph-types.ts       # Graph node, edge, and layout types
-│       │   ├── graph-layout.ts      # Force-directed layout algorithms
-│       │   ├── relationship-styles.ts # Line and label styling
-│       │   └── index.ts             # Barrel exports
+│       ├── visualization/       # Relationship line visualization utilities
+│       │   ├── graph-types.ts       # Relationship data and point interfaces
+│       │   ├── graph-layout.ts      # Bezier curve calculation utilities
+│       │   └── relationship-styles.ts # Line and label styling
 │       ├── components/          # Shared React components
 │       │   ├── ItemIcon.tsx         # Entity type icons
 │       │   ├── ActionButton.tsx     # Stylized action button

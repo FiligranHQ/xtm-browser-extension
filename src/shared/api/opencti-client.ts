@@ -74,8 +74,7 @@ import {
   type ContainerQueryResult,
 } from './opencti/types';
 import {
-  normalizeToStixType,
-  stixToGraphQLType,
+  toGraphQLInputType,
   buildObservableInput,
 } from './opencti/observable-mapping';
 
@@ -454,12 +453,12 @@ export class OpenCTIClient {
     objectMarking?: string[];
     objectLabel?: string[];
   }): Promise<OCTIStixCyberObservable> {
-    const stixType = normalizeToStixType(input.type);
-    const gqlType = stixToGraphQLType(stixType);
-    const observableInput = buildObservableInput(stixType, gqlType, input.value, input.hashType);
+    // OpenCTI uses the type as-is (with hyphens) for the 'type' field
+    const gqlType = toGraphQLInputType(input.type);
+    const observableInput = buildObservableInput(input.type, input.value, input.hashType);
 
     const variables = {
-      type: stixType,
+      type: input.type,
       x_opencti_score: input.score,
       x_opencti_description: input.description,
       createIndicator: input.createIndicator ?? false,

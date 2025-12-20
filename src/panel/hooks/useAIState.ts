@@ -5,15 +5,12 @@
  */
 
 import { useState } from 'react';
-import type { AISettings, ResolvedRelationship } from '../types/panel-types';
-
-// Re-export types for backward compatibility
-export type { AISettings, ResolvedRelationship };
+import type { PanelAIState, ResolvedRelationship } from '../types/panel-types';
 
 export interface AIStateReturn {
   // AI Configuration
-  aiSettings: AISettings;
-  setAiSettings: React.Dispatch<React.SetStateAction<AISettings>>;
+  aiSettings: PanelAIState;
+  setAiSettings: React.Dispatch<React.SetStateAction<PanelAIState>>;
   
   // AI Generation states
   aiGeneratingDescription: boolean;
@@ -41,7 +38,7 @@ export interface AIStateReturn {
  */
 export function useAIState(): AIStateReturn {
   // AI Configuration
-  const [aiSettings, setAiSettings] = useState<AISettings>({ 
+  const [aiSettings, setAiSettings] = useState<PanelAIState>({ 
     enabled: false, 
     available: false 
   });

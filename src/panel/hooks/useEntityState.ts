@@ -7,9 +7,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type { EntityData, PlatformInfo, MultiPlatformResult } from '../types/panel-types';
 
-// Re-export type for backward compatibility
-export type { MultiPlatformResult };
-
 export interface EntityStateReturn {
   // Current entity
   entity: EntityData | null;

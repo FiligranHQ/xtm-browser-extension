@@ -67,6 +67,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
   openai: 'gpt-5.2',
   anthropic: 'claude-sonnet-4-5',
   gemini: 'gemini-2.5-flash-lite',
+  custom: '',
   'xtm-one': '',
 };
 
@@ -80,6 +81,7 @@ export class AIClient {
   private provider: AIProvider;
   private apiKey: string;
   private model?: string;
+  private customBaseUrl?: string;
 
   constructor(settings: AISettings) {
     if (!settings.provider || !settings.apiKey) {
@@ -88,9 +90,27 @@ export class AIClient {
     if (settings.provider === 'xtm-one') {
       throw new Error('XTM One is not yet available');
     }
+    if (settings.provider === 'custom' && !settings.customBaseUrl) {
+      throw new Error('Custom endpoint URL is required for custom provider');
+    }
+    if (settings.provider === 'custom' && !settings.model) {
+      throw new Error('Model name is required for custom provider');
+    }
     this.provider = settings.provider;
     this.apiKey = settings.apiKey;
     this.model = settings.model;
+    this.customBaseUrl = settings.customBaseUrl;
+  }
+
+  /**
+   * Get the base URL for the current provider
+   */
+  private getBaseUrl(): string {
+    if (this.provider === 'custom' && this.customBaseUrl) {
+      // Normalize the URL - remove trailing slash
+      return this.customBaseUrl.replace(/\/+$/, '');
+    }
+    return BASE_URLS[this.provider as keyof typeof BASE_URLS] || '';
   }
 
   private getModel(): string {
@@ -111,6 +131,7 @@ export class AIClient {
         case 'openai': return await this.fetchOpenAIModels();
         case 'anthropic': return await this.fetchAnthropicModels();
         case 'gemini': return await this.fetchGeminiModels();
+        case 'custom': return await this.testCustomEndpoint();
         default: return { success: false, error: 'Unknown AI provider' };
       }
     } catch (error) {
@@ -119,7 +140,8 @@ export class AIClient {
   }
 
   private async fetchOpenAIModels() {
-    const response = await fetch(`${BASE_URLS.openai}/models`, {
+    const baseUrl = this.getBaseUrl();
+    const response = await fetch(`${baseUrl}/models`, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${this.apiKey}` },
     });
@@ -142,6 +164,79 @@ export class AIClient {
       }));
 
     return { success: true, models };
+  }
+
+  /**
+   * Test custom OpenAI-compatible endpoint
+   * For custom endpoints, we just test that the connection works with a simple models list request
+   * If the endpoint doesn't support /models, we try a simple chat completion test
+   */
+  private async testCustomEndpoint(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; description?: string }>;
+    error?: string;
+  }> {
+    const baseUrl = this.getBaseUrl();
+    
+    // First try to fetch models (many OpenAI-compatible APIs support this)
+    try {
+      const response = await fetch(`${baseUrl}/models`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && Array.isArray(data.data)) {
+          const models = data.data
+            .slice(0, MAX_MODELS)
+            .map((m: { id: string; created?: number; owned_by?: string }) => ({
+              id: m.id,
+              name: m.id,
+              description: m.owned_by ? `Owned by: ${m.owned_by}` : undefined,
+            }));
+          return { success: true, models };
+        }
+      }
+    } catch {
+      // If /models fails, fall through to test with a simple completion
+    }
+
+    // Fallback: Test with a minimal chat completion request
+    try {
+      const testResponse = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model || 'test',
+          messages: [{ role: 'user', content: 'Hi' }],
+          max_tokens: 5,
+        }),
+      });
+
+      if (testResponse.ok) {
+        // Connection works - return success without model list
+        // User will need to enter model name manually
+        return { 
+          success: true, 
+          models: this.model ? [{ id: this.model, name: this.model }] : [],
+        };
+      }
+
+      if (testResponse.status === 401) {
+        throw new Error('Invalid API key or token');
+      }
+
+      const errorData = await testResponse.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || `API error: ${testResponse.status}`;
+      throw new Error(errorMessage);
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      throw new Error('Failed to connect to custom endpoint');
+    }
   }
 
   private async fetchAnthropicModels() {
@@ -208,6 +303,7 @@ export class AIClient {
         case 'openai': return await this.generateOpenAI(request);
         case 'anthropic': return await this.generateAnthropic(request);
         case 'gemini': return await this.generateGemini(request);
+        case 'custom': return await this.generateCustom(request);
         default: return { success: false, error: 'Unknown AI provider' };
       }
     } catch (error) {
@@ -287,7 +383,8 @@ export class AIClient {
   // ==========================================================================
 
   private async generateOpenAI(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const response = await fetch(`${BASE_URLS.openai}/chat/completions`, {
+    const baseUrl = this.getBaseUrl();
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
       body: JSON.stringify({
@@ -304,6 +401,37 @@ export class AIClient {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
       throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { success: true, content: data.choices?.[0]?.message?.content || '' };
+  }
+
+  /**
+   * Generate using a custom OpenAI-compatible endpoint
+   */
+  private async generateCustom(request: AIGenerationRequest): Promise<AIGenerationResponse> {
+    const baseUrl = this.getBaseUrl();
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.getModel(),
+        messages: [
+          ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
+          { role: 'user', content: request.prompt },
+        ],
+        max_tokens: request.maxTokens || 1500,
+        temperature: request.temperature || 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      throw new Error(error.error?.message || `Custom API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -367,5 +495,12 @@ export class AIClient {
  * Check if AI is configured and available
  */
 export function isAIAvailable(settings?: AISettings): boolean {
-  return !!(settings?.provider && settings?.apiKey && settings?.model);
+  if (!settings?.provider || !settings?.apiKey || !settings?.model) {
+    return false;
+  }
+  // For custom provider, also require the custom base URL
+  if (settings.provider === 'custom' && !settings.customBaseUrl) {
+    return false;
+  }
+  return true;
 }

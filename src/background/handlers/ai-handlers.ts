@@ -490,14 +490,26 @@ export async function handleAIResolveRelationships(
         return;
       }
       
-      // Validate indices are within bounds
+      // Validate indices are within bounds and enrich with entity values
       const entityCount = payload.entities.length;
-      const validRelationships = parsed.relationships.filter(r => 
-        r.fromIndex >= 0 && r.fromIndex < entityCount &&
-        r.toIndex >= 0 && r.toIndex < entityCount &&
-        r.fromIndex !== r.toIndex &&
-        r.relationshipType && typeof r.relationshipType === 'string'
-      );
+      const validRelationships = parsed.relationships
+        .filter(r => 
+          r.fromIndex >= 0 && r.fromIndex < entityCount &&
+          r.toIndex >= 0 && r.toIndex < entityCount &&
+          r.fromIndex !== r.toIndex &&
+          r.relationshipType && typeof r.relationshipType === 'string'
+        )
+        .map(r => {
+          const fromEntity = payload.entities[r.fromIndex];
+          const toEntity = payload.entities[r.toIndex];
+          return {
+            ...r,
+            fromEntityValue: fromEntity?.value || fromEntity?.name || '',
+            toEntityValue: toEntity?.value || toEntity?.name || '',
+          };
+        })
+        // Filter out relationships where we couldn't resolve entity values
+        .filter(r => r.fromEntityValue && r.toEntityValue);
       
       log.info(`AI resolved ${validRelationships.length} relationships (${parsed.relationships.length} raw)`);
       

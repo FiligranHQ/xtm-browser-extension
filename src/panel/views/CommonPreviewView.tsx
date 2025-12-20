@@ -28,7 +28,7 @@ import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB, itemColor } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
-import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, AISettings } from '../types/panel-types';
+import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, PanelAIState } from '../types/panel-types';
 
 const log = loggers.panel;
 
@@ -42,7 +42,7 @@ export interface PreviewViewProps {
   setCreateIndicators: (value: boolean) => void;
   resolvedRelationships: ResolvedRelationship[];
   setResolvedRelationships: (rels: ResolvedRelationship[] | ((prev: ResolvedRelationship[]) => ResolvedRelationship[])) => void;
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   aiResolvingRelationships: boolean;
   setAiResolvingRelationships: (value: boolean) => void;
   availablePlatforms: PlatformInfo[];
@@ -108,13 +108,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
           confidence: rel.confidence,
         })).filter(r => r.fromValue && r.toValue);
 
-        // Build entity data for minimap graph
-        const entityData = entitiesToAdd.map(e => ({
-          value: e.value || e.name || '',
-          type: e.type || 'Unknown',
-        })).filter(e => e.value);
-
-        const payload = { relationships: relationshipData, entities: entityData };
+        const payload = { relationships: relationshipData };
 
         // Send via postMessage for iframe mode
         window.parent.postMessage({
@@ -122,15 +116,31 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
           payload,
         }, '*');
 
-        // Send via chrome.tabs for split screen mode
+        // Send via chrome.tabs for split screen mode (regular web pages)
+        // AND forward to PDF scanner if on a PDF scanner tab
         if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
           try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-              chrome.tabs.sendMessage(tab.id, {
-                type: 'DRAW_RELATIONSHIP_LINES',
-                payload,
-              }).catch(() => {});
+              const extensionId = chrome.runtime.id;
+              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
+              
+              if (isPdfScanner) {
+                // PDF scanner is an extension page, use runtime message forwarding
+                chrome.runtime.sendMessage({
+                  type: 'FORWARD_TO_PDF_SCANNER',
+                  payload: {
+                    type: 'DRAW_RELATIONSHIP_LINES',
+                    payload,
+                  },
+                }).catch(() => {});
+              } else {
+                // Regular web page, send directly to content script
+                chrome.tabs.sendMessage(tab.id, {
+                  type: 'DRAW_RELATIONSHIP_LINES',
+                  payload,
+                }).catch(() => {});
+              }
             }
           } catch {
             // Silently handle errors
@@ -143,7 +153,19 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
           try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab?.id) {
-              chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
+              const extensionId = chrome.runtime.id;
+              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
+              
+              if (isPdfScanner) {
+                chrome.runtime.sendMessage({
+                  type: 'FORWARD_TO_PDF_SCANNER',
+                  payload: {
+                    type: 'CLEAR_RELATIONSHIP_LINES',
+                  },
+                }).catch(() => {});
+              } else {
+                chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
+              }
             }
           } catch {
             // Silently handle errors

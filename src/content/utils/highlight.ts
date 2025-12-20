@@ -238,12 +238,3 @@ export function scrollToAndFlashHighlight(highlight: HTMLElement): void {
   }, 3000);
 }
 
-/**
- * Check if a character is a valid word boundary for exact matching
- */
-export function isValidWordBoundary(char: string | undefined): boolean {
-  if (!char) return true;
-  // Word boundaries are: whitespace, punctuation, start/end of string
-  return /[\s.,;:!?'"()[\]{}<>/\\|@#$%^&*+=~`\-_]/.test(char);
-}
-

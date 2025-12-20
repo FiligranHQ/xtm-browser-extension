@@ -11,8 +11,8 @@
 import React from 'react';
 import { ComputerOutlined } from '@mui/icons-material';
 import { MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
-import { THEME_DARK_AI } from '../../shared/theme/ThemeDark';
-import { THEME_LIGHT_AI } from '../../shared/theme/ThemeLight';
+import { THEME_DARK_AI } from '../../shared/theme/theme-dark';
+import { THEME_LIGHT_AI } from '../../shared/theme/theme-light';
 import type { MultiPlatformResult, PlatformInfo } from '../types/panel-types';
 
 // ============================================================================

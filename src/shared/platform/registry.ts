@@ -567,6 +567,10 @@ export const CROSS_PLATFORM_TYPE_MAPPINGS: Record<string, string[]> = {
   // Vulnerability/CVE exists in both OpenCTI (Vulnerability) and OpenAEV (oaev-Vulnerability)
   // CVE is the common identifier format but maps to Vulnerability type in both platforms
   'Vulnerability': ['vulnerability', 'oaev-vulnerability', 'cve'],
+  
+  // System (OpenCTI) and Asset (OpenAEV) represent similar concepts - computing systems/endpoints
+  // In OpenCTI, System is an Identity subtype; in OpenAEV, Asset represents endpoints
+  'System': ['system', 'asset', 'oaev-asset'],
 };
 
 /**

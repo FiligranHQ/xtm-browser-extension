@@ -15,6 +15,7 @@ import { openctiHandlers } from '../../src/background/handlers/opencti-handlers'
 import { openaevHandlers } from '../../src/background/handlers/openaev-handlers';
 import { aiHandlers } from '../../src/background/handlers/ai-handlers';
 import { miscHandlers } from '../../src/background/handlers/misc-handlers';
+import { pdfHandlers } from '../../src/background/handlers/pdf-handlers';
 
 // Import message dispatcher functions
 import { 
@@ -208,6 +209,13 @@ const DISPATCHER_HANDLED_MESSAGES: MessageType[] = [
   'GET_PANEL_STATE',
   'GENERATE_NATIVE_PDF',
   'FETCH_IMAGE_AS_DATA_URL',
+  
+  // PDF handlers (from pdfHandlers registry)
+  'OPEN_PDF_SCANNER',
+  'OPEN_PDF_SCANNER_PANEL',
+  'PDF_SCANNER_RESCAN',
+  'FORWARD_TO_PDF_SCANNER',
+  'GET_PDF_CONTENT_FROM_PDF_SCANNER',
 ];
 
 /**
@@ -268,14 +276,11 @@ const NON_BACKGROUND_MESSAGES: MessageType[] = [
   'SHOW_SCENARIO_PANEL',
   'CREATE_SCENARIO_FROM_PAGE',
   'AI_SCAN_ALL',
+  // PDF messages handled in switch (CHECK_IF_PDF, SCAN_PDF_CONTENT)
+  // or by PDF scanner itself (GET_PDF_CONTENT)
   'CHECK_IF_PDF',
-  'OPEN_PDF_SCANNER',
   'SCAN_PDF_CONTENT',
-  'OPEN_PDF_SCANNER_PANEL',
-  'PDF_SCANNER_RESCAN',
-  'FORWARD_TO_PDF_SCANNER',
   'GET_PDF_CONTENT',
-  'GET_PDF_CONTENT_FROM_PDF_SCANNER',
 ];
 
 // ============================================================================
@@ -468,6 +473,31 @@ describe('Handler Registries', () => {
       }
     });
   });
+
+  describe('PDF Handlers', () => {
+    const expectedHandlers = [
+      'OPEN_PDF_SCANNER',
+      'OPEN_PDF_SCANNER_PANEL',
+      'PDF_SCANNER_RESCAN',
+      'FORWARD_TO_PDF_SCANNER',
+      'GET_PDF_CONTENT_FROM_PDF_SCANNER',
+    ];
+
+    it('should export all required handlers', () => {
+      for (const name of expectedHandlers) {
+        expect(pdfHandlers[name], `Handler ${name} should be exported`).toBeDefined();
+        expect(typeof pdfHandlers[name]).toBe('function');
+      }
+    });
+
+    it('should not have extra unexpected handlers', () => {
+      const handlerNames = Object.keys(pdfHandlers);
+      for (const name of handlerNames) {
+        expect(expectedHandlers.includes(name as any), 
+          `Unexpected handler ${name} - add to expectedHandlers if intentional`).toBe(true);
+      }
+    });
+  });
 });
 
 describe('Handler Types', () => {
@@ -477,6 +507,7 @@ describe('Handler Types', () => {
       ...openaevHandlers,
       ...aiHandlers,
       ...miscHandlers,
+      ...pdfHandlers,
     };
 
     for (const [name, handler] of Object.entries(allHandlers)) {

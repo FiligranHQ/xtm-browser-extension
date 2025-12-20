@@ -5,8 +5,7 @@
  */
 
 import { useCallback } from 'react';
-import type { EntityData, PlatformInfo, ImportResults, ContainerFormState, ContainerSpecificFields } from '../types/panel-types';
-import type { ResolvedRelationship, AISettings } from './useAIState';
+import type { EntityData, PlatformInfo, ImportResults, ContainerFormState, ContainerSpecificFields, ResolvedRelationship, PanelAIState } from '../types/panel-types';
 
 export interface ContainerActionsProps {
   // Platform state
@@ -42,7 +41,7 @@ export interface ContainerActionsProps {
   setImportResults: (results: ImportResults | null) => void;
   
   // AI state
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   resolvedRelationships: ResolvedRelationship[];
   setAiGeneratingDescription: (generating: boolean) => void;
   

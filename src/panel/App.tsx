@@ -10,8 +10,8 @@ import {
 import {
   CloseOutlined,
 } from '@mui/icons-material';
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
+import themeDark from '../shared/theme/theme-dark';
+import themeLight from '../shared/theme/theme-light';
 import { loggers } from '../shared/utils/logger';
 import { sessionStorage } from '../shared/utils/storage';
 import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
@@ -24,7 +24,7 @@ import { useInvestigationState } from './hooks/useInvestigationState';
 import { useContainerState } from './hooks/useContainerState';
 import { useScanResultsState } from './hooks/useScanResultsState';
 import { useSearchState } from './hooks/useSearchState';
-import { useEntityState, type MultiPlatformResult } from './hooks/useEntityState';
+import { useEntityState } from './hooks/useEntityState';
 import { useAddSelectionState } from './hooks/useAddSelectionState';
 import { CommonNotFoundView } from './components/CommonNotFoundView';
 import { CommonScanResultsView } from './views/CommonScanResultsView';
@@ -52,6 +52,7 @@ import type {
   PanelMode,
   EntityData,
   PlatformInfo,
+  MultiPlatformResult,
 } from './types/panel-types';
 const log = loggers.panel;
 
@@ -243,7 +244,7 @@ const App: React.FC = () => {
   } = useInvestigationState();
 
   const theme = useMemo(() => {
-    const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
+    const themeOptions = mode === 'dark' ? themeDark() : themeLight();
     return createTheme(themeOptions);
   }, [mode]);
 

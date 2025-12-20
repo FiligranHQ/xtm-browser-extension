@@ -131,12 +131,6 @@ export interface ExtensionMessage {
 // Message Payload Types
 // ============================================================================
 
-export interface ScanPagePayload {
-  url: string;
-  title: string;
-  content: string;
-}
-
 export interface ScanResultPayload {
   /** Observable Types detected (IPs, domains, hashes, etc.) */
   observables: DetectedObservable[];

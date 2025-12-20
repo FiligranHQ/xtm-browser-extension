@@ -51,7 +51,10 @@ export type OCTIEntityType =
   | 'Tool'
   | 'Incident'
   | 'Infrastructure'
-  | 'Indicator';
+  | 'Indicator'
+  | 'Narrative'
+  | 'Channel'
+  | 'System';
 
 // ============================================================================
 // STIX Base Types

@@ -17,16 +17,6 @@ import type {
   AuthorOption,
 } from '../types/panel-types';
 
-// Re-export types for backward compatibility
-export type {
-  ContainerFormState,
-  ContainerSpecificFields,
-  LabelOption,
-  MarkingOption,
-  VocabularyOption,
-  AuthorOption,
-};
-
 export interface ContainerStateReturn {
   // Container type and form
   containerType: string;

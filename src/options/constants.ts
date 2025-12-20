@@ -28,6 +28,7 @@ export const OPENCTI_TYPES = [
   { value: 'Administrative-Area', label: 'Administrative Areas' },
   { value: 'Attack-Pattern', label: 'Attack Patterns' },
   { value: 'Campaign', label: 'Campaigns' },
+  { value: 'Channel', label: 'Channels' },
   { value: 'City', label: 'Cities' },
   { value: 'Country', label: 'Countries' },
   { value: 'Event', label: 'Events' },
@@ -35,12 +36,15 @@ export const OPENCTI_TYPES = [
   { value: 'Individual', label: 'Individuals' },
   { value: 'Intrusion-Set', label: 'Intrusion Sets' },
   { value: 'Malware', label: 'Malware' },
+  { value: 'Narrative', label: 'Narratives' },
   { value: 'Organization', label: 'Organizations' },
   { value: 'Position', label: 'Positions' },
   { value: 'Region', label: 'Regions' },
   { value: 'Sector', label: 'Sectors' },
+  { value: 'System', label: 'Systems' },
   { value: 'Threat-Actor-Group', label: 'Threat Actor Groups' },
   { value: 'Threat-Actor-Individual', label: 'Threat Actor Individuals' },
+  { value: 'Tool', label: 'Tools' },
   { value: 'Vulnerability', label: 'Vulnerabilities (CVE)' },
 ];
 

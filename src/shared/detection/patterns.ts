@@ -9,6 +9,7 @@
  */
 
 import type { ObservableType, HashType } from '../types/observables';
+import { escapeRegex } from './matching';
 
 // ============================================================================
 // Defanging/Refanging Utilities
@@ -469,10 +470,8 @@ export const SDO_SEARCH_TYPES = [
  * Generate a regex pattern for exact word matching
  */
 export function createNamePattern(name: string): RegExp {
-    // Escape special regex characters
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Match whole word only (case insensitive)
-    return new RegExp(`\\b${escaped}\\b`, 'gi');
+    return new RegExp(`\\b${escapeRegex(name)}\\b`, 'gi');
 }
 
 // ============================================================================

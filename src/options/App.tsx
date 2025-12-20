@@ -12,8 +12,8 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material';
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
+import themeDark from '../shared/theme/theme-dark';
+import themeLight from '../shared/theme/theme-light';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
 
@@ -73,7 +73,7 @@ const App: React.FC = () => {
 
   // Create theme based on mode
   const theme = useMemo(() => {
-    const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
+    const themeOptions = mode === 'dark' ? themeDark() : themeLight();
     return createTheme(themeOptions);
   }, [mode]);
 
@@ -868,6 +868,7 @@ const App: React.FC = () => {
               onRemoveAll={handleRemoveAllOpenCTI}
               onSave={handleSave}
               isSaveDisabled={isPlatformSaveDisabled('opencti')}
+              getUrlError={getUrlError('opencti')}
             />
           )}
 
@@ -887,6 +888,7 @@ const App: React.FC = () => {
               onRemoveAll={handleRemoveAllOpenAEV}
               onSave={handleSave}
               isSaveDisabled={isPlatformSaveDisabled('openaev')}
+              getUrlError={getUrlError('openaev')}
             />
           )}
 

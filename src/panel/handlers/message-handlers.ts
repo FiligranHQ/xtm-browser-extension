@@ -23,8 +23,8 @@ import type {
   ScenarioFormData,
   SelectedInject,
   AIGeneratedScenario,
+  MultiPlatformResult,
 } from '../types/panel-types';
-import type { MultiPlatformResult } from '../hooks/useEntityState';
 
 const log = loggers.panel;
 

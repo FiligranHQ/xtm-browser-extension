@@ -33,6 +33,10 @@ import {
   handleCreateContainer,
   type CreateContainerPayload,
 } from './handlers/container-handlers';
+import {
+  handleGetEntityDetails,
+  type GetEntityDetailsPayload,
+} from './handlers/entity-handlers';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -48,12 +52,11 @@ import {
 } from '../shared/platform/registry';
 import {
   CONNECTION_TIMEOUT_MS,
-  ENTITY_FETCH_TIMEOUT_MS,
   SEARCH_TIMEOUT_MS,
   CONTAINER_FETCH_TIMEOUT_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/utils/messaging';
-import { generateNativePDF, isNativePDFAvailable } from '../shared/extraction/native-pdf';
+// Note: generateNativePDF and isNativePDFAvailable are used in misc-handlers.ts (dispatcher)
 import {
   startOCTICacheRefresh,
   startOAEVCacheRefresh,
@@ -716,194 +719,14 @@ async function handleMessage(
       
       case 'GET_ENTITY_DETAILS': {
         // Unified entity details handler for all platforms
-        // platformType determines which platform type to query
-        // To add a new platform: add a case in the switch below
-        const { id, entityType, platformId: specificPlatformId, platformType } = message.payload as {
-          id: string;
-          entityType: string;
-          platformId?: string;
-          platformType?: PlatformType;
-        };
-        
-        const targetPlatformType = platformType || 'opencti';
-        
-        try {
-          switch (targetPlatformType) {
-            case 'opencti': {
-              if (openCTIClients.size === 0) {
-                sendResponse(errorResponse('OpenCTI not configured'));
-                break;
-              }
-              
-              // If a specific platform is requested, use that
-              // Otherwise, search all platforms in PARALLEL with timeout
-              if (specificPlatformId) {
-                // Single platform request with timeout
-                const client = openCTIClients.get(specificPlatformId);
-                if (!client) {
-                  sendResponse(errorResponse('Platform not found'));
-                  break;
-                }
-                
-                const timeoutPromise = new Promise<null>((_, reject) => 
-                  setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-                );
-                
-                try {
-                  let entityPromise;
-                  if (
-                    entityType.includes('Addr') ||
-                    entityType.includes('Domain') ||
-                    entityType.includes('Url') ||
-                    entityType.includes('File') ||
-                    entityType.includes('Email') ||
-                    entityType.includes('Mac') ||
-                    entityType.includes('Observable')
-                  ) {
-                    entityPromise = client.getObservableById(id);
-                  } else {
-                    entityPromise = client.getSDOById(id);
-                  }
-                  
-                  const entity = await Promise.race([entityPromise, timeoutPromise]);
-                  if (entity) {
-                    sendResponse({ success: true, data: { ...entity, platformId: specificPlatformId, platformType: 'opencti' } });
-                  } else {
-                    sendResponse(errorResponse('Entity not found'));
-                  }
-                } catch (e) {
-                  sendResponse(errorResponse('Entity not found or timeout'));
-                }
-              } else {
-                // Search all OpenCTI platforms in PARALLEL
-                const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-                  const timeoutPromise = new Promise<null>((resolve) => 
-                    setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
-                  );
-                  
-                  try {
-                    let entityPromise;
-                    if (
-                      entityType.includes('Addr') ||
-                      entityType.includes('Domain') ||
-                      entityType.includes('Url') ||
-                      entityType.includes('File') ||
-                      entityType.includes('Email') ||
-                      entityType.includes('Mac') ||
-                      entityType.includes('Observable')
-                    ) {
-                      entityPromise = client.getObservableById(id);
-                    } else {
-                      entityPromise = client.getSDOById(id);
-                    }
-                    
-                    const entity = await Promise.race([entityPromise, timeoutPromise]);
-                    return { platformId: pId, entity };
-                  } catch (e) {
-                    return { platformId: pId, entity: null };
-                  }
-                });
-                
-                const results = await Promise.all(fetchPromises);
-                const found = results.find(r => r.entity !== null);
-                
-                if (found && found.entity) {
-                  sendResponse({ success: true, data: { ...found.entity, platformId: found.platformId, platformType: 'opencti' } });
-                } else {
-                  sendResponse(errorResponse('Entity not found in any OpenCTI platform'));
-                }
-              }
-              break;
-            }
-            
-            case 'openaev': {
-              if (!specificPlatformId) {
-                sendResponse(errorResponse('platformId is required for OpenAEV'));
-                break;
-              }
-              
-              const oaevClient = openAEVClients.get(specificPlatformId);
-              if (!oaevClient) {
-                sendResponse(errorResponse('OpenAEV platform not found'));
-                break;
-              }
-              
-              const oaevTimeoutPromise = new Promise<null>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-              );
-              
-              // Ensure caches are populated for resolution
-              await oaevClient.ensureTagsCached();
-              
-              // For AttackPattern entities, also cache kill chain phases and attack patterns
-              const normalizedEntityType = entityType.replace(/^oaev-/, '');
-              if (normalizedEntityType === 'AttackPattern') {
-                await Promise.all([
-                  oaevClient.ensureKillChainPhasesCached(),
-                  oaevClient.ensureAttackPatternsCached(),
-                ]);
-              }
-              
-              const oaevEntity = await Promise.race([
-                oaevClient.getEntityById(id, entityType),
-                oaevTimeoutPromise
-              ]);
-              
-              if (oaevEntity) {
-                // Resolve tags if present (convert IDs to labels)
-                if (oaevEntity.asset_tags && Array.isArray(oaevEntity.asset_tags)) {
-                  oaevEntity.asset_tags_resolved = oaevClient.resolveTagIds(oaevEntity.asset_tags);
-                }
-                if (oaevEntity.endpoint_tags && Array.isArray(oaevEntity.endpoint_tags)) {
-                  oaevEntity.endpoint_tags_resolved = oaevClient.resolveTagIds(oaevEntity.endpoint_tags);
-                }
-                if (oaevEntity.team_tags && Array.isArray(oaevEntity.team_tags)) {
-                  oaevEntity.team_tags_resolved = oaevClient.resolveTagIds(oaevEntity.team_tags);
-                }
-                if (oaevEntity.asset_group_tags && Array.isArray(oaevEntity.asset_group_tags)) {
-                  oaevEntity.asset_group_tags_resolved = oaevClient.resolveTagIds(oaevEntity.asset_group_tags);
-                }
-                if (oaevEntity.scenario_tags && Array.isArray(oaevEntity.scenario_tags)) {
-                  oaevEntity.scenario_tags_resolved = oaevClient.resolveTagIds(oaevEntity.scenario_tags);
-                }
-                if (oaevEntity.exercise_tags && Array.isArray(oaevEntity.exercise_tags)) {
-                  oaevEntity.exercise_tags_resolved = oaevClient.resolveTagIds(oaevEntity.exercise_tags);
-                }
-                
-                // For AttackPattern: resolve kill chain phase IDs and parent technique ID
-                if (normalizedEntityType === 'AttackPattern') {
-                  if (oaevEntity.attack_pattern_kill_chain_phases && Array.isArray(oaevEntity.attack_pattern_kill_chain_phases)) {
-                    oaevEntity.attack_pattern_kill_chain_phases_resolved = oaevClient.resolveKillChainPhaseIds(oaevEntity.attack_pattern_kill_chain_phases);
-                  }
-                  if (oaevEntity.attack_pattern_parent) {
-                    oaevEntity.attack_pattern_parent_resolved = oaevClient.resolveAttackPatternId(oaevEntity.attack_pattern_parent);
-                  }
-                }
-                
-                sendResponse({ 
-                  success: true, 
-                  data: {
-                    ...oaevEntity,
-                    platformId: specificPlatformId,
-                    platformType: 'openaev',
-                    _entityType: entityType,
-                  }
-                });
-              } else {
-                sendResponse(errorResponse('Entity not found'));
-              }
-              break;
-            }
-            
-            default:
-              sendResponse({ success: false, error: `Unsupported platform type: ${targetPlatformType}` });
+        await handleGetEntityDetails(
+          message.payload as GetEntityDetailsPayload,
+          sendResponse,
+          {
+            getOpenCTIClients: () => openCTIClients,
+            getOpenAEVClients: () => openAEVClients,
           }
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to get entity',
-          });
-        }
+        );
         break;
       }
       
@@ -1810,92 +1633,7 @@ async function handleMessage(
         await handleAIScanAll(message.payload as EntityDiscoveryRequest, sendResponse);
         break;
       
-      case 'GENERATE_NATIVE_PDF': {
-        // Generate PDF using Chrome's native print-to-PDF via Debugger API
-        const { tabId } = message.payload as { tabId: number };
-        
-        if (!isNativePDFAvailable()) {
-          log.warn('Native PDF generation not available (debugger API not present)');
-          sendResponse({ success: false, error: 'Native PDF generation not available' });
-          break;
-        }
-        
-        try {
-          log.debug(`Generating native PDF for tab ${tabId}`);
-          const pdfData = await generateNativePDF(tabId, {
-            displayHeaderFooter: true,
-            printBackground: true,
-            paperWidth: 8.27, // A4
-            paperHeight: 11.69,
-            marginTop: 0.5,
-            marginBottom: 0.5,
-            marginLeft: 0.5,
-            marginRight: 0.5,
-          });
-          
-          if (pdfData) {
-            log.debug('Native PDF generated successfully, size:', pdfData.length);
-            sendResponse({ success: true, data: pdfData });
-          } else {
-            log.warn('Native PDF generation returned no data');
-            sendResponse({ success: false, error: 'PDF generation failed' });
-          }
-        } catch (error) {
-          log.error('Native PDF generation error:', error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'PDF generation failed' 
-          });
-        }
-        break;
-      }
-      
-      case 'FETCH_IMAGE_AS_DATA_URL': {
-        // Fetch image bypassing CORS (background script has elevated permissions)
-        const { url } = message.payload as { url: string };
-        
-        if (!url) {
-          sendResponse({ success: false, error: 'No URL provided' });
-          break;
-        }
-        
-        try {
-          log.debug(`Fetching image: ${url}`);
-          const response = await fetch(url, {
-            mode: 'cors',
-            credentials: 'omit',
-            headers: {
-              'Accept': 'image/*,*/*;q=0.8',
-            },
-          });
-          
-          if (!response.ok) {
-            log.warn(`Image fetch failed: ${response.status} ${response.statusText}`);
-            sendResponse({ success: false, error: `HTTP ${response.status}` });
-            break;
-          }
-          
-          const blob = await response.blob();
-          
-          // Convert blob to base64 data URL
-          const reader = new FileReader();
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = () => reject(new Error('Failed to read blob'));
-            reader.readAsDataURL(blob);
-          });
-          
-          log.debug(`Image fetched successfully: ${url.substring(0, 50)}...`);
-          sendResponse({ success: true, dataUrl });
-        } catch (error) {
-          log.warn('Image fetch error:', url, error);
-          sendResponse({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Fetch failed' 
-          });
-        }
-        break;
-      }
+      // Note: GENERATE_NATIVE_PDF and FETCH_IMAGE_AS_DATA_URL are handled by dispatcher (misc-handlers.ts)
       
       // ============================================================================
       // PDF Scanner Handlers
@@ -1920,28 +1658,7 @@ async function handleMessage(
         break;
       }
       
-      case 'OPEN_PDF_SCANNER': {
-        // Open the PDF scanner page in a new tab
-        const { pdfUrl } = message.payload as { pdfUrl: string };
-        
-        if (!pdfUrl) {
-          sendResponse(errorResponse('No PDF URL provided'));
-          break;
-        }
-        
-        try {
-          const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html') + 
-            '?url=' + encodeURIComponent(pdfUrl);
-          
-          const tab = await chrome.tabs.create({ url: scannerUrl });
-          log.debug(`Opened PDF scanner for: ${pdfUrl}, tab: ${tab.id}`);
-          sendResponse(successResponse({ tabId: tab.id }));
-        } catch (error) {
-          log.error('OPEN_PDF_SCANNER error:', error);
-          sendResponse(errorResponse('Failed to open PDF scanner'));
-        }
-        break;
-      }
+      // Note: OPEN_PDF_SCANNER is handled by message dispatcher (pdf-handlers.ts)
       
       case 'SCAN_PDF_CONTENT': {
         // Scan PDF text content for entities (reuses existing detection logic - same as SCAN_PAGE)
@@ -2002,161 +1719,8 @@ async function handleMessage(
         break;
       }
       
-      case 'OPEN_PDF_SCANNER_PANEL': {
-        // Open the side panel for the PDF scanner tab
-        // PDF scanner is an extension page so we always use native side panel
-        try {
-          // Get the sender's tab (PDF scanner tab) or query for active tab
-          let tabId = sender?.tab?.id;
-          let windowId: number | undefined;
-          
-          if (!tabId) {
-            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            tabId = activeTab?.id;
-            windowId = activeTab?.windowId;
-          } else if (sender?.tab?.windowId) {
-            windowId = sender.tab.windowId;
-          }
-          
-          if (!tabId && !windowId) {
-            sendResponse(errorResponse('Could not determine tab'));
-            break;
-          }
-          
-          // Open side panel
-          if (chrome.sidePanel) {
-            let opened = false;
-            
-            if (tabId) {
-              try {
-                await chrome.sidePanel.open({ tabId });
-                opened = true;
-                log.debug(`PDF scanner: side panel opened for tab ${tabId}`);
-              } catch (tabError) {
-                log.debug(`PDF scanner: tabId approach failed, trying windowId`, tabError);
-              }
-            }
-            
-            if (!opened && windowId) {
-              try {
-                await chrome.sidePanel.open({ windowId });
-                opened = true;
-                log.debug(`PDF scanner: side panel opened for window ${windowId}`);
-              } catch (windowError) {
-                log.warn('PDF scanner: Failed to open side panel with windowId', windowError);
-              }
-            }
-            
-            sendResponse(successResponse({ opened }));
-          } else {
-            sendResponse(errorResponse('Side panel API not available'));
-          }
-        } catch (error) {
-          log.error('OPEN_PDF_SCANNER_PANEL error:', error);
-          sendResponse(errorResponse('Failed to open panel'));
-        }
-        break;
-      }
-      
-      case 'PDF_SCANNER_RESCAN': {
-        // Trigger a rescan on the PDF scanner tab
-        // Called from popup/panel when user clicks scan while on PDF scanner page
-        try {
-          // Use tabId from payload if provided, otherwise query for active tab
-          const payload = message.payload as { tabId?: number } | undefined;
-          let targetTabId = payload?.tabId;
-          
-          if (!targetTabId) {
-            // Fallback: try to find the PDF scanner tab
-            const extensionId = chrome.runtime.id;
-            const tabs = await chrome.tabs.query({});
-            const pdfScannerTab = tabs.find(t => 
-              t.url?.includes(`${extensionId}/pdf-scanner/`)
-            );
-            targetTabId = pdfScannerTab?.id;
-            
-            // If still no tab found, try active tab
-            if (!targetTabId) {
-              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-              targetTabId = activeTab?.id;
-            }
-          }
-          
-          if (targetTabId) {
-            // Open side panel first (might fail if not from user gesture, that's okay)
-            if (chrome.sidePanel) {
-              try {
-                await chrome.sidePanel.open({ tabId: targetTabId });
-                log.debug('Side panel opened for PDF scanner rescan');
-              } catch (e) {
-                log.debug('Side panel may already be open or user gesture required:', e);
-              }
-            }
-            
-            // Send rescan trigger to the PDF scanner page
-            await chrome.tabs.sendMessage(targetTabId, { type: 'PDF_SCANNER_RESCAN_TRIGGER' });
-            log.debug('PDF scanner rescan triggered for tab:', targetTabId);
-            sendResponse(successResponse({ triggered: true }));
-          } else {
-            sendResponse(errorResponse('No PDF scanner tab found'));
-          }
-        } catch (error) {
-          log.error('PDF_SCANNER_RESCAN error:', error);
-          sendResponse(errorResponse('Failed to trigger rescan'));
-        }
-        break;
-      }
-      
-      case 'FORWARD_TO_PDF_SCANNER': {
-        // Forward a message to the PDF scanner tab (e.g., AI entities discovered)
-        try {
-          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (activeTab?.id && activeTab.url) {
-            const extensionId = chrome.runtime.id;
-            // Check if active tab is PDF scanner
-            if (activeTab.url.includes(`${extensionId}/pdf-scanner/`)) {
-              const innerPayload = (message.payload as { type: string; payload: unknown });
-              await chrome.tabs.sendMessage(activeTab.id, innerPayload);
-              log.debug('Message forwarded to PDF scanner:', innerPayload.type);
-              sendResponse(successResponse({ forwarded: true }));
-            } else {
-              // Not a PDF scanner tab - silently succeed (message not applicable)
-              sendResponse(successResponse({ forwarded: false, reason: 'Not PDF scanner tab' }));
-            }
-          } else {
-            sendResponse(successResponse({ forwarded: false, reason: 'No active tab' }));
-          }
-        } catch (error) {
-          log.error('FORWARD_TO_PDF_SCANNER error:', error);
-          sendResponse(errorResponse('Failed to forward to PDF scanner'));
-        }
-        break;
-      }
-      
-      case 'GET_PDF_CONTENT_FROM_PDF_SCANNER': {
-        // Get PDF content from the PDF scanner tab for AI analysis
-        // This is used when panel is in iframe and needs PDF text content
-        try {
-          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (activeTab?.id && activeTab.url) {
-            const extensionId = chrome.runtime.id;
-            // Check if active tab is PDF scanner
-            if (activeTab.url.includes(`${extensionId}/pdf-scanner/`)) {
-              // Send message to PDF scanner and wait for response
-              const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'GET_PDF_CONTENT' });
-              sendResponse(response);
-            } else {
-              sendResponse({ success: false, error: 'Not a PDF scanner tab' });
-            }
-          } else {
-            sendResponse({ success: false, error: 'No active tab' });
-          }
-        } catch (error) {
-          log.error('GET_PDF_CONTENT_FROM_PDF_SCANNER error:', error);
-          sendResponse({ success: false, error: 'Failed to get PDF content' });
-        }
-        break;
-      }
+      // Note: OPEN_PDF_SCANNER_PANEL, PDF_SCANNER_RESCAN, FORWARD_TO_PDF_SCANNER,
+      // and GET_PDF_CONTENT_FROM_PDF_SCANNER are handled by message dispatcher (pdf-handlers.ts)
       
       default:
         sendResponse(errorResponse('Unknown message type'));

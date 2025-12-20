@@ -19,9 +19,6 @@ import type {
   AIGeneratedScenario,
 } from '../types/panel-types';
 
-// Re-export type for backward compatibility
-export type { AIGeneratedScenario };
-
 export interface ScenarioStateReturn {
   // Overview data
   scenarioOverviewData: ScenarioOverviewData | null;

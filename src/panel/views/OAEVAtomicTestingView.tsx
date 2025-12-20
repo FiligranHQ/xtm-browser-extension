@@ -40,16 +40,15 @@ import { LockPattern, Target } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
-import type { PlatformInfo, PanelMode } from '../types/panel-types';
+import type { PlatformInfo, PanelMode, PanelAIState } from '../types/panel-types';
 import type { AtomicTestingStateReturn } from '../hooks/useAtomicTestingState';
-import type { AISettings } from '../hooks/useAIState';
 
 const log = loggers.panel;
 
 export interface OAEVAtomicTestingViewProps extends AtomicTestingStateReturn {
   mode: 'dark' | 'light';
   availablePlatforms: PlatformInfo[];
-  aiSettings: AISettings;
+  aiSettings: PanelAIState;
   setPanelMode: (mode: PanelMode) => void;
   showToast: (options: {
     type: 'success' | 'info' | 'warning' | 'error';

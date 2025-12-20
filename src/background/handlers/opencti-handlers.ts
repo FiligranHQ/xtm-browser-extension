@@ -27,7 +27,8 @@ const CACHEABLE_OPENCTI_TYPES = [
   'Threat-Actor-Group', 'Threat-Actor-Individual', 'Intrusion-Set',
   'Campaign', 'Incident', 'Malware', 'Attack-Pattern', 'Sector',
   'Organization', 'Individual', 'Event', 'Country', 'Region',
-  'City', 'Administrative-Area', 'Position'
+  'City', 'Administrative-Area', 'Position', 'Tool', 'Narrative',
+  'Channel', 'System'
 ];
 
 /**

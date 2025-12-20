@@ -28,6 +28,7 @@ import {
   CenterFocusStrongOutlined,
   TravelExploreOutlined,
   HubOutlined,
+  LinkOutlined,
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types/settings';
 import type { AIProvider } from '../../shared/types/ai';
@@ -165,6 +166,7 @@ const AITab: React.FC<AITabProps> = ({
                 { value: 'openai', label: 'OpenAI', sublabel: 'GPT' },
                 { value: 'anthropic', label: 'Anthropic', sublabel: 'Claude' },
                 { value: 'gemini', label: 'Google', sublabel: 'Gemini' },
+                { value: 'custom', label: 'Custom', sublabel: 'OpenAI-compatible' },
               ].map((provider) => (
                 <Paper
                   key={provider.value}
@@ -178,6 +180,7 @@ const AITab: React.FC<AITabProps> = ({
                       availableModels: undefined,
                       connectionTested: false,
                       apiKey: settings?.ai?.apiKey,
+                      customBaseUrl: provider.value === 'custom' ? settings?.ai?.customBaseUrl : undefined,
                     });
                   }}
                   sx={{
@@ -209,12 +212,43 @@ const AITab: React.FC<AITabProps> = ({
             {/* API Key Input with Test Button */}
             {settings?.ai?.provider && settings.ai.provider !== 'xtm-one' && (
               <>
+                {/* Custom Endpoint URL (only for custom provider) */}
+                {settings.ai.provider === 'custom' && (
+                  <TextField
+                    fullWidth
+                    label="API Endpoint URL"
+                    placeholder="https://your-api-endpoint.com/v1"
+                    value={settings?.ai?.customBaseUrl || ''}
+                    onChange={(e) => {
+                      // Reset test results when URL changes
+                      setAiTestResult(null);
+                      setAvailableModels([]);
+                      onUpdateSetting('ai', { 
+                        ...settings?.ai,
+                        customBaseUrl: e.target.value,
+                        model: settings?.ai?.model,
+                        availableModels: undefined,
+                        connectionTested: false,
+                      });
+                    }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LinkOutlined sx={{ color: 'text.secondary' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    helperText="Enter the base URL of your OpenAI-compatible API (e.g., https://api.example.com/v1)"
+                    sx={{ mb: 2 }}
+                  />
+                )}
+
                 <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
                   <TextField
                     fullWidth
                     type="password"
-                    label={`${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API Key`}
-                    placeholder={`Enter your ${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API key`}
+                    label={settings.ai.provider === 'custom' ? 'API Token' : `${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API Key`}
+                    placeholder={settings.ai.provider === 'custom' ? 'Enter your API token' : `Enter your ${settings.ai.provider === 'openai' ? 'OpenAI' : settings.ai.provider === 'anthropic' ? 'Anthropic' : 'Google'} API key`}
                     value={settings?.ai?.apiKey || ''}
                     onChange={(e) => {
                       // Reset test results when API key changes
@@ -223,8 +257,8 @@ const AITab: React.FC<AITabProps> = ({
                       onUpdateSetting('ai', { 
                         ...settings?.ai,
                         apiKey: e.target.value,
-                        model: undefined,
-                        availableModels: undefined,
+                        model: settings?.ai?.provider === 'custom' ? settings?.ai?.model : undefined,
+                        availableModels: settings?.ai?.provider === 'custom' ? settings?.ai?.availableModels : undefined,
                         connectionTested: false,
                       });
                     }}
@@ -236,7 +270,9 @@ const AITab: React.FC<AITabProps> = ({
                       ),
                     }}
                     helperText={
-                      settings.ai.provider === 'openai' 
+                      settings.ai.provider === 'custom'
+                        ? 'Enter the API token/key for authentication'
+                        : settings.ai.provider === 'openai' 
                         ? 'Get your API key from platform.openai.com' 
                         : settings.ai.provider === 'anthropic'
                         ? 'Get your API key from console.anthropic.com'
@@ -245,7 +281,11 @@ const AITab: React.FC<AITabProps> = ({
                   />
                   <Button
                     variant="outlined"
-                    disabled={!settings?.ai?.apiKey || aiTesting}
+                    disabled={
+                      !settings?.ai?.apiKey || 
+                      aiTesting || 
+                      (settings.ai.provider === 'custom' && !settings?.ai?.customBaseUrl)
+                    }
                     onClick={onTestAndFetchModels}
                     sx={{ 
                       minWidth: 150,
@@ -260,6 +300,24 @@ const AITab: React.FC<AITabProps> = ({
                   </Button>
                 </Box>
 
+                {/* Model Name Input (text field for custom provider) */}
+                {settings.ai.provider === 'custom' && (
+                  <TextField
+                    fullWidth
+                    label="Model Name"
+                    placeholder="e.g., gpt-4, llama-3, mistral-7b"
+                    value={settings?.ai?.model || ''}
+                    onChange={(e) => {
+                      onUpdateSetting('ai', {
+                        ...settings?.ai,
+                        model: e.target.value,
+                      });
+                    }}
+                    helperText="Enter the model name/identifier supported by your endpoint"
+                    sx={{ mb: 2 }}
+                  />
+                )}
+
                 {/* Test Result Alert */}
                 {aiTestResult && (
                   <Alert 
@@ -271,8 +329,8 @@ const AITab: React.FC<AITabProps> = ({
                   </Alert>
                 )}
 
-                {/* Model Selection */}
-                {(availableModels.length > 0 || settings?.ai?.availableModels?.length) && (
+                {/* Model Selection (dropdown for standard providers) */}
+                {settings.ai.provider !== 'custom' && (availableModels.length > 0 || settings?.ai?.availableModels?.length) && (
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <InputLabel>Model</InputLabel>
                     <Select

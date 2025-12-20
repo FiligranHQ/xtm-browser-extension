@@ -120,13 +120,6 @@ export function getEntityPlatformType(entity: Record<string, unknown>): Platform
 }
 
 /**
- * Check if entity exists in platform
- */
-export function entityExistsInPlatform(entity: Record<string, unknown>): boolean {
-  return entity.existsInPlatform === true || entity.found === true;
-}
-
-/**
  * Get OpenAEV entity name based on type
  */
 export function getOAEVEntityName(entity: Record<string, unknown>, type: string): string {

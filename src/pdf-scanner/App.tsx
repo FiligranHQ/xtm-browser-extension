@@ -19,17 +19,11 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import ThemeDark from '../shared/theme/ThemeDark';
-import ThemeLight from '../shared/theme/ThemeLight';
-import { HIGHLIGHT_FOUND, HIGHLIGHT_NOT_FOUND, HIGHLIGHT_AI_DISCOVERED } from '../shared/constants';
+import themeDark from '../shared/theme/theme-dark';
+import themeLight from '../shared/theme/theme-light';
+import { getHighlightColors, getStatusIconColor } from '../shared/utils/highlight-colors';
 import type { ScanResultPayload } from '../shared/types/messages';
 import RelationshipLinesOverlay from './RelationshipLinesOverlay';
-import RelationshipMinimap from './RelationshipMinimap';
-
-interface MinimapEntityData {
-  value: string;
-  type: string;
-}
 
 interface RelationshipData {
   fromValue: string;
@@ -481,24 +475,12 @@ async function renderHighlightsOnCanvas(
         const isSelected = selectedEntities.has(entityKey);
         const isAIDiscovered = entity.discoveredByAI === true;
         
-        // Get colors based on found state - selection doesn't change background color
-        // (matches webpage highlight behavior where selection only affects checkbox)
-        let bgColor: string;
-        let outlineColor: string;
-        
-        if (isAIDiscovered) {
-          // AI-discovered entities use purple color
-          bgColor = isSelected ? HIGHLIGHT_AI_DISCOVERED.backgroundHover : HIGHLIGHT_AI_DISCOVERED.background;
-          outlineColor = HIGHLIGHT_AI_DISCOVERED.outline;
-        } else if (entity.found) {
-          // Found entities use green - slightly darker when selected
-          bgColor = isSelected ? HIGHLIGHT_FOUND.backgroundHover : HIGHLIGHT_FOUND.background;
-          outlineColor = HIGHLIGHT_FOUND.outline;
-        } else {
-          // Not found entities use orange - slightly darker when selected
-          bgColor = isSelected ? HIGHLIGHT_NOT_FOUND.backgroundHover : HIGHLIGHT_NOT_FOUND.background;
-          outlineColor = HIGHLIGHT_NOT_FOUND.outline;
-        }
+        // Get colors using shared utility - selection adds hover effect
+        const { background: bgColor, outline: outlineColor } = getHighlightColors({
+          found: entity.found,
+          discoveredByAI: isAIDiscovered,
+          isSelected,
+        });
         
         const highlightX = scaledX - leftPadding;
         const highlightY = scaledY - padding;
@@ -551,13 +533,16 @@ async function renderHighlightsOnCanvas(
         const iconX = highlightX + highlightWidth - iconSize - padding;
         const iconY = highlightY + (highlightHeight - iconSize) / 2;
         
+        // Get icon color using shared utility
+        const iconColor = getStatusIconColor({ found: entity.found, discoveredByAI: isAIDiscovered });
+        
         if (isAIDiscovered) {
           // Draw AI sparkle/star icon for AI-discovered entities
           const cx = iconX + iconSize / 2;
           const cy = iconY + iconSize / 2;
           const r = iconSize / 2 - 1;
           
-          context.fillStyle = HIGHLIGHT_AI_DISCOVERED.outline;
+          context.fillStyle = iconColor;
           context.beginPath();
           // Draw a simple 4-point star (sparkle)
           for (let i = 0; i < 4; i++) {
@@ -579,7 +564,7 @@ async function renderHighlightsOnCanvas(
           context.fill();
         } else if (entity.found) {
           // Draw checkmark icon for found
-          context.strokeStyle = HIGHLIGHT_FOUND.outline;
+          context.strokeStyle = iconColor;
           context.lineWidth = 1.5;
           context.beginPath();
           context.moveTo(iconX + iconSize * 0.15, iconY + iconSize * 0.5);
@@ -588,14 +573,14 @@ async function renderHighlightsOnCanvas(
           context.stroke();
         } else {
           // Draw info circle icon for not found
-          context.strokeStyle = HIGHLIGHT_NOT_FOUND.outline;
+          context.strokeStyle = iconColor;
           context.lineWidth = 1;
           context.beginPath();
           context.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2 - 1, 0, Math.PI * 2);
           context.stroke();
           
           // Draw "i" in the circle
-          context.fillStyle = HIGHLIGHT_NOT_FOUND.outline;
+          context.fillStyle = iconColor;
           context.font = `bold ${iconSize * 0.6}px sans-serif`;
           context.textAlign = 'center';
           context.textBaseline = 'middle';
@@ -637,7 +622,6 @@ export default function App() {
   const [hoveredEntity, setHoveredEntity] = useState<{ entity: ScanEntity; x: number; y: number } | null>(null);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
   const [relationships, setRelationships] = useState<RelationshipData[]>([]);
-  const [minimapEntities, setMinimapEntities] = useState<MinimapEntityData[]>([]);
   const [highlightPositions, setHighlightPositions] = useState<Map<string, HighlightPosition[]>>(new Map());
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -658,7 +642,7 @@ export default function App() {
   }, [pdfUrl]);
 
   const theme = useMemo(() => {
-    const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
+    const themeOptions = mode === 'dark' ? themeDark() : themeLight();
     return createTheme(themeOptions);
   }, [mode]);
 
@@ -1032,7 +1016,6 @@ export default function App() {
         setSelectedEntities(new Set());
         setHoveredEntity(null);
         setRelationships([]);
-        setMinimapEntities([]);
         setHighlightPositions(new Map());
         chrome.runtime.sendMessage({
           type: 'FORWARD_TO_PANEL',
@@ -1045,7 +1028,6 @@ export default function App() {
         setSelectedEntities(new Set());
         setHoveredEntity(null);
         setRelationships([]);
-        setMinimapEntities([]);
         setHighlightPositions(new Map());
         sendResponse({ success: true });
       } else if (message.type === 'ADD_AI_ENTITIES_TO_PDF') {
@@ -1085,15 +1067,12 @@ export default function App() {
         });
       } else if (message.type === 'DRAW_RELATIONSHIP_LINES') {
         // Draw relationship lines between highlighted entities
-        const payload = message.payload as { relationships?: RelationshipData[]; entities?: MinimapEntityData[] } | undefined;
+        const payload = message.payload as { relationships?: RelationshipData[] } | undefined;
         const rels = payload?.relationships || [];
-        const entities = payload?.entities || [];
         setRelationships(rels);
-        setMinimapEntities(entities);
         sendResponse({ success: true });
       } else if (message.type === 'CLEAR_RELATIONSHIP_LINES') {
         setRelationships([]);
-        setMinimapEntities([]);
         sendResponse({ success: true });
       }
       return true;
@@ -1113,12 +1092,9 @@ export default function App() {
         closeIframePanel();
       } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
         const rels = event.data.payload?.relationships || [];
-        const entities = event.data.payload?.entities || [];
         setRelationships(rels);
-        setMinimapEntities(entities);
       } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
         setRelationships([]);
-        setMinimapEntities([]);
       } else if (event.data?.type === 'XTM_GET_PDF_CONTENT') {
         // Panel iframe is requesting PDF content for AI analysis
         const fullText = pageTextsRef.current.join('\n');
@@ -1163,7 +1139,6 @@ export default function App() {
     if (!scanResults) {
       setHighlightPositions(new Map());
       setRelationships([]);
-      setMinimapEntities([]);
     }
   }, [scanResults]);
 
@@ -1549,13 +1524,6 @@ export default function App() {
           </Box>
         )}
 
-        {/* Relationship Minimap */}
-        {relationships.length > 0 && (
-          <RelationshipMinimap
-            entities={minimapEntities}
-            relationships={relationships}
-          />
-        )}
       </Box>
     </ThemeProvider>
   );

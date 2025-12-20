@@ -9,7 +9,8 @@
  * - Investigation/Workbench operations
  */
 
-import { type MessageHandler, successResponse, errorResponse } from './types';
+import { successResponse, errorResponse } from '../../shared/types/common';
+import type { MessageHandler } from './types';
 import {
   getOpenCTIClients,
   getPrimaryOpenCTIClient,

@@ -5,29 +5,11 @@
  * - Container description generation
  * - Scenario generation
  * - On-the-fly atomic testing
+ * 
+ * NOTE: Import types from 'shared/api/ai/types' directly, not from this file.
  */
 
 import type { AIProvider, AISettings } from '../types/ai';
-
-export type {
-  AIGenerationRequest,
-  AIGenerationResponse,
-  ContainerDescriptionRequest,
-  ScenarioGenerationRequest,
-  GeneratedScenario,
-  GeneratedInject,
-  FullScenarioGenerationRequest,
-  AtomicTestRequest,
-  GeneratedAtomicTest,
-  EmailGenerationRequest,
-  GeneratedEmail,
-  EntityDiscoveryRequest,
-  DiscoveredEntity,
-  RelationshipResolutionRequest,
-  ResolvedRelationship,
-} from './ai/types';
-
-// Import types for internal use
 import type {
   AIGenerationRequest,
   AIGenerationResponse,

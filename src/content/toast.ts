@@ -3,19 +3,12 @@
  * Uses Shadow DOM for complete isolation from page styles.
  */
 
+import type { ToastOptions } from '../shared/types/common';
+
 let toastHost: HTMLElement | null = null;
 let toastShadowRoot: ShadowRoot | null = null;
 let currentToast: HTMLElement | null = null;
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
-
-export interface ToastOptions {
-  type: 'info' | 'success' | 'error' | 'warning';
-  message: string;
-  showSpinner?: boolean;
-  action?: { label: string; onClick: () => void };
-  persistent?: boolean; // Won't auto-dismiss if true
-  duration?: number; // Auto-dismiss duration in ms (default: 4000)
-}
 
 // Complete toast styles - fully self-contained
 const TOAST_STYLES = `
@@ -284,7 +277,9 @@ export function showToast(options: ToastOptions): void {
     actionBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      action.onClick();
+      if (action.onClick) {
+        action.onClick();
+      }
       hideToast();
     });
     toast.appendChild(actionBtn);

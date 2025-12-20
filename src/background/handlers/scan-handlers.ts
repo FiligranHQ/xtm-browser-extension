@@ -7,12 +7,11 @@
 import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
 import { getSettings, getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } from '../../shared/utils/storage';
-import { successResponse, errorResponse } from '../../shared/utils/messaging';
+import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { isValidBoundary } from '../../shared/detection/matching';
 import type { DetectedObservable } from '../../shared/types/observables';
 import type { DetectedOCTIEntity } from '../../shared/types/opencti';
 import type { ScanResultPayload } from '../../shared/types/messages';
-import type { SendResponseFn } from './types';
 
 const log = loggers.background;
 

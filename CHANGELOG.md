@@ -7,37 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.13] - 2025-12-20
+## [0.0.12] - 2025-12-20
 
 ### Added
 - **AI Relationship Discovery**: New AI-powered relationship discovery directly from scan results
 - **Clear All Button**: Button to clear all highlights, results, and selections while staying on scan results view
 - **New OpenCTI Entity Types**: Added support for Narrative, Channel, System, and Tool entity types
-
-### Changed
-- **AI Buttons Styling**: Redesigned AI buttons with consistent styling and magic sparkle icons
-- **Relationship Display**: Unified relationship display format with entity type icons and proper colors
-
-### Fixed
-- **PDF Viewer**: Fixed iframe panel not closing and AI scanning not working in PDF viewer mode
-- **PDF Table Highlighting**: Fixed entities in PDF tables not being highlighted when text is split across multiple PDF text items (e.g., defanged IPs like `203.91.76[.]102` in table cells)
-- **AI Scenario Timing**: Fixed table-top scenario inject timing being incorrectly accumulated instead of using absolute timing values (e.g., 5 injects over 60 minutes now correctly spans 0-60 minutes instead of 0-150 minutes)
-- **Relationship Persistence**: Resolved relationships now preserved when navigating back from import screen
-- **Select All Behavior**: Fixed "Select all" sometimes visually selecting non-importable entities
-- **AI JSON Parsing**: Enhanced parsing with more robust strategies for handling truncated AI responses
-- **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
-
-### Improved
-- **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector, ScenarioTypeSelector) from monolithic views for better maintainability
-- **Custom Hooks**: Extracted and integrated reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
-- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, deprecated type aliases, and other dead code
-- **Duplicate Code Removal**: Consolidated duplicate handler functions in scenario-handlers.ts (3 unused handlers removed, now using openaev-handlers.ts)
-- **React Hook Optimization**: Wrapped callbacks in `useCallback` to prevent unnecessary re-renders
-- Shared visualization constants ensure consistent appearance across all scan modes
-
-## [0.0.12] - 2025-12-20
-
-### Added
 - **PDF Scanning**: Full PDF document scanning with integrated viewer. When clicking "Scan" on a PDF page, the extension opens a dedicated PDF viewer with:
   - Vertical scrolling through all pages (no page-by-page navigation)
   - Real-time entity highlighting directly on PDF content with color-coded overlays (green for found, amber for new, purple for AI-discovered)
@@ -53,18 +28,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAEV-Only Entity Display**: Entities found only in OpenAEV (not importable to OpenCTI) now display correctly without selection checkboxes
 
 ### Changed
+- **AI Buttons Styling**: Redesigned AI buttons with consistent styling and magic sparkle icons
+- **Relationship Display**: Unified relationship display format with entity type icons and proper colors
 - **PDF Viewer Styling**: Clean, minimal interface matching the extension's theme (dark/light mode support)
 - **PDF Entity Detection**: Uses same detection engine as page scanning for consistent results across formats
 - **PDF Highlight Sizing**: Highlights are now more precise, sticking closely to text boundaries to reduce overlaps
 - **Disabled Actions on PDF View**: Container, Investigate, Atomic Test, and Scenario buttons are disabled on both native PDF pages and PDF scanner view
 
 ### Fixed
+- **PDF Viewer**: Fixed iframe panel not closing and AI scanning not working in PDF viewer mode
+- **PDF Table Highlighting**: Fixed entities in PDF tables not being highlighted when text is split across multiple PDF text items (e.g., defanged IPs like `203.91.76[.]102` in table cells)
+- **AI Scenario Timing**: Fixed table-top scenario inject timing being incorrectly accumulated instead of using absolute timing values (e.g., 5 injects over 60 minutes now correctly spans 0-60 minutes instead of 0-150 minutes)
+- **Relationship Persistence**: Resolved relationships now preserved when navigating back from import screen
+- **Select All Behavior**: Fixed "Select all" sometimes visually selecting non-importable entities
+- **AI JSON Parsing**: Enhanced parsing with more robust strategies for handling truncated AI responses
+- **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
 - **PDF Scanner Panel Communication**: PDF scanner now properly communicates with side panel for scan results display
 - **PDF Rescan from Popup**: Clicking scan while on PDF scanner page now triggers rescan instead of opening new tab
 - **PDF Rescan from Side Panel**: Clicking "Scan" in side panel while on PDF scanner now properly rescans the PDF
 - **PDF Highlight Click to Entity Overview**: Clicking a highlight in the PDF scanner now correctly opens the entity overview with full data
 - **Firefox PDF Scanner Detection**: Popup now correctly detects PDF scanner pages in Firefox (`moz-extension://` URLs)
 - **AI Discovery Content Retrieval**: AI discovery now properly retrieves PDF content when triggered from the side panel
+
+### Improved
+- **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector, ScenarioTypeSelector) from monolithic views for better maintainability
+- **Custom Hooks**: Extracted and integrated reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
+- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, deprecated type aliases, and other dead code
+- **Duplicate Code Removal**: Consolidated duplicate handler functions in scenario-handlers.ts (3 unused handlers removed, now using openaev-handlers.ts)
+- **React Hook Optimization**: Wrapped callbacks in `useCallback` to prevent unnecessary re-renders
+- Shared visualization constants ensure consistent appearance across all scan modes
 
 ## [0.0.11] - 2025-12-19
 
@@ -138,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `visibility: hidden` from hidden panel CSS (was preventing Edge from loading iframe content)
 - Removed redundant `SHOW_ENTITY_PANEL` message sends from highlight click handlers (now handled by `showPanel()` function)
 
-## [0.0.8] - 2024-12-18
+## [0.0.8] - 2025-12-18
 
 ### Added
 - **Empty panel action buttons**: The empty/home panel view now displays the same action buttons as the popup (Scan, Search, Container, Investigate, Atomic Test, Scenario) organized by platform sections, providing a consistent experience and quick access to all features directly from the side panel
@@ -170,7 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deleted unused `src/popup/components/ActionButton.tsx` re-export file (components now import directly from shared)
 - Deleted unused `src/shared/types/ui.ts` type definitions file (interfaces were never imported)
 
-## [0.0.7] - 2024-12-18
+## [0.0.7] - 2025-12-18
 
 ### Added
 - **Split screen mode**: Optional browser native side panel mode for Chrome, Edge, and Firefox. When enabled in Settings > Appearance, the extension panel uses the browser's built-in side panel instead of a floating iframe. The close button is automatically hidden as the browser controls the panel. Works across all three browsers (Chrome/Edge use `sidePanel` API, Firefox uses `sidebar_action`)
@@ -249,7 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Investigation mode CVE support**: Fixed CVE highlighting in investigation mode. CVEs detected via regex are now properly included in investigation results and highlighted with flexible dash matching (same as regular scan mode). Investigation mode now correctly shows and highlights found CVEs from OpenCTI only (OpenAEV entities are excluded as investigation is OpenCTI-specific).
 - **Investigation mode multi-platform filtering**: Investigation mode now strictly filters entities to the targeted OpenCTI platform. All entities (observables, cached entities, and CVEs) must have `platformType === 'opencti'` and must match the specified `platformId`. Entities from other platforms (including other OpenCTI instances in multi-platform setups) are excluded.
 
-## [0.0.6] - 2024-12-17
+## [0.0.6] - 2025-12-17
 
 ### Added
 - Shadow DOM support for content extraction on sites like VirusTotal that use Web Components
@@ -279,7 +271,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deleted unused `handlers/types.ts` duplicate type definitions file
 - Removed Firefox `sidebar_action` from manifest (extension uses injected floating panel instead)
 
-## [0.0.5] - 2024-12-17
+## [0.0.5] - 2025-12-17
 
 ### Added
 - Search field in scan results to quickly filter findings by name, value, or type
@@ -308,7 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code cleanup: removed legacy comments and unused code
 - OpenAEV entity view now uses Markdown rendering for descriptions (consistent with OpenCTI)
 
-## [0.0.4] - 2024-12-15
+## [0.0.4] - 2025-12-15
 
 ### Added
 - OpenAEV scenario generation with AI assistance
@@ -326,7 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved entity type icons in scenario configuration
 - Enhanced AI prompts for better scenario generation
 
-## [0.0.3] - 2024-12-10
+## [0.0.3] - 2025-12-10
 
 ### Added
 - Investigation mode for OpenCTI
@@ -342,7 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved UI/UX for entity cards
 - Better error handling for API calls
 
-## [0.0.2] - 2024-12-05
+## [0.0.2] - 2025-12-05
 
 ### Added
 - OpenCTI platform integration
@@ -355,7 +347,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial setup wizard flow
 - Token validation errors
 
-## [0.0.1] - 2024-12-01
+## [0.0.1] - 2025-12-01
 
 ### Added
 - Initial release

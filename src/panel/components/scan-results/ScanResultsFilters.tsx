@@ -20,7 +20,7 @@ import {
 import {
   SearchOutlined,
 } from '@mui/icons-material';
-import type { ScanResultEntity } from '../../types/panel-types';
+import type { ScanResultEntity } from '../../../shared/types/scan';
 
 type FoundFilterType = 'all' | 'found' | 'not-found' | 'ai-discovered';
 

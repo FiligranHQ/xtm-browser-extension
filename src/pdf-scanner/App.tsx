@@ -19,9 +19,12 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 // Local imports
 import type { ScanEntity, HoveredEntityState } from './types';
-import { PageRenderer, PDFToolbar, EntityTooltip } from './components';
-import { usePanelManager, useMessageHandlers } from './hooks';
-import { groupTextItemsIntoLines, buildLineTextAndCharMap } from './utils';
+import { PageRenderer } from './components/PageRenderer';
+import { PDFToolbar } from './components/PDFToolbar';
+import { EntityTooltip } from './components/EntityTooltip';
+import { usePanelManager } from './hooks/usePanelManager';
+import { useMessageHandlers } from './hooks/useMessageHandlers';
+import { groupTextItemsIntoLines, buildLineTextAndCharMap } from './utils/highlight-utils';
 
 // Configure PDF.js worker - MUST be embedded in the extension for Chrome Web Store compliance
 if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {

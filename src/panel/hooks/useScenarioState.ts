@@ -16,8 +16,8 @@ import type {
   ScenarioFormData,
   ScenarioEmail,
   SelectedInject,
-  AIGeneratedScenario,
 } from '../types/panel-types';
+import type { GeneratedScenario } from '../../shared/api/ai/types';
 
 export interface ScenarioStateReturn {
   // Overview data
@@ -111,8 +111,8 @@ export interface ScenarioStateReturn {
   setScenarioAITheme: (theme: string) => void;
   scenarioAIContext: string;
   setScenarioAIContext: (context: string) => void;
-  scenarioAIGeneratedScenario: AIGeneratedScenario | null;
-  setScenarioAIGeneratedScenario: (scenario: AIGeneratedScenario | null) => void;
+  scenarioAIGeneratedScenario: GeneratedScenario | null;
+  setScenarioAIGeneratedScenario: (scenario: GeneratedScenario | null) => void;
   
   // Reset function
   resetScenarioState: () => void;
@@ -184,7 +184,7 @@ export function useScenarioState(): ScenarioStateReturn {
   const [scenarioAIEmailLanguage, setScenarioAIEmailLanguage] = useState<string>('english');
   const [scenarioAITheme, setScenarioAITheme] = useState<string>('cybersecurity');
   const [scenarioAIContext, setScenarioAIContext] = useState<string>('');
-  const [scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario] = useState<AIGeneratedScenario | null>(null);
+  const [scenarioAIGeneratedScenario, setScenarioAIGeneratedScenario] = useState<GeneratedScenario | null>(null);
   
   // Reset function
   const resetScenarioState = () => {

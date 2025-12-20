@@ -16,7 +16,9 @@ import {
 import { DeleteOutlined } from '@mui/icons-material';
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
-import type { ScanResultEntity, EntityData, ResolvedRelationship } from '../../types/panel-types';
+import type { EntityData } from '../../types/panel-types';
+import type { ScanResultEntity } from '../../../shared/types/scan';
+import type { ResolvedRelationship } from '../../../shared/api/ai/types';
 
 // Generic entity type that works with both ScanResultEntity and EntityData
 type RelationshipEntity = ScanResultEntity | EntityData;

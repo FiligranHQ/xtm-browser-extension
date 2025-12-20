@@ -4,12 +4,11 @@
  * Handles entity-related operations across platforms.
  */
 
-import { successResponse, errorResponse } from '../../shared/utils/messaging';
+import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { ENTITY_FETCH_TIMEOUT_MS } from '../../shared/constants';
 import type { OpenCTIClient } from '../../shared/api/opencti-client';
 import type { OpenAEVClient } from '../../shared/api/openaev-client';
 import type { PlatformType } from '../../shared/platform/registry';
-import type { SendResponseFn } from './types';
 
 /**
  * Dependency container for entity handlers

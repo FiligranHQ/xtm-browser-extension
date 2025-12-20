@@ -7,7 +7,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import type { PageRendererProps, ScanEntity, HighlightRegion } from '../types';
-import { renderHighlightsOnCanvas } from '../utils';
+import { renderHighlightsOnCanvas } from '../utils/highlight-utils';
 
 export function PageRenderer({ 
   pdfDocument,

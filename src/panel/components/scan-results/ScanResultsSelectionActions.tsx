@@ -15,7 +15,7 @@ import {
   CheckBoxOutlineBlankOutlined,
   ArrowForwardOutlined,
 } from '@mui/icons-material';
-import type { ScanResultEntity } from '../../types/panel-types';
+import type { ScanResultEntity } from '../../../shared/types/scan';
 import { isSelectableForOpenCTI, isFoundInOpenCTI } from '../../utils/scan-results-helpers';
 
 interface ScanResultsSelectionActionsProps {

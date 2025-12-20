@@ -108,7 +108,9 @@ export interface GeneratedAtomicTest {
   executor: string; // powershell, bash, sh, cmd
   command: string;
   cleanupCommand?: string;
+  cleanupExecutor?: string;
   prerequisites?: string[];
+  platform?: string; // windows, linux, macos
 }
 
 // ============================================================================

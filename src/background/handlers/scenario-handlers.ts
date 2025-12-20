@@ -6,7 +6,7 @@
  */
 
 import { OpenAEVClient } from '../../shared/api/openaev-client';
-import { successResponse, errorResponse, type SendResponseFn } from './types';
+import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { loggers } from '../../shared/utils/logger';
 
 const log = loggers.background;

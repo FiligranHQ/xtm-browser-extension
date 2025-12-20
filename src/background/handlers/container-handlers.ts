@@ -7,49 +7,12 @@
 
 import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
-import { errorResponse, type SendResponseFn } from './types';
+import { errorResponse, type SendResponseFn } from '../../shared/types/common';
+import type { CreateContainerPayload } from '../../shared/types/messages';
 import { loggers } from '../../shared/utils/logger';
 import type { OCTIContainerType } from '../../shared/types/opencti';
 
 const log = loggers.background;
-
-/**
- * CREATE_CONTAINER handler payload
- */
-export interface CreateContainerPayload {
-  type: string;
-  name: string;
-  description?: string;
-  content?: string;
-  labels?: string[];
-  markings?: string[];
-  entities?: string[];
-  entitiesToCreate?: Array<{ type: string; value: string }>;
-  platformId?: string;
-  pdfAttachment?: { data: string; filename: string } | null;
-  pageUrl?: string;
-  pageTitle?: string;
-  // Type-specific fields
-  report_types?: string[];
-  context?: string;
-  severity?: string;
-  priority?: string;
-  response_types?: string[];
-  createdBy?: string;
-  // Draft mode
-  createAsDraft?: boolean;
-  // Relationships to create (from AI resolution or manual)
-  relationshipsToCreate?: Array<{
-    fromEntityIndex: number;
-    toEntityIndex: number;
-    relationship_type: string;
-    description?: string;
-  }>;
-  // Update mode: pass existing container ID and dates to avoid duplicates
-  updateContainerId?: string;
-  published?: string;
-  created?: string;
-}
 
 /**
  * CREATE_CONTAINER handler

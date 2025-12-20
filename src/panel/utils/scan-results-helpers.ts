@@ -4,7 +4,7 @@
  * Utility functions for scan results view.
  */
 
-import type { ScanResultEntity } from '../types/panel-types';
+import type { ScanResultEntity } from '../../shared/types/scan';
 import { getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
 
 /**

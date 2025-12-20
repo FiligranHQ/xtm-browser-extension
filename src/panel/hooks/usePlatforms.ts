@@ -10,9 +10,6 @@ import type { PlatformInfo } from '../types/panel-types';
 
 const log = loggers.panel;
 
-// Re-export for backwards compatibility
-export type { PlatformInfo } from '../types/panel-types';
-
 /**
  * Hook for managing platform state
  */

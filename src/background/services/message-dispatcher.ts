@@ -15,12 +15,8 @@ import { pdfHandlers } from '../handlers/pdf-handlers';
 // function signatures that require dependency injection (getDetectionEngine, getOpenCTIClients, etc.).
 // They are handled by the switch statement in index.ts.
 // Note: SCAN_PDF_CONTENT is also not included because it requires detection engine.
-import {
-  errorResponse,
-  createHandlerContext,
-  type MessageHandler,
-  type SendResponseFn,
-} from '../handlers/types';
+import { errorResponse, type SendResponseFn } from '../../shared/types/common';
+import { createHandlerContext, type MessageHandler } from '../handlers/types';
 import type { ExtensionMessage } from '../../shared/types/messages';
 
 const log = loggers.background;
@@ -109,6 +105,4 @@ export function unregisterHandler(type: string): boolean {
   return handlerRegistry.delete(type);
 }
 
-// Export for type checking
-export type { MessageHandler, SendResponseFn };
 

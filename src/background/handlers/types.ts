@@ -1,29 +1,24 @@
 /**
  * Background Message Handler Types
  * 
- * Common types and utilities for message handlers
+ * Handler-specific types and utilities.
  */
 
-/**
- * Message response type
- */
-export interface MessageResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+import { successResponse, errorResponse, type MessageResponse, type SendResponseFn } from '../../shared/types/common';
 
-/**
- * Send response function type
- */
-export type SendResponseFn = (response: MessageResponse) => void;
+// Re-export types and functions for backward compatibility
+export type { SendResponseFn };
+export { successResponse, errorResponse };
+
+// ============================================================================
+// Handler-Specific Types
+// ============================================================================
 
 /**
  * Message handler context
  * Contains all the dependencies handlers need
  */
 export interface HandlerContext {
-  // Response helpers
   successResponse: <T>(data: T) => MessageResponse<T>;
   errorResponse: (error: string) => MessageResponse;
 }
@@ -42,19 +37,9 @@ export type MessageHandler = (
  */
 export type MessageHandlerRegistry = Map<string, MessageHandler>;
 
-/**
- * Create a success response
- */
-export function successResponse<T>(data: T): MessageResponse<T> {
-  return { success: true, data };
-}
-
-/**
- * Create an error response
- */
-export function errorResponse(error: string): MessageResponse {
-  return { success: false, error };
-}
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
  * Create handler context
@@ -62,7 +47,6 @@ export function errorResponse(error: string): MessageResponse {
 export function createHandlerContext(): HandlerContext {
   return {
     successResponse,
-    errorResponse,
+    errorResponse: (error: string) => errorResponse(error),
   };
 }
-

@@ -29,7 +29,8 @@ import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
 import { ScanResultsRelationshipItem } from '../components/scan-results/ScanResultsRelationshipItem';
-import type { PanelMode, EntityData, PlatformInfo, ContainerData, ResolvedRelationship, PanelAIState } from '../types/panel-types';
+import type { PanelMode, EntityData, PlatformInfo, ContainerData, PanelAIState } from '../types/panel-types';
+import type { ResolvedRelationship } from '../../shared/api/ai/types';
 
 const log = loggers.panel;
 

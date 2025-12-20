@@ -11,24 +11,22 @@ import type {
   EntityData,
   ContainerData,
   PlatformInfo,
-  ScanResultEntity,
-  ImportResults,
   ContainerFormState,
   ContainerSpecificFields,
   PanelAIState,
   ScenarioOverviewData,
   SelectedInject,
   ScenarioEmail,
-  ResolvedRelationship,
   MultiPlatformResult,
   UnifiedSearchResult,
   AtomicTestingTarget,
-  AIGeneratedPayload,
   LabelOption,
   MarkingOption,
   VocabularyOption,
   AuthorOption,
 } from './panel-types';
+import type { ScanResultEntity, ImportResults } from '../../shared/types/scan';
+import type { ResolvedRelationship, GeneratedAtomicTest } from '../../shared/api/ai/types';
 import type {
   OAEVAsset,
   OAEVAssetGroup,
@@ -486,8 +484,8 @@ export interface AtomicTestingViewProps {
   setAtomicTestingAIExecutor: (executor: string) => void;
   atomicTestingAIContext: string;
   setAtomicTestingAIContext: (context: string) => void;
-  atomicTestingAIGeneratedPayload: AIGeneratedPayload | null;
-  setAtomicTestingAIGeneratedPayload: (payload: AIGeneratedPayload | null) => void;
+  atomicTestingAIGeneratedPayload: GeneratedAtomicTest | null;
+  setAtomicTestingAIGeneratedPayload: (payload: GeneratedAtomicTest | null) => void;
 }
 
 /**

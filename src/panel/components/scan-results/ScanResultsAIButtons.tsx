@@ -17,7 +17,8 @@ import {
   PlaylistAddCheckOutlined,
 } from '@mui/icons-material';
 import { hexToRGB } from '../../../shared/theme/colors';
-import type { PlatformInfo, ScanResultEntity, PanelAIState } from '../../types/panel-types';
+import type { PlatformInfo, PanelAIState } from '../../types/panel-types';
+import type { ScanResultEntity } from '../../../shared/types/scan';
 
 interface ScanResultsAIButtonsProps {
   aiSettings: PanelAIState;

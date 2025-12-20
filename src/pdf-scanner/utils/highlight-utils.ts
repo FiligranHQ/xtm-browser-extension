@@ -317,15 +317,24 @@ export async function renderHighlightsOnCanvas(
     const textLower = line.combinedText.toLowerCase();
     
     allEntities.forEach((entity) => {
-      const entityValue = 'value' in entity && entity.value ? entity.value : 'name' in entity && entity.name ? entity.name : '';
-      const searchValue = entityValue.toLowerCase();
-      if (!searchValue || searchValue.length < 2) return;
+      const entityValue = 'value' in entity && entity.value ? String(entity.value) : 'name' in entity && entity.name ? String(entity.name) : '';
+      // Also get refanged value for defanged observables (e.g., 206.238.196[.]237 -> 206.238.196.237)
+      const refangedValue = 'refangedValue' in entity && entity.refangedValue ? String(entity.refangedValue) : '';
       
-      // Find all occurrences of the entity in this line
-      let searchIndex = 0;
-      while (searchIndex < textLower.length) {
-        const matchIndex = textLower.indexOf(searchValue, searchIndex);
-        if (matchIndex === -1) break;
+      // Try both the original value and the refanged value (if different)
+      const searchValues = [entityValue.toLowerCase()];
+      if (refangedValue && refangedValue.toLowerCase() !== entityValue.toLowerCase()) {
+        searchValues.push(refangedValue.toLowerCase());
+      }
+      
+      for (const searchValue of searchValues) {
+        if (!searchValue || searchValue.length < 2) continue;
+        
+        // Find all occurrences of the entity in this line
+        let searchIndex = 0;
+        while (searchIndex < textLower.length) {
+          const matchIndex = textLower.indexOf(searchValue, searchIndex);
+          if (matchIndex === -1) break;
         
         // Check word boundaries
         const charBefore = matchIndex > 0 ? textLower[matchIndex - 1] : ' ';
@@ -424,6 +433,7 @@ export async function renderHighlightsOnCanvas(
         
         // Move to next potential match
         searchIndex = matchIndex + searchValue.length;
+        }
       }
     });
   });

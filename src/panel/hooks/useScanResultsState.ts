@@ -5,7 +5,8 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { ScanResultEntity, EntityData } from '../types/panel-types';
+import type { EntityData } from '../types/panel-types';
+import type { ScanResultEntity } from '../../shared/types/scan';
 
 export interface ScanResultsStateReturn {
   // Scan results entities

@@ -12,7 +12,8 @@
  * detection engine from the main background context.
  */
 
-import { type MessageHandler, type HandlerContext, type SendResponseFn } from './types';
+import type { SendResponseFn } from '../../shared/types/common';
+import type { MessageHandler, HandlerContext } from './types';
 import { loggers } from '../../shared/utils/logger';
 
 const log = loggers.background;

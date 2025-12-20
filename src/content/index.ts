@@ -60,6 +60,36 @@ import {
 const log = loggers.content;
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Find the highlight target element from a mouse event.
+ * Tries currentTarget first, then walks up the DOM tree.
+ * @returns The highlight element or null if not found
+ */
+function getHighlightTargetFromEvent(event: MouseEvent): HTMLElement | null {
+  // First try currentTarget (the element the listener is attached to)
+  if (event.currentTarget instanceof HTMLElement) {
+    const target = event.currentTarget;
+    if (target.getAttribute('data-type')) {
+      return target;
+    }
+  }
+  
+  // Fallback: walk up from event.target to find the highlight
+  let el = event.target as Node;
+  while (el && el !== document.body) {
+    if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
+      return el;
+    }
+    el = el.parentNode as Node;
+  }
+  
+  return null;
+}
+
+// ============================================================================
 // Global State
 // ============================================================================
 
@@ -473,26 +503,7 @@ function handleHighlightHover(event: MouseEvent): void {
   event.stopPropagation();
   event.preventDefault();
   
-  // Find the highlight element - try multiple approaches for Edge compatibility
-  let target: HTMLElement | null = null;
-  
-  // First try currentTarget (the element the listener is attached to)
-  if (event.currentTarget instanceof HTMLElement) {
-    target = event.currentTarget;
-  }
-  
-  // Fallback: walk up from event.target to find the highlight
-  if (!target || !target.getAttribute('data-type')) {
-    let el = event.target as Node;
-    while (el && el !== document.body) {
-      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
-        target = el;
-        break;
-      }
-      el = el.parentNode as Node;
-    }
-  }
-  
+  const target = getHighlightTargetFromEvent(event);
   const tooltip = getTooltipElement();
   if (!tooltip || !target) return;
   
@@ -649,26 +660,7 @@ function handleHighlightClick(event: MouseEvent): void {
     event.returnValue = false;
   }
   
-  // Find the highlight element - try multiple approaches for Edge compatibility
-  let target: HTMLElement | null = null;
-  
-  // First try currentTarget (the element the listener is attached to)
-  if (event.currentTarget instanceof HTMLElement) {
-    target = event.currentTarget;
-  }
-  
-  // Fallback: walk up from event.target to find the highlight
-  if (!target || !target.getAttribute('data-type')) {
-    let el = event.target as Node;
-    while (el && el !== document.body) {
-      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
-        target = el;
-        break;
-      }
-      el = el.parentNode as Node;
-    }
-  }
-  
+  const target = getHighlightTargetFromEvent(event);
   if (!target) return;
   
   const isFoundEntity = target.getAttribute('data-found') === 'true';
@@ -955,26 +947,7 @@ function handleHighlightRightClick(event: MouseEvent): void {
   event.preventDefault();
   event.stopPropagation();
   
-  // Find the highlight element - try multiple approaches for Edge compatibility
-  let target: HTMLElement | null = null;
-  
-  // First try currentTarget (the element the listener is attached to)
-  if (event.currentTarget instanceof HTMLElement) {
-    target = event.currentTarget;
-  }
-  
-  // Fallback: walk up from event.target to find the highlight
-  if (!target || !target.getAttribute('data-type')) {
-    let el = event.target as Node;
-    while (el && el !== document.body) {
-      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
-        target = el;
-        break;
-      }
-      el = el.parentNode as Node;
-    }
-  }
-  
+  const target = getHighlightTargetFromEvent(event);
   if (!target) return;
   
   const entityData = target.getAttribute('data-entity');

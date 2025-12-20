@@ -4,19 +4,13 @@
 
 import type * as pdfjsLib from 'pdfjs-dist';
 
-/**
- * Text item from PDF.js text content
- */
-export interface TextItem {
-  str: string;
-  transform: number[];
-  width: number;
-  height: number;
-}
+// Note: ScanEntity is a local type for PDF scanner that's more flexible
+// than the panel's ScanResultEntity (which requires id and name).
+// This allows working with raw scan results from DetectedObservable/DetectedOCTIEntity.
 
 /**
- * Entity from scan results - includes all properties from DetectedObservable/DetectedOCTIEntity
- * Using index signature to allow any additional properties from the original entity types
+ * Entity from scan results - flexible type for PDF scanner
+ * Allows any properties from DetectedObservable/DetectedOCTIEntity
  */
 export interface ScanEntity {
   value?: string;
@@ -42,6 +36,16 @@ export interface ScanEntity {
   aiReason?: string;
   /** Allow any additional properties from original entity types */
   [key: string]: unknown;
+}
+
+/**
+ * Text item from PDF.js text content
+ */
+export interface TextItem {
+  str: string;
+  transform: number[];
+  width: number;
+  height: number;
 }
 
 /**
@@ -107,4 +111,3 @@ export interface HoveredEntityState {
   x: number;
   y: number;
 }
-

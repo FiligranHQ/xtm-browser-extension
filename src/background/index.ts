@@ -17,8 +17,6 @@ import {
   handleAIDiscoverEntities,
   handleAIResolveRelationships,
   handleAIScanAll,
-  type FullScenarioRequest,
-  type EmailGenerationRequest,
 } from './handlers/ai-handlers';
 import {
   handleAddTechnicalInjectToScenario,
@@ -29,10 +27,7 @@ import {
   handleScanOAEV,
   handleScanAll,
 } from './handlers/scan-handlers';
-import {
-  handleCreateContainer,
-  type CreateContainerPayload,
-} from './handlers/container-handlers';
+import { handleCreateContainer } from './handlers/container-handlers';
 import {
   handleGetEntityDetails,
   type GetEntityDetailsPayload,
@@ -43,7 +38,10 @@ import type {
   AtomicTestRequest,
   EntityDiscoveryRequest,
   RelationshipResolutionRequest,
-} from '../shared/api/ai-client';
+  FullScenarioGenerationRequest,
+  EmailGenerationRequest,
+} from '../shared/api/ai/types';
+import type { CreateContainerPayload, ExtensionMessage, ScanResultPayload } from '../shared/types/messages';
 import { DetectionEngine } from '../shared/detection/detector';
 import { refangIndicator } from '../shared/detection/patterns';
 import { loggers } from '../shared/utils/logger';
@@ -55,7 +53,7 @@ import {
   SEARCH_TIMEOUT_MS,
   CONTAINER_FETCH_TIMEOUT_MS,
 } from '../shared/constants';
-import { successResponse, errorResponse } from '../shared/utils/messaging';
+import { successResponse, errorResponse } from '../shared/types/common';
 // Note: generateNativePDF and isNativePDFAvailable are used in misc-handlers.ts (dispatcher)
 import {
   startOCTICacheRefresh,
@@ -98,10 +96,6 @@ import type {
   OCTILabel,
   OCTIMarkingDefinition,
 } from '../shared/types/opencti';
-import type {
-  ExtensionMessage,
-  ScanResultPayload,
-} from '../shared/types/messages';
 
 // ============================================================================
 // Global State - Multi-Platform Architecture
@@ -1610,7 +1604,7 @@ async function handleMessage(
         break;
       
       case 'AI_GENERATE_FULL_SCENARIO':
-        await handleAIGenerateFullScenario(message.payload as FullScenarioRequest, sendResponse);
+        await handleAIGenerateFullScenario(message.payload as FullScenarioGenerationRequest, sendResponse);
         break;
       
       case 'AI_GENERATE_ATOMIC_TEST':

@@ -244,53 +244,64 @@ xtm-browser-extension/
 │   │   ├── index.ts             # Main entry, event coordination
 │   │   ├── styles.ts            # CSS for highlights, tooltips, panel
 │   │   ├── highlighting.ts      # Entity highlighting engine
-│   │   ├── highlight-utils.ts   # Shared highlighting utilities
+│   │   ├── message-handlers.ts  # Message handling from background/panel
 │   │   ├── extraction.ts        # Content extraction for PDFs
 │   │   ├── page-content.ts      # Page content utilities
 │   │   ├── panel.ts             # Side panel iframe management
-│   │   └── toast.ts             # Toast notifications
+│   │   ├── toast.ts             # Toast notifications
+│   │   └── utils/
+│   │       └── highlight.ts     # Shared highlighting utilities
 │   │
 │   ├── panel/                   # Side panel (entity details, forms)
 │   │   ├── App.tsx              # Main orchestrator component
 │   │   ├── views/               # Panel mode view components
+│   │   │   ├── CommonPlatformSelectView.tsx  # Platform selection
+│   │   │   ├── CommonPreviewView.tsx         # Import preview
 │   │   │   ├── CommonScanResultsView.tsx     # Scan results display
 │   │   │   ├── CommonUnifiedSearchView.tsx   # Multi-platform search
-│   │   │   ├── CommonPreviewView.tsx         # Import preview
-│   │   │   ├── CommonPlatformSelectView.tsx  # Platform selection
-│   │   │   ├── OCTIContainerTypeView.tsx     # Container type selection
-│   │   │   ├── OCTIContainerFormView.tsx     # Container form
-│   │   │   ├── OCTIAddView.tsx               # Manual entity addition
+│   │   │   ├── OAEVAtomicTestingView.tsx     # Atomic testing
+│   │   │   ├── OAEVEntityView.tsx            # OpenAEV entity details
+│   │   │   ├── OAEVScenarioView.tsx          # Scenario creation
 │   │   │   ├── OCTIAddSelectionView.tsx      # Add from selection
+│   │   │   ├── OCTIAddView.tsx               # Manual entity addition
+│   │   │   ├── OCTIContainerFormView.tsx     # Container form
+│   │   │   ├── OCTIContainerTypeView.tsx     # Container type selection
 │   │   │   ├── OCTIEntityView.tsx            # OpenCTI entity details
 │   │   │   ├── OCTIExistingContainersView.tsx # Existing containers
 │   │   │   ├── OCTIImportResultsView.tsx     # Import results
-│   │   │   ├── OCTIInvestigationView.tsx     # Investigation view
-│   │   │   ├── OAEVEntityView.tsx            # OpenAEV entity details
-│   │   │   ├── OAEVScenarioView.tsx          # Scenario creation
-│   │   │   ├── OAEVScenarioOverviewView.tsx  # Scenario overview
-│   │   │   └── OAEVAtomicTestingView.tsx     # Atomic testing
+│   │   │   └── OCTIInvestigationView.tsx     # Investigation view
 │   │   ├── components/          # Reusable UI components
 │   │   │   ├── CommonEmptyView.tsx
 │   │   │   ├── CommonLoadingView.tsx
-│   │   │   └── CommonNotFoundView.tsx
+│   │   │   ├── CommonNotFoundView.tsx
+│   │   │   ├── scan-results/    # Scan results components
+│   │   │   │   ├── ScanResultsAIButtons.tsx
+│   │   │   │   ├── ScanResultsEntityItem.tsx
+│   │   │   │   ├── ScanResultsFilters.tsx
+│   │   │   │   ├── ScanResultsRelationshipItem.tsx
+│   │   │   │   └── ScanResultsSelectionActions.tsx
+│   │   │   └── scenario/        # Scenario components
+│   │   │       ├── ScenarioFormView.tsx
+│   │   │       ├── ScenarioInjectSelector.tsx
+│   │   │       ├── ScenarioPlatformSelector.tsx
+│   │   │       ├── ScenarioSummary.tsx
+│   │   │       └── ScenarioTypeSelector.tsx
 │   │   ├── hooks/               # React hooks
-│   │   │   ├── usePanelState.ts         # Centralized state management
-│   │   │   ├── usePlatforms.ts          # Platform data
-│   │   │   ├── useToast.ts              # Toast notifications
-│   │   │   ├── useContainerState.ts     # Container state
-│   │   │   ├── useContainerActions.ts   # Container actions
-│   │   │   ├── useEntityState.ts        # Entity state
-│   │   │   ├── useEntityDisplay.ts      # Entity display helpers
-│   │   │   ├── useScenarioState.ts      # Scenario state
-│   │   │   ├── useAtomicTestingState.ts # Atomic testing state
-│   │   │   ├── useInvestigationState.ts # Investigation state
-│   │   │   ├── useInvestigationActions.ts # Investigation actions
-│   │   │   ├── useScanResultsState.ts   # Scan results state
-│   │   │   ├── useSearchState.ts        # Search state
 │   │   │   ├── useAddSelectionState.ts  # Add selection state
-│   │   │   └── useAIState.ts            # AI state
+│   │   │   ├── useAIState.ts            # AI state
+│   │   │   ├── useAtomicTestingState.ts # Atomic testing state
+│   │   │   ├── useContainerActions.ts   # Container actions
+│   │   │   ├── useContainerState.ts     # Container state
+│   │   │   ├── useEntityDisplay.ts      # Entity display helpers
+│   │   │   ├── useEntityState.ts        # Entity state
+│   │   │   ├── useInvestigationActions.ts # Investigation actions
+│   │   │   ├── useInvestigationState.ts # Investigation state
+│   │   │   ├── usePlatforms.ts          # Platform data
+│   │   │   ├── useScanResultsState.ts   # Scan results state
+│   │   │   ├── useScenarioState.ts      # Scenario state
+│   │   │   ├── useSearchState.ts        # Search state
+│   │   │   └── useToast.ts              # Toast notifications
 │   │   ├── handlers/            # Message handlers
-│   │   │   ├── message-handlers.ts      # Panel message handlers
 │   │   │   └── scan-results-handler.ts  # Scan results handler
 │   │   ├── utils/               # Panel utilities
 │   │   │   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
@@ -346,33 +357,42 @@ xtm-browser-extension/
 │       ├── platform/            # Platform abstractions
 │       │   └── registry.ts          # Platform type registry
 │       ├── theme/               # Theme definitions
-│       │   ├── ThemeDark.ts
-│       │   ├── ThemeLight.ts
+│       │   ├── theme-dark.ts
+│       │   ├── theme-light.ts
 │       │   └── colors.ts
 │       ├── components/          # Shared React components
 │       │   ├── ItemIcon.tsx         # Entity type icons
 │       │   ├── ActionButton.tsx     # Stylized action button
 │       │   └── ActionButtonsGrid.tsx # Action buttons layout grid
 │       ├── types/               # TypeScript definitions
-│       │   ├── settings.ts          # Platform config, detection settings, extension settings
 │       │   ├── ai.ts                # AI provider types, model selection, affinities
+│       │   ├── common.ts            # Common response types and utilities
+│       │   ├── messages.ts          # Extension message types and payloads
 │       │   ├── observables.ts       # Observable types (IoCs) and detection interfaces
-│       │   ├── platform.ts          # Cross-platform matching and enrichment types
-│       │   ├── opencti.ts           # OpenCTI types (GraphQL, STIX, entities, containers)
 │       │   ├── openaev.ts           # OpenAEV entities, scenarios, atomic testing
-│       │   └── messages.ts          # Extension message types and payloads
+│       │   ├── opencti.ts           # OpenCTI types (GraphQL, STIX, entities, containers)
+│       │   ├── platform.ts          # Cross-platform matching and enrichment types
+│       │   ├── scan.ts              # Scan result types
+│       │   └── settings.ts          # Platform config, detection settings, extension settings
 │       └── utils/               # Utilities
-│           ├── logger.ts            # Logging
-│           ├── storage.ts           # Chrome storage wrapper
+│           ├── entity.ts            # Entity helpers
 │           ├── formatters.ts        # Data formatters
-│           └── entity.ts            # Entity helpers
+│           ├── highlight-colors.ts  # Highlight color utilities
+│           ├── logger.ts            # Logging
+│           ├── messaging.ts         # Messaging utilities
+│           └── storage.ts           # Chrome storage wrapper
 │
 ├── tests/
 │   ├── unit/                    # Unit tests
-│   │   ├── patterns.test.ts
-│   │   ├── defang.test.ts
 │   │   ├── ai-client.test.ts
-│   │   └── logger.test.ts
+│   │   ├── defang.test.ts
+│   │   ├── detection.test.ts
+│   │   ├── handler-types.test.ts
+│   │   ├── logger.test.ts
+│   │   ├── message-dispatcher.test.ts
+│   │   ├── messages.test.ts
+│   │   ├── patterns.test.ts
+│   │   └── pdf-scanner-utils.test.ts
 │   └── integration/             # Integration tests
 │       ├── opencti/
 │       └── openaev/

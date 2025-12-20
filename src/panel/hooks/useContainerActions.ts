@@ -5,7 +5,9 @@
  */
 
 import { useCallback } from 'react';
-import type { EntityData, PlatformInfo, ImportResults, ContainerFormState, ContainerSpecificFields, ResolvedRelationship, PanelAIState, PanelMode } from '../types/panel-types';
+import type { EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, PanelMode } from '../types/panel-types';
+import type { ImportResults } from '../../shared/types/scan';
+import type { ResolvedRelationship } from '../../shared/api/ai/types';
 
 export interface ContainerActionsProps {
   // Platform state

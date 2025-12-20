@@ -5,6 +5,9 @@
  */
 
 import type { ExtensionSettings } from '../types/settings';
+import { loggers } from './logger';
+
+const log = loggers.storage;
 
 // ============================================================================
 // Cross-Browser Session Storage
@@ -541,6 +544,60 @@ function addEntityToNameMap<T extends { id: string }>(
   }
 }
 
+/** Base entity interface for cache name mapping */
+interface CacheableEntity {
+  id: string;
+  name: string;
+  aliases?: string[];
+  platformId?: string;
+}
+
+/**
+ * Generic function to build entity name map from multi-platform cache
+ * @param platforms - Object of platformId -> cache with entities
+ * @param extraKeyExtractor - Optional function to extract additional keys (e.g., x_mitre_id)
+ */
+function buildEntityNameMap<TEntity extends CacheableEntity, TCache extends { entities: Record<string, TEntity[]> }>(
+  platforms: Record<string, TCache>,
+  extraKeyExtractor?: (entity: TEntity) => string | undefined
+): Map<string, TEntity[]> {
+  const nameMap = new Map<string, TEntity[]>();
+  
+  for (const [platformId, cache] of Object.entries(platforms)) {
+    for (const entityType of Object.keys(cache.entities)) {
+      for (const entity of cache.entities[entityType]) {
+        const entityWithPlatform = { ...entity, platformId } as TEntity;
+        const nameLower = entity.name.toLowerCase();
+        
+        // Add main name (only if long enough and not excluded)
+        if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
+          addEntityToNameMap(nameMap, nameLower, entityWithPlatform);
+        }
+        
+        // Add aliases
+        if (entity.aliases) {
+          for (const alias of entity.aliases) {
+            const aliasLower = alias.toLowerCase();
+            if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
+              addEntityToNameMap(nameMap, aliasLower, entityWithPlatform);
+            }
+          }
+        }
+        
+        // Add extra key if provided (e.g., x_mitre_id)
+        if (extraKeyExtractor) {
+          const extraKey = extraKeyExtractor(entity);
+          if (extraKey) {
+            addEntityToNameMap(nameMap, extraKey.toLowerCase(), entityWithPlatform);
+          }
+        }
+      }
+    }
+  }
+  
+  return nameMap;
+}
+
 /** Generic cache stats calculation */
 function calculateCacheStats(
   caches: { entities: Record<string, unknown[]>; timestamp: number }[],
@@ -577,38 +634,11 @@ function calculateCacheStats(
  */
 export async function getAllCachedOCTIEntityNamesForMatching(): Promise<Map<string, CachedOCTIEntity[]>> {
   const multiCache = await getMultiPlatformOCTICache();
-  const nameMap = new Map<string, CachedOCTIEntity[]>();
-  
-  for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
-    for (const entityType of Object.keys(cache.entities) as Array<keyof OCTIEntityCache['entities']>) {
-      for (const entity of cache.entities[entityType]) {
-        const entityWithPlatform = { ...entity, platformId };
-        const nameLower = entity.name.toLowerCase();
-        
-        // Add main name (only if long enough and not excluded)
-        if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          addEntityToNameMap(nameMap, nameLower, entityWithPlatform);
-        }
-        
-        // Add aliases
-        if (entity.aliases) {
-          for (const alias of entity.aliases) {
-            const aliasLower = alias.toLowerCase();
-            if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              addEntityToNameMap(nameMap, aliasLower, entityWithPlatform);
-            }
-          }
-        }
-        
-        // Add x_mitre_id for attack patterns
-        if (entity.x_mitre_id) {
-          addEntityToNameMap(nameMap, entity.x_mitre_id.toLowerCase(), entityWithPlatform);
-        }
-      }
-    }
-  }
-  
-  return nameMap;
+  return buildEntityNameMap<CachedOCTIEntity, OCTIEntityCache>(
+    multiCache.platforms,
+    // Include x_mitre_id for attack patterns
+    (entity) => entity.x_mitre_id
+  );
 }
 
 /**
@@ -821,33 +851,7 @@ export function createEmptyOAEVCache(platformId: string = 'default'): OAEVCache 
  */
 export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<string, CachedOAEVEntity[]>> {
   const multiCache = await getMultiPlatformOAEVCache();
-  const nameMap = new Map<string, CachedOAEVEntity[]>();
-  
-  for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
-    for (const entityType of Object.keys(cache.entities) as Array<keyof OAEVCache['entities']>) {
-      for (const entity of cache.entities[entityType]) {
-        const entityWithPlatform = { ...entity, platformId };
-        const nameLower = entity.name.toLowerCase();
-        
-        // Add main name (only if long enough and not excluded)
-        if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          addEntityToNameMap(nameMap, nameLower, entityWithPlatform);
-        }
-        
-        // Add aliases (hostnames, IPs)
-        if (entity.aliases) {
-          for (const alias of entity.aliases) {
-            const aliasLower = alias.toLowerCase();
-            if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              addEntityToNameMap(nameMap, aliasLower, entityWithPlatform);
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  return nameMap;
+  return buildEntityNameMap<CachedOAEVEntity, OAEVCache>(multiCache.platforms);
 }
 
 /**
@@ -972,7 +976,7 @@ export async function clearAllCaches(): Promise<void> {
     console.error('[Storage] Failed to clear scan caches:', e);
   }
   
-  console.log('[Storage] All caches cleared');
+  log.info('All caches cleared');
 }
 
 /**
@@ -986,7 +990,7 @@ export async function isStorageNearQuota(): Promise<boolean> {
     return true;
   }
   if (usage.percentage > 75) {
-    console.log(`[Storage] Storage usage high: ${usage.percentage}%`);
+    log.info(`Storage usage high: ${usage.percentage}%`);
   }
   return false;
 }

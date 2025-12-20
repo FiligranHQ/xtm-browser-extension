@@ -5,7 +5,8 @@
  */
 
 import { useState } from 'react';
-import type { PanelAIState, ResolvedRelationship } from '../types/panel-types';
+import type { PanelAIState } from '../types/panel-types';
+import type { ResolvedRelationship } from '../../shared/api/ai/types';
 
 export interface AIStateReturn {
   // AI Configuration

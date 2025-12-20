@@ -8,7 +8,6 @@ import { useState } from 'react';
 import type {
   ContainerData,
   EntityData,
-  ImportResults,
   ContainerFormState,
   ContainerSpecificFields,
   LabelOption,
@@ -16,6 +15,7 @@ import type {
   VocabularyOption,
   AuthorOption,
 } from '../types/panel-types';
+import type { ImportResults } from '../../shared/types/scan';
 
 export interface ContainerStateReturn {
   // Container type and form

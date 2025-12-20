@@ -135,7 +135,6 @@ src/panel/
 │       ├── ScenarioSummary.tsx           # Summary & timeline
 │       └── ScenarioTypeSelector.tsx      # Type/affinity selection
 ├── handlers/             # Message handlers
-│   ├── message-handlers.ts      # Panel message handlers
 │   └── scan-results-handler.ts  # Scan results handler
 ├── views/                # Panel mode views
 │   ├── CommonScanResultsView.tsx     # Scan results display
@@ -150,26 +149,24 @@ src/panel/
 │   ├── OCTIExistingContainersView.tsx # Existing containers
 │   ├── OCTIImportResultsView.tsx     # Import results
 │   ├── OCTIInvestigationView.tsx     # Investigation view
+│   ├── OAEVAtomicTestingView.tsx     # Atomic testing
 │   ├── OAEVEntityView.tsx            # OpenAEV entity details
-│   ├── OAEVScenarioView.tsx          # Scenario creation
-│   ├── OAEVScenarioOverviewView.tsx  # Scenario overview
-│   └── OAEVAtomicTestingView.tsx     # Atomic testing
+│   └── OAEVScenarioView.tsx          # Scenario creation
 ├── hooks/                # Custom React hooks
-│   ├── usePanelState.ts         # Centralized panel state management
-│   ├── usePlatforms.ts          # Platform data hooks
-│   ├── useToast.ts              # Toast notification hook
-│   ├── useContainerState.ts     # Container state
-│   ├── useContainerActions.ts   # Container actions
-│   ├── useEntityState.ts        # Entity state
-│   ├── useEntityDisplay.ts      # Entity display helpers
-│   ├── useScenarioState.ts      # Scenario state
-│   ├── useAtomicTestingState.ts # Atomic testing state
-│   ├── useInvestigationState.ts # Investigation state
-│   ├── useInvestigationActions.ts # Investigation actions
-│   ├── useScanResultsState.ts   # Scan results state
-│   ├── useSearchState.ts        # Search state
 │   ├── useAddSelectionState.ts  # Add selection state
-│   └── useAIState.ts            # AI state
+│   ├── useAIState.ts            # AI state
+│   ├── useAtomicTestingState.ts # Atomic testing state
+│   ├── useContainerActions.ts   # Container actions
+│   ├── useContainerState.ts     # Container state
+│   ├── useEntityDisplay.ts      # Entity display helpers
+│   ├── useEntityState.ts        # Entity state
+│   ├── useInvestigationActions.ts # Investigation actions
+│   ├── useInvestigationState.ts # Investigation state
+│   ├── usePlatforms.ts          # Platform data hooks
+│   ├── useScanResultsState.ts   # Scan results state
+│   ├── useScenarioState.ts      # Scenario state
+│   ├── useSearchState.ts        # Search state
+│   └── useToast.ts              # Toast notification hook
 ├── utils/                # Panel utilities
 │   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
 │   ├── cvss-helpers.ts          # CVSS score formatting
@@ -240,16 +237,18 @@ src/shared/
 ├── platform/             # Platform abstractions
 │   └── registry.ts       # Platform type registry
 ├── types/                # TypeScript definitions
-│   ├── settings.ts       # Platform config, detection settings, extension settings
 │   ├── ai.ts             # AI provider types, model selection, affinities
+│   ├── common.ts         # Common response types and utilities
+│   ├── messages.ts       # Extension message types and payloads
 │   ├── observables.ts    # Observable types (IoCs) and detection interfaces
-│   ├── platform.ts       # Cross-platform matching and enrichment types
-│   ├── opencti.ts        # OpenCTI types (GraphQL, STIX, entities, containers)
 │   ├── openaev.ts        # OpenAEV entities, scenarios, atomic testing
-│   └── messages.ts       # Extension message types and payloads
+│   ├── opencti.ts        # OpenCTI types (GraphQL, STIX, entities, containers)
+│   ├── platform.ts       # Cross-platform matching and enrichment types
+│   ├── scan.ts           # Scan result types
+│   └── settings.ts       # Platform config, detection settings, extension settings
 ├── theme/                # Theme definitions
-│   ├── ThemeDark.ts
-│   ├── ThemeLight.ts
+│   ├── theme-dark.ts
+│   ├── theme-light.ts
 │   └── colors.ts
 ├── components/           # Shared React components
 │   ├── ItemIcon.tsx      # Entity type icons

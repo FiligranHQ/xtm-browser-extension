@@ -5,7 +5,8 @@
  */
 
 import { useState } from 'react';
-import type { AtomicTestingTarget, AIGeneratedPayload } from '../types/panel-types';
+import type { AtomicTestingTarget } from '../types/panel-types';
+import type { GeneratedAtomicTest } from '../../shared/api/ai/types';
 import type { OAEVAsset, OAEVAssetGroup, OAEVInjectorContract } from '../../shared/types/openaev';
 
 export interface AtomicTestingStateReturn {
@@ -74,8 +75,8 @@ export interface AtomicTestingStateReturn {
   setAtomicTestingAIExecutor: (executor: string) => void;
   atomicTestingAIContext: string;
   setAtomicTestingAIContext: (context: string) => void;
-  atomicTestingAIGeneratedPayload: AIGeneratedPayload | null;
-  setAtomicTestingAIGeneratedPayload: (payload: AIGeneratedPayload | null) => void;
+  atomicTestingAIGeneratedPayload: GeneratedAtomicTest | null;
+  setAtomicTestingAIGeneratedPayload: (payload: GeneratedAtomicTest | null) => void;
   
   // Reset function
   resetAtomicTestingState: () => void;
@@ -129,7 +130,7 @@ export function useAtomicTestingState(): AtomicTestingStateReturn {
   const [atomicTestingAIPlatform, setAtomicTestingAIPlatform] = useState('Windows');
   const [atomicTestingAIExecutor, setAtomicTestingAIExecutor] = useState('psh');
   const [atomicTestingAIContext, setAtomicTestingAIContext] = useState('');
-  const [atomicTestingAIGeneratedPayload, setAtomicTestingAIGeneratedPayload] = useState<AIGeneratedPayload | null>(null);
+  const [atomicTestingAIGeneratedPayload, setAtomicTestingAIGeneratedPayload] = useState<GeneratedAtomicTest | null>(null);
   
   // Reset function
   const resetAtomicTestingState = () => {

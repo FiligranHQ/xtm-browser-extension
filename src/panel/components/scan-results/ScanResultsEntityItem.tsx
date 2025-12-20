@@ -22,7 +22,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
-import type { ScanResultEntity } from '../../types/panel-types';
+import type { ScanResultEntity } from '../../../shared/types/scan';
 import { getCanonicalTypeName } from '../../../shared/platform/registry';
 import { sendToContentScript } from '../../utils/content-messaging';
 import { isFoundInOpenCTI, getUniqueTypesFromMatches } from '../../utils/scan-results-helpers';

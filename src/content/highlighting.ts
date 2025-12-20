@@ -67,8 +67,6 @@ const OPENCTI_TYPES_SET = new Set([
   'Grouping', 'Case-Incident', 'Case-Rfi', 'Case-Rft', 'Feedback',
 ]);
 
-// Re-export NodeMapEntry for external consumers
-export type { NodeMapEntry };
 
 // ============================================================================
 // State

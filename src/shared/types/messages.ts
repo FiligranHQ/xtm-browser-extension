@@ -151,13 +151,51 @@ export interface ScanResultPayload {
   url: string;
 }
 
+/**
+ * CREATE_CONTAINER message payload
+ * Contains all fields needed to create a container in OpenCTI
+ */
 export interface CreateContainerPayload {
-  type: OCTIContainerType;
+  type: OCTIContainerType | string;
   name: string;
   description?: string;
   content?: string;
-  pageUrl: string;
-  pageTitle: string;
-  observableIds?: string[];
-  generatePdf?: boolean;
+  /** Label IDs to attach */
+  labels?: string[];
+  /** Marking definition IDs */
+  markings?: string[];
+  /** Existing entity IDs to add to container */
+  entities?: string[];
+  /** Entities to create before adding to container */
+  entitiesToCreate?: Array<{ type: string; value: string }>;
+  /** Platform ID for multi-platform support */
+  platformId?: string;
+  /** PDF attachment (base64 encoded) */
+  pdfAttachment?: { data: string; filename: string } | null;
+  /** Source page URL */
+  pageUrl?: string;
+  /** Source page title */
+  pageTitle?: string;
+  // Type-specific fields (Report, Case-Incident, etc.)
+  report_types?: string[];
+  context?: string;
+  severity?: string;
+  priority?: string;
+  response_types?: string[];
+  createdBy?: string;
+  /** Create container as draft (EE only) */
+  createAsDraft?: boolean;
+  /** Relationships to create between entities */
+  relationshipsToCreate?: Array<{
+    fromEntityIndex: number;
+    toEntityIndex: number;
+    relationship_type: string;
+    description?: string;
+  }>;
+  /** For update mode: existing container ID */
+  updateContainerId?: string;
+  /** Original published date (for Reports) */
+  published?: string;
+  /** Original created date */
+  created?: string;
 }

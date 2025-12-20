@@ -20,7 +20,9 @@ import {
   LayersClearOutlined,
 } from '@mui/icons-material';
 import type { ScanResultsViewProps } from '../types/view-props';
-import type { ScanResultEntity, EntityData, MultiPlatformResult, ResolvedRelationship } from '../types/panel-types';
+import type { EntityData, MultiPlatformResult } from '../types/panel-types';
+import type { ScanResultEntity } from '../../shared/types/scan';
+import type { ResolvedRelationship } from '../../shared/api/ai/types';
 import { loggers } from '../../shared/utils/logger';
 import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
 import { getAiColor } from '../utils/platform-helpers';

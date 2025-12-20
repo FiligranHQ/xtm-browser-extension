@@ -150,11 +150,18 @@ try {
   console.log(`IP addresses found: ${ipMatches.length}`);
   [...new Set(ipMatches)].slice(0, 10).forEach(ip => console.log(`  - ${ip}`));
   
-  // URLs/Domains
+  // URLs/Domains (including defanged)
+  // Standard domains
   const urlPattern = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{2,6}(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)?/gi;
   const urlMatches = fullText.match(urlPattern) || [];
-  console.log(`\nURLs/Domains found: ${urlMatches.length}`);
+  // Defanged domains (with [.] notation)
+  const defangedDomainPattern = /(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\[\.\]))+(?:com|net|org|edu|gov|io|co|cn|ru|uk|de|fr|it|es|jp|kr|au|br|in|mx|nl|se|ch|no|fi|pl|cz|at|be|tw|hk|sg|my|id|th|vn|ph|za|eg|ng|ke|pk|bd|lk|mm|ae|sa|qa|kw|om|jo|lb|il|tr|ua|by|kz|uz|ge|am|az|ir|iq|af)/gi;
+  const defangedDomainMatches = fullText.match(defangedDomainPattern) || [];
+  console.log(`\nURLs/Domains found: ${urlMatches.length} (standard), ${defangedDomainMatches.length} (defanged)`);
+  console.log('Standard domains:');
   [...new Set(urlMatches)].slice(0, 10).forEach(url => console.log(`  - ${url}`));
+  console.log('Defanged domains:');
+  [...new Set(defangedDomainMatches)].slice(0, 10).forEach(url => console.log(`  - ${url}`));
   
   // Hashes (MD5, SHA1, SHA256)
   const hashPattern = /\b[a-fA-F0-9]{32}\b|\b[a-fA-F0-9]{40}\b|\b[a-fA-F0-9]{64}\b/g;

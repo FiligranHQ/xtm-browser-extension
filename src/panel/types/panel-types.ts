@@ -1,12 +1,30 @@
 /**
  * Panel Types
  * Centralized type definitions for the panel component
+ * 
+ * IMPORTANT: Common types should be defined in shared/types/ and imported here.
+ * Only panel-specific types should be defined in this file.
  */
 
-// Re-export shared types for convenience
-export type { OAEVInjectorContract, OAEVKillChainPhase } from '../../shared/types/openaev';
-export type { PlatformMatch } from '../../shared/types/platform';
-export type { ResolvedRelationship } from '../../shared/api/ai/types';
+import type { OAEVInjectorContract } from '../../shared/types/openaev';
+import type { 
+  ScanResultEntity, 
+  ScanResultPlatformMatch, 
+  ImportResults 
+} from '../../shared/types/scan';
+import type { 
+  GeneratedAtomicTest, 
+  GeneratedScenario,
+  ResolvedRelationship
+} from '../../shared/api/ai/types';
+
+// Re-export shared types used by panel components
+export type { ScanResultEntity, ScanResultPlatformMatch, ImportResults };
+export type { ResolvedRelationship };
+
+// Type aliases for backward compatibility
+export type AIGeneratedPayload = GeneratedAtomicTest;
+export type AIGeneratedScenario = GeneratedScenario;
 
 // Panel modes
 export type PanelMode =
@@ -28,49 +46,6 @@ export type PanelMode =
   | 'scenario-overview'
   | 'scenario-form'
   | 'add-selection';
-
-/**
- * Platform match in scan results
- * Similar to PlatformMatch from shared/types/platform but with:
- * - platformType is required (not optional)
- * - entityId is optional (may not exist for new entities)
- * - type is required (entity type)
- */
-export interface ScanResultPlatformMatch {
-  platformId: string;
-  platformType: 'opencti' | 'openaev';
-  entityId?: string;
-  entityData?: unknown;
-  type: string;
-}
-
-// Scan result entity
-export interface ScanResultEntity {
-  id: string;
-  type: string;
-  name: string;
-  value?: string;
-  found: boolean;
-  entityId?: string;
-  platformId?: string;
-  platformType?: 'opencti' | 'openaev';
-  entityData?: unknown;
-  platformMatches?: ScanResultPlatformMatch[];
-  discoveredByAI?: boolean;
-  aiReason?: string;
-  aiConfidence?: 'high' | 'medium' | 'low';
-  /** Strings that matched in the page to detect this entity (name, aliases, etc.) */
-  matchedStrings?: string[];
-}
-
-// Import results statistics
-export interface ImportResults {
-  success: boolean;
-  total: number;
-  created: Array<{ id: string; type: string; value: string }>;
-  failed: Array<{ type: string; value: string; error?: string }>;
-  platformName: string;
-}
 
 // Entity data from platform
 export interface EntityData {
@@ -166,8 +141,6 @@ export interface PanelAIState {
   available: boolean;
 }
 
-// ResolvedRelationship is now imported from ../../shared/api/ai/types
-
 // Container specific fields
 export interface ContainerSpecificFields {
   report_types: string[];
@@ -254,35 +227,6 @@ export interface AtomicTestingTarget {
   };
 }
 
-// AI generated payload for atomic testing
-export interface AIGeneratedPayload {
-  name: string;
-  description: string;
-  executor: string;
-  command: string;
-  cleanupCommand?: string;
-  cleanupExecutor?: string;
-  platform: string;
-}
-
-// AI generated scenario
-export interface AIGeneratedScenario {
-  name: string;
-  description: string;
-  subtitle?: string;
-  category?: string;
-  injects: Array<{
-    title: string;
-    description: string;
-    type: string;
-    content?: string;
-    executor?: string;
-    delayMinutes?: number;
-    subject?: string;
-    body?: string;
-  }>;
-}
-
 // Container form state
 export interface ContainerFormState {
   name: string;
@@ -347,7 +291,6 @@ export interface RawAttackPattern {
 }
 
 // Attack pattern for scenario building (from OpenAEV)
-// Uses OAEVInjectorContract from shared types
 export interface ScenarioAttackPattern {
   id: string;
   name: string;

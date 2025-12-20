@@ -6,23 +6,74 @@
  */
 
 import { getSettings } from '../../shared/utils/storage';
-import { successResponse, errorResponse } from '../../shared/utils/messaging';
+import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { loggers } from '../../shared/utils/logger';
-import {
-  AIClient,
-  isAIAvailable,
-  type ContainerDescriptionRequest,
-  type ScenarioGenerationRequest,
-  type AtomicTestRequest,
-  type EntityDiscoveryRequest,
-  type RelationshipResolutionRequest,
-} from '../../shared/api/ai-client';
+import { AIClient, isAIAvailable } from '../../shared/api/ai-client';
+import type {
+  ContainerDescriptionRequest,
+  ScenarioGenerationRequest,
+  AtomicTestRequest,
+  EntityDiscoveryRequest,
+  RelationshipResolutionRequest,
+  FullScenarioGenerationRequest,
+  EmailGenerationRequest,
+} from '../../shared/api/ai/types';
 import { parseAIJsonResponse } from '../../shared/api/ai/json-parser';
-import type { SendResponseFn, MessageHandler } from './types';
+import type { MessageHandler } from './types';
 
 const log = loggers.background;
 
 type SendResponse = SendResponseFn;
+
+// ============================================================================
+// Helper Types and Functions
+// ============================================================================
+
+/** Entity with optional identifying fields for deduplication */
+interface DetectedEntity {
+  value?: string;
+  name?: string;
+  externalId?: string;
+  aliases?: string[];
+  type?: string;
+}
+
+/**
+ * Build a Set of lowercase values from already-detected entities for efficient lookup.
+ * Includes: value, name, externalId, and all aliases.
+ */
+function buildAlreadyDetectedSet(alreadyDetectedList: DetectedEntity[]): Set<string> {
+  const detectedValues = new Set<string>();
+  
+  for (const e of alreadyDetectedList) {
+    if (e.value) detectedValues.add(e.value.toLowerCase());
+    if (e.name) detectedValues.add(e.name.toLowerCase());
+    if (e.externalId) detectedValues.add(e.externalId.toLowerCase());
+    if (e.aliases && Array.isArray(e.aliases)) {
+      for (const alias of e.aliases) {
+        if (alias) detectedValues.add(alias.toLowerCase());
+      }
+    }
+  }
+  
+  return detectedValues;
+}
+
+/**
+ * Filter entities to exclude those that match any already-detected value.
+ * Compares lowercase value and name against the detected set.
+ */
+function filterNewEntities<T extends DetectedEntity>(
+  entities: T[],
+  alreadyDetectedSet: Set<string>
+): T[] {
+  return entities.filter(e => {
+    const valueLC = (e.value || '').toLowerCase();
+    const nameLC = (e.name || '').toLowerCase();
+    return !alreadyDetectedSet.has(valueLC) && !alreadyDetectedSet.has(nameLC);
+  });
+}
+
 
 /**
  * AI_CHECK_STATUS handler
@@ -134,22 +185,8 @@ export async function handleAIGenerateScenario(
 /**
  * AI_GENERATE_FULL_SCENARIO handler
  */
-export interface FullScenarioRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  scenarioName: string;
-  typeAffinity: string;
-  platformAffinity?: string[];
-  numberOfInjects: number;
-  payloadAffinity?: string;
-  tableTopDuration?: number;
-  additionalContext?: string;
-  detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
-}
-
 export async function handleAIGenerateFullScenario(
-  payload: FullScenarioRequest,
+  payload: FullScenarioGenerationRequest,
   sendResponse: SendResponse
 ): Promise<void> {
   const settings = await getSettings();
@@ -295,19 +332,6 @@ export async function handleAIGenerateAtomicTest(
 /**
  * AI_GENERATE_EMAILS handler
  */
-export interface EmailGenerationRequest {
-  pageTitle: string;
-  pageUrl: string;
-  pageContent: string;
-  scenarioName: string;
-  attackPatterns: Array<{
-    id: string;
-    name: string;
-    externalId?: string;
-    killChainPhases?: string[];
-  }>;
-}
-
 export async function handleAIGenerateEmails(
   payload: EmailGenerationRequest,
   sendResponse: SendResponse
@@ -405,30 +429,10 @@ export async function handleAIDiscoverEntities(
         return;
       }
       
-      // Filter out entities that were already detected (double-check)
-      // Include name, value, aliases, and external IDs for comprehensive matching
-      const alreadyDetectedValues = new Set<string>();
+      // Filter out entities that were already detected
       const alreadyDetectedList = payload.alreadyDetected || [];
-      alreadyDetectedList.forEach(e => {
-        // Add value and name (lowercase)
-        if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
-        if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
-        // Add external ID if present (e.g., T1059.001 for attack patterns)
-        if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
-        // Add all aliases (alternative names for the same entity)
-        if (e.aliases && Array.isArray(e.aliases)) {
-          e.aliases.forEach((alias: string) => {
-            if (alias) alreadyDetectedValues.add(alias.toLowerCase());
-          });
-        }
-      });
-      
-      const newEntities = parsed.entities.filter(e => {
-        const valueLC = (e.value || '').toLowerCase();
-        const nameLC = (e.name || '').toLowerCase();
-        // Entity is new if neither value nor name matches any already detected value/name/alias/externalId
-        return !alreadyDetectedValues.has(valueLC) && !alreadyDetectedValues.has(nameLC);
-      });
+      const alreadyDetectedSet = buildAlreadyDetectedSet(alreadyDetectedList);
+      const newEntities = filterNewEntities(parsed.entities, alreadyDetectedSet);
       
       log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${alreadyDetectedList.length} already detected)`);
       
@@ -695,22 +699,8 @@ If the content has no CTI entities, return: {"entities": [], "relationships": []
       ];
       
       // Filter out entities that were already detected
-      const alreadyDetectedValues = new Set<string>();
-      alreadyDetectedList.forEach(e => {
-        if (e.value) alreadyDetectedValues.add(e.value.toLowerCase());
-        if (e.name) alreadyDetectedValues.add(e.name.toLowerCase());
-        if (e.externalId) alreadyDetectedValues.add(e.externalId.toLowerCase());
-        if (e.aliases && Array.isArray(e.aliases)) {
-          e.aliases.forEach((alias: string) => {
-            if (alias) alreadyDetectedValues.add(alias.toLowerCase());
-          });
-        }
-      });
-      
-      const newEntities = entities.filter(e => {
-        const valueLC = (e.value || '').toLowerCase();
-        return !alreadyDetectedValues.has(valueLC);
-      });
+      const alreadyDetectedSet = buildAlreadyDetectedSet(alreadyDetectedList);
+      const newEntities = filterNewEntities(entities, alreadyDetectedSet);
       
       // Convert relationship indices to entity values using the combined list
       // This ensures relationships are correct even if entities are filtered out
@@ -775,7 +765,7 @@ export const aiHandlers: Record<string, MessageHandler> = {
     await handleAIGenerateScenario(payload as ScenarioGenerationRequest, sendResponse);
   },
   AI_GENERATE_FULL_SCENARIO: async (payload, sendResponse) => {
-    await handleAIGenerateFullScenario(payload as FullScenarioRequest, sendResponse);
+    await handleAIGenerateFullScenario(payload as FullScenarioGenerationRequest, sendResponse);
   },
   AI_GENERATE_ATOMIC_TEST: async (payload, sendResponse) => {
     await handleAIGenerateAtomicTest(payload as AtomicTestRequest, sendResponse);

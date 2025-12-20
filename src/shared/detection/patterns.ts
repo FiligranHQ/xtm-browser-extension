@@ -351,8 +351,10 @@ export const OBSERVABLE_PATTERNS: PatternConfig[] = [
         type: 'Domain-Name',
         priority: 70,
         validate: (match) => {
+            // Refang the match first to handle defanged domains (e.g., goupdate[.]mywire[.]org)
+            const refanged = refangIndicator(match);
             // Must have at least one dot and valid TLD
-            const parts = match.split('.');
+            const parts = refanged.split('.');
             if (parts.length < 2) return false;
             // Exclude common file extensions misdetected as domains
             const lastPart = parts[parts.length - 1].toLowerCase();

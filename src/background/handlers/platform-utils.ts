@@ -5,7 +5,7 @@
  */
 
 import { loggers } from '../../shared/utils/logger';
-import { errorResponse, successResponse } from './types';
+import { errorResponse, successResponse } from '../../shared/types/common';
 
 const log = loggers.background;
 

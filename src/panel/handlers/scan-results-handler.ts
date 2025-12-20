@@ -10,7 +10,7 @@ import {
 import {
   getOAEVEntityId,
 } from '../../shared/utils/entity';
-import type { ScanResultEntity, ScanResultPlatformMatch } from '../types/panel-types';
+import type { ScanResultEntity, ScanResultPlatformMatch } from '../../shared/types/scan';
 import type { DetectedObservable } from '../../shared/types/observables';
 import type { DetectedOCTIEntity } from '../../shared/types/opencti';
 import type { DetectedOAEVEntity } from '../../shared/types/openaev';

@@ -2591,6 +2591,167 @@ async function handleMessage(
         break;
       }
       
+      case 'SEARCH_LABELS': {
+        if (openCTIClients.size === 0) {
+          sendResponse(errorResponse('Not configured'));
+          break;
+        }
+        
+        const { search, first, platformId: searchLabelsPlatformId } = (message.payload || {}) as { 
+          search?: string; 
+          first?: number;
+          platformId?: string;
+        };
+        
+        try {
+          // If a specific platform is requested, search only from that platform
+          if (searchLabelsPlatformId) {
+            const client = openCTIClients.get(searchLabelsPlatformId);
+            if (!client) {
+              sendResponse(errorResponse('Platform not found'));
+              break;
+            }
+            
+            const labels = await client.searchLabels(search || '', first || 10);
+            sendResponse({ success: true, data: labels.map(l => ({ ...l, platformId: searchLabelsPlatformId })) });
+          } else {
+            // Search from first available platform
+            const [firstPlatformId, firstClient] = Array.from(openCTIClients.entries())[0];
+            const labels = await firstClient.searchLabels(search || '', first || 10);
+            sendResponse({ success: true, data: labels.map(l => ({ ...l, platformId: firstPlatformId })) });
+          }
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to search labels',
+          });
+        }
+        break;
+      }
+      
+      case 'CREATE_LABEL': {
+        if (openCTIClients.size === 0) {
+          sendResponse(errorResponse('Not configured'));
+          break;
+        }
+        
+        const { value: labelValue, color: labelColor, platformId: createLabelPlatformId } = (message.payload || {}) as { 
+          value: string; 
+          color: string;
+          platformId?: string;
+        };
+        
+        if (!labelValue) {
+          sendResponse(errorResponse('Label value is required'));
+          break;
+        }
+        
+        try {
+          const targetPlatformId = createLabelPlatformId || Array.from(openCTIClients.keys())[0];
+          const client = openCTIClients.get(targetPlatformId);
+          
+          if (!client) {
+            sendResponse(errorResponse('Platform not found'));
+            break;
+          }
+          
+          const label = await client.createLabel(labelValue, labelColor || '#000000');
+          sendResponse({ 
+            success: true, 
+            data: { ...label, platformId: targetPlatformId }
+          });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to create label',
+          });
+        }
+        break;
+      }
+      
+      case 'SEARCH_IDENTITIES': {
+        if (openCTIClients.size === 0) {
+          sendResponse(errorResponse('Not configured'));
+          break;
+        }
+        
+        const { search: identitySearch, first: identityFirst, platformId: searchIdentityPlatformId } = (message.payload || {}) as { 
+          search?: string; 
+          first?: number;
+          platformId?: string;
+        };
+        
+        try {
+          const targetPlatformId = searchIdentityPlatformId || Array.from(openCTIClients.keys())[0];
+          const client = openCTIClients.get(targetPlatformId);
+          
+          if (!client) {
+            sendResponse(errorResponse('Platform not found'));
+            break;
+          }
+          
+          const identities = await client.searchIdentities(identitySearch || '', identityFirst || 50);
+          sendResponse({ 
+            success: true, 
+            data: identities.map(i => ({ ...i, platformId: targetPlatformId })) 
+          });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to search identities',
+          });
+        }
+        break;
+      }
+      
+      case 'CREATE_IDENTITY': {
+        if (openCTIClients.size === 0) {
+          sendResponse(errorResponse('Not configured'));
+          break;
+        }
+        
+        const { name: identityName, entityType: identityType, platformId: createIdentityPlatformId } = (message.payload || {}) as { 
+          name: string; 
+          entityType: 'Organization' | 'Individual';
+          platformId?: string;
+        };
+        
+        if (!identityName) {
+          sendResponse(errorResponse('Identity name is required'));
+          break;
+        }
+        
+        if (!identityType || !['Organization', 'Individual'].includes(identityType)) {
+          sendResponse(errorResponse('Invalid entity type'));
+          break;
+        }
+        
+        try {
+          const targetPlatformId = createIdentityPlatformId || Array.from(openCTIClients.keys())[0];
+          const client = openCTIClients.get(targetPlatformId);
+          
+          if (!client) {
+            sendResponse(errorResponse('Platform not found'));
+            break;
+          }
+          
+          const identity = identityType === 'Organization' 
+            ? await client.createOrganization(identityName)
+            : await client.createIndividual(identityName);
+            
+          sendResponse({ 
+            success: true, 
+            data: { ...identity, platformId: targetPlatformId }
+          });
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to create identity',
+          });
+        }
+        break;
+      }
+      
       case 'FETCH_MARKINGS': {
         if (openCTIClients.size === 0) {
           sendResponse(errorResponse('Not configured'));

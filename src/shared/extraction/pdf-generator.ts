@@ -4,7 +4,6 @@
  * Generates high-quality PDFs using:
  * 1. Chrome's native print-to-PDF (via Debugger API) - Best quality
  * 2. Reader-view rendering with jsPDF - Fallback with selectable text
- * 3. html2canvas capture - Last resort for complex layouts
  */
 
 import { jsPDF } from 'jspdf';
@@ -326,9 +325,6 @@ async function generateWithJsPDF(
     // Parse the HTML content and render it
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content.content;
-    
-    // Track images to add after their context (for deferred rendering)
-    const imagesToAdd: ExtractedImage[] = [];
     
     // Track all added image sources to avoid duplicates
     const addedImageSrcs = new Set<string>();

@@ -38,8 +38,16 @@ import { getAiColor } from '../utils/platform-helpers';
 import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, AISettings } from '../types/panel-types';
 import type { LabelOption, MarkingOption } from '../types/view-props';
 
-// Debounce delay for label search
-const LABEL_SEARCH_DEBOUNCE_MS = 1000;
+// Debounce delay for search (1.2s is optimal for reducing API calls while remaining responsive)
+const SEARCH_DEBOUNCE_MS = 1200;
+
+// Author type definition
+interface AuthorOption {
+  id: string;
+  name: string;
+  entity_type: string;
+  platformId?: string;
+}
 
 // Generate a random color for new labels
 const generateRandomColor = () => {
@@ -132,13 +140,29 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
   const [labelInputValue, setLabelInputValue] = useState('');
   const [labelsLoading, setLabelsLoading] = useState(false);
   const [labelsInitialized, setLabelsInitialized] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const labelSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Create label dialog state
   const [createLabelDialogOpen, setCreateLabelDialogOpen] = useState(false);
   const [newLabelValue, setNewLabelValue] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(generateRandomColor());
   const [creatingLabel, setCreatingLabel] = useState(false);
+
+  // Author search state
+  const [authorOptions, setAuthorOptions] = useState<AuthorOption[]>(availableAuthors);
+  const [authorInputValue, setAuthorInputValue] = useState('');
+  const [authorsLoading, setAuthorsLoading] = useState(false);
+  const [authorsInitialized, setAuthorsInitialized] = useState(false);
+  const [selectedAuthor, setSelectedAuthor] = useState<AuthorOption | null>(
+    availableAuthors.find(a => a.id === containerSpecificFields.createdBy) || null
+  );
+  const authorSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Create author dialog state
+  const [createAuthorDialogOpen, setCreateAuthorDialogOpen] = useState(false);
+  const [newAuthorName, setNewAuthorName] = useState('');
+  const [newAuthorType, setNewAuthorType] = useState<'Organization' | 'Individual'>('Organization');
+  const [creatingAuthor, setCreatingAuthor] = useState(false);
 
   // Get target platform
   const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
@@ -179,43 +203,145 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
     }
   }, [availableLabels, labelsInitialized, targetPlatformId]);
 
-  // Search labels with debounce
-  const searchLabels = useCallback((searchValue: string) => {
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (labelSearchTimeoutRef.current) {
+        clearTimeout(labelSearchTimeoutRef.current);
+      }
+      if (authorSearchTimeoutRef.current) {
+        clearTimeout(authorSearchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Load initial authors on mount
+  useEffect(() => {
+    if (availableAuthors.length > 0) {
+      setAuthorOptions(availableAuthors);
+      setAuthorsInitialized(true);
+      // Set selected author from containerSpecificFields
+      const currentAuthor = availableAuthors.find(a => a.id === containerSpecificFields.createdBy);
+      if (currentAuthor) {
+        setSelectedAuthor(currentAuthor);
+      }
+    } else if (!authorsInitialized && targetPlatformId) {
+      // Fetch initial authors
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        setAuthorsLoading(true);
+        chrome.runtime.sendMessage(
+          { 
+            type: 'SEARCH_IDENTITIES', 
+            payload: { 
+              search: '', 
+              first: 50,
+              platformId: targetPlatformId 
+            } 
+          }, 
+          (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Initial authors load error:', chrome.runtime.lastError);
+              setAuthorsLoading(false);
+              return;
+            }
+            if (response?.success && response.data) {
+              setAuthorOptions(response.data);
+              setAuthorsInitialized(true);
+            }
+            setAuthorsLoading(false);
+          }
+        );
+      }
+    }
+  }, [availableAuthors, authorsInitialized, targetPlatformId, containerSpecificFields.createdBy]);
+
+  // Execute label search (called after debounce)
+  const executeLabelSearch = useCallback((searchValue: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
+    setLabelsLoading(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'SEARCH_LABELS', 
+        payload: { 
+          search: searchValue.trim(), 
+          first: 10,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Label search error:', chrome.runtime.lastError);
+          setLabelsLoading(false);
+          return;
+        }
+        if (response?.success && response.data) {
+          setLabelOptions(response.data);
+        } else if (response?.error) {
+          console.error('Label search failed:', response.error);
+        }
+        setLabelsLoading(false);
+      }
+    );
+  }, [targetPlatformId]);
+
+  // Search labels with debounce
+  const searchLabels = useCallback((searchValue: string) => {
     // Clear any pending timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+    if (labelSearchTimeoutRef.current) {
+      clearTimeout(labelSearchTimeoutRef.current);
+      labelSearchTimeoutRef.current = null;
     }
 
     // Set timeout for debounced search
-    searchTimeoutRef.current = setTimeout(() => {
-      setLabelsLoading(true);
-      chrome.runtime.sendMessage(
-        { 
-          type: 'SEARCH_LABELS', 
-          payload: { 
-            search: searchValue, 
-            first: 10,
-            platformId: targetPlatformId 
-          } 
-        }, 
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('Label search error:', chrome.runtime.lastError);
-            setLabelsLoading(false);
-            return;
-          }
-          if (response?.success && response.data) {
-            setLabelOptions(response.data);
-          } else if (response?.error) {
-            console.error('Label search failed:', response.error);
-          }
-          setLabelsLoading(false);
+    labelSearchTimeoutRef.current = setTimeout(() => {
+      executeLabelSearch(searchValue);
+    }, SEARCH_DEBOUNCE_MS);
+  }, [executeLabelSearch]);
+
+  // Execute author search (called after debounce)
+  const executeAuthorSearch = useCallback((searchValue: string) => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setAuthorsLoading(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'SEARCH_IDENTITIES', 
+        payload: { 
+          search: searchValue.trim(), 
+          first: 50,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Author search error:', chrome.runtime.lastError);
+          setAuthorsLoading(false);
+          return;
         }
-      );
-    }, LABEL_SEARCH_DEBOUNCE_MS);
+        if (response?.success && response.data) {
+          setAuthorOptions(response.data);
+        } else if (response?.error) {
+          console.error('Author search failed:', response.error);
+        }
+        setAuthorsLoading(false);
+      }
+    );
   }, [targetPlatformId]);
+
+  // Search authors with debounce
+  const searchAuthors = useCallback((searchValue: string) => {
+    // Clear any pending timeout
+    if (authorSearchTimeoutRef.current) {
+      clearTimeout(authorSearchTimeoutRef.current);
+      authorSearchTimeoutRef.current = null;
+    }
+
+    // Set timeout for debounced search
+    authorSearchTimeoutRef.current = setTimeout(() => {
+      executeAuthorSearch(searchValue);
+    }, SEARCH_DEBOUNCE_MS);
+  }, [executeAuthorSearch]);
 
   // Load labels when autocomplete is opened (if not already loaded)
   const handleLabelsOpen = useCallback(() => {
@@ -251,16 +377,75 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
     );
   }, [targetPlatformId, labelsInitialized, labelOptions.length]);
 
+  // Load authors when autocomplete is opened (if not already loaded)
+  const handleAuthorsOpen = useCallback(() => {
+    if (authorsInitialized && authorOptions.length > 0) return;
+
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setAuthorsLoading(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'SEARCH_IDENTITIES', 
+        payload: { 
+          search: '', 
+          first: 50,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Authors open error:', chrome.runtime.lastError);
+          setAuthorsLoading(false);
+          return;
+        }
+        if (response?.success && response.data) {
+          setAuthorOptions(response.data);
+          setAuthorsInitialized(true);
+        } else if (response?.error) {
+          console.error('Authors load failed:', response.error);
+        }
+        setAuthorsLoading(false);
+      }
+    );
+  }, [targetPlatformId, authorsInitialized, authorOptions.length]);
+
   // Handle label input change with debounced search
-  const handleLabelInputChange = useCallback((_event: React.SyntheticEvent, value: string) => {
+  const handleLabelInputChange = useCallback((_event: React.SyntheticEvent, value: string, reason: string) => {
     setLabelInputValue(value);
-    if (value.trim()) {
-      searchLabels(value);
-    } else if (labelsInitialized) {
-      // If cleared, reload initial labels
-      searchLabels('');
+    
+    // Only trigger search on actual user input, not on reset/clear from selecting an option
+    if (reason === 'input') {
+      if (value.trim()) {
+        searchLabels(value);
+      } else {
+        // If cleared by user typing, reload initial labels after debounce
+        searchLabels('');
+      }
     }
-  }, [searchLabels, labelsInitialized]);
+  }, [searchLabels]);
+
+  // Handle author input change with debounced search
+  const handleAuthorInputChange = useCallback((_event: React.SyntheticEvent, value: string, reason: string) => {
+    setAuthorInputValue(value);
+    
+    if (reason === 'input') {
+      if (value.trim()) {
+        searchAuthors(value);
+      } else {
+        searchAuthors('');
+      }
+    }
+  }, [searchAuthors]);
+
+  // Handle author selection change
+  const handleAuthorChange = useCallback((_event: React.SyntheticEvent, newValue: AuthorOption | null) => {
+    setSelectedAuthor(newValue);
+    setContainerSpecificFields(prev => ({
+      ...prev,
+      createdBy: newValue?.id || ''
+    }));
+  }, [setContainerSpecificFields]);
 
   // Create new label
   const handleCreateLabel = useCallback(() => {
@@ -295,21 +480,54 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           setNewLabelColor(generateRandomColor());
         } else if (response?.error) {
           console.error('Create label failed:', response.error);
-          // Could show a toast/alert here
         }
         setCreatingLabel(false);
       }
     );
   }, [newLabelValue, newLabelColor, targetPlatformId, selectedLabels, setSelectedLabels]);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
+  // Create new author (Organization or Individual)
+  const handleCreateAuthor = useCallback(() => {
+    if (!newAuthorName.trim()) return;
+    
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setCreatingAuthor(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'CREATE_IDENTITY', 
+        payload: { 
+          name: newAuthorName.trim(), 
+          entityType: newAuthorType,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Create author error:', chrome.runtime.lastError);
+          setCreatingAuthor(false);
+          return;
+        }
+        if (response?.success && response.data) {
+          const newAuthor = response.data as AuthorOption;
+          // Add to options and select it
+          setAuthorOptions(prev => [newAuthor, ...prev]);
+          setSelectedAuthor(newAuthor);
+          setContainerSpecificFields(prev => ({
+            ...prev,
+            createdBy: newAuthor.id
+          }));
+          // Close dialog and reset
+          setCreateAuthorDialogOpen(false);
+          setNewAuthorName('');
+          setNewAuthorType('Organization');
+        } else if (response?.error) {
+          console.error('Create author failed:', response.error);
+        }
+        setCreatingAuthor(false);
       }
-    };
-  }, []);
+    );
+  }, [newAuthorName, newAuthorType, targetPlatformId, setContainerSpecificFields]);
 
   // Check if AI is available for the container platform
   const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
@@ -465,24 +683,60 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
 
         {/* Author (createdBy) - for all container types */}
         <Autocomplete
-          options={availableAuthors}
+          fullWidth
+          options={authorOptions}
           getOptionLabel={(option) => option.name}
-          value={availableAuthors.find(a => a.id === containerSpecificFields.createdBy) || null}
-          onChange={(_, newValue) => setContainerSpecificFields(prev => ({
-            ...prev,
-            createdBy: newValue?.id || ''
-          }))}
+          value={selectedAuthor}
+          onChange={handleAuthorChange}
+          onOpen={handleAuthorsOpen}
+          inputValue={authorInputValue}
+          onInputChange={handleAuthorInputChange}
           isOptionEqualToValue={(option, value) => option.id === value.id}
+          loading={authorsLoading}
+          filterOptions={(x) => x} // Disable client-side filtering, server handles it
           renderInput={(params) => (
-            <TextField {...params} label="Author" size="small" placeholder="Select author..." />
+            <TextField
+              {...params}
+              label="Author"
+              size="small"
+              placeholder="Type to search..."
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {authorsLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                    <Tooltip title="Create new author">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCreateAuthorDialogOpen(true);
+                        }}
+                        sx={{ 
+                          p: 0.5,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+            />
           )}
           renderOption={(props, option) => (
             <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ItemIcon type={option.entity_type} size="small" />
               <Typography variant="body2">{option.name}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                ({option.entity_type})
+              </Typography>
             </Box>
           )}
           size="small"
+          noOptionsText={authorsLoading ? "Searching..." : "No authors found"}
         />
 
         {/* Description field with AI generate button */}
@@ -579,9 +833,11 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           ChipProps={{
             size: 'small',
             sx: {
-              borderRadius: 0.5,
+              borderRadius: '4px',
               maxWidth: 80,
+              bgcolor: 'action.selected',
               '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+              '& .MuiChip-deleteIcon': { fontSize: 16 },
             }
           }}
           sx={{
@@ -614,18 +870,39 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
               />
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="body2" color="text.secondary">Color:</Typography>
-                <input
-                  type="color"
-                  value={newLabelColor}
-                  onChange={(e) => setNewLabelColor(e.target.value)}
-                  style={{ 
-                    width: 40, 
-                    height: 30, 
-                    border: 'none', 
-                    borderRadius: 4,
-                    cursor: 'pointer'
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: 40,
+                    height: 30,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: mode === 'dark' ? 'rgba(255,255,255,0.23)' : 'rgba(0,0,0,0.23)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    bgcolor: newLabelColor,
+                    '&:hover': {
+                      borderColor: mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+                    },
                   }}
-                />
+                >
+                  <input
+                    type="color"
+                    value={newLabelColor}
+                    onChange={(e) => setNewLabelColor(e.target.value)}
+                    style={{ 
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '200%',
+                      height: '200%',
+                      transform: 'translate(-25%, -25%)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      opacity: 0,
+                    }}
+                  />
+                </Box>
                 <Box 
                   sx={{ 
                     display: 'flex', 
@@ -663,6 +940,61 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           </DialogActions>
         </Dialog>
 
+        {/* Create Author Dialog */}
+        <Dialog 
+          open={createAuthorDialogOpen} 
+          onClose={() => !creatingAuthor && setCreateAuthorDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Create New Author</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Author Name"
+                value={newAuthorName}
+                onChange={(e) => setNewAuthorName(e.target.value)}
+                size="small"
+                fullWidth
+                autoFocus
+                placeholder="Enter author name..."
+              />
+              <Autocomplete
+                value={newAuthorType}
+                onChange={(_, value) => setNewAuthorType(value || 'Organization')}
+                options={['Organization', 'Individual'] as const}
+                disableClearable
+                renderInput={(params) => (
+                  <TextField {...params} label="Author Type" size="small" />
+                )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ItemIcon type={option} size="small" />
+                    <Typography variant="body2">{option}</Typography>
+                  </Box>
+                )}
+                size="small"
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setCreateAuthorDialogOpen(false)} 
+              disabled={creatingAuthor}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleCreateAuthor}
+              disabled={!newAuthorName.trim() || creatingAuthor}
+              startIcon={creatingAuthor ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+            >
+              {creatingAuthor ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Markings Autocomplete */}
         <Autocomplete
           multiple
@@ -685,6 +1017,9 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
                 sx={{
                   width: 14,
                   height: 14,
+                  minWidth: 14,
+                  minHeight: 14,
+                  flexShrink: 0,
                   borderRadius: 0.5,
                   bgcolor: (option as any).x_opencti_color || 'grey.500'
                 }}
@@ -694,11 +1029,12 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           )}
           ChipProps={{
             size: 'small',
-            variant: 'outlined',
             sx: {
-              borderRadius: 0.5,
+              borderRadius: '4px',
               maxWidth: 80,
+              bgcolor: 'action.selected',
               '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+              '& .MuiChip-deleteIcon': { fontSize: 16 },
             }
           }}
           sx={{

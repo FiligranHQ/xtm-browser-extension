@@ -545,6 +545,97 @@ export const handleFetchIdentities: MessageHandler = async (payload, sendRespons
 };
 
 /**
+ * Search identities handler (with limit and search)
+ */
+export const handleSearchIdentities: MessageHandler = async (payload, sendResponse) => {
+  if (!hasOpenCTIClients()) {
+    sendResponse(errorResponse('Not configured'));
+    return;
+  }
+
+  const { search, first, platformId: searchPlatformId } = (payload || {}) as { 
+    search?: string; 
+    first?: number;
+    platformId?: string;
+  };
+
+  const openCTIClients = getOpenCTIClients();
+
+  try {
+    const targetPlatformId = searchPlatformId || openCTIClients.keys().next().value as string;
+    const client = openCTIClients.get(targetPlatformId);
+
+    if (!client) {
+      sendResponse(errorResponse('Platform not found'));
+      return;
+    }
+
+    const identities = await client.searchIdentities(search || '', first || 50);
+    sendResponse({ 
+      success: true, 
+      data: identities.map(i => ({ ...i, platformId: targetPlatformId })) 
+    });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to search identities',
+    });
+  }
+};
+
+/**
+ * Create identity handler (Organization or Individual)
+ */
+export const handleCreateIdentity: MessageHandler = async (payload, sendResponse) => {
+  if (!hasOpenCTIClients()) {
+    sendResponse(errorResponse('Not configured'));
+    return;
+  }
+
+  const { name, entityType, platformId: createPlatformId } = (payload || {}) as { 
+    name: string; 
+    entityType: 'Organization' | 'Individual';
+    platformId?: string;
+  };
+  
+  if (!name) {
+    sendResponse(errorResponse('Identity name is required'));
+    return;
+  }
+
+  if (!entityType || !['Organization', 'Individual'].includes(entityType)) {
+    sendResponse(errorResponse('Invalid entity type. Must be Organization or Individual'));
+    return;
+  }
+
+  const openCTIClients = getOpenCTIClients();
+
+  try {
+    const targetPlatformId = createPlatformId || openCTIClients.keys().next().value as string;
+    const client = openCTIClients.get(targetPlatformId);
+
+    if (!client) {
+      sendResponse(errorResponse('Platform not found'));
+      return;
+    }
+
+    const identity = entityType === 'Organization' 
+      ? await client.createOrganization(name)
+      : await client.createIndividual(name);
+      
+    sendResponse({ 
+      success: true, 
+      data: { ...identity, platformId: targetPlatformId }
+    });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create identity',
+    });
+  }
+};
+
+/**
  * Fetch entity containers handler
  */
 export const handleFetchEntityContainers: MessageHandler = async (payload, sendResponse) => {
@@ -761,6 +852,8 @@ export const openctiHandlers: Record<string, MessageHandler> = {
   FETCH_MARKINGS: handleFetchMarkings,
   FETCH_VOCABULARY: handleFetchVocabulary,
   FETCH_IDENTITIES: handleFetchIdentities,
+  SEARCH_IDENTITIES: handleSearchIdentities,
+  CREATE_IDENTITY: handleCreateIdentity,
   FETCH_ENTITY_CONTAINERS: handleFetchEntityContainers,
   FIND_CONTAINERS_BY_URL: handleFindContainersByUrl,
   CREATE_WORKBENCH: handleCreateWorkbench,

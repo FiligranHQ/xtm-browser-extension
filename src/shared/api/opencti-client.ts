@@ -21,6 +21,9 @@ import {
   FETCH_MARKING_DEFINITIONS_QUERY,
   FETCH_VOCABULARY_QUERY,
   FETCH_IDENTITIES_QUERY,
+  SEARCH_IDENTITIES_QUERY,
+  CREATE_ORGANIZATION_MUTATION,
+  CREATE_INDIVIDUAL_MUTATION,
   buildCreateObservableMutation,
   CREATE_INTRUSION_SET_MUTATION,
   CREATE_THREAT_ACTOR_MUTATION,
@@ -402,6 +405,35 @@ export class OpenCTIClient {
       after = data.identities.pageInfo.endCursor;
     }
     return allResults;
+  }
+
+  async searchIdentities(search: string, first: number = 50): Promise<Array<{ id: string; name: string; entity_type: string }>> {
+    // Build variables - only include search if non-empty
+    const variables: { first: number; search?: string } = { first };
+    if (search && search.trim()) {
+      variables.search = search.trim();
+    }
+    const data = await this.query<{ identities: { edges: Array<{ node: { id: string; name: string; entity_type: string } }> } }>(
+      SEARCH_IDENTITIES_QUERY,
+      variables
+    );
+    return data.identities?.edges?.map((e) => e.node) || [];
+  }
+
+  async createOrganization(name: string): Promise<{ id: string; name: string; entity_type: string }> {
+    const data = await this.query<{ organizationAdd: { id: string; name: string; entity_type: string } }>(
+      CREATE_ORGANIZATION_MUTATION,
+      { input: { name } }
+    );
+    return data.organizationAdd;
+  }
+
+  async createIndividual(name: string): Promise<{ id: string; name: string; entity_type: string }> {
+    const data = await this.query<{ individualAdd: { id: string; name: string; entity_type: string } }>(
+      CREATE_INDIVIDUAL_MUTATION,
+      { input: { name } }
+    );
+    return data.individualAdd;
   }
 
   // ==========================================================================

@@ -190,6 +190,34 @@ export const FETCH_IDENTITIES_QUERY = `
   }
 `;
 
+export const SEARCH_IDENTITIES_QUERY = `
+  query SearchIdentities($first: Int, $search: String) {
+    identities(first: $first, search: $search, types: ["Organization", "Individual"], orderBy: name, orderMode: asc) {
+      edges { node { id name entity_type } }
+    }
+  }
+`;
+
+export const CREATE_ORGANIZATION_MUTATION = `
+  mutation CreateOrganization($input: OrganizationAddInput!) {
+    organizationAdd(input: $input) {
+      id
+      name
+      entity_type
+    }
+  }
+`;
+
+export const CREATE_INDIVIDUAL_MUTATION = `
+  mutation CreateIndividual($input: IndividualAddInput!) {
+    individualAdd(input: $input) {
+      id
+      name
+      entity_type
+    }
+  }
+`;
+
 // ============================================================================
 // Create Mutations
 // ============================================================================

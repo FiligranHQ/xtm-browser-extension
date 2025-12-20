@@ -10,13 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.11] - 2024-12-20
 
 ### Added
-- **Labels field improvements**: Labels autocomplete in container form now fetches only initial 100 labels, searches on the fly with 1-second debounce, and includes a "+" button to create new labels directly within the field
+- **Labels field improvements**: Labels autocomplete in container form now fetches only initial 10 labels, searches on the fly with 1.2-second debounce, and includes a "+" button to create new labels directly within the field
+- **Author field improvements**: Author (createdBy) autocomplete now fetches only initial 50 authors, searches on the fly with debounce, includes a "+" button to create new Organization or Individual directly within the field
 - **Hidden content filtering**: Scan results now exclude text from tooltips, popovers, and screen-reader-only elements (e.g., "Skip to content" links) that are not visually displayed but picked up by DOM extraction
+- **React/SPA content extraction**: Added fallback extraction methods for React, Next.js, Nuxt.js, and other SPA frameworks that render content dynamically via JavaScript
+- **Visible content extraction**: Last-resort extraction method that walks through all visible DOM elements when other methods fail
 
 ### Changed
 - **Highlight styling refined**: Highlights are now less aggressive and no longer cause layout shifts or distortions on complex pages. Uses `display: inline` instead of `inline-block`, reduced padding, and proper z-index layering
 - **Glowing effect improved**: The locate/scroll-to-highlight glow animation now has a gentler 3-pulse pattern over 3 seconds with `ease-in-out` timing for a smoother visual effect
 - **Number of injects limit increased**: Maximum number of injects for AI scenario generation increased from 20 to 50
+- **Table-top scenario AI prompts improved**: AI-generated table-top exercises now focus on presenting crisis situations without prescribing defensive actions, feature progressive intensity escalation, use varied email senders (SOC, executives, legal, etc.), and create immediately playable exercises
+- **Consistent multi-select chip styling**: All multi-select autocomplete fields (Report Types, Labels, Marking Definitions, etc.) now use consistent chip styling with light grey background and 4px border radius
+- **Color picker dark mode support**: Label creation color picker now properly respects dark/light theme mode
 
 ### Fixed
 - **Critical: OpenAEV atomic testing and scenarios not finding attack patterns**: Fixed condition that checked for `platformEntities` instead of `openaevEntities`, causing attack pattern detection to always fail for OpenAEV-only scans
@@ -24,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Side panel user gesture errors**: Console errors about `sidePanel.open()` requiring user gesture are now suppressed (logged as debug) when the panel is already open or being managed by the popup
 - **Number of injects field behavior**: Input field now allows clearing and typing any value (like the duration field) with proper validation and error feedback
 - **Exercise duration field behavior**: Input field now allows clearing, accepts values 1-2880 minutes (48 hours max), shows validation errors, and disables Generate button when invalid
+- **PDF images at wrong location**: Fixed images being placed at the end of generated PDFs instead of their original position in the content. Images are now rendered inline where they appear in the document
+- **Empty PDF/HTML on React websites**: Fixed content extraction returning empty results on React/SPA websites by adding multiple fallback extraction methods
+- **Labels loading error**: Fixed "Unknown message type" error when loading labels in container form by adding missing `SEARCH_LABELS` handler in background script
+- **Back to actions link consistency**: Entity overview screens now always show a "Back to actions" link for consistent navigation
+- **Label creation not adding to selection**: Fixed label creation not properly adding newly created labels to the selected list
+
+### Removed
+- **Debug logging**: Removed all debug console.log statements from content script for cleaner production builds
 
 ## [0.0.10] - 2024-12-19
 

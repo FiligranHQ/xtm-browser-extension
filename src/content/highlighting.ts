@@ -182,7 +182,7 @@ export function highlightResults(
   results: ScanResultPayload,
   handlers: {
     onHover: (e: MouseEvent) => void;
-    onLeave: () => void;
+    onLeave: (e: MouseEvent) => void;
     onClick: (e: MouseEvent) => void;
     onRightClick: (e: MouseEvent) => void;
     onMouseDown: (e: MouseEvent) => void;
@@ -414,7 +414,7 @@ function highlightCVEInText(
   meta: HighlightMeta,
   handlers: {
     onHover: (e: MouseEvent) => void;
-    onLeave: () => void;
+    onLeave: (e: MouseEvent) => void;
     onClick: (e: MouseEvent) => void;
     onRightClick: (e: MouseEvent) => void;
     onMouseDown: (e: MouseEvent) => void;
@@ -545,7 +545,7 @@ function highlightInText(
   meta: HighlightMeta,
   handlers: {
     onHover: (e: MouseEvent) => void;
-    onLeave: () => void;
+    onLeave: (e: MouseEvent) => void;
     onClick: (e: MouseEvent) => void;
     onRightClick: (e: MouseEvent) => void;
     onMouseDown: (e: MouseEvent) => void;

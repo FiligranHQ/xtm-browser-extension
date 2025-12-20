@@ -32,7 +32,6 @@
     "@mozilla/readability": "^0.6.0",
     "@mui/icons-material": "^6.4.11",
     "@mui/material": "^6.4.11",
-    "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",
     "mdi-material-ui": "^7.9.4",
     "react": "^19.0.0",

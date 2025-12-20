@@ -1255,6 +1255,198 @@ function createEmptyResult(title: string): ExtractedContent {
 }
 
 /**
+ * Extract content from React/SPA rendered pages
+ * These pages often render content dynamically via JavaScript
+ */
+function extractFromReactSPA(): ExtractedContent | null {
+  try {
+    log.debug('[ContentExtractor] Attempting React/SPA extraction');
+    
+    // Common React app root selectors
+    const reactRoots = ['#root', '#app', '#__next', '#__nuxt', '[data-reactroot]', '[data-react-root]'];
+    
+    let contentContainer: Element | null = null;
+    
+    // Try to find the React root
+    for (const selector of reactRoots) {
+      const root = document.querySelector(selector);
+      if (root && root.textContent && root.textContent.trim().length > 200) {
+        contentContainer = root;
+        break;
+      }
+    }
+    
+    if (!contentContainer) {
+      // Try body as fallback for SPA
+      if (document.body.textContent && document.body.textContent.trim().length > 200) {
+        contentContainer = document.body;
+      }
+    }
+    
+    if (!contentContainer) {
+      return null;
+    }
+    
+    // Find the largest content block within the container
+    const allDivs = contentContainer.querySelectorAll('div, article, section, main');
+    let bestContainer: Element | null = null;
+    let bestScore = 0;
+    
+    for (const div of allDivs) {
+      const text = div.textContent || '';
+      const paragraphs = div.querySelectorAll('p');
+      const score = text.length + (paragraphs.length * 100);
+      
+      // Skip if it's a navigation or sidebar element
+      const className = (div.className || '').toLowerCase();
+      const id = (div.id || '').toLowerCase();
+      if (/nav|sidebar|footer|header|menu|toolbar|modal|popup|overlay/i.test(className + ' ' + id)) {
+        continue;
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestContainer = div;
+      }
+    }
+    
+    if (!bestContainer || bestScore < 500) {
+      // Use the whole container
+      bestContainer = contentContainer;
+    }
+    
+    // Clone and clean
+    const clone = bestContainer.cloneNode(true) as HTMLElement;
+    
+    // Remove non-content elements
+    clone.querySelectorAll('script, style, noscript, nav, footer, header, [role="navigation"], [role="banner"], [class*="nav"], [class*="menu"], [class*="sidebar"]').forEach(el => el.remove());
+    
+    // Fix images
+    clone.querySelectorAll('img').forEach(img => {
+      fixImageSource(img as HTMLImageElement);
+    });
+    
+    const textContent = cleanText(clone.textContent || '');
+    const images = extractImages(clone);
+    
+    if (textContent.length < 100) {
+      return null;
+    }
+    
+    log.debug('[ContentExtractor] React/SPA extraction got:', textContent.length, 'chars');
+    
+    return {
+      title: extractTitle(),
+      byline: extractByline(),
+      excerpt: textContent.substring(0, 200).trim() + '...',
+      content: clone.innerHTML,
+      textContent,
+      images,
+      url: window.location.href,
+      siteName: extractSiteName(),
+      publishedDate: extractDate(),
+      readingTime: estimateReadingTime(textContent),
+    };
+  } catch (error) {
+    log.error('[ContentExtractor] React/SPA extraction failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract visible content directly from the DOM
+ * This is a last resort when other methods fail
+ */
+function extractFromVisibleContent(): ExtractedContent {
+  log.debug('[ContentExtractor] Extracting visible content');
+  
+  const title = extractTitle();
+  const textParts: string[] = [];
+  const htmlParts: string[] = [];
+  const images: ExtractedImage[] = [];
+  const seenImages = new Set<string>();
+  
+  // Walk through all visible elements
+  function processElement(element: Element): void {
+    // Skip invisible elements
+    if (!isElementVisible(element)) {
+      return;
+    }
+    
+    const tagName = element.tagName.toLowerCase();
+    
+    // Skip non-content elements
+    if (['script', 'style', 'noscript', 'nav', 'footer', 'header', 'aside', 'svg', 'canvas', 'video', 'audio', 'iframe'].includes(tagName)) {
+      return;
+    }
+    
+    // Skip elements that are likely navigation/chrome
+    const className = (element.className || '').toLowerCase();
+    const id = (element.id || '').toLowerCase();
+    if (/nav|menu|sidebar|toolbar|modal|popup|overlay|cookie|consent|banner/i.test(className + ' ' + id)) {
+      return;
+    }
+    
+    // Handle images
+    if (tagName === 'img') {
+      const imgEl = element as HTMLImageElement;
+      const src = getImageSrc(imgEl);
+      if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
+        seenImages.add(src);
+        images.push({
+          src: makeAbsoluteUrl(src),
+          alt: imgEl.alt || '',
+          caption: getFigureCaption(imgEl),
+          width: imgEl.naturalWidth || imgEl.width || 0,
+          height: imgEl.naturalHeight || imgEl.height || 0,
+        });
+      }
+      return;
+    }
+    
+    // Handle text-containing elements
+    if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th', 'blockquote', 'pre', 'code'].includes(tagName)) {
+      const text = element.textContent?.trim();
+      if (text && text.length > 10) {
+        textParts.push(text);
+        
+        // Clone for HTML
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll('script, style').forEach(el => el.remove());
+        htmlParts.push(clone.outerHTML);
+      }
+      return;
+    }
+    
+    // Recurse into children for container elements
+    for (const child of element.children) {
+      processElement(child);
+    }
+  }
+  
+  // Start from body
+  processElement(document.body);
+  
+  const textContent = cleanText(textParts.join('\n\n'));
+  const htmlContent = htmlParts.join('\n');
+  
+  log.debug('[ContentExtractor] Visible content extraction got:', textContent.length, 'chars,', images.length, 'images');
+  
+  return {
+    title,
+    byline: extractByline(),
+    excerpt: textContent.substring(0, 200).trim() + (textContent.length > 200 ? '...' : ''),
+    content: htmlContent || `<div>${textContent.split('\n\n').map(p => `<p>${escapeHtml(p)}</p>`).join('')}</div>`,
+    textContent,
+    images,
+    url: window.location.href,
+    siteName: extractSiteName(),
+    publishedDate: extractDate(),
+    readingTime: estimateReadingTime(textContent),
+  };
+}
+
+/**
  * Generate a clean reader-view HTML document
  */
 export function generateReaderView(content: ExtractedContent): string {

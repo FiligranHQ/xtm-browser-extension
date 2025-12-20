@@ -318,7 +318,7 @@ const App: React.FC = () => {
       });
     });
     
-    chrome.runtime.sendMessage({ type: 'FETCH_IDENTITIES', payload: { platformId: targetPlatformId } }, (response) => {
+    chrome.runtime.sendMessage({ type: 'SEARCH_IDENTITIES', payload: { search: '', first: 50, platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) setAvailableAuthors(response.data);
     });

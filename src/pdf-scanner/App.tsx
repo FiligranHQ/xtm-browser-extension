@@ -23,22 +23,6 @@ import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import { getHighlightColors, getStatusIconColor } from '../shared/utils/highlight-colors';
 import type { ScanResultPayload } from '../shared/types/messages';
-import RelationshipLinesOverlay from './RelationshipLinesOverlay';
-
-interface RelationshipData {
-  fromValue: string;
-  toValue: string;
-  relationshipType: string;
-  confidence?: 'high' | 'medium' | 'low';
-}
-
-interface HighlightPosition {
-  entityValue: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 // PDF.js imports
 import * as pdfjsLib from 'pdfjs-dist';
@@ -404,10 +388,88 @@ async function renderHighlightsOnCanvas(
   // Track which entity occurrences have been drawn to avoid duplicate highlights at same position
   const drawnPositions = new Set<string>();
 
-  textContent.items.forEach((item) => {
+  // Build a structure that combines adjacent text items on the same line
+  // This handles tables and other cases where text is split across multiple items
+  interface CharPosition {
+    item: TextItem;
+    charIndex: number; // Index within the item's str
+    globalIndex: number; // Index in combined text
+  }
+  
+  interface TextLine {
+    items: TextItem[];
+    combinedText: string;
+    charMap: CharPosition[]; // Maps global char index to item + local char index
+    y: number; // Base Y position for this line
+  }
+  
+  // Group text items by Y position (same line) with tolerance
+  const Y_TOLERANCE = 3; // Pixels tolerance for same-line detection
+  const lines: TextLine[] = [];
+  
+  // Sort items by Y position (top to bottom), then X (left to right)
+  const sortedItems = [...textContent.items].sort((a, b) => {
+    const itemA = a as TextItem;
+    const itemB = b as TextItem;
+    const yA = itemA.transform[5];
+    const yB = itemB.transform[5];
+    if (Math.abs(yA - yB) > Y_TOLERANCE) {
+      return yB - yA; // Higher Y = higher on page in PDF coords (inverted)
+    }
+    return itemA.transform[4] - itemB.transform[4]; // Sort by X (left to right)
+  });
+  
+  // Group into lines
+  sortedItems.forEach((item) => {
     const textItem = item as TextItem;
-    const textStr = textItem.str;
-    const textLower = textStr.toLowerCase();
+    if (!textItem.str) return; // Skip empty items
+    
+    const itemY = textItem.transform[5];
+    
+    // Find existing line within Y tolerance
+    const existingLine = lines.find(line => Math.abs(line.y - itemY) <= Y_TOLERANCE);
+    
+    if (existingLine) {
+      existingLine.items.push(textItem);
+    } else {
+      lines.push({
+        items: [textItem],
+        combinedText: '',
+        charMap: [],
+        y: itemY,
+      });
+    }
+  });
+  
+  // Build combined text and character map for each line
+  lines.forEach(line => {
+    // Sort items in line by X position (left to right)
+    line.items.sort((a, b) => a.transform[4] - b.transform[4]);
+    
+    let combinedText = '';
+    const charMap: CharPosition[] = [];
+    
+    line.items.forEach((item) => {
+      const startGlobalIndex = combinedText.length;
+      
+      for (let i = 0; i < item.str.length; i++) {
+        charMap.push({
+          item,
+          charIndex: i,
+          globalIndex: startGlobalIndex + i,
+        });
+      }
+      
+      combinedText += item.str;
+    });
+    
+    line.combinedText = combinedText;
+    line.charMap = charMap;
+  });
+  
+  // Now search for entities in combined line text
+  lines.forEach((line) => {
+    const textLower = line.combinedText.toLowerCase();
     
     allEntities.forEach((entity) => {
       const entityValue = 'value' in entity && entity.value ? entity.value : 'name' in entity && entity.name ? entity.name : '';
@@ -433,19 +495,37 @@ async function renderHighlightsOnCanvas(
         if (isWordBoundaryBefore && isWordBoundaryAfter) {
           const entityKey = getEntityKey(entity);
           
-          const [, , , fontHeight, x, y] = textItem.transform;
+          // Get the characters that make up this match from the charMap
+          const matchEndIndex = matchIndex + searchValue.length;
+          const startCharPos = line.charMap[matchIndex];
+          const endCharPos = line.charMap[matchEndIndex - 1];
+          
+          if (!startCharPos || !endCharPos) {
+            searchIndex = matchIndex + 1;
+            continue;
+          }
+          
+          // Get the first item for font height and Y position
+          const firstItem = startCharPos.item;
+          const lastItem = endCharPos.item;
+          
+          const [, , , fontHeight, , y] = firstItem.transform;
           const baseHeight = fontHeight * viewport.scale;
-          // Keep height close to text size - minimal expansion
           const height = Math.max(baseHeight * 1.05, 12);
           
-          // Calculate the position of this specific match within the text item
-          // Use character ratio to estimate position (PDF.js doesn't give per-char positions)
-          const fullTextWidth = textItem.width;
-          const charWidth = textStr.length > 0 ? fullTextWidth / textStr.length : 0;
-          const matchOffset = matchIndex * charWidth;
-          const matchWidth = searchValue.length * charWidth;
+          // Calculate X position: start of first item + offset to match start
+          const firstItemX = firstItem.transform[4];
+          const firstItemCharWidth = firstItem.str.length > 0 ? firstItem.width / firstItem.str.length : 0;
+          const startX = firstItemX + (startCharPos.charIndex * firstItemCharWidth);
           
-          const scaledX = (x + matchOffset) * viewport.scale;
+          // Calculate end X position: position in last item
+          const lastItemX = lastItem.transform[4];
+          const lastItemCharWidth = lastItem.str.length > 0 ? lastItem.width / lastItem.str.length : 0;
+          const endX = lastItemX + ((endCharPos.charIndex + 1) * lastItemCharWidth);
+          
+          const matchWidth = endX - startX;
+          
+          const scaledX = startX * viewport.scale;
           const scaledY = canvas.height - (y * viewport.scale) - baseHeight - (height - baseHeight) / 2;
           const textWidth = matchWidth * viewport.scale;
           
@@ -458,10 +538,7 @@ async function renderHighlightsOnCanvas(
           drawnPositions.add(positionKey);
           
           // Determine if entity is OpenAEV-only (not selectable for OpenCTI import)
-          // OpenAEV entities have type starting with 'oaev-'
           const isOpenAEVOnly = entity.type?.startsWith('oaev-') || false;
-          // Show checkbox only for entities that can be imported to OpenCTI
-          // (not found entities that aren't OpenAEV-only, OR found entities that aren't OpenAEV-only for dual state)
           const showCheckbox = !isOpenAEVOnly || !entity.found;
           
           // Compact padding for checkbox (left) and icon (right)
@@ -471,122 +548,122 @@ async function renderHighlightsOnCanvas(
           const leftPadding = showCheckbox ? checkboxSize + padding * 2 : padding;
           const rightPadding = iconSize + padding * 2;
           const totalWidth = textWidth + leftPadding + rightPadding;
-        
-        const isSelected = selectedEntities.has(entityKey);
-        const isAIDiscovered = entity.discoveredByAI === true;
-        
-        // Get colors using shared utility - selection adds hover effect
-        const { background: bgColor, outline: outlineColor } = getHighlightColors({
-          found: entity.found,
-          discoveredByAI: isAIDiscovered,
-          isSelected,
-        });
-        
-        const highlightX = scaledX - leftPadding;
-        const highlightY = scaledY - padding;
-        const highlightWidth = totalWidth;
-        const highlightHeight = height + padding * 2;
-        
-        // Draw background
-        context.fillStyle = bgColor;
-        context.beginPath();
-        context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
-        context.fill();
-        
-        // Draw outline
-        context.strokeStyle = outlineColor;
-        context.lineWidth = 1;
-        context.beginPath();
-        context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
-        context.stroke();
-        
-        // Draw checkbox on the left (only for entities that can be imported to OpenCTI)
-        if (showCheckbox) {
-          const checkboxX = highlightX + padding;
-          const checkboxY = highlightY + (highlightHeight - checkboxSize) / 2;
           
+          const isSelected = selectedEntities.has(entityKey);
+          const isAIDiscovered = entity.discoveredByAI === true;
+          
+          // Get colors using shared utility - selection adds hover effect
+          const { background: bgColor, outline: outlineColor } = getHighlightColors({
+            found: entity.found,
+            discoveredByAI: isAIDiscovered,
+            isSelected,
+          });
+          
+          const highlightX = scaledX - leftPadding;
+          const highlightY = scaledY - padding;
+          const highlightWidth = totalWidth;
+          const highlightHeight = height + padding * 2;
+          
+          // Draw background
+          context.fillStyle = bgColor;
+          context.beginPath();
+          context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
+          context.fill();
+          
+          // Draw outline
           context.strokeStyle = outlineColor;
           context.lineWidth = 1;
           context.beginPath();
-          context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
+          context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
           context.stroke();
           
-          if (isSelected) {
-            // Fill checkbox
-            context.fillStyle = outlineColor;
-            context.beginPath();
-            context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
-            context.fill();
+          // Draw checkbox on the left (only for entities that can be imported to OpenCTI)
+          if (showCheckbox) {
+            const checkboxX = highlightX + padding;
+            const checkboxY = highlightY + (highlightHeight - checkboxSize) / 2;
             
-            // Draw checkmark
-            context.strokeStyle = 'white';
+            context.strokeStyle = outlineColor;
             context.lineWidth = 1;
             context.beginPath();
-            context.moveTo(checkboxX + checkboxSize * 0.2, checkboxY + checkboxSize * 0.5);
-            context.lineTo(checkboxX + checkboxSize * 0.4, checkboxY + checkboxSize * 0.7);
-            context.lineTo(checkboxX + checkboxSize * 0.8, checkboxY + checkboxSize * 0.3);
+            context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
             context.stroke();
-          }
-        }
-        
-        // Draw status icon on the right
-        const iconX = highlightX + highlightWidth - iconSize - padding;
-        const iconY = highlightY + (highlightHeight - iconSize) / 2;
-        
-        // Get icon color using shared utility
-        const iconColor = getStatusIconColor({ found: entity.found, discoveredByAI: isAIDiscovered });
-        
-        if (isAIDiscovered) {
-          // Draw AI sparkle/star icon for AI-discovered entities
-          const cx = iconX + iconSize / 2;
-          const cy = iconY + iconSize / 2;
-          const r = iconSize / 2 - 1;
-          
-          context.fillStyle = iconColor;
-          context.beginPath();
-          // Draw a simple 4-point star (sparkle)
-          for (let i = 0; i < 4; i++) {
-            const angle = (i * Math.PI / 2) - Math.PI / 2;
-            const outerX = cx + Math.cos(angle) * r;
-            const outerY = cy + Math.sin(angle) * r;
-            const innerAngle = angle + Math.PI / 4;
-            const innerX = cx + Math.cos(innerAngle) * (r * 0.4);
-            const innerY = cy + Math.sin(innerAngle) * (r * 0.4);
             
-            if (i === 0) {
-              context.moveTo(outerX, outerY);
-            } else {
-              context.lineTo(outerX, outerY);
+            if (isSelected) {
+              // Fill checkbox
+              context.fillStyle = outlineColor;
+              context.beginPath();
+              context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
+              context.fill();
+              
+              // Draw checkmark
+              context.strokeStyle = 'white';
+              context.lineWidth = 1;
+              context.beginPath();
+              context.moveTo(checkboxX + checkboxSize * 0.2, checkboxY + checkboxSize * 0.5);
+              context.lineTo(checkboxX + checkboxSize * 0.4, checkboxY + checkboxSize * 0.7);
+              context.lineTo(checkboxX + checkboxSize * 0.8, checkboxY + checkboxSize * 0.3);
+              context.stroke();
             }
-            context.lineTo(innerX, innerY);
           }
-          context.closePath();
-          context.fill();
-        } else if (entity.found) {
-          // Draw checkmark icon for found
-          context.strokeStyle = iconColor;
-          context.lineWidth = 1.5;
-          context.beginPath();
-          context.moveTo(iconX + iconSize * 0.15, iconY + iconSize * 0.5);
-          context.lineTo(iconX + iconSize * 0.4, iconY + iconSize * 0.75);
-          context.lineTo(iconX + iconSize * 0.85, iconY + iconSize * 0.25);
-          context.stroke();
-        } else {
-          // Draw info circle icon for not found
-          context.strokeStyle = iconColor;
-          context.lineWidth = 1;
-          context.beginPath();
-          context.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2 - 1, 0, Math.PI * 2);
-          context.stroke();
           
-          // Draw "i" in the circle
-          context.fillStyle = iconColor;
-          context.font = `bold ${iconSize * 0.6}px sans-serif`;
-          context.textAlign = 'center';
-          context.textBaseline = 'middle';
-          context.fillText('i', iconX + iconSize / 2, iconY + iconSize / 2 + 1);
-        }
-        
+          // Draw status icon on the right
+          const iconX = highlightX + highlightWidth - iconSize - padding;
+          const iconY = highlightY + (highlightHeight - iconSize) / 2;
+          
+          // Get icon color using shared utility
+          const iconColor = getStatusIconColor({ found: entity.found, discoveredByAI: isAIDiscovered });
+          
+          if (isAIDiscovered) {
+            // Draw AI sparkle/star icon for AI-discovered entities
+            const cx = iconX + iconSize / 2;
+            const cy = iconY + iconSize / 2;
+            const r = iconSize / 2 - 1;
+            
+            context.fillStyle = iconColor;
+            context.beginPath();
+            // Draw a simple 4-point star (sparkle)
+            for (let i = 0; i < 4; i++) {
+              const angle = (i * Math.PI / 2) - Math.PI / 2;
+              const outerX = cx + Math.cos(angle) * r;
+              const outerY = cy + Math.sin(angle) * r;
+              const innerAngle = angle + Math.PI / 4;
+              const innerX = cx + Math.cos(innerAngle) * (r * 0.4);
+              const innerY = cy + Math.sin(innerAngle) * (r * 0.4);
+              
+              if (i === 0) {
+                context.moveTo(outerX, outerY);
+              } else {
+                context.lineTo(outerX, outerY);
+              }
+              context.lineTo(innerX, innerY);
+            }
+            context.closePath();
+            context.fill();
+          } else if (entity.found) {
+            // Draw checkmark icon for found
+            context.strokeStyle = iconColor;
+            context.lineWidth = 1.5;
+            context.beginPath();
+            context.moveTo(iconX + iconSize * 0.15, iconY + iconSize * 0.5);
+            context.lineTo(iconX + iconSize * 0.4, iconY + iconSize * 0.75);
+            context.lineTo(iconX + iconSize * 0.85, iconY + iconSize * 0.25);
+            context.stroke();
+          } else {
+            // Draw info circle icon for not found
+            context.strokeStyle = iconColor;
+            context.lineWidth = 1;
+            context.beginPath();
+            context.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2 - 1, 0, Math.PI * 2);
+            context.stroke();
+            
+            // Draw "i" in the circle
+            context.fillStyle = iconColor;
+            context.font = `bold ${iconSize * 0.6}px sans-serif`;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText('i', iconX + iconSize / 2, iconY + iconSize / 2 + 1);
+          }
+          
           // Store region for click detection
           regions.push({
             x: highlightX,
@@ -621,8 +698,6 @@ export default function App() {
   const [selectedEntities, setSelectedEntities] = useState<Set<string>>(new Set());
   const [hoveredEntity, setHoveredEntity] = useState<{ entity: ScanEntity; x: number; y: number } | null>(null);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
-  const [relationships, setRelationships] = useState<RelationshipData[]>([]);
-  const [highlightPositions, setHighlightPositions] = useState<Map<string, HighlightPosition[]>>(new Map());
   
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -845,52 +920,6 @@ export default function App() {
     }
   }, []);
 
-  // Handle highlight positions update from PageRenderer
-  const handleHighlightPositions = useCallback((pageNumber: number, positions: Array<{ entityValue: string; x: number; y: number; width: number; height: number }>) => {
-    setHighlightPositions(prev => {
-      const newMap = new Map(prev);
-      
-      // Get the page container to calculate absolute positions
-      const pagesContainer = pagesContainerRef.current;
-      if (!pagesContainer) return prev;
-      
-      const pageElements = pagesContainer.querySelectorAll('[data-page-number]');
-      let pageOffsetY = 0;
-      
-      // Calculate the vertical offset for this page
-      for (const pageEl of pageElements) {
-        const pn = parseInt(pageEl.getAttribute('data-page-number') || '0', 10);
-        if (pn === pageNumber) break;
-        pageOffsetY += pageEl.getBoundingClientRect().height + 24; // 24px gap between pages
-      }
-      
-      positions.forEach(pos => {
-        const key = pos.entityValue.toLowerCase();
-        const existingPositions = newMap.get(key) || [];
-        
-        // Add this position with page offset
-        const newPosition: HighlightPosition = {
-          entityValue: pos.entityValue,
-          x: pos.x,
-          y: pos.y + pageOffsetY,
-          width: pos.width,
-          height: pos.height,
-        };
-        
-        // Check if we already have this exact position
-        const exists = existingPositions.some(
-          p => Math.abs(p.x - newPosition.x) < 5 && Math.abs(p.y - newPosition.y) < 5
-        );
-        
-        if (!exists) {
-          newMap.set(key, [...existingPositions, newPosition]);
-        }
-      });
-      
-      return newMap;
-    });
-  }, []);
-
   // Send scan results to the panel
   // In iframe mode: opens panel automatically
   // In split screen mode: only sends results (user must click button to open)
@@ -1015,8 +1044,6 @@ export default function App() {
         setScanResults(null);
         setSelectedEntities(new Set());
         setHoveredEntity(null);
-        setRelationships([]);
-        setHighlightPositions(new Map());
         chrome.runtime.sendMessage({
           type: 'FORWARD_TO_PANEL',
           payload: { type: 'CLEAR_SCAN_RESULTS' },
@@ -1027,8 +1054,6 @@ export default function App() {
         setScanResults(null);
         setSelectedEntities(new Set());
         setHoveredEntity(null);
-        setRelationships([]);
-        setHighlightPositions(new Map());
         sendResponse({ success: true });
       } else if (message.type === 'ADD_AI_ENTITIES_TO_PDF') {
         // Add AI-discovered entities from panel to scanResults
@@ -1065,15 +1090,6 @@ export default function App() {
             url: pdfUrlRef.current,
           },
         });
-      } else if (message.type === 'DRAW_RELATIONSHIP_LINES') {
-        // Draw relationship lines between highlighted entities
-        const payload = message.payload as { relationships?: RelationshipData[] } | undefined;
-        const rels = payload?.relationships || [];
-        setRelationships(rels);
-        sendResponse({ success: true });
-      } else if (message.type === 'CLEAR_RELATIONSHIP_LINES') {
-        setRelationships([]);
-        sendResponse({ success: true });
       }
       return true;
     };
@@ -1090,11 +1106,6 @@ export default function App() {
       if (event.data?.type === 'XTM_CLOSE_PANEL') {
         // Close the iframe panel when X button is clicked inside the panel
         closeIframePanel();
-      } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
-        const rels = event.data.payload?.relationships || [];
-        setRelationships(rels);
-      } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
-        setRelationships([]);
       } else if (event.data?.type === 'XTM_GET_PDF_CONTENT') {
         // Panel iframe is requesting PDF content for AI analysis
         const fullText = pageTextsRef.current.join('\n');
@@ -1134,13 +1145,6 @@ export default function App() {
     return () => window.removeEventListener('message', handlePostMessage);
   }, [pdfUrl, closeIframePanel]);
 
-  // Clear highlight positions when scan results are cleared
-  useEffect(() => {
-    if (!scanResults) {
-      setHighlightPositions(new Map());
-      setRelationships([]);
-    }
-  }, [scanResults]);
 
   // Load PDF document
   useEffect(() => {
@@ -1422,18 +1426,8 @@ export default function App() {
               selectedEntities={selectedEntities}
               onEntityClick={handleEntityClick}
               onEntityHover={handleEntityHover}
-              onHighlightPositions={handleHighlightPositions}
             />
           ))}
-          
-          {/* Relationship lines overlay */}
-          {relationships.length > 0 && (
-            <RelationshipLinesOverlay
-              relationships={relationships}
-              containerRef={pagesContainerRef}
-              highlightPositions={highlightPositions}
-            />
-          )}
         </Box>
 
         {/* Tooltip for hovered entity */}

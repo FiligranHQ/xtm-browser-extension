@@ -314,6 +314,10 @@ export class OpenCTIClient {
   async fetchCities() { return this.fetchSDOsForCache('City'); }
   async fetchAdministrativeAreas() { return this.fetchSDOsForCache('Administrative-Area'); }
   async fetchPositions() { return this.fetchSDOsForCache('Position'); }
+  async fetchTools() { return this.fetchSDOsForCache('Tool'); }
+  async fetchNarratives() { return this.fetchSDOsForCache('Narrative'); }
+  async fetchChannels() { return this.fetchSDOsForCache('Channel'); }
+  async fetchSystems() { return this.fetchSDOsForCache('System'); }
 
   async fetchLocations(pageSize: number = DEFAULT_PAGE_SIZE): Promise<Array<{ id: string; name: string; aliases?: string[] }>> {
     const allResults: Array<{ id: string; name: string; aliases?: string[] }> = [];

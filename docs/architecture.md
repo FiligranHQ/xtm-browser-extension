@@ -102,9 +102,7 @@ src/content/
 ├── extraction.ts         # Content extraction for PDFs and descriptions
 ├── page-content.ts       # Page content utilities
 ├── panel.ts              # Side panel iframe management
-├── toast.ts              # Toast notification system
-├── relationship-lines.ts # Relationship line visualization between entities
-└── relationship-minimap.ts # Interactive graph mini-map for relationships
+└── toast.ts              # Toast notification system
 ```
 
 **Key State:**
@@ -243,10 +241,6 @@ src/shared/
 │   ├── ThemeDark.ts
 │   ├── ThemeLight.ts
 │   └── colors.ts
-├── visualization/        # Graph visualization utilities
-│   ├── graph-types.ts        # Relationship data and point interfaces
-│   ├── graph-layout.ts       # Bezier curve calculation utilities
-│   └── relationship-styles.ts # Line and label styling
 ├── components/           # Shared React components
 │   ├── ItemIcon.tsx      # Entity type icons
 │   ├── ActionButton.tsx  # Stylized action button
@@ -1043,111 +1037,6 @@ The `src/shared/visualization/` module provides shared graph visualization utili
 ### Module Structure
 
 ```
-src/shared/visualization/
-├── graph-types.ts        # TypeScript interfaces for relationship data
-├── graph-layout.ts       # Bezier curve calculation utilities
-├── line-geometry.ts      # Shared line geometry calculations
-└── relationship-styles.ts # Styling constants and helpers
-```
-
-### Graph Types (`graph-types.ts`)
-
-Common TypeScript interfaces for graph visualization:
-
-```typescript
-interface GraphNode {
-  id: string;
-  label: string;
-  type: string;
-  color: string;
-  x?: number;
-  y?: number;
-}
-
-interface GraphEdge {
-  source: string;
-  target: string;
-  label: string;
-}
-
-interface RelationshipData {
-  sourceEntityId: string;
-  targetEntityId: string;
-  relationshipType: string;
-}
-```
-
-### Graph Layout (`graph-layout.ts`)
-
-Force-directed layout algorithm and geometry utilities:
-
-```typescript
-import { 
-  calculateLayout, 
-  calculateCurveControlPoints,
-  calculateLabelRotation,
-  getPointOnBezier 
-} from '@/shared/visualization';
-
-// Calculate force-directed layout for nodes
-const positionedNodes = calculateLayout(nodes, edges, width, height);
-
-// Calculate bezier curve control points for edge rendering
-const controlPoints = calculateCurveControlPoints(startPoint, endPoint, curveOffset);
-
-// Calculate rotation angle for edge label positioning
-const rotation = calculateLabelRotation(startPoint, endPoint);
-```
-
-### Relationship Styles (`relationship-styles.ts`)
-
-Styling constants and CSS utilities for consistent appearance across web and PDF:
-
-```typescript
-import { 
-  LINE_STYLES, 
-  LABEL_STYLES,
-  MINIMAP_STYLES,
-  GRAPH_NODE_STYLES,
-  getGraphNodeStyle,
-  getLineAnimationCSS 
-} from '../shared/visualization/relationship-styles';
-
-// Use predefined style constants
-const lineColor = LINE_STYLES.color;
-const lineWidth = LINE_STYLES.width;
-
-// Get graph node styling based on expanded state
-const style = getGraphNodeStyle(isExpanded);
-const { nodeRadius, fontSize, labelOffset } = style;
-
-// Generate CSS for animated line drawing (prefix for scoping)
-const animationCSS = getLineAnimationCSS('pdf');
-```
-
-**GRAPH_NODE_STYLES** ensures visual consistency between web page and PDF viewer:
-- `nodeRadiusSmall/Expanded` - Node circle radius
-- `fontSizeSmall/Expanded` - Label font sizes  
-- `labelOffsetSmall/Expanded` - Label positioning
-- `edgeCurveOffset` - Bezier curve control point offset
-- `edgeStrokeWidth/Opacity` - Edge line styling
-
-### Usage in Components
-
-**Content Script (relationship-lines.ts):**
-```typescript
-import { calculateCurveControlPoints, calculateLabelRotation, getPointOnBezier } from '../shared/visualization/graph-layout';
-import { LINE_STYLES, LABEL_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
-import type { RelationshipData, Point } from '../shared/visualization/graph-types';
-```
-
-**PDF Scanner (RelationshipLinesOverlay.tsx):**
-```typescript
-import { calculateCurveControlPoints, calculateLabelRotation, getPointOnBezier } from '../shared/visualization/graph-layout';
-import { LINE_STYLES, LABEL_STYLES, ANIMATION_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
-import type { RelationshipData, HighlightPosition, Point } from '../shared/visualization/graph-types';
-```
-
 ## Panel Display Modes
 
 The extension supports two panel display modes, configurable in Settings > Appearance:

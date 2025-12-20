@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **AI Relationship Discovery**: New AI-powered relationship discovery directly from scan results with visual relationship lines on pages and PDFs
-- **Relationship Graph Mini-Map**: Interactive graph visualization showing entities and their relationships with force-directed layout
+- **AI Relationship Discovery**: New AI-powered relationship discovery directly from scan results
 - **Clear All Button**: Button to clear all highlights, results, and selections while staying on scan results view
 - **New OpenCTI Entity Types**: Added support for Narrative, Channel, System, and Tool entity types
 
@@ -19,13 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **PDF Viewer**: Fixed iframe panel not closing and AI scanning not working in PDF viewer mode
+- **PDF Table Highlighting**: Fixed entities in PDF tables not being highlighted when text is split across multiple PDF text items (e.g., defanged IPs like `203.91.76[.]102` in table cells)
 - **Relationship Persistence**: Resolved relationships now preserved when navigating back from import screen
 - **Select All Behavior**: Fixed "Select all" sometimes visually selecting non-importable entities
 - **AI JSON Parsing**: Enhanced parsing with more robust strategies for handling truncated AI responses
 - **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
 
 ### Improved
-- Unified visual styling between web page and PDF viewer for relationship graph, minimap, and lines
 - Shared visualization constants ensure consistent appearance across all scan modes
 
 ## [0.0.12] - 2024-12-20

@@ -12,10 +12,6 @@ import {
   scrollToHighlightByValue,
 } from './highlighting';
 import {
-  drawRelationshipLines,
-  clearRelationshipLines,
-} from './relationship-lines';
-import {
   sendPanelMessage,
   hidePanel,
   showContainerPanel,
@@ -97,7 +93,6 @@ export function handleMessage(
       
     case 'CLEAR_HIGHLIGHTS':
       clearHighlights();
-      clearRelationshipLines();
       selectedForImport.clear();
       context.setCurrentScanMode(null);
       context.setLastScanData(null);
@@ -107,27 +102,9 @@ export function handleMessage(
     
     case 'CLEAR_HIGHLIGHTS_ONLY':
       clearHighlights();
-      clearRelationshipLines();
       selectedForImport.clear();
       context.setCurrentScanMode(null);
       context.setLastScanData(null);
-      sendResponse({ success: true });
-      return false;
-    
-    case 'DRAW_RELATIONSHIP_LINES': {
-      const payload = message.payload as { relationships?: unknown[] } | undefined;
-      const relationships = payload?.relationships || [];
-      if (relationships.length > 0) {
-        drawRelationshipLines(relationships as Parameters<typeof drawRelationshipLines>[0]);
-      } else {
-        clearRelationshipLines();
-      }
-      sendResponse({ success: true });
-      return false;
-    }
-    
-    case 'CLEAR_RELATIONSHIP_LINES':
-      clearRelationshipLines();
       sendResponse({ success: true });
       return false;
       

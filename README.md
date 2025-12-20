@@ -88,8 +88,6 @@ Generate AI-powered table-top exercises across diverse domains:
   - "Relations (AI)" for relationship discovery between entities
   - "Scan All (AI)" for combined entity and relationship discovery
 - 🔗 **Relationship Resolution** - AI identifies relationships using valid STIX 2.1 and OpenCTI relationship types only
-- 📊 **Relationship Visualization** - Visual lines connecting related entities on the page with relationship type labels
-- 🗺️ **Relationship Graph Mini-Map** - Interactive force-directed graph visualization showing entities and relationships, expandable to full-screen dialog
 - 📊 **Model Selection** - Browse and select from available models for each provider
 - 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
@@ -245,9 +243,7 @@ xtm-browser-extension/
 │   │   ├── extraction.ts        # Content extraction for PDFs
 │   │   ├── page-content.ts      # Page content utilities
 │   │   ├── panel.ts             # Side panel iframe management
-│   │   ├── toast.ts             # Toast notifications
-│   │   ├── relationship-lines.ts    # Relationship line visualization
-│   │   └── relationship-minimap.ts  # Relationship graph mini-map
+│   │   └── toast.ts             # Toast notifications
 │   │
 │   ├── panel/                   # Side panel (entity details, forms)
 │   │   ├── App.tsx              # Main orchestrator component
@@ -315,8 +311,6 @@ xtm-browser-extension/
 │   │
 │   ├── pdf-scanner/             # PDF viewer with scanning
 │   │   ├── App.tsx              # PDF viewer component
-│   │   ├── RelationshipLinesOverlay.tsx  # Relationship lines on PDF
-│   │   ├── RelationshipMinimap.tsx       # Graph mini-map for PDF
 │   │   ├── index.html           # Entry point
 │   │   └── main.tsx             # React entry
 │   │
@@ -350,11 +344,6 @@ xtm-browser-extension/
 │       │   ├── ThemeDark.ts
 │       │   ├── ThemeLight.ts
 │       │   └── colors.ts
-│       ├── visualization/       # Relationship line visualization utilities
-│       │   ├── graph-types.ts       # Relationship data and point interfaces
-│       │   ├── graph-layout.ts      # Bezier curve calculation utilities
-│       │   ├── line-geometry.ts     # Shared line geometry calculations
-│       │   └── relationship-styles.ts # Line and label styling
 │       ├── components/          # Shared React components
 │       │   ├── ItemIcon.tsx         # Entity type icons
 │       │   ├── ActionButton.tsx     # Stylized action button

@@ -39,10 +39,6 @@ import {
   scrollToHighlightByValue,
   buildNodeMap,
 } from './highlighting';
-import {
-  drawRelationshipLines,
-  clearRelationshipLines,
-} from './relationship-lines';
 import { handleMessage, type MessageHandlerContext } from './message-handlers';
 import {
   sendPanelMessage,
@@ -225,7 +221,6 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     hidePanel();
   } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS') {
     clearHighlights();
-    clearRelationshipLines();
     currentScanMode = null;
     lastScanData = null;
     // Notify panel to clear scan results and reset to empty state
@@ -233,23 +228,8 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
   } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS_ONLY') {
     // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
     clearHighlights();
-    clearRelationshipLines();
     currentScanMode = null;
     lastScanData = null;
-  } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
-    // Draw relationship lines between highlighted entities
-    const relationships = event.data.payload?.relationships || [];
-    log.info('[XTM] Received XTM_DRAW_RELATIONSHIP_LINES:', relationships.length, 'relationships');
-    if (relationships.length > 0) {
-      log.info('[XTM] Drawing relationship lines...');
-      drawRelationshipLines(relationships);
-      log.info('[XTM] Relationship lines drawn');
-    } else {
-      log.info('[XTM] No relationships to draw, clearing...');
-      clearRelationshipLines();
-    }
-  } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
-    clearRelationshipLines();
   } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
     // Update lastScanData with AI-discovered entities so they persist when panel re-opens
     const aiEntities = event.data.payload?.entities;

@@ -260,6 +260,11 @@ export interface OCTIEntityCache {
     'City': CachedOCTIEntity[];
     'Administrative-Area': CachedOCTIEntity[];
     'Position': CachedOCTIEntity[];
+    // Arsenal and techniques
+    'Tool': CachedOCTIEntity[];
+    'Narrative': CachedOCTIEntity[];
+    'Channel': CachedOCTIEntity[];
+    'System': CachedOCTIEntity[];
   };
 }
 
@@ -508,6 +513,10 @@ export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntity
       'City': [],
       'Administrative-Area': [],
       'Position': [],
+      'Tool': [],
+      'Narrative': [],
+      'Channel': [],
+      'System': [],
     },
   };
 }

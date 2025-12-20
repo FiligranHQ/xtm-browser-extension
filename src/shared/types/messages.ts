@@ -112,8 +112,6 @@ export type MessageType =
   | 'FORWARD_TO_PDF_SCANNER'
   // Content Script Highlight Control
   | 'CLEAR_HIGHLIGHTS_ONLY'
-  | 'DRAW_RELATIONSHIP_LINES'
-  | 'CLEAR_RELATIONSHIP_LINES'
   // PDF Content for AI
   | 'GET_PDF_CONTENT'
   | 'GET_PDF_CONTENT_FROM_PDF_SCANNER';

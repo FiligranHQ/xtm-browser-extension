@@ -4,7 +4,7 @@
  * Displays scan results with filtering, selection, and import functionality.
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -33,7 +33,7 @@ import {
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
   DeleteOutlined,
-  ClearAllOutlined,
+  LayersClearOutlined,
   PlaylistAddCheckOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
@@ -134,94 +134,6 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   const [activeTab, setActiveTab] = useState(0);
   // Track when "Scan all" is specifically running (vs individual scans)
   const [scanAllRunning, setScanAllRunning] = useState(false);
-
-  // Send relationship lines and graph data to content script when relationships change
-  useEffect(() => {
-    const sendRelationshipLines = async () => {
-      if (resolvedRelationships.length > 0) {
-        const relationshipData = resolvedRelationships.map(rel => ({
-          fromValue: rel.fromEntityValue || '',
-          toValue: rel.toEntityValue || '',
-          relationshipType: rel.relationshipType,
-          confidence: rel.confidence,
-        })).filter(r => r.fromValue && r.toValue);
-
-        const payload = { relationships: relationshipData };
-
-        // Send via postMessage for iframe mode (including PDF scanner)
-        window.parent.postMessage({
-          type: 'XTM_DRAW_RELATIONSHIP_LINES',
-          payload,
-        }, '*');
-
-        // Also try sending to window itself for PDF scanner where panel is embedded
-        window.postMessage({
-          type: 'XTM_DRAW_RELATIONSHIP_LINES',
-          payload,
-        }, '*');
-
-        // Send via chrome.tabs for split screen mode (regular web pages)
-        // AND forward to PDF scanner if on a PDF scanner tab
-        if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab?.id) {
-              const extensionId = chrome.runtime.id;
-              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
-              
-              if (isPdfScanner) {
-                // PDF scanner is an extension page, use runtime message forwarding
-                chrome.runtime.sendMessage({
-                  type: 'FORWARD_TO_PDF_SCANNER',
-                  payload: {
-                    type: 'DRAW_RELATIONSHIP_LINES',
-                    payload,
-                  },
-                }).catch(() => {});
-              } else {
-                // Regular web page, send directly to content script
-                chrome.tabs.sendMessage(tab.id, {
-                  type: 'DRAW_RELATIONSHIP_LINES',
-                  payload,
-                }).catch(() => {
-                  // Silently ignore - content script may not be injected
-                });
-              }
-            }
-          } catch {
-            // Silently ignore - chrome.tabs may not be available
-          }
-        }
-      } else {
-        // Clear relationship lines
-        window.parent.postMessage({ type: 'XTM_CLEAR_RELATIONSHIP_LINES' }, '*');
-        if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab?.id) {
-              const extensionId = chrome.runtime.id;
-              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
-              
-              if (isPdfScanner) {
-                chrome.runtime.sendMessage({
-                  type: 'FORWARD_TO_PDF_SCANNER',
-                  payload: {
-                    type: 'CLEAR_RELATIONSHIP_LINES',
-                  },
-                }).catch(() => {});
-              } else {
-                chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
-              }
-            }
-          } catch {
-            // Silently handle errors
-          }
-        }
-      }
-    };
-
-    sendRelationshipLines();
-  }, [resolvedRelationships, scanResultsEntities]);
 
   // Calculate statistics
   const scanResultsFoundCount = useMemo(() => 
@@ -1005,7 +917,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           <Button
             size="small"
             variant="outlined"
-            startIcon={<ClearAllOutlined sx={{ fontSize: '1rem' }} />}
+            startIcon={<LayersClearOutlined sx={{ fontSize: '1rem' }} />}
             onClick={() => {
               // Clear highlights only (without triggering redirect) - use CLEAR_HIGHLIGHTS_ONLY
               window.parent.postMessage({ type: 'XTM_CLEAR_HIGHLIGHTS_ONLY' }, '*');

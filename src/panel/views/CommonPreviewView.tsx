@@ -4,7 +4,7 @@
  * Displays selected entities for import with options for AI relationships and container creation.
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Typography,
@@ -96,86 +96,6 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
 }) => {
   // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
   const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
-
-  // Send relationship lines and graph data to content script when relationships change
-  useEffect(() => {
-    const sendRelationshipLines = async () => {
-      if (resolvedRelationships.length > 0) {
-        const relationshipData = resolvedRelationships.map(rel => ({
-          fromValue: rel.fromEntityValue || '',
-          toValue: rel.toEntityValue || '',
-          relationshipType: rel.relationshipType,
-          confidence: rel.confidence,
-        })).filter(r => r.fromValue && r.toValue);
-
-        const payload = { relationships: relationshipData };
-
-        // Send via postMessage for iframe mode
-        window.parent.postMessage({
-          type: 'XTM_DRAW_RELATIONSHIP_LINES',
-          payload,
-        }, '*');
-
-        // Send via chrome.tabs for split screen mode (regular web pages)
-        // AND forward to PDF scanner if on a PDF scanner tab
-        if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab?.id) {
-              const extensionId = chrome.runtime.id;
-              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
-              
-              if (isPdfScanner) {
-                // PDF scanner is an extension page, use runtime message forwarding
-                chrome.runtime.sendMessage({
-                  type: 'FORWARD_TO_PDF_SCANNER',
-                  payload: {
-                    type: 'DRAW_RELATIONSHIP_LINES',
-                    payload,
-                  },
-                }).catch(() => {});
-              } else {
-                // Regular web page, send directly to content script
-                chrome.tabs.sendMessage(tab.id, {
-                  type: 'DRAW_RELATIONSHIP_LINES',
-                  payload,
-                }).catch(() => {});
-              }
-            }
-          } catch {
-            // Silently handle errors
-          }
-        }
-      } else {
-        // Clear relationship lines
-        window.parent.postMessage({ type: 'XTM_CLEAR_RELATIONSHIP_LINES' }, '*');
-        if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab?.id) {
-              const extensionId = chrome.runtime.id;
-              const isPdfScanner = tab.url?.includes(`${extensionId}/pdf-scanner/`);
-              
-              if (isPdfScanner) {
-                chrome.runtime.sendMessage({
-                  type: 'FORWARD_TO_PDF_SCANNER',
-                  payload: {
-                    type: 'CLEAR_RELATIONSHIP_LINES',
-                  },
-                }).catch(() => {});
-              } else {
-                chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_RELATIONSHIP_LINES' }).catch(() => {});
-              }
-            }
-          } catch {
-            // Silently handle errors
-          }
-        }
-      }
-    };
-
-    sendRelationshipLines();
-  }, [resolvedRelationships, entitiesToAdd]);
 
   const handleRemoveEntity = (index: number, entity: EntityData) => {
     // Remove entity from the list

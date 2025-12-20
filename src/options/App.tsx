@@ -471,6 +471,12 @@ const App: React.FC = () => {
       })),
     };
     
+    // Check if platform configs have changed (URLs or tokens)
+    const platformsChanged = savedSettings && (
+      JSON.stringify(normalizedSettings.openctiPlatforms) !== JSON.stringify(savedSettings.openctiPlatforms) ||
+      JSON.stringify(normalizedSettings.openaevPlatforms) !== JSON.stringify(savedSettings.openaevPlatforms)
+    );
+    
     setSettings(normalizedSettings);
     
     try {
@@ -484,21 +490,24 @@ const App: React.FC = () => {
         setSettings(normalizedSettings);
         setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
         
-        setIsRefreshingCache(true);
-        const pollInterval = setInterval(async () => {
-          const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
-          if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
+        // Only poll for cache refresh status if platform settings changed
+        if (platformsChanged) {
+          setIsRefreshingCache(true);
+          const pollInterval = setInterval(async () => {
+            const statusResponse = await chrome.runtime.sendMessage({ type: 'GET_CACHE_REFRESH_STATUS' });
+            if (statusResponse?.success && !statusResponse.data?.isRefreshing) {
+              clearInterval(pollInterval);
+              setIsRefreshingCache(false);
+              await loadCacheStats();
+            }
+          }, 1000);
+          
+          setTimeout(() => {
             clearInterval(pollInterval);
             setIsRefreshingCache(false);
-            await loadCacheStats();
-          }
-        }, 1000);
-        
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          setIsRefreshingCache(false);
-          loadCacheStats();
-        }, 120000);
+            loadCacheStats();
+          }, 120000);
+        }
       } else {
         setSnackbar({ open: true, message: response?.error || 'Failed to save settings', severity: 'error' });
       }

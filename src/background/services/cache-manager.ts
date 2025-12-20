@@ -293,7 +293,7 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
   
   const cache: OCTIEntityCache = createEmptyOCTICache(platformId);
   let fetchErrors = 0;
-  const totalFetchTypes = 16; // Number of entity types we fetch
+  const totalFetchTypes = 20; // Number of entity types we fetch
   
   try {
     // Fetch each entity type in parallel for speed with better error logging
@@ -327,6 +327,10 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
       cities,
       administrativeAreas,
       positions,
+      tools,
+      narratives,
+      channels,
+      systems,
     ] = await Promise.all([
       fetchWithLog('Threat-Actor-Group', () => client.fetchThreatActorGroups()),
       fetchWithLog('Threat-Actor-Individual', () => client.fetchThreatActorIndividuals()),
@@ -344,6 +348,10 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
       fetchWithLog('City', () => client.fetchCities()),
       fetchWithLog('Administrative-Area', () => client.fetchAdministrativeAreas()),
       fetchWithLog('Position', () => client.fetchPositions()),
+      fetchWithLog('Tool', () => client.fetchTools()),
+      fetchWithLog('Narrative', () => client.fetchNarratives()),
+      fetchWithLog('Channel', () => client.fetchChannels()),
+      fetchWithLog('System', () => client.fetchSystems()),
     ]);
     
     // Map to CachedOCTIEntity format (minimal data: id, name, aliases, x_mitre_id, type)
@@ -376,6 +384,10 @@ async function refreshOCTICacheForPlatform(platformId: string, client: OpenCTICl
     cache.entities['City'] = mapToCachedOCTIEntity(cities, 'City');
     cache.entities['Administrative-Area'] = mapToCachedOCTIEntity(administrativeAreas, 'Administrative-Area');
     cache.entities['Position'] = mapToCachedOCTIEntity(positions, 'Position');
+    cache.entities['Tool'] = mapToCachedOCTIEntity(tools, 'Tool');
+    cache.entities['Narrative'] = mapToCachedOCTIEntity(narratives, 'Narrative');
+    cache.entities['Channel'] = mapToCachedOCTIEntity(channels, 'Channel');
+    cache.entities['System'] = mapToCachedOCTIEntity(systems, 'System');
     
     // Calculate totals
     let total = 0;

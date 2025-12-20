@@ -1,7 +1,8 @@
 /**
- * Relationship Lines Overlay
+ * Relationship Lines Overlay for Web Pages
  * 
  * Draws beautiful curved lines between highlighted entities to visualize relationships.
+ * Uses vanilla DOM manipulation (no React) for content script compatibility.
  */
 
 import { loggers } from '../shared/utils/logger';
@@ -10,7 +11,12 @@ import {
   calculateLabelRotation,
   getPointOnBezier,
 } from '../shared/visualization/graph-layout';
-import { LINE_STYLES, LABEL_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
+import {
+  adjustEndpoints,
+  calculateLabelDimensions,
+  generateCurvePath,
+} from '../shared/visualization/line-geometry';
+import { LINE_STYLES, LABEL_STYLES, ANIMATION_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
 import type { RelationshipData, Point } from '../shared/visualization/graph-types';
 
 const log = loggers.content;
@@ -198,29 +204,20 @@ function drawRelationshipLine(
   const start = getElementCenter(fromEl);
   const end = getElementCenter(toEl);
   
-  // Calculate offset for line endpoints
+  // Get element dimensions
   const fromRect = fromEl.getBoundingClientRect();
   const toRect = toEl.getBoundingClientRect();
   
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  // Adjust endpoints to edges of highlights
+  const adjusted = adjustEndpoints(
+    start, end,
+    fromRect.width, fromRect.height,
+    toRect.width, toRect.height
+  );
   
-  if (distance < 20) return; // Too close, skip
+  if (!adjusted) return; // Too close, skip
   
-  const unitX = dx / distance;
-  const unitY = dy / distance;
-  
-  // Move start and end to edges of highlights
-  const adjustedStart: Point = {
-    x: start.x + (fromRect.width / 2) * unitX * 0.8,
-    y: start.y + (fromRect.height / 2) * unitY * 0.8,
-  };
-  
-  const adjustedEnd: Point = {
-    x: end.x - (toRect.width / 2) * unitX * 0.8,
-    y: end.y - (toRect.height / 2) * unitY * 0.8,
-  };
+  const { adjustedStart, adjustedEnd } = adjusted;
   
   // Calculate curve control points
   const { cp1 } = calculateCurveControlPoints(adjustedStart, adjustedEnd, index, LINE_STYLES.curveOffset);
@@ -233,8 +230,7 @@ function drawRelationshipLine(
   
   // Draw the curved line
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  const d = `M ${adjustedStart.x} ${adjustedStart.y} Q ${cp1.x} ${cp1.y} ${adjustedEnd.x} ${adjustedEnd.y}`;
-  path.setAttribute('d', d);
+  path.setAttribute('d', generateCurvePath(adjustedStart, cp1, adjustedEnd));
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', LINE_STYLES.color);
   path.setAttribute('stroke-width', String(LINE_STYLES.width));
@@ -246,8 +242,8 @@ function drawRelationshipLine(
   path.style.cssText = `
     stroke-dasharray: 1000;
     stroke-dashoffset: 1000;
-    animation: xtm-draw-line 0.6s ease-out forwards;
-    animation-delay: ${index * 0.1}s;
+    animation: xtm-draw-line ${ANIMATION_STYLES.lineDrawDuration}s ease-out forwards;
+    animation-delay: ${index * ANIMATION_STYLES.staggerDelay}s;
   `;
   
   group.appendChild(path);
@@ -258,8 +254,7 @@ function drawRelationshipLine(
   
   // Create label
   const labelText = relationship.relationshipType;
-  const textWidth = labelText.length * (LABEL_STYLES.fontSize * 0.6) + LABEL_STYLES.padding * 2;
-  const textHeight = LABEL_STYLES.fontSize + LABEL_STYLES.padding * 2;
+  const { width: textWidth, height: textHeight } = calculateLabelDimensions(labelText);
   
   const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   labelGroup.setAttribute('transform', `translate(${mid.x}, ${mid.y}) rotate(${rotation})`);
@@ -295,8 +290,8 @@ function drawRelationshipLine(
   // Add fade-in animation to label
   labelGroup.style.cssText = `
     opacity: 0;
-    animation: xtm-fade-in 0.3s ease-out forwards;
-    animation-delay: ${index * 0.1 + 0.3}s;
+    animation: xtm-fade-in ${ANIMATION_STYLES.fadeInDuration}s ease-out forwards;
+    animation-delay: ${index * ANIMATION_STYLES.staggerDelay + ANIMATION_STYLES.fadeInDuration}s;
   `;
   
   group.appendChild(labelGroup);

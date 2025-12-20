@@ -353,6 +353,7 @@ xtm-browser-extension/
 │       ├── visualization/       # Relationship line visualization utilities
 │       │   ├── graph-types.ts       # Relationship data and point interfaces
 │       │   ├── graph-layout.ts      # Bezier curve calculation utilities
+│       │   ├── line-geometry.ts     # Shared line geometry calculations
 │       │   └── relationship-styles.ts # Line and label styling
 │       ├── components/          # Shared React components
 │       │   ├── ItemIcon.tsx         # Entity type icons

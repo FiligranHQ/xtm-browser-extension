@@ -48,7 +48,10 @@ export interface MessageHandlerContext {
   scanPageForAtomicTesting: () => Promise<void>;
   scanPageForScenario: () => Promise<void>;
   scanPageForInvestigation: (platformId?: string) => Promise<void>;
-  handleHighlightAIEntities: (entities: unknown[]) => { highlightedEntities: string[]; failedEntities: string[] };
+  handleHighlightAIEntities: (entities: unknown[]) => { 
+    highlightedEntities: Array<{ type: string; value: string; name: string }>;
+    failedEntities: Array<{ type: string; value: string; name: string }>;
+  };
   // State setters
   setCurrentScanMode: (mode: 'scan' | 'atomic' | 'scenario' | 'investigation' | null) => void;
   setLastScanData: (data: unknown | null) => void;

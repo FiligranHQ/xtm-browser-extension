@@ -11,7 +11,6 @@ import {
   Paper,
   Chip,
   Button,
-  Checkbox,
   FormControl,
   InputLabel,
   Select,
@@ -28,15 +27,11 @@ import {
 import {
   TravelExploreOutlined,
   SearchOutlined,
-  ChevronRightOutlined,
   ChevronLeftOutlined,
   ArrowForwardOutlined,
   AutoAwesomeOutlined,
   CheckBoxOutlined,
   CheckBoxOutlineBlankOutlined,
-  LayersOutlined,
-  GpsFixedOutlined,
-  InfoOutlined,
   DeleteOutlined,
   ClearAllOutlined,
   PlaylistAddCheckOutlined,
@@ -48,45 +43,17 @@ import type { ScanResultEntity, EntityData, MultiPlatformResult, ResolvedRelatio
 import { loggers } from '../../shared/utils/logger';
 import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
 import { getAiColor } from '../utils/platform-helpers';
-import { isDefaultPlatform, getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
-import { sendToContentScript } from '../utils/content-messaging';
+import { isDefaultPlatform } from '../../shared/platform/registry';
+import {
+  isSelectableForOpenCTI,
+  isFoundInOpenCTI,
+  filterEntities,
+  getPageContent,
+  buildEntitiesForAI,
+} from '../utils/scan-results-helpers';
+import { ScanResultsEntityItem } from '../components/scan-results/ScanResultsEntityItem';
 
 const log = loggers.panel;
-
-// Check if entity is selectable for OpenCTI import (not oaev-* type)
-const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {
-  return !entity.type.startsWith('oaev-');
-};
-
-// Check if entity is found in OpenCTI
-const isFoundInOpenCTI = (entity: ScanResultEntity): boolean => {
-  if (entity.found) {
-    // If it's a multi-platform entity, check if any platform is OpenCTI
-    if (entity.platformMatches && entity.platformMatches.length > 0) {
-      return entity.platformMatches.some(pm => pm.platformType === 'opencti');
-    }
-    // Single-platform fallback check
-    return entity.platformType === 'opencti' || !entity.platformType;
-  }
-  return false;
-};
-
-// Get unique types from platform matches for multi-type display
-// Uses cross-platform type mapping to deduplicate equivalent types (e.g., OCTI Attack-Pattern and OAEV AttackPattern)
-const getUniqueTypesFromMatches = (entity: ScanResultEntity): { types: string[]; hasMultipleTypes: boolean } => {
-  if (!entity.platformMatches || entity.platformMatches.length === 0) {
-    return { types: [getCanonicalTypeName(entity.type)], hasMultipleTypes: false };
-  }
-  // Get all types and deduplicate using cross-platform mapping
-  const allTypes = entity.platformMatches.map(pm => pm.type);
-  const uniqueCanonicalTypes = getUniqueCanonicalTypes(allTypes);
-  return { types: uniqueCanonicalTypes, hasMultipleTypes: uniqueCanonicalTypes.length > 1 };
-};
-
-// Format type name for display - uses canonical type name for cross-platform consistency
-const formatTypeName = (type: string): string => {
-  return getCanonicalTypeName(type);
-};
 
 interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showToast' | 'entitiesToAdd' | 'setContainerWorkflowOrigin'> {
   /** Show toast notification */
@@ -281,34 +248,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
 
   // Filter entities based on current filters
   const filteredScanResultsEntities = useMemo(() => {
-    let filtered = scanResultsEntities;
-    
-    // Apply found/not-found/AI filter
-    if (scanResultsFoundFilter === 'found') {
-      filtered = filtered.filter(e => e.found && !e.discoveredByAI);
-    } else if (scanResultsFoundFilter === 'not-found') {
-      filtered = filtered.filter(e => !e.found && !e.discoveredByAI);
-    } else if (scanResultsFoundFilter === 'ai-discovered') {
-      filtered = filtered.filter(e => e.discoveredByAI);
-    }
-    
-    // Apply type filter
-    if (scanResultsTypeFilter !== 'all') {
-      filtered = filtered.filter(e => e.type === scanResultsTypeFilter);
-    }
-    
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(e => {
-        const name = (e.name || '').toLowerCase();
-        const value = (e.value || '').toLowerCase();
-        const type = (e.type || '').toLowerCase().replace(/-/g, ' ');
-        return name.includes(query) || value.includes(query) || type.includes(query);
-      });
-    }
-    
-    return filtered;
+    return filterEntities(scanResultsEntities, scanResultsFoundFilter, scanResultsTypeFilter, searchQuery);
   }, [scanResultsEntities, scanResultsFoundFilter, scanResultsTypeFilter, searchQuery]);
 
   // Handle entity click - navigate to entity view
@@ -491,62 +431,12 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     setAiDiscoveringEntities(true);
 
     try {
-      // Get page content
-      let pageContent = scanPageContent;
-      let pageTitle = currentPageTitle || '';
-      let pageUrl = currentPageUrl || '';
-
-      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-        try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id && tab.url) {
-            const extensionId = chrome.runtime.id;
-            // Check if this is a PDF scanner page (extension page - can't use content script)
-            const isPdfScannerPage = tab.url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
-                                    tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
-            
-            if (isPdfScannerPage) {
-              // For PDF scanner, request content via postMessage to parent (works in iframe mode)
-              try {
-                const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
-                  
-                  // Listen for response from PDF scanner
-                  const handleResponse = (event: MessageEvent) => {
-                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
-                      clearTimeout(timeout);
-                      window.removeEventListener('message', handleResponse);
-                      resolve(event.data.payload || { success: false });
-                    }
-                  };
-                  window.addEventListener('message', handleResponse);
-                  
-                  // Request content from PDF scanner via postMessage
-                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
-                });
-                
-                if (pdfContentResponse?.success) {
-                  pageContent = pdfContentResponse.data?.content || '';
-                  pageTitle = pdfContentResponse.data?.title || pageTitle;
-                  pageUrl = pdfContentResponse.data?.url || pageUrl;
-                }
-              } catch {
-                // PDF scanner might not respond, that's okay if scanPageContent is empty
-              }
-            } else {
-              // Regular page - use content script
-              const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-              if (contentResponse?.success) {
-                pageContent = contentResponse.data?.content || '';
-                pageTitle = contentResponse.data?.title || pageTitle;
-                pageUrl = contentResponse.data?.url || tab.url || pageUrl;
-              }
-            }
-          }
-        } catch {
-          // Silently handle page content retrieval errors
-        }
-      }
+      // Get page content using shared helper
+      const { content: pageContent, title: pageTitle, url: pageUrl } = await getPageContent(
+        scanPageContent,
+        currentPageTitle || '',
+        currentPageUrl || ''
+      );
 
       if (!pageContent) {
         showToast({ type: 'error', message: 'Could not get page content for AI analysis' });
@@ -554,23 +444,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         return;
       }
 
-      // Get existing entities for context (use alreadyDetected as expected by handler)
-      // Include name, value, aliases, x_mitre_id, and externalId for comprehensive deduplication
-      const alreadyDetected = scanResultsEntities.map(e => {
-        const entityData = e.entityData as Record<string, unknown> | undefined;
-        return {
-          type: e.type,
-          value: e.value || e.name,
-          name: e.name || e.value,
-          // Include aliases from entityData if available
-          aliases: entityData?.aliases as string[] | undefined 
-            || entityData?.x_opencti_aliases as string[] | undefined,
-          // Include MITRE ATT&CK ID if available
-          externalId: entityData?.x_mitre_id as string | undefined
-            || entityData?.external_id as string | undefined
-            || (entityData?.externalReferences as Array<{ external_id?: string }> | undefined)?.[0]?.external_id,
-        };
-      });
+      // Get existing entities for context using shared helper
+      const alreadyDetected = buildEntitiesForAI(scanResultsEntities);
 
       // Call AI discovery
       chrome.runtime.sendMessage(
@@ -763,57 +638,12 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     setAiResolvingRelationships(true);
 
     try {
-      // Get page content
-      let pageContent = scanPageContent;
-      let pageTitle = currentPageTitle || '';
-      let pageUrl = currentPageUrl || '';
-
-      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-        try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id && tab.url) {
-            const extensionId = chrome.runtime.id;
-            const isPdfScannerPage = tab.url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
-                                    tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
-            
-            if (isPdfScannerPage) {
-              // For PDF scanner, request content via postMessage to parent
-              try {
-                const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
-                  
-                  const handleResponse = (event: MessageEvent) => {
-                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
-                      clearTimeout(timeout);
-                      window.removeEventListener('message', handleResponse);
-                      resolve(event.data.payload || { success: false });
-                    }
-                  };
-                  window.addEventListener('message', handleResponse);
-                  
-                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
-                });
-                if (pdfContentResponse?.success) {
-                  pageContent = pdfContentResponse.data?.content || '';
-                  pageTitle = pdfContentResponse.data?.title || pageTitle;
-                  pageUrl = pdfContentResponse.data?.url || pageUrl;
-                }
-              } catch {
-                // PDF scanner might not respond
-              }
-            } else {
-              const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-              if (contentResponse?.success) {
-                pageContent = contentResponse.data?.content || '';
-                pageTitle = contentResponse.data?.title || pageTitle;
-                pageUrl = contentResponse.data?.url || tab.url || pageUrl;
-              }
-            }
-          }
-        } catch {
-          // Silently handle page content retrieval errors
-        }
-      }
+      // Get page content using shared helper
+      const { content: pageContent, title: pageTitle, url: pageUrl } = await getPageContent(
+        scanPageContent,
+        currentPageTitle || '',
+        currentPageUrl || ''
+      );
 
       if (!pageContent) {
         showToast({ type: 'error', message: 'Could not get page content for AI analysis' });
@@ -909,57 +739,12 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     setAiResolvingRelationships(true);
 
     try {
-      // Get page content
-      let pageContent = scanPageContent;
-      let pageTitle = currentPageTitle || '';
-      let pageUrl = currentPageUrl || '';
-
-      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-        try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id && tab.url) {
-            const extensionId = chrome.runtime.id;
-            const isPdfScannerPage = tab.url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
-                                    tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
-            
-            if (isPdfScannerPage) {
-              // For PDF scanner, request content via postMessage to parent
-              try {
-                const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
-                  
-                  const handleResponse = (event: MessageEvent) => {
-                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
-                      clearTimeout(timeout);
-                      window.removeEventListener('message', handleResponse);
-                      resolve(event.data.payload || { success: false });
-                    }
-                  };
-                  window.addEventListener('message', handleResponse);
-                  
-                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
-                });
-                if (pdfContentResponse?.success) {
-                  pageContent = pdfContentResponse.data?.content || '';
-                  pageTitle = pdfContentResponse.data?.title || pageTitle;
-                  pageUrl = pdfContentResponse.data?.url || pageUrl;
-                }
-              } catch {
-                // PDF scanner might not respond
-              }
-            } else {
-              const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-              if (contentResponse?.success) {
-                pageContent = contentResponse.data?.content || '';
-                pageTitle = contentResponse.data?.title || pageTitle;
-                pageUrl = contentResponse.data?.url || tab.url || pageUrl;
-              }
-            }
-          }
-        } catch {
-          // Silently handle page content retrieval errors
-        }
-      }
+      // Get page content using shared helper
+      const { content: pageContent, title: pageTitle, url: pageUrl } = await getPageContent(
+        scanPageContent,
+        currentPageTitle || '',
+        currentPageUrl || ''
+      );
 
       if (!pageContent) {
         showToast({ type: 'error', message: 'Could not get page content for AI analysis' });
@@ -969,21 +754,12 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
         return;
       }
 
-      // Get existing entities for context - only OpenCTI entities (not oaev-*)
-      const octiEntities = scanResultsEntities.filter(e => !e.type.startsWith('oaev-'));
-      const alreadyDetected = octiEntities.map(e => {
-        const entityData = e.entityData as Record<string, unknown> | undefined;
-        return {
-          type: e.type,
-          value: e.value || e.name,
-          name: e.name || e.value,
-          aliases: entityData?.aliases as string[] | undefined 
-            || entityData?.x_opencti_aliases as string[] | undefined,
-          externalId: entityData?.x_mitre_id as string | undefined
-            || entityData?.external_id as string | undefined
-            || (entityData?.externalReferences as Array<{ external_id?: string }> | undefined)?.[0]?.external_id,
-        };
-      });
+      // Get existing entities for context using shared helper
+      const alreadyDetected = buildEntitiesForAI(scanResultsEntities).map(e => ({
+        ...e,
+        existsInPlatform: scanResultsEntities.find(se => (se.value || se.name) === e.value)?.found || false,
+        octiEntityId: scanResultsEntities.find(se => (se.value || se.name) === e.value)?.entityId,
+      }));
 
       // Call AI to scan all (entities + relationships)
       chrome.runtime.sendMessage(
@@ -1807,302 +1583,33 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           </Box>
         ) : (
           filteredScanResultsEntities.map((entity, index) => {
-              const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
-              const { types: uniqueTypes, hasMultipleTypes } = getUniqueTypesFromMatches(entity);
-              const primaryType = uniqueTypes[0] || entity.type;
-              const displayType = formatTypeName(primaryType);
-
-              const octiCount = entity.platformMatches?.filter(pm => pm.platformType === 'opencti').length || 0;
-              const oaevCount = entity.platformMatches?.filter(pm => pm.platformType === 'openaev').length || 0;
-
-              const entityValue = entity.value || entity.name;
-              const isSelectable = isSelectableForOpenCTI(entity);
-              const isSelected = isSelectable && selectedScanItems.has(entityValue);
-
-              const borderColor = entity.discoveredByAI
-                ? aiColors.main
-                : (entity.found ? 'success.main' : 'warning.main');
-
-              // Build tooltip content for multi-type entities
-              const multiTypeTooltip = hasMultipleTypes
-                ? `Multiple types: ${uniqueTypes.map(t => formatTypeName(t)).join(', ')}`
-                : '';
-
-              return (
-                <Paper
-                  key={entity.id + '-' + index}
-                  elevation={0}
-                  onClick={() => handleScanResultEntityClick(entity)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 1,
-                    mb: 0.75,
-                    bgcolor: isSelected
-                      ? hexToRGB('#1976d2', 0.08)
-                      : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.05) : 'background.paper'),
-                    border: 1,
-                    borderColor: isSelected ? 'primary.main' : borderColor,
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    borderLeftWidth: 3,
-                    '&:hover': {
-                      bgcolor: isSelected
-                        ? hexToRGB('#1976d2', 0.12)
-                        : (entity.discoveredByAI ? hexToRGB(aiColors.main, 0.1) : 'action.hover'),
-                      boxShadow: 1,
-                    },
-                  }}
-                >
-                  {/* Checkbox for entities selectable for OpenCTI */}
-                  {isSelectable && (
-                    <Checkbox
-                      checked={selectedScanItems.has(entityValue)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.parent.postMessage({ type: 'XTM_TOGGLE_SELECTION', value: entityValue }, '*');
-                        const next = new Set(selectedScanItems);
-                        if (next.has(entityValue)) {
-                          next.delete(entityValue);
-                        } else {
-                          next.add(entityValue);
-                        }
-                        setSelectedScanItems(next);
-                      }}
-                      size="small"
-                      sx={{
-                        p: 0.25,
-                        '&.Mui-checked': { color: entity.discoveredByAI ? aiColors.main : (isFoundInOpenCTI(entity) ? 'success.main' : 'primary.main') },
-                      }}
-                    />
-                  )}
-                  {/* Entity icon - show stacked icon for multi-type */}
-                  {hasMultipleTypes ? (
-                    <Tooltip title={multiTypeTooltip} placement="top">
-                      <Box sx={{ position: 'relative', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ItemIcon type={primaryType} size="small" color={entityColor} />
-                        <LayersOutlined 
-                          sx={{ 
-                            position: 'absolute', 
-                            bottom: -2, 
-                            right: -4, 
-                            fontSize: 12, 
-                            color: 'primary.main',
-                            bgcolor: 'background.paper',
-                            borderRadius: '50%',
-                          }} 
-                        />
-                      </Box>
-                    </Tooltip>
-                  ) : (
-                    <ItemIcon type={entity.type} size="small" color={entityColor} />
-                  )}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word', fontSize: '0.85rem' }}>
-                      {entity.name || entity.value}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
-                      {/* Type display - compact for multi-type */}
-                      {hasMultipleTypes ? (
-                        <Tooltip title={multiTypeTooltip} placement="top">
-                          <Chip
-                            icon={<LayersOutlined sx={{ fontSize: '0.65rem !important' }} />}
-                            label={`${uniqueTypes.length} types`}
-                            size="small"
-                            color="primary"
-                            sx={{
-                              height: 16,
-                              fontSize: '0.6rem',
-                              '& .MuiChip-label': { px: 0.5 },
-                              '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
-                            }}
-                          />
-                        </Tooltip>
-                      ) : (
-                        <Typography variant="caption" sx={{ color: entity.discoveredByAI ? aiColors.main : 'text.secondary', fontSize: '0.7rem' }}>
-                          {displayType}
-                        </Typography>
-                      )}
-                      {/* Show AI indicator for AI-discovered entities */}
-                      {entity.discoveredByAI && (
-                        <Tooltip title={entity.aiReason || 'Detected by AI analysis'} placement="top">
-                          <Chip
-                            icon={<AutoAwesomeOutlined sx={{ fontSize: '0.65rem !important' }} />}
-                            label="AI"
-                            size="small"
-                            sx={{
-                              height: 16,
-                              fontSize: '0.6rem',
-                              bgcolor: hexToRGB(aiColors.main, 0.2),
-                              color: aiColors.main,
-                              '& .MuiChip-label': { px: 0.4 },
-                              '& .MuiChip-icon': { ml: 0.4, mr: -0.25 },
-                            }}
-                          />
-                        </Tooltip>
-                      )}
-                      {/* Show compact platform badges */}
-                      {!entity.discoveredByAI && (octiCount > 0 || oaevCount > 0) && (
-                        <>
-                          {octiCount > 0 && (
-                            <Chip
-                              label={octiCount > 1 ? `OCTI (${octiCount})` : 'OCTI'}
-                              size="small"
-                              sx={{
-                                height: 16,
-                                fontSize: '0.6rem',
-                                bgcolor: hexToRGB('#5c6bc0', 0.15),
-                                color: '#5c6bc0',
-                                fontWeight: octiCount > 1 ? 600 : 400,
-                                '& .MuiChip-label': { px: 0.5 },
-                              }}
-                            />
-                          )}
-                          {oaevCount > 0 && (
-                            <Chip
-                              label={oaevCount > 1 ? `OAEV (${oaevCount})` : 'OAEV'}
-                              size="small"
-                              sx={{
-                                height: 16,
-                                fontSize: '0.6rem',
-                                bgcolor: hexToRGB('#e91e63', 0.15),
-                                color: '#e91e63',
-                                fontWeight: oaevCount > 1 ? 600 : 400,
-                                '& .MuiChip-label': { px: 0.5 },
-                              }}
-                            />
-                          )}
-                        </>
-                      )}
-                    </Box>
-                  </Box>
-                  {/* Status chip with matched strings tooltip */}
-                  {(() => {
-                    const hasMatchedStrings = entity.matchedStrings && entity.matchedStrings.length > 0;
-                    const matchedStringsTooltip = hasMatchedStrings ? (
-                      <Box sx={{ p: 0.5 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                          Matched in page:
-                        </Typography>
-                        {entity.matchedStrings!.map((str, idx) => (
-                          <Box 
-                            key={idx} 
-                            sx={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: 0.5,
-                              py: 0.25,
-                              '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
-                            }}
-                          >
-                            <Box 
-                              sx={{ 
-                                width: 6, 
-                                height: 6, 
-                                borderRadius: '50%', 
-                                bgcolor: entity.found ? 'success.main' : 'warning.main',
-                                flexShrink: 0,
-                              }} 
-                            />
-                            <Typography 
-                              variant="caption" 
-                              sx={{ 
-                                fontFamily: 'monospace',
-                                wordBreak: 'break-word',
-                              }}
-                            >
-                              "{str}"
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    ) : (entity.found ? 'Entity found in platform' : (entity.discoveredByAI ? 'Discovered by AI' : 'New entity not in platform'));
-
-                    return (
-                      <Tooltip 
-                        title={matchedStringsTooltip} 
-                        placement="left"
-                        arrow
-                        slotProps={{
-                          tooltip: {
-                            sx: {
-                              bgcolor: 'background.paper',
-                              color: 'text.primary',
-                              boxShadow: 3,
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              maxWidth: 280,
-                              '& .MuiTooltip-arrow': {
-                                color: 'background.paper',
-                                '&::before': {
-                                  border: '1px solid',
-                                  borderColor: 'divider',
-                                },
-                              },
-                            },
-                          },
-                        }}
-                      >
-                        <Chip
-                          icon={hasMatchedStrings ? <InfoOutlined sx={{ fontSize: '0.85rem !important' }} /> : undefined}
-                          label={entity.found ? 'Found' : (entity.discoveredByAI ? 'AI' : 'New')}
-                          size="small"
-                          variant="outlined"
-                          sx={{
-                            minWidth: hasMatchedStrings ? 65 : 50,
-                            cursor: 'help',
-                            borderColor: entity.discoveredByAI ? aiColors.main : undefined,
-                            color: entity.discoveredByAI ? aiColors.main : undefined,
-                            '& .MuiChip-icon': { 
-                              ml: 0.5, 
-                              mr: -0.25,
-                              color: 'inherit',
-                            },
-                          }}
-                          color={entity.found ? 'success' : (entity.discoveredByAI ? undefined : 'warning')}
-                        />
-                      </Tooltip>
-                    );
-                  })()}
-                  {/* Scroll to highlight button */}
-                  <Tooltip title="Scroll to highlight on page" placement="top">
-                    <Box
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Include both the resolved name/value AND the original matched strings
-                        // This ensures we can find the highlight even when entity name differs from highlighted text
-                        const primaryValue = entity.value || entity.name;
-                        const allValues = entity.matchedStrings 
-                          ? [primaryValue, ...entity.matchedStrings.filter(s => s.toLowerCase() !== primaryValue.toLowerCase())]
-                          : [primaryValue];
-                        sendToContentScript({ 
-                          type: 'XTM_SCROLL_TO_HIGHLIGHT', 
-                          payload: { value: allValues } 
-                        });
-                      }}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 24,
-                        height: 24,
-                        borderRadius: '50%',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                        '&:hover': {
-                          bgcolor: 'action.hover',
-                        },
-                      }}
-                    >
-                      <GpsFixedOutlined sx={{ color: 'text.secondary', fontSize: 16 }} />
-                    </Box>
-                  </Tooltip>
-                  <ChevronRightOutlined sx={{ color: 'text.secondary', fontSize: 18 }} />
-                </Paper>
-              );
-            })
+            const entityValue = entity.value || entity.name;
+            const isSelectable = isSelectableForOpenCTI(entity);
+            const isSelected = isSelectable && selectedScanItems.has(entityValue);
+            
+            return (
+              <ScanResultsEntityItem
+                key={entity.id + '-' + index}
+                entity={entity}
+                index={index}
+                mode={mode}
+                aiColors={aiColors}
+                isSelected={isSelected}
+                isSelectable={isSelectable}
+                onEntityClick={handleScanResultEntityClick}
+                onToggleSelection={(value) => {
+                  window.parent.postMessage({ type: 'XTM_TOGGLE_SELECTION', value }, '*');
+                  const next = new Set(selectedScanItems);
+                  if (next.has(value)) {
+                    next.delete(value);
+                  } else {
+                    next.add(value);
+                  }
+                  setSelectedScanItems(next);
+                }}
+              />
+            );
+          })
         )}
       </Box>
     </Box>

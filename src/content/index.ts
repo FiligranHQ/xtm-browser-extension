@@ -22,12 +22,7 @@ import {
 // Module imports
 import { HIGHLIGHT_STYLES } from './styles';
 import { showToast, hideToast } from './toast';
-import { 
-  extractArticleContent, 
-  extractFirstParagraph, 
-  generateArticlePDF, 
-  getPageContentForScanning,
-} from './extraction';
+import { getPageContentForScanning } from './extraction';
 import { 
   getComprehensivePageContent, 
   detectDomainsAndHostnamesForAtomicTesting,
@@ -48,6 +43,7 @@ import {
   drawRelationshipLines,
   clearRelationshipLines,
 } from './relationship-lines';
+import { handleMessage, type MessageHandlerContext } from './message-handlers';
 import {
   sendPanelMessage,
   flushPanelMessageQueue,
@@ -57,16 +53,10 @@ import {
   isPanelHidden,
   showPanel,
   showAddPanel,
-  showContainerPanel,
-  showInvestigationPanel,
-  showSearchPanel,
-  showUnifiedSearchPanel,
-  showAddSelectionPanel,
   getCurrentTheme,
   setIsPanelReady,
   setHighlightClickInProgress,
   initializeSplitScreenMode,
-  refreshSplitScreenMode,
   getSplitScreenMode,
   openPanel,
 } from './panel';
@@ -1650,279 +1640,31 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
 // Message Handling
 // ============================================================================
 
+/**
+ * Create message handler context with current state and functions
+ */
+function createMessageHandlerContext(): MessageHandlerContext {
+  return {
+    selectedForImport,
+    currentScanMode,
+    lastScanData,
+    scanPage,
+    scanPageForOAEV,
+    scanAllPlatforms,
+    scanPageForAtomicTesting,
+    scanPageForScenario,
+    scanPageForInvestigation,
+    handleHighlightAIEntities: (entities: unknown[]) => {
+      return handleHighlightAIEntities(entities as Array<{ type: string; value: string; name: string }>);
+    },
+    setCurrentScanMode: (mode) => { currentScanMode = mode; },
+    setLastScanData: (data) => { lastScanData = data as ScanResultPayload | null; },
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  switch (message.type) {
-    case 'SCAN_PAGE':
-    case 'AUTO_SCAN_PAGE':
-      scanPage().then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    
-    case 'SCAN_OAEV':
-      scanPageForOAEV().then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    
-    case 'SCAN_ALL':
-      scanAllPlatforms().then(() => {
-        sendResponse({ success: true });
-      });
-      return true;
-    
-    case 'SCAN_ATOMIC_TESTING':
-      scanPageForAtomicTesting().then(() => sendResponse({ success: true }));
-      return true;
-    
-    case 'CREATE_SCENARIO_FROM_PAGE':
-      scanPageForScenario().then(() => sendResponse({ success: true }));
-      return true;
-      
-    case 'CLEAR_HIGHLIGHTS':
-      clearHighlights();
-      clearRelationshipLines();
-      selectedForImport.clear();
-      currentScanMode = null;
-      lastScanData = null;
-      // Notify panel to clear scan results and reset to empty state
-      sendPanelMessage('CLEAR_SCAN_RESULTS');
-      sendResponse({ success: true });
-      break;
-    
-    case 'CLEAR_HIGHLIGHTS_ONLY':
-      // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
-      clearHighlights();
-      clearRelationshipLines();
-      selectedForImport.clear();
-      currentScanMode = null;
-      lastScanData = null;
-      sendResponse({ success: true });
-      break;
-    
-    case 'DRAW_RELATIONSHIP_LINES': {
-      // Draw relationship lines between highlighted entities
-      const relationships = message.payload?.relationships || [];
-      if (relationships.length > 0) {
-        drawRelationshipLines(relationships);
-      } else {
-        clearRelationshipLines();
-      }
-      sendResponse({ success: true });
-      break;
-    }
-    
-    case 'CLEAR_RELATIONSHIP_LINES':
-      clearRelationshipLines();
-      sendResponse({ success: true });
-      break;
-      
-    case 'SCAN_FOR_INVESTIGATION': {
-      const { platformId } = message.payload || {};
-      scanPageForInvestigation(platformId).then(() => sendResponse({ success: true }));
-      return true;
-    }
-      
-    case 'INVESTIGATION_SYNC_SELECTION': {
-      const { entityId, selected } = message.payload || {};
-      if (entityId) {
-        const highlight = document.querySelector(`.xtm-highlight.xtm-investigation[data-entity-id="${entityId}"]`);
-        if (highlight) {
-          if (selected) {
-            highlight.classList.add('xtm-selected');
-          } else {
-            highlight.classList.remove('xtm-selected');
-          }
-        }
-      }
-      sendResponse({ success: true });
-      break;
-    }
-    
-    case 'INVESTIGATION_SYNC_ALL': {
-      const { entityIds, selected } = message.payload || {};
-      if (entityIds && Array.isArray(entityIds)) {
-        for (const entityId of entityIds) {
-          const highlight = document.querySelector(`.xtm-highlight.xtm-investigation[data-entity-id="${entityId}"]`);
-          if (highlight) {
-            if (selected) {
-              highlight.classList.add('xtm-selected');
-            } else {
-              highlight.classList.remove('xtm-selected');
-            }
-          }
-        }
-      }
-      sendResponse({ success: true });
-      break;
-    }
-    
-    case 'XTM_HIGHLIGHT_AI_ENTITIES': {
-      const { entities } = message.payload || {};
-      if (entities && Array.isArray(entities)) {
-        const result = handleHighlightAIEntities(entities);
-        // Return which entities were successfully highlighted so panel can filter
-        sendResponse({ 
-          success: true, 
-          highlightedEntities: result.highlightedEntities,
-          failedEntities: result.failedEntities,
-        });
-      } else {
-        sendResponse({ success: true, highlightedEntities: [], failedEntities: [] });
-      }
-      break;
-    }
-      
-    case 'HIDE_PANEL':
-      hidePanel();
-      sendResponse({ success: true });
-      break;
-    
-    case 'XTM_SCROLL_TO_FIRST':
-      scrollToFirstHighlight();
-      sendResponse({ success: true });
-      break;
-    
-    case 'XTM_SCROLL_TO_HIGHLIGHT': {
-      // Value can be a string or array of strings (entity name + matched strings)
-      const scrollValue = message.payload?.value;
-      if (scrollValue && (typeof scrollValue === 'string' || (Array.isArray(scrollValue) && scrollValue.length > 0))) {
-        const found = scrollToHighlightByValue(scrollValue);
-        sendResponse({ success: true, found });
-      } else {
-        sendResponse({ success: false, error: 'No value provided' });
-      }
-      break;
-    }
-    
-    case 'SPLIT_SCREEN_MODE_CHANGED': {
-      // Refresh split screen mode cache when settings change
-      // This allows the floating iframe to work again after disabling split screen mode
-      refreshSplitScreenMode();
-      // Re-initialize to update the cached value
-      initializeSplitScreenMode().then((enabled) => {
-        log.debug(' Split screen mode changed, new value:', enabled);
-      });
-      sendResponse({ success: true });
-      break;
-    }
-      
-    case 'GET_PAGE_CONTENT': {
-      const articleData = extractArticleContent();
-      const description = extractFirstParagraph(articleData.textContent);
-      
-      sendResponse({
-        success: true,
-        data: {
-          url: window.location.href,
-          title: articleData.title,
-          content: articleData.textContent,
-          html: articleData.content,
-          description: description,
-          excerpt: articleData.excerpt,
-          byline: articleData.byline,
-        },
-      });
-      break;
-    }
-    
-    case 'GET_ARTICLE_CONTENT': {
-      const article = extractArticleContent();
-      const firstParagraph = extractFirstParagraph(article.textContent);
-      
-      sendResponse({
-        success: true,
-        data: {
-          url: window.location.href,
-          title: article.title,
-          textContent: article.textContent,
-          htmlContent: article.content,
-          description: firstParagraph,
-          excerpt: article.excerpt,
-          byline: article.byline,
-        },
-      });
-      break;
-    }
-      
-    case 'CREATE_CONTAINER_FROM_PAGE':
-      showContainerPanel();
-      sendResponse({ success: true });
-      break;
-      
-    case 'CREATE_INVESTIGATION':
-      showInvestigationPanel();
-      sendResponse({ success: true });
-      break;
-    
-    case 'OPEN_SEARCH_PANEL':
-      showSearchPanel();
-      sendResponse({ success: true });
-      break;
-    
-    case 'OPEN_UNIFIED_SEARCH_PANEL':
-      showUnifiedSearchPanel();
-      sendResponse({ success: true });
-      break;
-    
-    case 'SEARCH_SELECTION':
-      if (message.payload?.text) {
-        showUnifiedSearchPanel(message.payload.text);
-      }
-      sendResponse({ success: true });
-      break;
-    
-    case 'ADD_SELECTION':
-      if (message.payload?.text) {
-        showAddSelectionPanel(message.payload.text);
-      }
-      sendResponse({ success: true });
-      break;
-    
-    case 'GENERATE_PDF':
-      generateArticlePDF().then(result => {
-        if (result) {
-          sendResponse({ success: true, data: result });
-        } else {
-          sendResponse({ success: false, error: 'Failed to generate PDF' });
-        }
-      }).catch(error => {
-        sendResponse({ success: false, error: error.message });
-      });
-      return true;
-      
-    case 'GET_SELECTION':
-      sendResponse({
-        success: true,
-        data: {
-          selectedCount: selectedForImport.size,
-          selectedItems: Array.from(selectedForImport),
-        },
-      });
-      break;
-      
-    case 'CLEAR_SELECTION':
-      selectedForImport.clear();
-      document.querySelectorAll('.xtm-highlight.xtm-selected').forEach(el => {
-        el.classList.remove('xtm-selected');
-      });
-      sendResponse({ success: true });
-      break;
-      
-    case 'ENTITY_ADDED': {
-      const value = message.payload?.value;
-      if (value) {
-        document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`).forEach(el => {
-          el.classList.remove('xtm-not-found', 'xtm-selected');
-          el.classList.add('xtm-found');
-          (el as HTMLElement).dataset.found = 'true';
-        });
-        selectedForImport.delete(value);
-      }
-      sendResponse({ success: true });
-      break;
-    }
-  }
+  const context = createMessageHandlerContext();
+  return handleMessage(message, context, sendResponse);
 });
 
 // ============================================================================

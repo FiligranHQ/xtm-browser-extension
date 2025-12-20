@@ -37,8 +37,6 @@ import {
   AddOutlined,
   RefreshOutlined,
   ComputerOutlined,
-  CloudOutlined,
-  LanguageOutlined,
   LanOutlined,
   GroupsOutlined,
   MovieFilterOutlined,
@@ -58,6 +56,7 @@ import {
   SCENARIO_SEVERITY_OPTIONS,
   SCENARIO_DEFAULT_VALUES,
 } from '../../shared/types/openaev';
+import { ScenarioTypeSelector } from '../components/scenario/ScenarioTypeSelector';
 
 const log = loggers.panel;
 
@@ -1456,9 +1455,8 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
   }
 
   function renderAffinitySelection() {
-    const aiColors = getAiColor(mode);
     const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
-    const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
+    const isAIAvailable = !!(aiSettings.available && targetPlatform?.isEnterprise);
     
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
@@ -1478,140 +1476,20 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           </Button>
         </Box>
 
-        {/* Type Affinity */}
-        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-          Type Affinity
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
-          Select the type of scenario you want to create
-        </Typography>
-        
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-          {[
-            { value: 'ENDPOINT', label: 'Endpoint', description: 'Technical endpoint testing', icon: ComputerOutlined },
-            { value: 'CLOUD', label: 'Cloud', description: 'Technical cloud testing', icon: CloudOutlined },
-            { value: 'WEB', label: 'Web', description: 'Technical web testing', icon: LanguageOutlined },
-            { value: 'TABLE-TOP', label: 'Table-top', description: 'Simulation with email notifications', icon: GroupsOutlined },
-          ].map((option) => {
-            const IconComponent = option.icon;
-            return (
-              <Paper
-                key={option.value}
-                elevation={0}
-                onClick={() => {
-                  setScenarioTypeAffinity(option.value as typeof scenarioTypeAffinity);
-                  setScenarioInjectSpacing(option.value === 'TABLE-TOP' ? 5 : 1);
-                }}
-                sx={{
-                  p: 1.5,
-                  flex: '1 1 calc(50% - 4px)',
-                  minWidth: 120,
-                  border: 2,
-                  borderColor: scenarioTypeAffinity === option.value ? 'primary.main' : 'divider',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  bgcolor: scenarioTypeAffinity === option.value ? 'action.selected' : 'transparent',
-                  transition: 'all 0.2s',
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <IconComponent sx={{ fontSize: 20, color: scenarioTypeAffinity === option.value ? 'primary.main' : 'text.secondary' }} />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {option.label}
-                  </Typography>
-                </Box>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', pl: 3.5 }}>
-                  {option.description}
-                </Typography>
-              </Paper>
-            );
-          })}
-        </Box>
-        
-        {/* Platform Affinity - Only show for technical scenarios */}
-        {scenarioTypeAffinity !== 'TABLE-TOP' && (
-          <>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Platform Affinity
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
-              {['windows', 'linux', 'macos'].map((platform) => {
-                const isSelected = scenarioPlatformsAffinity.includes(platform);
-                const color = getPlatformColor(platform);
-                return (
-                  <Chip
-                    key={platform}
-                    icon={getPlatformIcon(platform)}
-                    label={platform}
-                    onClick={() => {
-                      if (isSelected && scenarioPlatformsAffinity.length > 1) {
-                        setScenarioPlatformsAffinity(prev => prev.filter(p => p !== platform));
-                      } else if (!isSelected) {
-                        setScenarioPlatformsAffinity(prev => [...prev, platform]);
-                      }
-                    }}
-                    sx={{
-                      bgcolor: isSelected ? color : 'transparent',
-                      color: isSelected ? 'white' : 'text.primary',
-                      border: 1,
-                      borderColor: isSelected ? color : 'divider',
-                      '& .MuiChip-icon': { color: isSelected ? 'white' : color },
-                    }}
-                  />
-                );
-              })}
-            </Box>
-          </>
-        )}
-        
-        {/* Table-top info */}
-        {scenarioTypeAffinity === 'TABLE-TOP' && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Table-top scenarios use email notifications to simulate attack phases.
-          </Alert>
-        )}
-        
-        {/* AI Generate Scenario Option */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1.5,
-            mb: 2,
-            borderRadius: 1,
-            border: 1,
-            borderColor: isAIAvailable ? aiColors.main : 'divider',
-            bgcolor: isAIAvailable ? hexToRGB(aiColors.main, 0.08) : 'action.disabledBackground',
-            opacity: isAIAvailable ? 1 : 0.6,
-            flexShrink: 0,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <AutoAwesomeOutlined sx={{ fontSize: 24, color: isAIAvailable ? aiColors.main : 'text.disabled' }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: isAIAvailable ? 'text.primary' : 'text.disabled' }}>
-                Generate Scenario with AI
-              </Typography>
-              <Typography variant="caption" sx={{ color: isAIAvailable ? 'text.secondary' : 'text.disabled' }}>
-                {isAIAvailable ? 'AI will generate a complete scenario' : 'AI not available'}
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={!isAIAvailable}
-              onClick={() => setScenarioAIMode(true)}
-              startIcon={<AutoAwesomeOutlined />}
-              sx={{
-                textTransform: 'none',
-                borderColor: aiColors.main,
-                color: aiColors.main,
-              }}
-            >
-              Generate
-            </Button>
-          </Box>
-        </Paper>
+        {/* Type Affinity, Platform Affinity, and AI Generate using extracted component */}
+        <ScenarioTypeSelector
+          mode={mode}
+          scenarioTypeAffinity={scenarioTypeAffinity}
+          setScenarioTypeAffinity={(type) => setScenarioTypeAffinity(type as typeof scenarioTypeAffinity)}
+          scenarioPlatformsAffinity={scenarioPlatformsAffinity}
+          setScenarioPlatformsAffinity={setScenarioPlatformsAffinity}
+          scenarioInjectSpacing={scenarioInjectSpacing}
+          setScenarioInjectSpacing={setScenarioInjectSpacing}
+          isAIAvailable={isAIAvailable}
+          scenarioAIMode={scenarioAIMode || false}
+          scenarioAIGenerating={scenarioAIGenerating || false}
+          onAIGenerate={() => setScenarioAIMode(true)}
+        />
         
         {/* Attack Patterns Preview */}
         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>

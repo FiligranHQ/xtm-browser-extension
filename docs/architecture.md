@@ -1046,6 +1046,7 @@ The `src/shared/visualization/` module provides shared graph visualization utili
 src/shared/visualization/
 ├── graph-types.ts        # TypeScript interfaces for relationship data
 ├── graph-layout.ts       # Bezier curve calculation utilities
+├── line-geometry.ts      # Shared line geometry calculations
 └── relationship-styles.ts # Styling constants and helpers
 ```
 

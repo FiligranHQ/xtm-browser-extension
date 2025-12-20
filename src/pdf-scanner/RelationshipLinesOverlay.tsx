@@ -2,6 +2,7 @@
  * Relationship Lines Overlay for PDF Viewer
  * 
  * Renders SVG lines between highlighted entities to visualize relationships.
+ * Uses React for declarative rendering within the PDF viewer iframe.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -10,6 +11,11 @@ import {
   calculateLabelRotation,
   getPointOnBezier,
 } from '../shared/visualization/graph-layout';
+import {
+  adjustEndpoints,
+  calculateLabelDimensions,
+  generateCurvePath,
+} from '../shared/visualization/line-geometry';
 import { LINE_STYLES, LABEL_STYLES, ANIMATION_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
 import type { RelationshipData, HighlightPosition, Point } from '../shared/visualization/graph-types';
 
@@ -149,29 +155,26 @@ export const RelationshipLinesOverlay: React.FC<Props> = ({
       </defs>
 
       {lines.map(({ fromPos, toPos, relationship, index }) => {
-        // Calculate positions relative to the visible viewport
-        const fromX = fromPos.x + fromPos.width / 2 - scrollLeft;
-        const fromY = fromPos.y + fromPos.height / 2 - scrollTop;
-        const toX = toPos.x + toPos.width / 2 - scrollLeft;
-        const toY = toPos.y + toPos.height / 2 - scrollTop;
+        // Calculate center positions relative to the visible viewport
+        const fromCenter: Point = {
+          x: fromPos.x + fromPos.width / 2 - scrollLeft,
+          y: fromPos.y + fromPos.height / 2 - scrollTop,
+        };
+        const toCenter: Point = {
+          x: toPos.x + toPos.width / 2 - scrollLeft,
+          y: toPos.y + toPos.height / 2 - scrollTop,
+        };
 
         // Adjust endpoints to be at edge of highlights
-        const dx = toX - fromX;
-        const dy = toY - fromY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const adjusted = adjustEndpoints(
+          fromCenter, toCenter,
+          fromPos.width, fromPos.height,
+          toPos.width, toPos.height
+        );
 
-        if (distance < 20) return null;
+        if (!adjusted) return null; // Too close, skip
 
-        const unitX = dx / distance;
-        const unitY = dy / distance;
-
-        const adjustedFromX = fromX + (fromPos.width / 2) * unitX * 0.8;
-        const adjustedFromY = fromY + (fromPos.height / 2) * unitY * 0.8;
-        const adjustedToX = toX - (toPos.width / 2) * unitX * 0.8;
-        const adjustedToY = toY - (toPos.height / 2) * unitY * 0.8;
-
-        const start: Point = { x: adjustedFromX, y: adjustedFromY };
-        const end: Point = { x: adjustedToX, y: adjustedToY };
+        const { adjustedStart: start, adjustedEnd: end } = adjusted;
 
         const { cp1: cp } = calculateCurveControlPoints(start, end, index, LINE_STYLES.curveOffset);
 
@@ -181,10 +184,9 @@ export const RelationshipLinesOverlay: React.FC<Props> = ({
 
         // Label dimensions
         const labelText = relationship.relationshipType;
-        const textWidth = labelText.length * (LABEL_STYLES.fontSize * 0.6) + LABEL_STYLES.padding * 2;
-        const textHeight = LABEL_STYLES.fontSize + LABEL_STYLES.padding * 2;
+        const { width: textWidth, height: textHeight } = calculateLabelDimensions(labelText);
 
-        const pathD = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${end.x} ${end.y}`;
+        const pathD = generateCurvePath(start, cp, end);
 
         return (
           <g key={`rel-${index}`}>

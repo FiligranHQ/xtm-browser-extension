@@ -14,6 +14,7 @@ interface UsePlatformStatusReturn {
   mode: 'dark' | 'light';
   setMode: React.Dispatch<React.SetStateAction<'dark' | 'light'>>;
   aiConfigured: boolean;
+  splitScreenMode: boolean;
   hasOpenCTI: boolean;
   hasOpenAEV: boolean;
   hasAnyOpenCTIConfigured: boolean;
@@ -29,6 +30,7 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
     openaev: [] 
   });
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [splitScreenMode, setSplitScreenMode] = useState(false);
 
   useEffect(() => {
     // Check if we're running in an extension context
@@ -57,6 +59,9 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
         // Check AI configuration
         const aiSettings = settings.aiSettings;
         setAiConfigured(!!(aiSettings?.enabled && aiSettings?.provider && aiSettings?.apiKey));
+        
+        // Check split screen mode
+        setSplitScreenMode(!!settings.splitScreenMode);
 
         // Build initial platform lists - include isEnterprise from saved settings
         const openctiList: PlatformStatus[] = openctiPlatforms.map((p: any) => ({
@@ -214,6 +219,7 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
     mode,
     setMode,
     aiConfigured,
+    splitScreenMode,
     hasOpenCTI,
     hasOpenAEV,
     hasAnyOpenCTIConfigured,

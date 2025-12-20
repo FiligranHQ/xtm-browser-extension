@@ -3,7 +3,14 @@
  * Handles the side panel iframe and panel communication.
  * Supports two modes:
  * - Floating mode (default): Panel is an injected iframe, communication via postMessage
- * - Split screen mode: Panel is browser's native side panel, communication via chrome.runtime
+ * - Split screen mode: Panel is browser's native side panel/sidebar, communication via chrome.runtime
+ * 
+ * Browser support for split screen mode:
+ * - Chrome/Edge: Uses chrome.sidePanel API
+ * - Firefox: Uses browser.sidebarAction API
+ * 
+ * The sidebar/panel opens automatically when triggered from popup (scan, search, etc.).
+ * Messages are forwarded via background script and queued if panel is not yet open.
  */
 
 import { loggers } from '../shared/utils/logger';
@@ -65,9 +72,14 @@ export function getSplitScreenMode(): boolean {
 
 /**
  * Check if split screen mode is enabled
- * Note: chrome.sidePanel API is NOT available in content scripts, only in background.
+ * Note: Side panel APIs are NOT available in content scripts, only in background/popup.
  * So we must always ask the background script for the actual setting.
- * The background script handles Firefox detection and returns splitScreenMode: false for it.
+ * 
+ * Browser support:
+ * - Chrome/Edge: Uses chrome.sidePanel API
+ * - Firefox: Uses browser.sidebarAction API
+ * 
+ * Both browsers open the panel/sidebar automatically when triggered from popup.
  * 
  * @param forceRefresh - If true, always fetch fresh value from background (don't use cache)
  */
@@ -124,10 +136,15 @@ export async function initializeSplitScreenMode(): Promise<boolean> {
 }
 
 /**
- * Open the native side panel (Chrome/Edge only, split screen mode)
- * Returns a promise that resolves when the panel is opened (or failed)
+ * Open the native side panel (Chrome/Edge) or sidebar (Firefox)
+ * Returns a promise that resolves when the panel is opened (or the request is sent)
+ * 
  * Note: This should be called only when splitScreenMode is already confirmed,
  * so the background can open the panel immediately without checking settings.
+ * 
+ * Browser behavior:
+ * - Chrome/Edge: Opens the sidePanel via chrome.sidePanel.open() (background script)
+ * - Firefox: Popup opens sidebar via browser.sidebarAction.open() (requires user gesture)
  * 
  * On MacOS Chrome/Edge, the sidePanel API can be more restrictive.
  * This function includes retry logic to handle transient failures.
@@ -141,7 +158,8 @@ async function openNativeSidePanel(retryCount = 0): Promise<boolean> {
   
   return new Promise((resolve) => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      // Send OPEN_SIDE_PANEL_IMMEDIATE - background will open immediately without settings check
+      // Send OPEN_SIDE_PANEL_IMMEDIATE - background will open for Chrome/Edge
+      // For Firefox, the popup already opened the sidebar, background just confirms
       chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL_IMMEDIATE' }, (response) => {
         if (chrome.runtime.lastError) {
           log.warn('Failed to open native side panel:', chrome.runtime.lastError.message);
@@ -159,21 +177,23 @@ async function openNativeSidePanel(retryCount = 0): Promise<boolean> {
         const opened = response?.success && response.data?.opened === true;
         const reason = response?.data?.reason || '';
         const isUserGestureError = reason.includes('user gesture') || reason.includes('User gesture');
+        const isFirefoxHandled = reason === 'firefox_popup_handles';
         
-        if (!opened && !isUserGestureError && retryCount < MAX_RETRIES) {
+        if (!opened && !isUserGestureError && !isFirefoxHandled && retryCount < MAX_RETRIES) {
           // Retry if not opened (MacOS may need multiple attempts)
           // Don't retry if it's a user gesture error - panel is likely already open
+          // Don't retry on Firefox - popup already handled sidebar opening
           log.debug(`Side panel open returned false, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
           setTimeout(() => {
             openNativeSidePanel(retryCount + 1).then(resolve);
           }, 100 * (retryCount + 1));
         } else {
-          if (!opened && !isUserGestureError) {
-            // Only log warning if it's not a user gesture error (which is expected in split screen mode)
+          if (!opened && !isUserGestureError && !isFirefoxHandled) {
             log.debug('Failed to open native side panel, reason:', reason);
           }
           // Resolve true for user gesture errors - panel is likely already open from popup
-          resolve(opened || isUserGestureError);
+          // Resolve true for Firefox - popup already opened the sidebar
+          resolve(opened || isUserGestureError || isFirefoxHandled);
         }
       });
     } else {

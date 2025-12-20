@@ -329,6 +329,10 @@ async function generateWithJsPDF(
     // Track all added image sources to avoid duplicates
     const addedImageSrcs = new Set<string>();
     
+    // Check if HTML content is minimal/empty - if so, use text content directly
+    const htmlTextContent = tempDiv.textContent?.trim() || '';
+    const useTextFallback = htmlTextContent.length < 50 && content.textContent.length > 100;
+    
     // Process each element
     const processElement = async (element: Element): Promise<void> => {
       const tagName = element.tagName.toLowerCase();
@@ -605,8 +609,65 @@ async function generateWithJsPDF(
     log.debug('[PDFGenerator] Found images with positions:', imagePositions.size);
     
     // Process all top-level elements - images are rendered INLINE where they appear
-    for (const child of tempDiv.children) {
-      await processElement(child);
+    if (useTextFallback) {
+      // Fallback: render plain text content when HTML is minimal/empty
+      log.debug('[PDFGenerator] Using text content fallback (HTML was minimal)');
+      
+      // Split text content into paragraphs
+      const paragraphs = content.textContent.split(/\n\n+/);
+      
+      for (const para of paragraphs) {
+        const text = para.trim();
+        if (!text || text.length < 5) continue;
+        
+        // Check if it looks like a heading (short and starts with ## or is all caps)
+        const isHeading = text.startsWith('##') || (text.length < 100 && text === text.toUpperCase());
+        
+        if (isHeading) {
+          const headingText = text.replace(/^#+\s*/, '');
+          yPosition += 5;
+          checkPageBreak(20);
+          pdf.setFontSize(14);
+          pdf.setTextColor(0, 0, 0);
+          pdf.setFont('helvetica', 'bold');
+          const lines = pdf.splitTextToSize(headingText, contentWidth);
+          pdf.text(lines, margin, yPosition);
+          yPosition += lines.length * 6 + 3;
+        } else {
+          checkPageBreak(15);
+          pdf.setFontSize(11);
+          pdf.setTextColor(30, 30, 30);
+          pdf.setFont('helvetica', 'normal');
+          const lines = pdf.splitTextToSize(text, contentWidth);
+          pdf.text(lines, margin, yPosition);
+          yPosition += lines.length * 5 + 4;
+        }
+      }
+    } else {
+      // Normal HTML processing
+      for (const child of tempDiv.children) {
+        await processElement(child);
+      }
+      
+      // If HTML processing yielded very little content, add text fallback
+      if (yPosition < margin + 50 && content.textContent.length > 200) {
+        log.debug('[PDFGenerator] HTML processing yielded minimal content, adding text fallback');
+        
+        const paragraphs = content.textContent.split(/\n\n+/).slice(0, 30); // Limit to 30 paragraphs
+        
+        for (const para of paragraphs) {
+          const text = para.trim();
+          if (!text || text.length < 10) continue;
+          
+          checkPageBreak(15);
+          pdf.setFontSize(11);
+          pdf.setTextColor(30, 30, 30);
+          pdf.setFont('helvetica', 'normal');
+          const lines = pdf.splitTextToSize(text, contentWidth);
+          pdf.text(lines, margin, yPosition);
+          yPosition += lines.length * 5 + 4;
+        }
+      }
     }
     
     // Only add hero/featured images from extraction if they weren't in HTML

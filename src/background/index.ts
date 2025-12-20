@@ -456,10 +456,8 @@ async function handleMessage(
         // Debug: Log platform EE status when settings are requested
         log.debug('GET_SETTINGS: OpenCTI platforms EE status:', 
           settings.openctiPlatforms?.map(p => ({ id: p.id, name: p.name, isEnterprise: p.isEnterprise })));
-        // Firefox: Force splitScreenMode to false (no native side panel, use iframe)
-        if (!chrome.sidePanel) {
-          settings.splitScreenMode = false;
-        }
+        // Note: Firefox uses browser.sidebarAction instead of chrome.sidePanel
+        // Both Chrome/Edge (sidePanel) and Firefox (sidebarAction) support split screen mode
         sendResponse(successResponse(settings));
         break;
       }
@@ -2460,7 +2458,11 @@ async function handleMessage(
               sendResponse(successResponse({ opened: false, reason: 'No tab or window found' }));
             }
           } else {
-            sendResponse(successResponse({ opened: false, reason: 'sidePanel API not available' }));
+            // Firefox: sidebarAction.open() can only be called from popup (user gesture context)
+            // The popup already opened the sidebar before sending messages, so we just return success
+            // Messages are forwarded via FORWARD_TO_PANEL and will be received by the open sidebar
+            log.debug('Firefox sidebar - popup handles opening, background just forwards messages');
+            sendResponse(successResponse({ opened: true, reason: 'firefox_popup_handles' }));
           }
         } catch (error) {
           log.error('Failed to open side panel (outer catch):', error);

@@ -104,7 +104,31 @@ export const HIGHLIGHT_STYLES = `
   .xtm-highlight.xtm-found {
     background: rgba(0, 200, 83, 0.2) !important;
     outline: 2px solid #4caf50 !important;
-    padding: 1px 16px 1px 4px !important;  /* Space on right for check icon */
+    padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for check icon */
+  }
+  
+  /* Checkbox on LEFT for found */
+  .xtm-highlight.xtm-found::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 2px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 10px !important;
+    height: 10px !important;
+    border: 1.5px solid #4caf50 !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Checkbox checked state for found */
+  .xtm-highlight.xtm-found.xtm-selected::before {
+    background: #4caf50 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 8px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
   }
   
   /* Check icon on RIGHT for found */
@@ -138,7 +162,31 @@ export const HIGHLIGHT_STYLES = `
   .xtm-highlight.xtm-not-found {
     background: rgba(255, 167, 38, 0.2) !important;
     outline: 2px solid #ffa726 !important;
-    padding: 1px 16px 1px 4px !important;  /* Space on right for info icon */
+    padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for info icon */
+  }
+  
+  /* Checkbox on LEFT for not found */
+  .xtm-highlight.xtm-not-found::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 2px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 10px !important;
+    height: 10px !important;
+    border: 1.5px solid #ffa726 !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Checkbox checked state for not found */
+  .xtm-highlight.xtm-not-found.xtm-selected::before {
+    background: #ffa726 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 8px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
   }
   
   /* Info icon on RIGHT */
@@ -174,8 +222,14 @@ export const HIGHLIGHT_STYLES = `
   .xtm-highlight.xtm-entity-not-addable {
     background: rgba(158, 158, 158, 0.15) !important;
     outline: 2px solid #9e9e9e !important;
-    padding: 1px 16px 1px 4px !important;
+    padding: 1px 16px 1px 4px !important;  /* No left padding - no checkbox for non-addable */
     cursor: default !important;
+  }
+  
+  /* No checkbox for entity not addable - explicitly hide */
+  .xtm-highlight.xtm-entity-not-addable::before {
+    display: none !important;
+    content: none !important;
   }
   
   /* Info icon on RIGHT for entity not addable */
@@ -203,8 +257,32 @@ export const HIGHLIGHT_STYLES = `
   .xtm-highlight.xtm-mixed-state {
     background: linear-gradient(90deg, rgba(255, 167, 38, 0.2) 0%, rgba(255, 167, 38, 0.2) 70%, rgba(0, 200, 83, 0.25) 70%, rgba(0, 200, 83, 0.25) 100%) !important;
     outline: 2px solid #ffa726 !important;
-    padding: 1px 16px 1px 4px !important;
+    padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for badge */
     cursor: pointer !important;
+  }
+  
+  /* Checkbox on LEFT for mixed state */
+  .xtm-highlight.xtm-mixed-state::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 2px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 10px !important;
+    height: 10px !important;
+    border: 1.5px solid #ffa726 !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Checkbox checked state for mixed state */
+  .xtm-highlight.xtm-mixed-state.xtm-selected::before {
+    background: #ffa726 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 8px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
   }
   
   /* Green checkmark badge on RIGHT for mixed state */
@@ -241,7 +319,31 @@ export const HIGHLIGHT_STYLES = `
   .xtm-highlight.xtm-ai-discovered {
     background: rgba(149, 117, 205, 0.2) !important;
     outline: 2px solid #9575cd !important;
-    padding: 1px 16px 1px 4px !important;  /* Space on right for AI icon */
+    padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for AI icon */
+  }
+  
+  /* Checkbox on LEFT for AI discovered */
+  .xtm-highlight.xtm-ai-discovered::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 2px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 10px !important;
+    height: 10px !important;
+    border: 1.5px solid #9575cd !important;
+    border-radius: 2px !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Checkbox checked state for AI discovered */
+  .xtm-highlight.xtm-ai-discovered.xtm-selected::before {
+    background: #9575cd !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: 8px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
   }
   
   /* AI sparkle icon on RIGHT */
@@ -497,137 +599,6 @@ export const HIGHLIGHT_STYLES = `
   .xtm-panel-overlay.hidden {
     display: none !important;
     visibility: hidden !important;
-  }
-
-  /* ========================================
-     TOAST NOTIFICATIONS
-     ======================================== */
-  .xtm-toast {
-    position: fixed;
-    top: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #070d19 0%, #09101e 100%);
-    color: rgba(255, 255, 255, 0.9);
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
-    z-index: 2147483647;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 500px;
-    animation: xtm-toast-slide-in 0.3s ease-out;
-  }
-
-  @keyframes xtm-toast-slide-in {
-    from {
-      transform: translateX(-50%) translateY(-100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
-  }
-
-  .xtm-toast.xtm-toast-hiding {
-    animation: xtm-toast-slide-out 0.2s ease-in forwards;
-  }
-
-  @keyframes xtm-toast-slide-out {
-    from {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
-    to {
-      transform: translateX(-50%) translateY(-100%);
-      opacity: 0;
-    }
-  }
-
-  @keyframes xtm-spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .xtm-toast-info {
-    border-left: 4px solid #0fbcff;
-  }
-
-  .xtm-toast-success {
-    border-left: 4px solid #4caf50;
-  }
-
-  .xtm-toast-error {
-    border-left: 4px solid #f44336;
-  }
-
-  .xtm-toast-warning {
-    border-left: 4px solid #ff9800;
-  }
-
-  .xtm-toast-icon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .xtm-toast-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(15, 188, 255, 0.3);
-    border-top-color: #0fbcff;
-    border-radius: 50%;
-    animation: xtm-spin 0.8s linear infinite;
-  }
-
-  .xtm-toast-message {
-    flex: 1;
-    line-height: 1.4;
-  }
-
-  .xtm-toast-action {
-    background: #0fbcff;
-    color: #001e3c;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: inherit;
-    white-space: nowrap;
-  }
-
-  .xtm-toast-action:hover {
-    background: #40caff;
-  }
-
-  .xtm-toast-close {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s;
-    flex-shrink: 0;
-  }
-
-  .xtm-toast-close:hover {
-    color: rgba(255, 255, 255, 0.9);
   }
 
 `;

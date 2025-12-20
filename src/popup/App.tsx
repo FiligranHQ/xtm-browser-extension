@@ -60,6 +60,7 @@ const App: React.FC = () => {
     hasAnyPlatformConfigured,
     hasEnterprise,
     aiConfigured,
+    splitScreenMode,
   } = usePlatformStatus();
 
   // Popover and dialog state
@@ -99,6 +100,7 @@ const App: React.FC = () => {
   } = usePopupActions({
     aiConfigured,
     hasEnterprise,
+    splitScreenMode,
     setPopoverAnchor,
     setShowEETrialDialog,
   });

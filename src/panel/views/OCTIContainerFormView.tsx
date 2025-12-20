@@ -730,9 +730,6 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
             <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ItemIcon type={option.entity_type} size="small" />
               <Typography variant="body2">{option.name}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                ({option.entity_type})
-              </Typography>
             </Box>
           )}
           size="small"

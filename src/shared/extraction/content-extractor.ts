@@ -123,6 +123,15 @@ export function extractContent(): ExtractedContent {
     result = shadowDOMContent!;
   }
   
+  // Try app page extraction for complex JS apps (OpenCTI, dashboards, etc.)
+  if (result.textContent.length < 200 || !result.content.trim()) {
+    log.debug('[ContentExtractor] Trying app page extraction');
+    const appContent = extractFromAppPage();
+    if (appContent && appContent.textContent.length > result.textContent.length) {
+      result = appContent;
+    }
+  }
+  
   // Last resort: extract visible text from the page
   if (result.textContent.length < 100) {
     log.debug('[ContentExtractor] Using visible viewport extraction');
@@ -402,6 +411,27 @@ function isElementVisible(el: Element): boolean {
 }
 
 /**
+ * Remove XTM extension highlights from a cloned element
+ * This unwraps highlight spans while preserving their text content
+ * Consistent with clearHighlights() in highlighting.ts
+ */
+function removeXTMHighlights(root: Document | HTMLElement): void {
+  // Remove XTM highlight styles
+  root.querySelectorAll('[data-xtm-highlight-styles]').forEach(el => el.remove());
+  
+  // Unwrap highlight spans - same approach as clearHighlights() in highlighting.ts
+  root.querySelectorAll('.xtm-highlight').forEach(highlight => {
+    const parent = highlight.parentNode;
+    if (parent) {
+      // Replace highlight with its text content (same as clearHighlights)
+      parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
+      // Merge adjacent text nodes
+      parent.normalize();
+    }
+  });
+}
+
+/**
  * Extract using Mozilla Readability with minimal preprocessing
  */
 function extractWithReadability(): ExtractedContent | null {
@@ -411,6 +441,9 @@ function extractWithReadability(): ExtractedContent | null {
     
     // Clone the entire document
     const clone = document.cloneNode(true) as Document;
+    
+    // Remove XTM extension highlights before extraction
+    removeXTMHighlights(clone);
     
     // Minimal preprocessing: only remove scripts and styles that could cause issues
     // Do NOT remove content elements - let Readability decide what's important
@@ -702,6 +735,9 @@ function extractFallback(): ExtractedContent {
   
   // Clone and clean the content
   const clone = contentElement.cloneNode(true) as HTMLElement;
+  
+  // Remove XTM extension highlights before extraction
+  removeXTMHighlights(clone);
   
   // Fix images before cleaning
   clone.querySelectorAll('img').forEach(img => {
@@ -1318,6 +1354,9 @@ function extractFromReactSPA(): ExtractedContent | null {
     // Clone and clean
     const clone = bestContainer.cloneNode(true) as HTMLElement;
     
+    // Remove XTM extension highlights before extraction
+    removeXTMHighlights(clone);
+    
     // Remove non-content elements
     clone.querySelectorAll('script, style, noscript, nav, footer, header, [role="navigation"], [role="banner"], [class*="nav"], [class*="menu"], [class*="sidebar"]').forEach(el => el.remove());
     
@@ -1354,6 +1393,122 @@ function extractFromReactSPA(): ExtractedContent | null {
 }
 
 /**
+ * Extract content from complex app pages (like OpenCTI, dashboards, etc.)
+ * This method captures the visible rendered content with basic structure
+ */
+function extractFromAppPage(): ExtractedContent | null {
+  try {
+    log.debug('[ContentExtractor] Attempting app page extraction');
+    
+    const title = extractTitle();
+    const structuredContent: string[] = [];
+    const htmlParts: string[] = [];
+    const images: ExtractedImage[] = [];
+    const seenImages = new Set<string>();
+    const seenText = new Set<string>();
+    
+    // Get all text-containing elements that are visible
+    const textElements = document.body.querySelectorAll(
+      'h1, h2, h3, h4, h5, h6, p, span, div, td, th, li, label, a'
+    );
+    
+    for (const el of textElements) {
+      // Skip if not visible
+      if (!isElementVisible(el)) continue;
+      
+      // Skip XTM extension highlights (our own elements)
+      if ((el as HTMLElement).classList?.contains('xtm-highlight')) continue;
+      
+      // Skip navigation, footer, sidebar elements
+      const className = ((el as HTMLElement).className || '').toLowerCase();
+      const id = ((el as HTMLElement).id || '').toLowerCase();
+      const parentClass = ((el.parentElement?.className || '') + ' ' + (el.parentElement?.parentElement?.className || '')).toLowerCase();
+      
+      if (/nav|menu|sidebar|footer|header|toolbar|drawer|modal|popup|overlay|breadcrumb|pagination|cookie|consent|banner|tooltip/i.test(className + ' ' + id + ' ' + parentClass)) {
+        continue;
+      }
+      
+      // Get direct text content (not from children)
+      let directText = '';
+      for (const child of el.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          directText += child.textContent || '';
+        }
+      }
+      directText = directText.trim();
+      
+      // Skip empty or very short text
+      if (!directText || directText.length < 3) continue;
+      
+      // Skip duplicates
+      const normalizedText = directText.toLowerCase().replace(/\s+/g, ' ');
+      if (seenText.has(normalizedText)) continue;
+      seenText.add(normalizedText);
+      
+      // Skip common UI text patterns
+      if (/^(click|tap|press|select|choose|enter|type|loading|please wait|cancel|ok|yes|no|close|open|save|delete|edit|add|remove|search|filter|sort|more|less|show|hide|expand|collapse|next|prev|back|forward|submit|reset)$/i.test(directText)) {
+        continue;
+      }
+      
+      const tagName = el.tagName.toLowerCase();
+      
+      // Add structured content
+      if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+        structuredContent.push(`\n## ${directText}\n`);
+        htmlParts.push(`<${tagName}>${escapeHtml(directText)}</${tagName}>`);
+      } else if (directText.length > 20) {
+        // Only add substantial text blocks
+        structuredContent.push(directText);
+        htmlParts.push(`<p>${escapeHtml(directText)}</p>`);
+      }
+    }
+    
+    // Extract images
+    document.body.querySelectorAll('img').forEach(img => {
+      if (!isElementVisible(img)) return;
+      
+      const imgEl = img as HTMLImageElement;
+      const src = getImageSrc(imgEl);
+      if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
+        seenImages.add(src);
+        images.push({
+          src: makeAbsoluteUrl(src),
+          alt: imgEl.alt || '',
+          caption: getFigureCaption(imgEl),
+          width: imgEl.naturalWidth || imgEl.width || 0,
+          height: imgEl.naturalHeight || imgEl.height || 0,
+        });
+      }
+    });
+    
+    const textContent = cleanText(structuredContent.join('\n'));
+    const htmlContent = htmlParts.join('\n');
+    
+    if (textContent.length < 100) {
+      return null;
+    }
+    
+    log.debug('[ContentExtractor] App page extraction got:', textContent.length, 'chars');
+    
+    return {
+      title,
+      byline: extractByline(),
+      excerpt: textContent.substring(0, 200).trim() + '...',
+      content: htmlContent,
+      textContent,
+      images,
+      url: window.location.href,
+      siteName: extractSiteName(),
+      publishedDate: extractDate(),
+      readingTime: estimateReadingTime(textContent),
+    };
+  } catch (error) {
+    log.error('[ContentExtractor] App page extraction failed:', error);
+    return null;
+  }
+}
+
+/**
  * Extract visible content directly from the DOM
  * This is a last resort when other methods fail
  */
@@ -1370,6 +1525,11 @@ function extractFromVisibleContent(): ExtractedContent {
   function processElement(element: Element): void {
     // Skip invisible elements
     if (!isElementVisible(element)) {
+      return;
+    }
+    
+    // Skip XTM extension highlights (our own elements)
+    if ((element as HTMLElement).classList?.contains('xtm-highlight')) {
       return;
     }
     
@@ -1413,6 +1573,8 @@ function extractFromVisibleContent(): ExtractedContent {
         // Clone for HTML
         const clone = element.cloneNode(true) as HTMLElement;
         clone.querySelectorAll('script, style').forEach(el => el.remove());
+        // Remove XTM highlights from the clone
+        removeXTMHighlights(clone);
         htmlParts.push(clone.outerHTML);
       }
       return;

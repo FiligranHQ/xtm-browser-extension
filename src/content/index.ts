@@ -878,7 +878,7 @@ async function handleMixedStatePlatformClick(target: HTMLElement, value: string)
       await showPanel(entity, platformMatches, hasScanResults, scanResultsToRestore);
     }
   } catch (e) {
-    log.error(' Failed to parse platform entities for mixed state:', e);
+    log.error(' Failed to parse multi-platform data for mixed state:', e);
   }
 }
 
@@ -1242,10 +1242,39 @@ async function scanAllPlatforms(): Promise<void> {
       });
     } else {
       showToast({ type: 'error', message: 'Scan failed: ' + (response?.error || 'Unknown error') });
+      // Send empty results so panel stops spinning and shows "no results"
+      await openPanel();
+      sendPanelMessage('SCAN_RESULTS', { 
+        observables: [], 
+        openctiEntities: [], 
+        openaevEntities: [], 
+        cves: [],
+        pageContent: '', 
+        pageTitle: document.title, 
+        pageUrl: window.location.href,
+        error: response?.error || 'Scan failed'
+      });
     }
   } catch (error) {
     log.error(' SCAN_ALL exception:', error);
     showToast({ type: 'error', message: 'Scan error: ' + (error instanceof Error ? error.message : 'Unknown') });
+    // Send empty results so panel stops spinning and shows "no results"
+    try {
+      await openPanel();
+      sendPanelMessage('SCAN_RESULTS', { 
+        observables: [], 
+        openctiEntities: [], 
+        openaevEntities: [], 
+        cves: [],
+        pageContent: '', 
+        pageTitle: document.title, 
+        pageUrl: window.location.href,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } catch {
+      // Panel might not be available, just log
+      log.debug('Could not send error results to panel');
+    }
   }
 }
 
@@ -1338,6 +1367,20 @@ async function scanPageForAtomicTesting(): Promise<void> {
   } catch (error) {
     log.error(' Atomic testing scan error:', error);
     showToast({ type: 'error', message: 'Atomic testing scan error: ' + (error instanceof Error ? error.message : 'Unknown') });
+    // Send empty results so panel stops spinning and shows "no results"
+    try {
+      await openPanel();
+      const theme = await getCurrentTheme();
+      sendPanelMessage('ATOMIC_TESTING_SCAN_RESULTS', {
+        targets: [],
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        theme,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } catch {
+      log.debug('Could not send error results to panel');
+    }
   }
 }
 
@@ -1419,6 +1462,22 @@ async function scanPageForScenario(): Promise<void> {
   } catch (error) {
     log.error(' Scenario scan error:', error);
     showToast({ type: 'error', message: 'Scenario scan error: ' + (error instanceof Error ? error.message : 'Unknown') });
+    // Send empty results so panel stops spinning and shows "no results"
+    try {
+      await openPanel();
+      const theme = await getCurrentTheme();
+      sendPanelMessage('SHOW_SCENARIO_PANEL', {
+        attackPatterns: [],
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        pageDescription: '',
+        platformId: undefined,
+        theme,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } catch {
+      log.debug('Could not send error results to panel');
+    }
   }
 }
 

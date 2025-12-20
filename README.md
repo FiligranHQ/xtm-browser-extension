@@ -179,7 +179,7 @@ Full documentation is available in the [docs](./docs) folder:
 |---------|--------|-------|
 | Chrome  | ✅ Full Support | Native side panel + floating panel |
 | Edge    | ✅ Full Support | Native side panel + floating panel |
-| Firefox | ✅ Full Support | Floating panel only |
+| Firefox | ✅ Full Support | Native sidebar + floating panel |
 | Safari  | ⚠️ Experimental | Requires wrapper |
 
 ## API Requirements

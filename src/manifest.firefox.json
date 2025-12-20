@@ -37,6 +37,17 @@
     },
     "default_title": "Filigran XTM"
   },
+  "sidebar_action": {
+    "default_panel": "panel/index.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.svg",
+      "32": "assets/icons/icon-32.svg",
+      "48": "assets/icons/icon-48.svg",
+      "128": "assets/icons/icon-128.svg"
+    },
+    "default_title": "Filigran XTM",
+    "open_at_install": false
+  },
   "options_ui": {
     "page": "options/index.html",
     "open_in_tab": true

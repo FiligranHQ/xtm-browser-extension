@@ -718,11 +718,11 @@ export class DetectionEngine {
     const entityMap = await getAllCachedOAEVEntityNamesForMatching();
     
     if (entityMap.size === 0) {
-      log.debug(' No cached platform entities available for detection');
+      log.debug(' No cached OpenAEV entities available for detection');
       return detected;
     }
     
-    log.debug(`Searching for ${entityMap.size} cached platform entity names/aliases`);
+    log.debug(`Searching for ${entityMap.size} cached OpenAEV entity names/aliases`);
     
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);

@@ -22,8 +22,7 @@ import type { ExtensionSettings } from '../../shared/types/settings';
 
 /**
  * Detect if running in Firefox
- * Firefox doesn't support programmatic control of sidebar opening,
- * so split screen mode is Chrome/Edge only
+ * Firefox uses browser.sidebarAction API for sidebar support
  */
 const isFirefox = (): boolean => {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Firefox');
@@ -44,7 +43,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
   onResetAppearance,
   onSave,
 }) => {
-  // Split screen mode is only available on Chrome/Edge (not Firefox)
+  // Detect browser for appropriate messaging
   const isFirefoxBrowser = useMemo(() => isFirefox(), []);
   
   return (
@@ -106,7 +105,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           </Typography>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3, opacity: isFirefoxBrowser ? 0.6 : 1 }}>
+        <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mt: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
             <VerticalSplitOutlined sx={{ color: 'text.secondary' }} />
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Panel Display Mode</Typography>
@@ -115,10 +114,9 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           <FormControlLabel
             control={
               <Switch
-                checked={isFirefoxBrowser ? false : (settings.splitScreenMode ?? false)}
+                checked={settings.splitScreenMode ?? false}
                 onChange={(e) => onSetSplitScreenMode(e.target.checked)}
                 color="primary"
-                disabled={isFirefoxBrowser}
               />
             }
             label="Enable split screen mode"
@@ -126,10 +124,7 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
           />
           
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', ml: 6 }}>
-            {isFirefoxBrowser 
-              ? 'Split screen mode is not available on Firefox. This feature requires Chrome or Edge.'
-              : 'When enabled, the panel will use your browser\'s native side panel instead of a floating window. The panel will be controlled by the browser and remain open until you close it via the browser\'s UI.'
-            }
+            When enabled, the panel will use your browser's native {isFirefoxBrowser ? 'sidebar' : 'side panel'} instead of a floating window. The panel opens automatically when you perform actions and remains open until you close it.
           </Typography>
         </Paper>
       </Box>

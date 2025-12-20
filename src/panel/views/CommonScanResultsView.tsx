@@ -884,19 +884,18 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               const entityValue = e.value || e.name;
               return selectedScanItems.has(entityValue) && !isFoundInOpenCTI(e);
             }).length;
-            const selectedExistingCount = selectedCount - selectedNewCount;
 
             if (selectableEntities.length === 0) return null;
 
             return (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 1 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }}>
                   {selectedCount > 0
-                    ? `${selectedCount} selected (${selectedNewCount} new, ${selectedExistingCount} existing)`
-                    : `${selectableEntities.length} entities available for selection`
+                    ? `${selectedCount} sel.${selectedNewCount > 0 ? ` (${selectedNewCount} new)` : ''}`
+                    : `${selectableEntities.length} available`
                   }
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>
                   <Button
                     size="small"
                     variant="outlined"
@@ -915,6 +914,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                       fontSize: '0.75rem',
                       py: 0.25,
                       minWidth: 'auto',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {allSelected ? 'Deselect all' : 'Select all'}
@@ -930,6 +930,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                         fontSize: '0.75rem',
                         py: 0.25,
                         minWidth: 'auto',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       Import ({selectedCount})

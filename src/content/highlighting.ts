@@ -233,7 +233,7 @@ export function highlightResults(
     }
   }
   
-  // Collect platform entities
+  // Collect OpenAEV entities
   if (results.openaevEntities) {
     for (const entity of results.openaevEntities) {
       const valueLower = entity.name.toLowerCase();
@@ -343,7 +343,7 @@ export function highlightResults(
     }
   }
   
-  // Highlight platform entities
+  // Highlight OpenAEV entities
   // Rebuild nodeMap as CVE highlighting may have modified the DOM
   if (results.openaevEntities && results.openaevEntities.length > 0) {
     textNodes = getTextNodes(document.body);

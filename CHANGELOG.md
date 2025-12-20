@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.11] - 2024-12-20
+## [0.0.11] - 2024-12-19
 
 ### Added
 - **Labels field improvements**: Labels autocomplete in container form now fetches only initial 10 labels, searches on the fly with 1.2-second debounce, and includes a "+" button to create new labels directly within the field
@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hidden content filtering**: Scan results now exclude text from tooltips, popovers, and screen-reader-only elements (e.g., "Skip to content" links) that are not visually displayed but picked up by DOM extraction
 - **React/SPA content extraction**: Added fallback extraction methods for React, Next.js, Nuxt.js, and other SPA frameworks that render content dynamically via JavaScript
 - **Visible content extraction**: Last-resort extraction method that walks through all visible DOM elements when other methods fail
+- **App page content extraction**: Added specialized extraction for complex app pages (like OpenCTI dashboards) that captures visible text with basic structure preservation
+- **Firefox sidebar support**: Firefox now fully supports split screen mode using the native sidebar. Enable in Settings > Appearance. The sidebar opens automatically when you scan or perform actions, just like Chrome/Edge. It integrates with Firefox's native panel system and persists across page navigation
+- **Selection checkboxes on highlights**: Restored selection checkboxes on the left side of highlights for "Found", "Not Found", "Mixed State", and "AI Discovered" entities. Checkboxes show border when unchecked and filled with checkmark when selected
 
 ### Changed
 - **Highlight styling refined**: Highlights are now less aggressive and no longer cause layout shifts or distortions on complex pages. Uses `display: inline` instead of `inline-block`, reduced padding, and proper z-index layering
@@ -23,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Table-top scenario AI prompts improved**: AI-generated table-top exercises now focus on presenting crisis situations without prescribing defensive actions, feature progressive intensity escalation, use varied email senders (SOC, executives, legal, etc.), and create immediately playable exercises
 - **Consistent multi-select chip styling**: All multi-select autocomplete fields (Report Types, Labels, Marking Definitions, etc.) now use consistent chip styling with light grey background and 4px border radius
 - **Color picker dark mode support**: Label creation color picker now properly respects dark/light theme mode
+- **Compact selection indicator**: Selection text in scan results now more compact - shows "X sel." with "(Y new)" only when there are new items, and "X available" instead of verbose text
 
 ### Fixed
 - **Critical: OpenAEV atomic testing and scenarios not finding attack patterns**: Fixed condition that checked for `platformEntities` instead of `openaevEntities`, causing attack pattern detection to always fail for OpenAEV-only scans
@@ -35,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Labels loading error**: Fixed "Unknown message type" error when loading labels in container form by adding missing `SEARCH_LABELS` handler in background script
 - **Back to actions link consistency**: Entity overview screens now always show a "Back to actions" link for consistent navigation
 - **Label creation not adding to selection**: Fixed label creation not properly adding newly created labels to the selected list
+- **XTM highlights in extracted content**: Content extraction for PDF/HTML now removes XTM extension highlights before processing, ensuring clean output without colored spans
+- **Toast not showing in Edge**: Rewrote toast notification system using Shadow DOM for complete isolation from page styles, ensuring consistent display across all browsers (Chrome, Firefox, Edge)
+- **Scan error infinite spinner**: When scanning fails (e.g., connection error), the panel now properly shows "no results" instead of spinning forever
+- **Small screen selection bar layout**: Selection indicator and buttons in scan results now properly maintain shape on small screens - text can wrap while buttons stay vertically centered with `flexShrink: 0` and `whiteSpace: nowrap`
 
 ### Removed
 - **Debug logging**: Removed all debug console.log statements from content script for cleaner production builds

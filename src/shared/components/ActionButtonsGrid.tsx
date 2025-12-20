@@ -66,7 +66,7 @@ export const ActionButtonsGrid: React.FC<ActionButtonsGridProps> = ({
           <ActionButton
             icon={<CenterFocusStrongOutlined />}
             label="Scan"
-            subtitle="Find entities across all platforms"
+            subtitle="Find entities across platforms"
             tooltip="Scan page for entities in OpenCTI and OpenAEV"
             onClick={onScan}
             color="#2196f3"

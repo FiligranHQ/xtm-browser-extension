@@ -6,6 +6,9 @@
 
 import { successResponse, errorResponse, type MessageResponse, type SendResponseFn } from '../../shared/types/common';
 
+// Re-export for convenience
+export { successResponse, errorResponse, type MessageResponse, type SendResponseFn };
+
 // ============================================================================
 // Handler-Specific Types
 // ============================================================================

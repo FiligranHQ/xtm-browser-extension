@@ -399,8 +399,6 @@ describe('Seeded Data Tests', () => {
 
   it('should find seeded scenarios', async (context) => {
     if (skipIfUnavailable(context)) return;
-      return;
-    }
     
     const scenarios = await client.getScenarios();
     expect(Array.isArray(scenarios)).toBe(true);

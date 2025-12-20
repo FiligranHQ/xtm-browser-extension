@@ -5,7 +5,6 @@
  * Includes:
  * - AI theme colors
  * - Platform icons and colors
- * - Platform sorting and filtering
  */
 
 import React from 'react';
@@ -13,7 +12,6 @@ import { ComputerOutlined } from '@mui/icons-material';
 import { MicrosoftWindows, Linux, Apple, Android } from 'mdi-material-ui';
 import { THEME_DARK_AI } from '../../shared/theme/theme-dark';
 import { THEME_LIGHT_AI } from '../../shared/theme/theme-light';
-import type { MultiPlatformResult, PlatformInfo } from '../types/panel-types';
 
 // ============================================================================
 // AI Theme Colors
@@ -96,40 +94,6 @@ export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'open
   }
 };
 
-// ============================================================================
-// Platform Sorting & Filtering
-// ============================================================================
-
-/**
- * Sort multi-platform results with OpenCTI platforms first.
- * OpenCTI is the knowledge base reference, so it should always be displayed first.
- */
-export const sortPlatformResults = (results: MultiPlatformResult[]): MultiPlatformResult[] => {
-  return [...results].sort((a, b) => {
-    const aIsOpenCTI = a.entity.platformType === 'opencti' || !a.entity.platformType;
-    const bIsOpenCTI = b.entity.platformType === 'opencti' || !b.entity.platformType;
-    if (aIsOpenCTI && !bIsOpenCTI) return -1;
-    if (!aIsOpenCTI && bIsOpenCTI) return 1;
-    return 0;
-  });
-};
-
-/**
- * Filter platforms by type
- */
-export const filterPlatformsByType = (
-  platforms: PlatformInfo[],
-  type: 'opencti' | 'openaev'
-): PlatformInfo[] => {
-  return platforms.filter(p => p.type === type);
-};
-
-/**
- * Check if any platform has Enterprise Edition
- */
-export const hasEnterprisePlatform = (platforms: PlatformInfo[]): boolean => {
-  return platforms.some(p => p.isEnterprise);
-};
-
 // Note: For Filigran platform display (OpenCTI/OpenAEV names, logo paths),
 // use the functions from '../../shared/platform/registry' directly
+// Note: For platform sorting (sortPlatformResults), use the hook from useEntityState

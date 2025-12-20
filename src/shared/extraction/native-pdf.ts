@@ -227,13 +227,13 @@ function sendDebuggerCommand(
   target: chrome.debugger.Debuggee,
   method: string,
   params?: object
-): Promise<object | undefined> {
+): Promise<{ [key: string]: unknown } | undefined> {
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(target, method, params, (result) => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
-        resolve(result);
+        resolve(result as { [key: string]: unknown } | undefined);
       }
     });
   });

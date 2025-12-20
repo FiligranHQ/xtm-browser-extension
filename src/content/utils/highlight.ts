@@ -238,3 +238,215 @@ export function scrollToAndFlashHighlight(highlight: HTMLElement): void {
   }, 3000);
 }
 
+/**
+ * Extended match info with optional match length (for regex matches)
+ */
+export interface ExtendedMatchInfo extends MatchPosition {
+  matchLength?: number;
+}
+
+/**
+ * Configuration for creating a highlight element
+ */
+export interface HighlightConfig {
+  className: string;
+  dataAttributes: Record<string, string>;
+  handlers?: HighlightEventHandlers;
+}
+
+/**
+ * Apply highlights using a config factory pattern
+ * More flexible version that supports both callback and config-based highlight creation
+ * 
+ * @param matches - Array of match positions to highlight
+ * @param createConfig - Factory function that creates highlight config from match info
+ * @param highlightsList - Array to push created highlights to (optional)
+ * @returns Array of created highlight elements
+ */
+export function applyHighlightsWithConfig<T extends ExtendedMatchInfo>(
+  matches: T[],
+  createConfig: (match: T) => HighlightConfig | null,
+  highlightsList?: HTMLElement[]
+): HTMLElement[] {
+  const createdHighlights: HTMLElement[] = [];
+  
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i];
+    const { node, localStart, localEnd } = match;
+    
+    try {
+      // Verify node is still valid and not already highlighted
+      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+        continue;
+      }
+      
+      const currentNodeText = node.textContent || '';
+      if (localEnd > currentNodeText.length) {
+        continue;
+      }
+      
+      // Ensure styles are injected if this node is in a Shadow DOM
+      ensureStylesInShadowRoot(node);
+      
+      const range = document.createRange();
+      range.setStart(node, localStart);
+      range.setEnd(node, localEnd);
+      
+      if (range.toString().trim().length === 0) {
+        continue;
+      }
+      
+      const config = createConfig(match);
+      if (!config) continue;
+      
+      // Create highlight element from config
+      const highlight = document.createElement('span');
+      highlight.className = config.className;
+      
+      // Set data attributes
+      Object.entries(config.dataAttributes).forEach(([key, value]) => {
+        highlight.dataset[key] = value;
+      });
+      
+      // Add event handlers
+      if (config.handlers) {
+        highlight.addEventListener('mouseenter', config.handlers.onHover, { capture: true });
+        highlight.addEventListener('mouseleave', config.handlers.onLeave, { capture: true });
+        highlight.addEventListener('click', config.handlers.onClick, { capture: true });
+        highlight.addEventListener('mousedown', config.handlers.onMouseDown, { capture: true });
+        highlight.addEventListener('mouseup', config.handlers.onMouseUp, { capture: true });
+        highlight.addEventListener('contextmenu', config.handlers.onRightClick, { capture: true });
+      }
+      
+      range.surroundContents(highlight);
+      createdHighlights.push(highlight);
+      if (highlightsList) {
+        highlightsList.push(highlight);
+      }
+    } catch {
+      // Range might cross node boundaries or node may have been modified
+    }
+  }
+  
+  return createdHighlights;
+}
+
+/**
+ * Options for finding match positions with boundary checking
+ */
+export interface FindMatchOptions {
+  caseSensitive?: boolean;
+  skipHighlighted?: boolean;
+  checkBoundaries?: boolean;
+  boundaryChecker?: (charBefore: string | undefined, charAfter: string | undefined) => boolean;
+}
+
+/**
+ * Find all occurrences of a search value with optional boundary checking
+ * Enhanced version that supports word boundary validation
+ */
+export function findMatchPositionsWithBoundaries(
+  fullText: string,
+  searchValue: string,
+  nodeMap: NodeMapEntry[],
+  options: FindMatchOptions = {}
+): MatchPosition[] {
+  const { 
+    caseSensitive = false, 
+    skipHighlighted = true,
+    checkBoundaries = false,
+    boundaryChecker,
+  } = options;
+  
+  if (!searchValue || searchValue.length < 2) return [];
+  
+  const searchText = caseSensitive ? searchValue : searchValue.toLowerCase();
+  const textToSearch = caseSensitive ? fullText : fullText.toLowerCase();
+  
+  const matches: MatchPosition[] = [];
+  let pos = 0;
+  
+  while ((pos = textToSearch.indexOf(searchText, pos)) !== -1) {
+    const endPos = pos + searchValue.length;
+    
+    // Check word boundaries if required
+    if (checkBoundaries && boundaryChecker) {
+      const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
+      const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
+      if (!boundaryChecker(charBefore, charAfter)) {
+        pos++;
+        continue;
+      }
+    }
+    
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        // Skip if already highlighted
+        if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) {
+          break;
+        }
+        
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
+        
+        const textToHighlight = nodeText.substring(localStart, localEnd);
+        const expectedText = caseSensitive 
+          ? searchValue.substring(0, textToHighlight.length)
+          : searchValue.substring(0, textToHighlight.length).toLowerCase();
+        const actualText = caseSensitive 
+          ? textToHighlight 
+          : textToHighlight.toLowerCase();
+          
+        if (!textToHighlight || actualText !== expectedText) {
+          break;
+        }
+        
+        if (localEnd <= nodeText.length && textToHighlight.length > 0) {
+          matches.push({ pos, node, localStart, localEnd });
+        }
+        break;
+      }
+    }
+    
+    pos = endPos;
+  }
+  
+  return matches;
+}
+
+/**
+ * Collect matches using a regex pattern
+ */
+export function collectRegexMatches(
+  fullText: string,
+  pattern: RegExp,
+  nodeMap: NodeMapEntry[],
+  skipHighlighted = true
+): ExtendedMatchInfo[] {
+  const matches: ExtendedMatchInfo[] = [];
+  
+  let match;
+  while ((match = pattern.exec(fullText)) !== null) {
+    const pos = match.index;
+    const matchLength = match[0].length;
+    
+    for (const { node, start, end } of nodeMap) {
+      if (pos >= start && pos < end) {
+        if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) break;
+        
+        const nodeText = node.textContent || '';
+        const localStart = pos - start;
+        const localEnd = Math.min(localStart + matchLength, nodeText.length);
+        
+        if (localEnd <= nodeText.length) {
+          matches.push({ pos, matchLength, node, localStart, localEnd });
+        }
+        break;
+      }
+    }
+  }
+  
+  return matches;
+}
+

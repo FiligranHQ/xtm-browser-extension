@@ -7,24 +7,6 @@
  */
 
 import type { OAEVInjectorContract } from '../../shared/types/openaev';
-import type { 
-  ScanResultEntity, 
-  ScanResultPlatformMatch, 
-  ImportResults 
-} from '../../shared/types/scan';
-import type { 
-  GeneratedAtomicTest, 
-  GeneratedScenario,
-  ResolvedRelationship
-} from '../../shared/api/ai/types';
-
-// Re-export shared types used by panel components
-export type { ScanResultEntity, ScanResultPlatformMatch, ImportResults };
-export type { ResolvedRelationship };
-
-// Type aliases for backward compatibility
-export type AIGeneratedPayload = GeneratedAtomicTest;
-export type AIGeneratedScenario = GeneratedScenario;
 
 // Panel modes
 export type PanelMode =

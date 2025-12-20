@@ -666,7 +666,7 @@ const App: React.FC = () => {
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
-        const newSettings = changes.settings.newValue;
+        const newSettings = changes.settings.newValue as { ai?: { provider?: string; apiKey?: string; model?: string } } | undefined;
         if (newSettings) {
           // Reload platforms via hook (handles platform state updates)
           loadPlatforms();

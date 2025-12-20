@@ -303,7 +303,16 @@ export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest):
   const emailLanguage = request.emailLanguage || 'english';
 
   const systemPrompt = isTableTop
-    ? `You are a simulation expert creating table-top exercises. Generate realistic incident simulation scenarios with email notifications that simulate real-world scenarios for training purposes. ${themeConfig.systemPromptSuffix} Each inject should be an email notification that advances the scenario narrative. Output in JSON format only.`
+    ? `You are an expert crisis simulation designer creating immersive table-top exercises. You create scenarios that CHALLENGE players to make decisions, NOT scenarios that tell them what to do.
+
+CORE PRINCIPLES:
+1. PRESENT THE CRISIS, NOT THE SOLUTION - Each inject presents a situation that requires player discussion and decision-making
+2. PROGRESSIVE ESCALATION - Start with early warning signs, build to full crisis, add complications
+3. PRESSURE FROM MULTIPLE ANGLES - Use different senders (SOC, executives, media, regulators, partners) to create realistic pressure
+4. REALISTIC CRISIS COMMUNICATION - Emails should feel urgent, sometimes incomplete, forcing players to act with imperfect information
+5. NO DEFENSIVE ACTIONS IN THE SCENARIO - Never include what players "should do" or expected responses
+
+${themeConfig.systemPromptSuffix} Output in JSON format only.`
     : `You are a cybersecurity adversary simulation expert. Generate realistic attack scenarios with executable payloads that simulate specific attack techniques. Commands must be SAFE, NON-DESTRUCTIVE, and reversible. Output in JSON format only.`;
 
   let prompt: string;
@@ -322,13 +331,13 @@ Even if the page content mentions cyber-related topics, reframe the scenario to 
       i === 0 ? 0 : Math.round(i * interval)
     ).join(', ');
 
-    prompt = `Generate a table-top exercise scenario based on the following:
+    prompt = `Generate a PLAYABLE table-top crisis exercise based on the following:
 
 Scenario Name: ${request.scenarioName}
-Type: Table-Top Exercise
+Type: Table-Top Exercise (Crisis Simulation)
 Theme: ${themeConfig.promptContext}
 Total Duration: ${duration} minutes
-Number of Email Notifications: ${numInjects}
+Number of Email Injects: ${numInjects}
 EMAIL LANGUAGE: ${emailLanguage.toUpperCase()} - All email subjects and bodies MUST be written in ${emailLanguage}.
 ${themeInstruction}
 Source Intelligence:
@@ -344,36 +353,55 @@ ${truncatedContent}
 CRITICAL TIMING REQUIREMENT:
 - Total exercise duration: ${duration} minutes
 - Number of injects: ${numInjects}
-- Time interval between injects: ${interval} minutes
+- Time interval between injects: ~${interval} minutes
 - First inject at minute 0, last inject at minute ${duration}
 - Expected delayMinutes values: ${timingExample}${numInjects > 5 ? '...' : ''} (evenly distributed)
+
+CRISIS ESCALATION STRUCTURE (adapt number of phases to ${numInjects} injects):
+- Phase 1 (first ~20%): INITIAL ALERT - First signs of an issue (monitoring alert, unusual activity report, external tip)
+- Phase 2 (next ~30%): CONFIRMATION & SCOPE - The situation is real and growing (more systems affected, initial impact assessment)
+- Phase 3 (next ~30%): FULL CRISIS - Peak intensity (executive pressure, media inquiries, regulatory concerns, partner notifications)
+- Phase 4 (final ~20%): COMPLICATIONS - New twists that require adaptation (additional findings, external pressures, resource constraints)
+
+EMAIL SENDER VARIETY (use different senders to create realistic pressure):
+- SOC/Security Team: Technical alerts and findings
+- IT Operations: System status and availability concerns
+- Executive/Management: Business impact concerns, requests for updates
+- Legal/Compliance: Regulatory and contractual obligations
+- Communications/PR: Media inquiries, public perception
+- External Partners: Customers, vendors, regulators asking questions
+- Threat Intelligence: External reports or warnings
 
 Generate a JSON response with this structure:
 {
   "name": "scenario name",
-  "description": "detailed scenario description for the exercise",
+  "description": "Brief context for the facilitator (2-3 sentences about the overall crisis scenario)",
   "subtitle": "short tagline describing the exercise theme",
   "category": "table-top",
   "injects": [
     {
-      "title": "inject/email notification title",
-      "description": "brief description of this notification",
+      "title": "inject title (internal reference)",
+      "description": "Facilitator note: what this inject is meant to trigger (1 sentence)",
       "type": "email",
-      "subject": "[SIMULATION] realistic email subject line in ${emailLanguage}",
-      "body": "Professional email body in ${emailLanguage} describing the simulated ${themeConfig.promptContext.toLowerCase()} event (2-4 sentences)",
+      "subject": "[EXERCISE] realistic email subject in ${emailLanguage}",
+      "body": "The email content in ${emailLanguage}. Must be written as a realistic crisis email that PRESENTS A SITUATION requiring player decisions. Include sender name/role at the end. DO NOT include what players should do or expected responses.",
       "delayMinutes": 0 for first inject, then ${interval}, ${interval * 2}, etc. (MUST distribute across ${duration} minutes)
     }
   ]
 }
 
-Create exactly ${numInjects} email notification injects that:
-1. Build a coherent ${themeConfig.promptContext.toLowerCase()} narrative progressing through the incident
-2. MUST be evenly distributed across the ${duration} minute duration with ~${interval} minute intervals
-3. ${hasAttackPatterns ? 'Reference the detected topics where relevant, adapting them to the ' + themeConfig.promptContext + ' theme' : 'Create realistic scenarios based on ' + themeConfig.promptContext.toLowerCase() + ' topics derived from the page content'}
-4. Include realistic subject lines marked as [SIMULATION]
-5. Have professional, contextual email bodies suitable for training
-6. ALL EMAIL SUBJECTS AND BODIES MUST BE IN ${emailLanguage.toUpperCase()}
-7. Focus specifically on ${themeConfig.promptContext.toLowerCase()} scenarios (${themeConfig.exampleTopics})`;
+CRITICAL RULES FOR EACH EMAIL INJECT:
+1. PRESENT THE SITUATION, NOT THE SOLUTION - Describe what is happening, what has been discovered, what pressure exists. NEVER include what players "should do" or expected defensive actions.
+2. CREATE DECISION POINTS - Each email should force players to discuss: "What do we do now?" Examples:
+   - "We detected X. Awaiting your guidance." (NOT "We detected X and are isolating systems")
+   - "Media is asking for comment. How do you want us to respond?" (NOT "We should prepare a statement saying...")
+   - "Regulator wants an update by EOD. What information can we share?" (NOT "We need to notify the regulator")
+3. PROGRESSIVE INTENSITY - Start with ambiguous early signals, escalate to clear crisis, add complications
+4. REALISTIC TONE - Urgent, sometimes incomplete information, appropriate sender perspective
+5. VARIED SENDERS - Use different roles/departments across the exercise
+6. ALL TEXT MUST BE IN ${emailLanguage.toUpperCase()}
+
+Create exactly ${numInjects} email injects that form a coherent, escalating crisis narrative where players must make real decisions. This exercise should be PLAYABLE immediately - no additional preparation needed.`;
   } else {
     prompt = `Generate a technical adversary simulation scenario based on the following:
 

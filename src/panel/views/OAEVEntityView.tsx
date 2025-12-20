@@ -232,35 +232,38 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   const platformLogo = getPlatformLogoName(currentPlatformType);
   const hasMultiplePlatforms = multiPlatformResults.length > 1;
   
+  // Handle back button click
+  const handleBackClick = () => {
+    if (entityFromScanResults) {
+      setEntityFromScanResults(false);
+      setMultiPlatformResults([]);
+      setPanelMode('scan-results');
+    } else if (entityFromSearchMode) {
+      setMultiPlatformResults([]);
+      setPanelMode(entityFromSearchMode);
+      setEntityFromSearchMode(null);
+    } else {
+      setPanelMode('empty');
+    }
+  };
+
   return (
     <Box sx={{ p: 2, overflow: 'auto' }}>
-      {/* Back to search/scan results button */}
-      {(entityFromSearchMode || entityFromScanResults) && (
-        <Box sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            startIcon={<ChevronLeftOutlined />}
-            onClick={() => {
-              if (entityFromScanResults) {
-                setEntityFromScanResults(false);
-                setMultiPlatformResults([]);
-                setPanelMode('scan-results');
-              } else if (entityFromSearchMode) {
-                setMultiPlatformResults([]);
-                setPanelMode(entityFromSearchMode);
-                setEntityFromSearchMode(null);
-              }
-            }}
-            sx={{ 
-              color: 'text.secondary',
-              textTransform: 'none',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            {entityFromScanResults ? 'Back to scan results' : 'Back to search'}
-          </Button>
-        </Box>
-      )}
+      {/* Back button - always visible for consistent navigation */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={handleBackClick}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          {entityFromScanResults ? 'Back to scan results' : entityFromSearchMode ? 'Back to search' : 'Back to actions'}
+        </Button>
+      </Box>
       
       {/* Platform indicator bar with navigation */}
       {(availablePlatforms.length > 1 || hasMultiplePlatforms) && (

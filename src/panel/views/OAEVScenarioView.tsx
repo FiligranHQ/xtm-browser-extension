@@ -1315,12 +1315,30 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             <TextField
               label="Number of Injects"
               type="number"
-              value={scenarioAINumberOfInjects}
-              onChange={(e) => setScenarioAINumberOfInjects(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+              value={scenarioAINumberOfInjects || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setScenarioAINumberOfInjects(0);
+                } else {
+                  const num = parseInt(val, 10);
+                  if (!isNaN(num)) {
+                    // Allow typing any value, cap at 50
+                    setScenarioAINumberOfInjects(Math.min(50, Math.max(0, num)));
+                  }
+                }
+              }}
               size="small"
               fullWidth
-              inputProps={{ min: 1, max: 20 }}
-              helperText="Number of injects to generate (1-20)"
+              inputProps={{ min: 1, max: 50 }}
+              error={scenarioAINumberOfInjects < 1 || scenarioAINumberOfInjects > 50}
+              helperText={
+                scenarioAINumberOfInjects < 1 
+                  ? "Number of injects is required (1-50)" 
+                  : scenarioAINumberOfInjects > 50 
+                    ? "Maximum is 50 injects"
+                    : "Number of injects to generate (1-50)"
+              }
             />
             
             {scenarioTypeAffinity === 'TABLE-TOP' ? (
@@ -1343,11 +1361,30 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
                 <TextField
                   label="Exercise Duration (minutes)"
                   type="number"
-                  value={scenarioAITableTopDuration}
-                  onChange={(e) => setScenarioAITableTopDuration(Math.max(15, parseInt(e.target.value) || 60))}
+                  value={scenarioAITableTopDuration || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setScenarioAITableTopDuration(0);
+                    } else {
+                      const num = parseInt(val, 10);
+                      if (!isNaN(num)) {
+                        // Allow typing any value, cap at 2880 (48 hours)
+                        setScenarioAITableTopDuration(Math.min(2880, Math.max(0, num)));
+                      }
+                    }
+                  }}
                   size="small"
                   fullWidth
-                  inputProps={{ min: 15, step: 15 }}
+                  inputProps={{ min: 1, max: 2880 }}
+                  error={scenarioAITableTopDuration < 1 || scenarioAITableTopDuration > 2880}
+                  helperText={
+                    scenarioAITableTopDuration < 1 
+                      ? "Duration is required (1-2880 minutes)" 
+                      : scenarioAITableTopDuration > 2880 
+                        ? "Maximum duration is 48 hours (2880 minutes)"
+                        : "Total exercise duration (max 48 hours)"
+                  }
                 />
                 <FormControl fullWidth size="small">
                   <InputLabel>Email Language</InputLabel>
@@ -1394,7 +1431,11 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
             <Button
               variant="outlined"
               fullWidth
-              disabled={scenarioAIGenerating}
+              disabled={
+                scenarioAIGenerating || 
+                scenarioAINumberOfInjects < 1 || scenarioAINumberOfInjects > 50 ||
+                (scenarioTypeAffinity === 'TABLE-TOP' && (scenarioAITableTopDuration < 1 || scenarioAITableTopDuration > 2880))
+              }
               onClick={handleGenerateAIScenario}
               startIcon={scenarioAIGenerating ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeOutlined />}
               sx={{

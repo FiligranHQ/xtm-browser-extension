@@ -2444,8 +2444,16 @@ async function handleMessage(
               if (opened) {
                 sendResponse(successResponse({ opened: true }));
               } else {
-                log.error('Failed to open side panel with all strategies. Last error:', lastError);
-                sendResponse(successResponse({ opened: false, reason: 'Failed to open with all strategies' }));
+                // Check if error is about user gesture - this is expected when popup already opened the panel
+                const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+                const isUserGestureError = errorMessage.includes('user gesture');
+                if (isUserGestureError) {
+                  // This is expected in split screen mode - popup opened it, content script fallback fails
+                  log.debug('Side panel requires user gesture (likely already opened by popup)');
+                } else {
+                  log.warn('Failed to open side panel with all strategies. Last error:', lastError);
+                }
+                sendResponse(successResponse({ opened: false, reason: isUserGestureError ? 'User gesture required (panel may already be open)' : 'Failed to open with all strategies' }));
               }
             } else {
               log.warn('No tab or window found for side panel');

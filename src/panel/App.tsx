@@ -277,11 +277,17 @@ const App: React.FC = () => {
     const targetPlatformId = platformId || selectedPlatformId;
     
     if (!labelsLoaded) {
-      chrome.runtime.sendMessage({ type: 'FETCH_LABELS', payload: { platformId: targetPlatformId } }, (response) => {
-        if (chrome.runtime.lastError) return;
+      // Use SEARCH_LABELS with limit of 10 for initial load
+      chrome.runtime.sendMessage({ type: 'SEARCH_LABELS', payload: { search: '', first: 10, platformId: targetPlatformId } }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Failed to load labels:', chrome.runtime.lastError);
+          return;
+        }
         if (response?.success && response.data) {
           setAvailableLabels(response.data);
           setLabelsLoaded(true);
+        } else if (response?.error) {
+          console.error('Labels load error:', response.error);
         }
       });
     }

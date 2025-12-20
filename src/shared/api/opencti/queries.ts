@@ -149,6 +149,20 @@ export const FETCH_LABELS_QUERY = `
   }
 `;
 
+export const SEARCH_LABELS_QUERY = `
+  query SearchLabels($first: Int, $search: String) {
+    labels(first: $first, search: $search, orderBy: value, orderMode: asc) {
+      edges { node { id value color } }
+    }
+  }
+`;
+
+export const CREATE_LABEL_MUTATION = `
+  mutation LabelAdd($input: LabelAddInput!) {
+    labelAdd(input: $input) { id value color }
+  }
+`;
+
 export const FETCH_MARKING_DEFINITIONS_QUERY = `
   query FetchMarkingDefinitions($first: Int, $after: ID) {
     markingDefinitions(first: $first, after: $after) {

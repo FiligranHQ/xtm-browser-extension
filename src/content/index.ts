@@ -458,7 +458,45 @@ function toggleSelection(_element: HTMLElement, value: string): void {
 // Tooltip Handling
 // ============================================================================
 
+// Store suppressed title attributes to restore on leave
+const suppressedTitles = new WeakMap<HTMLElement, string>();
+
+/**
+ * Suppress native tooltips by temporarily removing title attributes
+ * from the target element and all ancestors
+ */
+function suppressNativeTooltips(element: HTMLElement): void {
+  let current: HTMLElement | null = element;
+  while (current && current !== document.body) {
+    const title = current.getAttribute('title');
+    if (title) {
+      suppressedTitles.set(current, title);
+      current.removeAttribute('title');
+    }
+    current = current.parentElement;
+  }
+}
+
+/**
+ * Restore native tooltips that were suppressed
+ */
+function restoreNativeTooltips(element: HTMLElement): void {
+  let current: HTMLElement | null = element;
+  while (current && current !== document.body) {
+    const storedTitle = suppressedTitles.get(current);
+    if (storedTitle !== undefined) {
+      current.setAttribute('title', storedTitle);
+      suppressedTitles.delete(current);
+    }
+    current = current.parentElement;
+  }
+}
+
 function handleHighlightHover(event: MouseEvent): void {
+  // Stop event propagation to prevent page's native hover behaviors
+  event.stopPropagation();
+  event.preventDefault();
+  
   // Find the highlight element - try multiple approaches for Edge compatibility
   let target: HTMLElement | null = null;
   
@@ -481,6 +519,9 @@ function handleHighlightHover(event: MouseEvent): void {
   
   const tooltip = getTooltipElement();
   if (!tooltip || !target) return;
+  
+  // Suppress native tooltips (title attributes) on this element and ancestors
+  suppressNativeTooltips(target);
   
   // Use getAttribute for more reliable data access in Edge
   const rawType = target.getAttribute('data-type') || 'Unknown';
@@ -581,7 +622,32 @@ function handleHighlightHover(event: MouseEvent): void {
   }
 }
 
-function handleHighlightLeave(): void {
+function handleHighlightLeave(event: MouseEvent): void {
+  // Stop event propagation to prevent page's native hover behaviors
+  event.stopPropagation();
+  event.preventDefault();
+  
+  // Find the highlight element to restore its native tooltips
+  let target: HTMLElement | null = null;
+  if (event.currentTarget instanceof HTMLElement) {
+    target = event.currentTarget;
+  }
+  if (!target) {
+    let el = event.target as Node;
+    while (el && el !== document.body) {
+      if (el instanceof HTMLElement && el.classList.contains('xtm-highlight')) {
+        target = el;
+        break;
+      }
+      el = el.parentNode as Node;
+    }
+  }
+  
+  // Restore native tooltips that were suppressed
+  if (target) {
+    restoreNativeTooltips(target);
+  }
+  
   const tooltip = getTooltipElement();
   if (tooltip) {
     tooltip.classList.remove('visible');
@@ -1228,7 +1294,7 @@ async function scanPageForAtomicTesting(): Promise<void> {
       data: unknown;
     }> = [];
     
-    if (response?.success && response?.data?.platformEntities) {
+    if (response?.success && response?.data?.openaevEntities) {
       const attackPatterns = (response.data.openaevEntities || [])
         .filter((e: { type: string }) => e.type === 'AttackPattern');
       
@@ -1321,7 +1387,7 @@ async function scanPageForScenario(): Promise<void> {
       platformId?: string;
     }> = [];
     
-    if (response?.success && response?.data?.platformEntities) {
+    if (response?.success && response?.data?.openaevEntities) {
       const foundPatterns = (response.data.openaevEntities || [])
         .filter((e: { type: string }) => e.type === 'AttackPattern');
       

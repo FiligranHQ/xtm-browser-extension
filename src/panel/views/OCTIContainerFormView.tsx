@@ -4,7 +4,7 @@
  * Form for creating or updating containers (Reports, Groupings, Cases).
  */
 
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -19,18 +19,38 @@ import {
   Stepper,
   Step,
   StepLabel,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
   AddOutlined,
   AutoAwesomeOutlined,
   PictureAsPdfOutlined,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
 import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, AISettings } from '../types/panel-types';
 import type { LabelOption, MarkingOption } from '../types/view-props';
+
+// Debounce delay for label search
+const LABEL_SEARCH_DEBOUNCE_MS = 1000;
+
+// Generate a random color for new labels
+const generateRandomColor = () => {
+  const colors = [
+    '#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5',
+    '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50',
+    '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800',
+    '#ff5722', '#795548', '#607d8b'
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+};
 
 export interface ContainerFormViewProps {
   mode: 'dark' | 'light';
@@ -48,7 +68,7 @@ export interface ContainerFormViewProps {
   aiSettings: AISettings;
   aiGeneratingDescription: boolean;
   handleGenerateAIDescription: () => void;
-  availableLabels: LabelOption[];
+  availableLabels: LabelOption[]; // Initial labels (may be empty, we load on demand)
   selectedLabels: LabelOption[];
   setSelectedLabels: (labels: LabelOption[]) => void;
   availableMarkings: MarkingOption[];
@@ -107,9 +127,191 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
   submitting,
   generatingPdf,
 }) => {
-  // Check if AI is available for the container platform
+  // Label search state
+  const [labelOptions, setLabelOptions] = useState<LabelOption[]>(availableLabels);
+  const [labelInputValue, setLabelInputValue] = useState('');
+  const [labelsLoading, setLabelsLoading] = useState(false);
+  const [labelsInitialized, setLabelsInitialized] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Create label dialog state
+  const [createLabelDialogOpen, setCreateLabelDialogOpen] = useState(false);
+  const [newLabelValue, setNewLabelValue] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState(generateRandomColor());
+  const [creatingLabel, setCreatingLabel] = useState(false);
+
+  // Get target platform
   const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
   const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
+
+  // Load initial labels on mount or when availableLabels changes
+  useEffect(() => {
+    if (availableLabels.length > 0) {
+      setLabelOptions(availableLabels);
+      setLabelsInitialized(true);
+    } else if (!labelsInitialized && targetPlatformId) {
+      // If no labels were passed and not initialized, fetch them directly
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        setLabelsLoading(true);
+        chrome.runtime.sendMessage(
+          { 
+            type: 'SEARCH_LABELS', 
+            payload: { 
+              search: '', 
+              first: 10,
+              platformId: targetPlatformId 
+            } 
+          }, 
+          (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Initial labels load error:', chrome.runtime.lastError);
+              setLabelsLoading(false);
+              return;
+            }
+            if (response?.success && response.data) {
+              setLabelOptions(response.data);
+              setLabelsInitialized(true);
+            }
+            setLabelsLoading(false);
+          }
+        );
+      }
+    }
+  }, [availableLabels, labelsInitialized, targetPlatformId]);
+
+  // Search labels with debounce
+  const searchLabels = useCallback((searchValue: string) => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    // Clear any pending timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      setLabelsLoading(true);
+      chrome.runtime.sendMessage(
+        { 
+          type: 'SEARCH_LABELS', 
+          payload: { 
+            search: searchValue, 
+            first: 10,
+            platformId: targetPlatformId 
+          } 
+        }, 
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Label search error:', chrome.runtime.lastError);
+            setLabelsLoading(false);
+            return;
+          }
+          if (response?.success && response.data) {
+            setLabelOptions(response.data);
+          } else if (response?.error) {
+            console.error('Label search failed:', response.error);
+          }
+          setLabelsLoading(false);
+        }
+      );
+    }, LABEL_SEARCH_DEBOUNCE_MS);
+  }, [targetPlatformId]);
+
+  // Load labels when autocomplete is opened (if not already loaded)
+  const handleLabelsOpen = useCallback(() => {
+    // Load if not initialized or if options are empty
+    if (labelsInitialized && labelOptions.length > 0) return;
+
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setLabelsLoading(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'SEARCH_LABELS', 
+        payload: { 
+          search: '', 
+          first: 10,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Labels open error:', chrome.runtime.lastError);
+          setLabelsLoading(false);
+          return;
+        }
+        if (response?.success && response.data) {
+          setLabelOptions(response.data);
+          setLabelsInitialized(true);
+        } else if (response?.error) {
+          console.error('Labels load failed:', response.error);
+        }
+        setLabelsLoading(false);
+      }
+    );
+  }, [targetPlatformId, labelsInitialized, labelOptions.length]);
+
+  // Handle label input change with debounced search
+  const handleLabelInputChange = useCallback((_event: React.SyntheticEvent, value: string) => {
+    setLabelInputValue(value);
+    if (value.trim()) {
+      searchLabels(value);
+    } else if (labelsInitialized) {
+      // If cleared, reload initial labels
+      searchLabels('');
+    }
+  }, [searchLabels, labelsInitialized]);
+
+  // Create new label
+  const handleCreateLabel = useCallback(() => {
+    if (!newLabelValue.trim()) return;
+    
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setCreatingLabel(true);
+    chrome.runtime.sendMessage(
+      { 
+        type: 'CREATE_LABEL', 
+        payload: { 
+          value: newLabelValue.trim(), 
+          color: newLabelColor,
+          platformId: targetPlatformId 
+        } 
+      }, 
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Create label error:', chrome.runtime.lastError);
+          setCreatingLabel(false);
+          return;
+        }
+        if (response?.success && response.data) {
+          const newLabel = response.data as LabelOption;
+          // Add to options and select it
+          setLabelOptions(prev => [newLabel, ...prev]);
+          setSelectedLabels([...selectedLabels, newLabel]);
+          // Close dialog and reset
+          setCreateLabelDialogOpen(false);
+          setNewLabelValue('');
+          setNewLabelColor(generateRandomColor());
+        } else if (response?.error) {
+          console.error('Create label failed:', response.error);
+          // Could show a toast/alert here
+        }
+        setCreatingLabel(false);
+      }
+    );
+  }, [newLabelValue, newLabelColor, targetPlatformId, selectedLabels, setSelectedLabels]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Check if AI is available for the container platform
   const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
   const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
   const aiColors = getAiColor(mode);
@@ -322,20 +524,50 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
           </Tooltip>
         </Box>
 
-        {/* Labels Autocomplete */}
+        {/* Labels Autocomplete with search and create */}
         <Autocomplete
           multiple
-          options={availableLabels}
+          fullWidth
+          options={labelOptions}
           getOptionLabel={(option) => option.value}
           value={selectedLabels}
           onChange={(_, newValue) => setSelectedLabels(newValue)}
+          onOpen={handleLabelsOpen}
+          inputValue={labelInputValue}
+          onInputChange={handleLabelInputChange}
           isOptionEqualToValue={(option, value) => option.id === value.id}
+          loading={labelsLoading}
+          filterOptions={(x) => x} // Disable client-side filtering, server handles it
           renderInput={(params) => (
             <TextField
               {...params}
               label="Labels"
               size="small"
-              placeholder={selectedLabels.length === 0 ? "Select labels..." : ""}
+              placeholder={selectedLabels.length === 0 ? "Type to search..." : ""}
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {labelsLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                    <Tooltip title="Create new label">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCreateLabelDialogOpen(true);
+                        }}
+                        sx={{ 
+                          p: 0.5,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
             />
           )}
           renderOption={(props, option) => (
@@ -358,7 +590,78 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
             }
           }}
           limitTags={2}
+          noOptionsText={labelsLoading ? "Searching..." : "No labels found"}
         />
+
+        {/* Create Label Dialog */}
+        <Dialog 
+          open={createLabelDialogOpen} 
+          onClose={() => !creatingLabel && setCreateLabelDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Create New Label</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <TextField
+                label="Label Name"
+                value={newLabelValue}
+                onChange={(e) => setNewLabelValue(e.target.value)}
+                size="small"
+                fullWidth
+                autoFocus
+                placeholder="Enter label name..."
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="body2" color="text.secondary">Color:</Typography>
+                <input
+                  type="color"
+                  value={newLabelColor}
+                  onChange={(e) => setNewLabelColor(e.target.value)}
+                  style={{ 
+                    width: 40, 
+                    height: 30, 
+                    border: 'none', 
+                    borderRadius: 4,
+                    cursor: 'pointer'
+                  }}
+                />
+                <Box 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 0.5,
+                    bgcolor: newLabelColor,
+                    color: '#fff',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {newLabelValue || 'Preview'}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setCreateLabelDialogOpen(false)} 
+              disabled={creatingLabel}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleCreateLabel}
+              disabled={!newLabelValue.trim() || creatingLabel}
+              startIcon={creatingLabel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+            >
+              {creatingLabel ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Markings Autocomplete */}
         <Autocomplete

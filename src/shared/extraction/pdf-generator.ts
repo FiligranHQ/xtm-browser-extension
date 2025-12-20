@@ -570,51 +570,58 @@ async function generateWithJsPDF(
       }
     };
     
-    // Process all top-level elements
-    for (const child of tempDiv.children) {
-      await processElement(child);
+    // First pass: collect image positions from the HTML to understand their context
+    // This helps us render images at their proper location in the document
+    const imagePositions = new Map<string, number>();
+    let elementIndex = 0;
+    
+    function collectImagePositions(element: Element): void {
+      const tagName = element.tagName.toLowerCase();
+      elementIndex++;
       
-      // Add any queued images after their context
-      if (options.includeImages && imagesToAdd.length > 0) {
-        for (const img of imagesToAdd) {
-          if (!addedImageSrcs.has(img.src)) {
-            await addImage(img);
-            addedImageSrcs.add(img.src);
+      if (tagName === 'img') {
+        const imgEl = element as HTMLImageElement;
+        const src = imgEl.src || imgEl.getAttribute('data-src') || '';
+        if (src && !src.includes('data:image/svg')) {
+          imagePositions.set(src, elementIndex);
+        }
+      } else if (tagName === 'figure') {
+        const imgEl = element.querySelector('img') as HTMLImageElement;
+        if (imgEl) {
+          const src = imgEl.src || imgEl.getAttribute('data-src') || '';
+          if (src && !src.includes('data:image/svg')) {
+            imagePositions.set(src, elementIndex);
           }
         }
-        imagesToAdd.length = 0;
+      }
+      
+      // Recurse into children
+      for (const child of element.children) {
+        collectImagePositions(child);
       }
     }
     
-    // Pre-collect ALL images from the HTML content that may have been missed
-    const allImagesInHtml = tempDiv.querySelectorAll('img');
-    log.debug('[PDFGenerator] Total images found in HTML:', allImagesInHtml.length);
-    
-    for (const imgEl of allImagesInHtml) {
-      const imgElement = imgEl as HTMLImageElement;
-      const src = imgElement.src || imgElement.getAttribute('data-src') || '';
-      if (src && !addedImageSrcs.has(src) && !src.includes('data:image/svg')) {
-        log.debug('[PDFGenerator] Adding missed image from HTML:', src);
-        const img: ExtractedImage = {
-          src: src,
-          alt: imgElement.alt || '',
-          caption: '',
-          width: imgElement.naturalWidth || imgElement.width || 400,
-          height: imgElement.naturalHeight || imgElement.height || 300,
-        };
-        await addImage(img);
-        addedImageSrcs.add(src);
-      }
+    // Collect positions
+    for (const child of tempDiv.children) {
+      collectImagePositions(child);
     }
     
-    // If we have images from the extraction that weren't in HTML, add them at the end
+    log.debug('[PDFGenerator] Found images with positions:', imagePositions.size);
+    
+    // Process all top-level elements - images are rendered INLINE where they appear
+    for (const child of tempDiv.children) {
+      await processElement(child);
+    }
+    
+    // Only add hero/featured images from extraction if they weren't in HTML
+    // These are images that were found separately (e.g., og:image, hero banners)
+    // and should be added at the beginning if not already present
     if (options.includeImages && content.images.length > 0) {
-      for (const img of content.images) {
-        if (!addedImageSrcs.has(img.src)) {
-          log.debug('[PDFGenerator] Adding remaining image from extraction:', img.src);
-          await addImage(img);
-          addedImageSrcs.add(img.src);
-        }
+      // Only the first image from extraction might be a hero - add it only if not already rendered
+      const heroImage = content.images[0];
+      if (heroImage && !addedImageSrcs.has(heroImage.src) && !imagePositions.has(heroImage.src)) {
+        log.debug('[PDFGenerator] Hero image not in HTML content, was likely added at the top already');
+        // Hero images are typically added to the HTML by content-extractor, so skip
       }
     }
     

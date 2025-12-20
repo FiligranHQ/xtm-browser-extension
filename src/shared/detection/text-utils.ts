@@ -21,6 +21,7 @@ export function extractTextFromHTML(html: string): string {
 /**
  * Get text nodes from a DOM element for highlighting
  * Also traverses Shadow DOM trees for sites like VirusTotal
+ * Note: Tooltip filtering is done at the scan level in extraction.ts
  */
 export function getTextNodes(element: Node): Text[] {
     const textNodes: Text[] = [];
@@ -31,8 +32,11 @@ export function getTextNodes(element: Node): Text[] {
             return false;
         }
         const parent = node.parentElement;
+        if (!parent) {
+            return false;
+        }
+        // Skip script, style, and form elements
         if (
-            parent &&
             ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(
                 parent.tagName
             )

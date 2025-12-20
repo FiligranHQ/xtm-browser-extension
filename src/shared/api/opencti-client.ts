@@ -16,6 +16,8 @@ import {
   FETCH_SDOS_FOR_CACHE_QUERY,
   FETCH_LOCATIONS_QUERY,
   FETCH_LABELS_QUERY,
+  SEARCH_LABELS_QUERY,
+  CREATE_LABEL_MUTATION,
   FETCH_MARKING_DEFINITIONS_QUERY,
   FETCH_VOCABULARY_QUERY,
   FETCH_IDENTITIES_QUERY,
@@ -337,6 +339,27 @@ export class OpenCTIClient {
       after = data.labels.pageInfo.endCursor;
     }
     return allResults;
+  }
+
+  async searchLabels(search: string, first: number = 10): Promise<Array<{ id: string; value: string; color: string }>> {
+    // Build variables - only include search if non-empty to avoid empty string issues
+    const variables: { first: number; search?: string } = { first };
+    if (search && search.trim()) {
+      variables.search = search.trim();
+    }
+    const data = await this.query<{ labels: { edges: Array<{ node: { id: string; value: string; color: string } }> } }>(
+      SEARCH_LABELS_QUERY,
+      variables
+    );
+    return data.labels?.edges?.map((e) => e.node) || [];
+  }
+
+  async createLabel(value: string, color: string): Promise<{ id: string; value: string; color: string }> {
+    const data = await this.query<{ labelAdd: { id: string; value: string; color: string } }>(
+      CREATE_LABEL_MUTATION,
+      { input: { value, color } }
+    );
+    return data.labelAdd;
   }
 
   async fetchMarkingDefinitions(pageSize: number = 100): Promise<Array<{ id: string; definition: string; definition_type: string; x_opencti_color: string }>> {

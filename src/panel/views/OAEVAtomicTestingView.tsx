@@ -34,7 +34,6 @@ import {
   LanOutlined,
   LanguageOutlined,
   DnsOutlined,
-  InfoOutlined,
   AutoAwesomeOutlined,
 } from '@mui/icons-material';
 import { LockPattern, Target } from 'mdi-material-ui';
@@ -951,7 +950,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
                         {target.name}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                        {target.data?.attack_pattern_external_id || ''} • No inject contracts
+                        {target.data?.attack_pattern_external_id ? `${target.data.attack_pattern_external_id} - No inject` : 'No inject'}
                       </Typography>
                     </Box>
                   </Paper>
@@ -961,9 +960,11 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
           </Box>
         )}
         
-        <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, textAlign: 'center', flexShrink: 0 }}>
-          Select a target from the list or click on a highlight on the page
-        </Typography>
+        {atomicTestingTargets.length > 0 && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, textAlign: 'center', flexShrink: 0 }}>
+            Select a target from the list or click on a highlight on the page
+          </Typography>
+        )}
       </Box>
     );
   }
@@ -1385,7 +1386,19 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
                       <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>{label}</Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                            {injectorType && (
+                              <Chip
+                                label={injectorType}
+                                size="small"
+                                sx={{ 
+                                  height: 18, 
+                                  fontSize: 10,
+                                  bgcolor: 'action.selected',
+                                  fontWeight: 500,
+                                }}
+                              />
+                            )}
                             {platforms.map((platform: string) => (
                               <Chip
                                 key={platform}
@@ -1393,7 +1406,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
                                 label={platform}
                                 size="small"
                                 sx={{ 
-                                  height: 20, 
+                                  height: 18, 
                                   fontSize: 10,
                                   bgcolor: getPlatformColor(platform),
                                   color: 'white',
@@ -1401,14 +1414,8 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
                                 }}
                               />
                             ))}
-                            {injectorType && (
-                              <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
-                                {injectorType}
-                              </Typography>
-                            )}
                           </Box>
                         </Box>
-                        <InfoOutlined fontSize="small" sx={{ color: 'text.secondary', opacity: 0.5 }} />
                       </Box>
                     </li>
                   );

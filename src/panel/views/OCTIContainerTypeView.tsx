@@ -61,24 +61,6 @@ export const OCTIContainerTypeView: React.FC<OCTIContainerTypeViewProps> = ({
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Back to actions button - shown when direct workflow with single platform */}
-      {!canGoBack && containerWorkflowOrigin === 'direct' && (
-        <Box sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            startIcon={<ChevronLeftOutlined />}
-            onClick={() => setPanelMode('empty')}
-            sx={{ 
-              color: 'text.secondary',
-              textTransform: 'none',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            Back to actions
-          </Button>
-        </Box>
-      )}
-
       {/* Stepper */}
       <Stepper activeStep={openctiPlatformsCount > 1 ? 1 : 0} sx={{ mb: 3 }}>
         {containerSteps.map((label) => (
@@ -88,8 +70,8 @@ export const OCTIContainerTypeView: React.FC<OCTIContainerTypeViewProps> = ({
         ))}
       </Stepper>
 
-      {/* Back button - shown when coming from preview or multi-platform */}
-      {canGoBack && (
+      {/* Back button - always below stepper for consistency */}
+      {canGoBack ? (
         <Box sx={{ mb: 1.5 }}>
           <Button
             size="small"
@@ -102,6 +84,21 @@ export const OCTIContainerTypeView: React.FC<OCTIContainerTypeViewProps> = ({
             }}
           >
             {openctiPlatformsCount > 1 ? 'Back to platform selection' : 'Back to preview'}
+          </Button>
+        </Box>
+      ) : containerWorkflowOrigin === 'direct' && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => setPanelMode('empty')}
+            sx={{ 
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to actions
           </Button>
         </Box>
       )}

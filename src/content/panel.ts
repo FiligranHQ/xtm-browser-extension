@@ -157,17 +157,23 @@ async function openNativeSidePanel(retryCount = 0): Promise<boolean> {
         }
         
         const opened = response?.success && response.data?.opened === true;
-        if (!opened && retryCount < MAX_RETRIES) {
+        const reason = response?.data?.reason || '';
+        const isUserGestureError = reason.includes('user gesture') || reason.includes('User gesture');
+        
+        if (!opened && !isUserGestureError && retryCount < MAX_RETRIES) {
           // Retry if not opened (MacOS may need multiple attempts)
+          // Don't retry if it's a user gesture error - panel is likely already open
           log.debug(`Side panel open returned false, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
           setTimeout(() => {
             openNativeSidePanel(retryCount + 1).then(resolve);
           }, 100 * (retryCount + 1));
         } else {
-          if (!opened) {
-            log.warn('Failed to open native side panel after retries, reason:', response?.data?.reason);
+          if (!opened && !isUserGestureError) {
+            // Only log warning if it's not a user gesture error (which is expected in split screen mode)
+            log.debug('Failed to open native side panel, reason:', reason);
           }
-          resolve(opened);
+          // Resolve true for user gesture errors - panel is likely already open from popup
+          resolve(opened || isUserGestureError);
         }
       });
     } else {

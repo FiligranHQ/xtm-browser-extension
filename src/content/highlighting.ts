@@ -518,12 +518,12 @@ function highlightCVEInText(
         highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
       }
       
-      highlight.addEventListener('mouseenter', handlers.onHover);
-      highlight.addEventListener('mouseleave', handlers.onLeave);
+      highlight.addEventListener('mouseenter', handlers.onHover, { capture: true });
+      highlight.addEventListener('mouseleave', handlers.onLeave, { capture: true });
       highlight.addEventListener('click', handlers.onClick, { capture: true });
       highlight.addEventListener('mousedown', handlers.onMouseDown, { capture: true });
       highlight.addEventListener('mouseup', handlers.onMouseUp, { capture: true });
-      highlight.addEventListener('contextmenu', handlers.onRightClick);
+      highlight.addEventListener('contextmenu', handlers.onRightClick, { capture: true });
       
       range.surroundContents(highlight);
       highlights.push(highlight);
@@ -660,12 +660,12 @@ function highlightInText(
         highlight.dataset.platformEntities = JSON.stringify(meta.foundInPlatforms);
       }
       
-      highlight.addEventListener('mouseenter', handlers.onHover);
-      highlight.addEventListener('mouseleave', handlers.onLeave);
+      highlight.addEventListener('mouseenter', handlers.onHover, { capture: true });
+      highlight.addEventListener('mouseleave', handlers.onLeave, { capture: true });
       highlight.addEventListener('click', handlers.onClick, { capture: true });
       highlight.addEventListener('mousedown', handlers.onMouseDown, { capture: true });
       highlight.addEventListener('mouseup', handlers.onMouseUp, { capture: true });
-      highlight.addEventListener('contextmenu', handlers.onRightClick);
+      highlight.addEventListener('contextmenu', handlers.onRightClick, { capture: true });
       
       range.surroundContents(highlight);
       highlights.push(highlight);
@@ -1303,7 +1303,7 @@ function scrollToAndFlashHighlight(highlight: HTMLElement): void {
       setTimeout(() => {
         highlight.classList.remove('xtm-flash');
       }, 3000);
-    }, 500);
+    }, 300);
   }, 50);
 }
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.11] - 2024-12-20
+
+### Added
+- **Labels field improvements**: Labels autocomplete in container form now fetches only initial 100 labels, searches on the fly with 1-second debounce, and includes a "+" button to create new labels directly within the field
+- **Hidden content filtering**: Scan results now exclude text from tooltips, popovers, and screen-reader-only elements (e.g., "Skip to content" links) that are not visually displayed but picked up by DOM extraction
+
+### Changed
+- **Highlight styling refined**: Highlights are now less aggressive and no longer cause layout shifts or distortions on complex pages. Uses `display: inline` instead of `inline-block`, reduced padding, and proper z-index layering
+- **Glowing effect improved**: The locate/scroll-to-highlight glow animation now has a gentler 3-pulse pattern over 3 seconds with `ease-in-out` timing for a smoother visual effect
+- **Number of injects limit increased**: Maximum number of injects for AI scenario generation increased from 20 to 50
+
+### Fixed
+- **Critical: OpenAEV atomic testing and scenarios not finding attack patterns**: Fixed condition that checked for `platformEntities` instead of `openaevEntities`, causing attack pattern detection to always fail for OpenAEV-only scans
+- **Highlight hover conflicts**: Mouse events on highlights now properly block native page hover behaviors using event capture and propagation stopping. Native title-attribute tooltips are temporarily suppressed when hovering on extension highlights
+- **Side panel user gesture errors**: Console errors about `sidePanel.open()` requiring user gesture are now suppressed (logged as debug) when the panel is already open or being managed by the popup
+- **Number of injects field behavior**: Input field now allows clearing and typing any value (like the duration field) with proper validation and error feedback
+- **Exercise duration field behavior**: Input field now allows clearing, accepts values 1-2880 minutes (48 hours max), shows validation errors, and disables Generate button when invalid
+
 ## [0.0.10] - 2024-12-19
 
 ### Fixed
@@ -265,7 +283,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.10...v0.0.11
+[0.0.10]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.6...v0.0.7

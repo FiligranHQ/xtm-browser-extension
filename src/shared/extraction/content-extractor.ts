@@ -82,6 +82,7 @@ const CONTENT_SELECTORS = [
 
 /**
  * Extract clean article content from the current page
+ * Handles various page types including React/SPA, Shadow DOM, and traditional sites
  */
 export function extractContent(): ExtractedContent {
   log.debug('[ContentExtractor] Starting extraction for:', window.location.href);
@@ -107,10 +108,28 @@ export function extractContent(): ExtractedContent {
     }
   }
   
+  // If still insufficient, try React/SPA-specific extraction
+  if (result.textContent.length < 200) {
+    log.debug('[ContentExtractor] Trying React/SPA extraction');
+    const spaContent = extractFromReactSPA();
+    if (spaContent && spaContent.textContent.length > result.textContent.length) {
+      result = spaContent;
+    }
+  }
+  
   // If Shadow DOM content is substantially more, use it instead
   if (hasShadowContent && shadowDOMContent!.textContent.length > result.textContent.length * 1.5) {
     log.debug('[ContentExtractor] Using Shadow DOM content (more complete)');
     result = shadowDOMContent!;
+  }
+  
+  // Last resort: extract visible text from the page
+  if (result.textContent.length < 100) {
+    log.debug('[ContentExtractor] Using visible viewport extraction');
+    const viewportContent = extractFromVisibleContent();
+    if (viewportContent.textContent.length > result.textContent.length) {
+      result = viewportContent;
+    }
   }
   
   log.debug('[ContentExtractor] Final extraction:', result.title, 'text length:', result.textContent.length);

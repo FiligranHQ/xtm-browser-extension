@@ -236,23 +236,21 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 
   return (
     <Box sx={{ p: 2, overflow: 'auto' }}>
-      {/* Back to search/scan results button */}
-      {(entityFromSearchMode || entityFromScanResults) && (
-        <Box sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            startIcon={<ChevronLeftOutlined />}
-            onClick={handleBackToList}
-            sx={{ 
-              color: 'text.secondary',
-              textTransform: 'none',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            {entityFromScanResults ? 'Back to scan results' : 'Back to search'}
-          </Button>
-        </Box>
-      )}
+      {/* Back button - always visible for consistent navigation */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={entityFromSearchMode || entityFromScanResults ? handleBackToList : () => setPanelMode('empty')}
+          sx={{ 
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          {entityFromScanResults ? 'Back to scan results' : entityFromSearchMode ? 'Back to search' : 'Back to actions'}
+        </Button>
+      </Box>
       
       {/* Platform indicator bar */}
       {(availablePlatforms.length > 1 || hasMultiplePlatforms) && (

@@ -341,6 +341,88 @@ export const handleFetchLabels: MessageHandler = async (payload, sendResponse) =
 };
 
 /**
+ * Search labels handler (with pagination)
+ */
+export const handleSearchLabels: MessageHandler = async (payload, sendResponse) => {
+  if (!hasOpenCTIClients()) {
+    sendResponse(errorResponse('Not configured'));
+    return;
+  }
+
+  const { search, first, platformId: searchPlatformId } = (payload || {}) as { 
+    search?: string; 
+    first?: number;
+    platformId?: string;
+  };
+  const openCTIClients = getOpenCTIClients();
+
+  try {
+    const targetPlatformId = searchPlatformId || openCTIClients.keys().next().value as string;
+    const client = openCTIClients.get(targetPlatformId);
+
+    if (!client) {
+      sendResponse(errorResponse('Platform not found'));
+      return;
+    }
+
+    const labels = await client.searchLabels(search || '', first || 10);
+    sendResponse({ 
+      success: true, 
+      data: labels.map(l => ({ ...l, platformId: targetPlatformId })) 
+    });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to search labels',
+    });
+  }
+};
+
+/**
+ * Create label handler
+ */
+export const handleCreateLabel: MessageHandler = async (payload, sendResponse) => {
+  if (!hasOpenCTIClients()) {
+    sendResponse(errorResponse('Not configured'));
+    return;
+  }
+
+  const { value, color, platformId: createPlatformId } = (payload || {}) as { 
+    value: string; 
+    color: string;
+    platformId?: string;
+  };
+  
+  if (!value) {
+    sendResponse(errorResponse('Label value is required'));
+    return;
+  }
+
+  const openCTIClients = getOpenCTIClients();
+
+  try {
+    const targetPlatformId = createPlatformId || openCTIClients.keys().next().value as string;
+    const client = openCTIClients.get(targetPlatformId);
+
+    if (!client) {
+      sendResponse(errorResponse('Platform not found'));
+      return;
+    }
+
+    const label = await client.createLabel(value, color || '#000000');
+    sendResponse({ 
+      success: true, 
+      data: { ...label, platformId: targetPlatformId }
+    });
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create label',
+    });
+  }
+};
+
+/**
  * Fetch markings handler
  */
 export const handleFetchMarkings: MessageHandler = async (payload, sendResponse) => {
@@ -674,6 +756,8 @@ export const openctiHandlers: Record<string, MessageHandler> = {
   CREATE_ENTITY: handleCreateEntity,
   CREATE_OBSERVABLES_BULK: handleCreateObservablesBulk,
   FETCH_LABELS: handleFetchLabels,
+  SEARCH_LABELS: handleSearchLabels,
+  CREATE_LABEL: handleCreateLabel,
   FETCH_MARKINGS: handleFetchMarkings,
   FETCH_VOCABULARY: handleFetchVocabulary,
   FETCH_IDENTITIES: handleFetchIdentities,

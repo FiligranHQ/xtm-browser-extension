@@ -720,17 +720,92 @@ function filterContentAggressively(content: string): string {
 }
 
 /**
- * Get page content for scanning - extracts visible text
- * This is the main function to use for IOC/entity scanning
+ * Collect text content from hidden elements to filter out later
+ * This includes tooltips and screen-reader-only elements (like "Skip to content")
+ */
+function getHiddenTexts(): Set<string> {
+  const hiddenTexts = new Set<string>();
+  
+  // Selectors for tooltips
+  const tooltipSelectors = [
+    '[role="tooltip"]',
+    '[data-tooltip]',
+    '.tooltip',
+    '.popover',
+    '[class*="tooltip"]',
+    '[class*="popover"]',
+  ];
+  
+  // Selectors for screen-reader-only / visually hidden elements
+  // These are hidden visually but innerText still picks them up
+  const srOnlySelectors = [
+    '.sr-only',
+    '.visually-hidden',
+    '.screen-reader-text',
+    '.screen-reader-only',
+    '.skip-link',
+    '.skip-to-content',
+    '[class*="sr-only"]',
+    '[class*="visually-hidden"]',
+    '[class*="ScreenReader"]',
+    // GitHub and common skip links
+    '[class*="skip-to"]',
+    '[class*="js-skip"]',
+    '.js-skip-to-content',
+    'a[href="#content"]',
+    'a[href="#main-content"]',
+    'a[href="#start-of-content"]',
+    'a[href^="#"][class*="skip"]',
+  ];
+  
+  const allSelectors = [...tooltipSelectors, ...srOnlySelectors];
+  
+  allSelectors.forEach(selector => {
+    try {
+      document.querySelectorAll(selector).forEach(el => {
+        const text = (el as HTMLElement).innerText?.trim();
+        if (text && text.length > 2) { // Only filter meaningful text
+          hiddenTexts.add(text);
+        }
+      });
+    } catch { /* Skip invalid selectors */ }
+  });
+  
+  return hiddenTexts;
+}
+
+/**
+ * Get page content for scanning - extracts visible text for IOC/entity scanning
  * 
  * IMPORTANT: We prioritize innerText because it only returns visible text
  * and excludes script/style content. Shadow DOM extraction is ONLY used
  * as a last resort for sites like VirusTotal that render entirely in Shadow DOM.
+ * 
+ * Tooltip content is filtered out from the extracted text.
  */
 export function getPageContentForScanning(): string {
+  // Collect hidden texts to filter out (tooltips, screen-reader-only elements)
+  const hiddenTexts = getHiddenTexts();
+  
+  // Add common skip link texts that are often hidden but picked up by innerText
+  const commonSkipTexts = [
+    'Skip to content',
+    'Skip to main content',
+    'Skip navigation',
+    'Skip to navigation',
+    'Jump to content',
+    'Jump to main content',
+  ];
+  commonSkipTexts.forEach(text => hiddenTexts.add(text));
+  
   // Get visible text using innerText (respects visibility, excludes script/style)
-  // This is the safest and most reliable method for most websites
-  const content = document.body?.innerText || '';
+  let content = document.body?.innerText || '';
+  
+  // Remove hidden text from content
+  hiddenTexts.forEach(hiddenText => {
+    // Replace all occurrences of the hidden text
+    content = content.split(hiddenText).join('');
+  });
   
   // Only try Shadow DOM extraction if innerText is nearly empty
   // This handles sites like VirusTotal that render entirely in Shadow DOM

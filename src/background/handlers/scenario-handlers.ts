@@ -6,12 +6,11 @@
  */
 
 import { OpenAEVClient } from '../../shared/api/openaev-client';
-import { successResponse, errorResponse } from '../../shared/utils/messaging';
+import { successResponse, errorResponse, type SendResponseFn } from './types';
 import { loggers } from '../../shared/utils/logger';
 
 const log = loggers.background;
 
-type SendResponse = (response: unknown) => void;
 type ClientGetter = (platformId?: string) => OpenAEVClient | undefined;
 
 /**
@@ -32,7 +31,7 @@ export interface AddTechnicalInjectPayload {
 
 export async function handleAddTechnicalInjectToScenario(
   payload: AddTechnicalInjectPayload,
-  sendResponse: SendResponse,
+  sendResponse: SendResponseFn,
   getClient: ClientGetter
 ): Promise<void> {
   const { platformId, scenarioId, title, description, command, executor, platforms, delayMinutes, assetId, assetGroupId } = payload;

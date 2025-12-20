@@ -243,6 +243,20 @@ export const SCENARIO_DEFAULT_VALUES = {
 };
 
 // ============================================================================
+// Kill Chain Phase Types
+// ============================================================================
+
+/**
+ * OpenAEV Kill Chain Phase
+ */
+export interface OAEVKillChainPhase {
+  phase_id: string;
+  phase_kill_chain_name: string;
+  phase_name: string;
+  phase_order: number;
+}
+
+// ============================================================================
 // Inject Types
 // ============================================================================
 

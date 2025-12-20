@@ -31,59 +31,17 @@ import { getPlatformIcon, getPlatformColor, getAiColor } from '../../utils/platf
 import { formatInjectorName, getContractLabel } from '../../utils/injector-helpers';
 import { ScenarioSummary } from './ScenarioSummary';
 import { loggers } from '../../../shared/utils/logger';
-import type { PlatformInfo, PanelMode } from '../../types/panel-types';
+import type {
+  PlatformInfo,
+  PanelMode,
+  InjectorContract,
+  SelectedInject,
+  ScenarioOverviewData,
+  ScenarioFormData,
+  PanelAIState,
+} from '../../types/panel-types';
 
 const log = loggers.panel;
-
-interface AttackPattern {
-  id: string;
-  name: string;
-  externalId?: string;
-  description?: string;
-  killChainPhases?: string[] | Array<{ phase_name?: string; kill_chain_name?: string }>;
-  contracts?: unknown[];
-}
-
-interface Contract {
-  injector_contract_id: string;
-  injector_contract_labels?: { en?: string };
-  injector_name?: string;
-  injector_type?: string;
-  injector_contract_platforms?: string[];
-  injector_contract_attack_patterns?: string[];
-  injector_contract_kill_chain_phases?: Array<{ phase_name?: string }>;
-}
-
-interface SelectedInject {
-  attackPatternId: string;
-  attackPatternName: string;
-  contractId: string;
-  contractLabel: string;
-  delayMinutes: number;
-}
-
-interface ScenarioOverviewData {
-  attackPatterns?: AttackPattern[];
-  killChainPhases?: string[] | Array<{ phase_id: string; phase_kill_chain_name: string; phase_name: string; phase_order: number }>;
-  pageTitle?: string;
-  pageUrl?: string;
-  pageDescription?: string;
-}
-
-interface AISettings {
-  enabled?: boolean;
-  provider?: string;
-  available?: boolean;
-}
-
-interface ScenarioForm {
-  name: string;
-  description: string;
-  subtitle: string;
-  category: string;
-  mainFocus: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-}
 
 interface ScenarioInjectSelectorProps {
   mode: 'dark' | 'light';
@@ -98,14 +56,14 @@ interface ScenarioInjectSelectorProps {
   setPanelMode: (mode: PanelMode) => void;
   handleClose: () => void;
   openaevPlatforms: PlatformInfo[];
-  scenarioPlatformId: string | null;
-  aiSettings: AISettings;
+  scenarioPlatformId: string;
+  aiSettings: PanelAIState;
   aiSelectingInjects: boolean;
   setAiSelectingInjects: (selecting: boolean) => void;
   currentPageTitle: string;
   currentPageUrl: string;
-  scenarioForm: ScenarioForm;
-  getFilteredContracts: (contracts: unknown[]) => Contract[];
+  scenarioForm: ScenarioFormData;
+  getFilteredContracts: (contracts: unknown[]) => InjectorContract[];
 }
 
 export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
@@ -206,7 +164,7 @@ export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
             name: ap.name,
             id: ap.externalId,
             description: ap.description,
-            availableInjects: getFilteredContracts(ap.contracts || []).map((c: Contract) => ({
+            availableInjects: getFilteredContracts(ap.contracts || []).map((c: InjectorContract) => ({
               id: c.injector_contract_id,
               label: c.injector_contract_labels?.en || c.injector_name || 'Unknown',
             })),

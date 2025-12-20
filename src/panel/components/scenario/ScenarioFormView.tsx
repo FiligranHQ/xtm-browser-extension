@@ -39,40 +39,24 @@ import {
   SCENARIO_MAIN_FOCUS_OPTIONS,
   SCENARIO_SEVERITY_OPTIONS,
 } from '../../../shared/types/openaev';
-import type { PlatformInfo, PanelMode } from '../../types/panel-types';
-
-interface ScenarioForm {
-  name: string;
-  description: string;
-  subtitle: string;
-  category: string;
-  mainFocus: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-}
-
-interface SelectedInject {
-  attackPatternId: string;
-  attackPatternName: string;
-  contractId: string;
-  contractLabel: string;
-  delayMinutes: number;
-}
-
-interface EmailTimelineItem {
-  attackPatternId: string;
-  attackPatternName: string;
-  externalId: string;
-  killChainPhases: Array<{ phase_name?: string; kill_chain_name?: string }>;
-  delayMinutes: number;
-}
+import type {
+  PlatformInfo,
+  PanelMode,
+  ScenarioFormData,
+  SelectedInject,
+  EmailTimelineItem,
+  ScenarioOverviewData,
+  ScenarioEmail,
+  PanelAIState,
+} from '../../types/panel-types';
 
 interface ScenarioFormViewProps {
   mode: 'dark' | 'light';
   openaevLogoPath: string;
   openaevPlatforms: PlatformInfo[];
   scenarioPlatformId: string;
-  scenarioForm: ScenarioForm;
-  setScenarioForm: React.Dispatch<React.SetStateAction<ScenarioForm>>;
+  scenarioForm: ScenarioFormData;
+  setScenarioForm: React.Dispatch<React.SetStateAction<ScenarioFormData>>;
   scenarioTypeAffinity: string;
   scenarioPlatformsAffinity: string[];
   scenarioInjectSpacing: number;
@@ -94,19 +78,19 @@ interface ScenarioFormViewProps {
   scenarioSelectedAssetGroup: string | null;
   setScenarioSelectedAssetGroup: (id: string | null) => void;
   // Email generation
-  scenarioEmails: Array<{ attackPatternId: string; subject: string; body: string }>;
-  setScenarioEmails: React.Dispatch<React.SetStateAction<Array<{ attackPatternId: string; subject: string; body: string }>>>;
+  scenarioEmails: ScenarioEmail[];
+  setScenarioEmails: React.Dispatch<React.SetStateAction<ScenarioEmail[]>>;
   scenarioAIEmailLanguage: string;
   setScenarioAIEmailLanguage: (lang: string) => void;
   // AI state
-  aiSettings: { available: boolean };
+  aiSettings: PanelAIState;
   aiFillingEmails: boolean;
   setAiFillingEmails: (value: boolean) => void;
   // Page context
   currentPageTitle: string;
   currentPageUrl: string;
   // Overview data
-  scenarioOverviewData: { attackPatterns?: Array<{ id: string; externalId?: string; killChainPhases?: Array<{ phase_name?: string; kill_chain_name?: string }> }> } | null;
+  scenarioOverviewData: ScenarioOverviewData | null;
   // Submit
   submitting: boolean;
   onCreateScenario: () => void;

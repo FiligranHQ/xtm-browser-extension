@@ -6,20 +6,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { loggers } from '../../shared/utils/logger';
+import type { PlatformInfo } from '../types/panel-types';
 
 const log = loggers.panel;
 
-/**
- * Platform info
- */
-export interface PlatformInfo {
-  id: string;
-  name: string;
-  url: string;
-  version?: string;
-  isEnterprise?: boolean;
-  type?: 'opencti' | 'openaev';
-}
+// Re-export for backwards compatibility
+export type { PlatformInfo } from '../types/panel-types';
 
 /**
  * Hook for managing platform state

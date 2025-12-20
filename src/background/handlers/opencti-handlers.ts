@@ -19,6 +19,14 @@ import { addEntityToOCTICache, type CachedOCTIEntity } from '../../shared/utils/
 import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
 import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
+import {
+  checkClientsConfigured,
+  getClientOrError,
+  getTargetClient,
+  fetchFromAllPlatforms,
+  searchAcrossPlatforms,
+  handleError,
+} from './platform-utils';
 
 const log = loggers.background;
 
@@ -285,59 +293,29 @@ export const handleCreateObservablesBulk: MessageHandler = async (payload, sendR
  * Fetch labels handler
  */
 export const handleFetchLabels: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
-
-  const { platformId: labelsPlatformId } = (payload || {}) as { platformId?: string };
   const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
+
+  const { platformId } = (payload || {}) as { platformId?: string };
 
   try {
-    if (labelsPlatformId) {
-      const client = openCTIClients.get(labelsPlatformId);
-      if (!client) {
-        sendResponse(errorResponse('Platform not found'));
-        return;
-      }
-
+    if (platformId) {
+      const client = getClientOrError(openCTIClients, platformId, sendResponse);
+      if (!client) return;
+      
       const labels = await client.fetchLabels();
-      sendResponse({ success: true, data: labels.map(l => ({ ...l, platformId: labelsPlatformId })) });
+      sendResponse(successResponse(labels.map(l => ({ ...l, platformId }))));
     } else {
-      // Fetch from all platforms in parallel
-      const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-        try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
-          );
-          const labels = await Promise.race([client.fetchLabels(), timeoutPromise]);
-          return { platformId: pId, labels, error: null };
-        } catch (e) {
-          log.warn(`Failed to fetch labels from platform ${pId}:`, e);
-          return { platformId: pId, labels: [], error: e };
-        }
-      });
-
-      const results = await Promise.all(fetchPromises);
-
-      const allLabels: unknown[] = [];
-      const seenIds = new Set<string>();
-      for (const result of results) {
-        for (const label of result.labels) {
-          if (!seenIds.has(label.id)) {
-            seenIds.add(label.id);
-            allLabels.push({ ...label, platformId: result.platformId });
-          }
-        }
-      }
-
-      sendResponse({ success: true, data: allLabels });
+      const { results } = await fetchFromAllPlatforms(
+        openCTIClients,
+        (client) => client.fetchLabels(),
+        CONTAINER_FETCH_TIMEOUT_MS,
+        '[Labels]'
+      );
+      sendResponse(successResponse(results));
     }
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch labels',
-    });
+    handleError(error, sendResponse, 'Failed to fetch labels');
   }
 };
 
@@ -345,37 +323,26 @@ export const handleFetchLabels: MessageHandler = async (payload, sendResponse) =
  * Search labels handler (with pagination)
  */
 export const handleSearchLabels: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
-  const { search, first, platformId: searchPlatformId } = (payload || {}) as { 
+  const { search, first, platformId } = (payload || {}) as { 
     search?: string; 
     first?: number;
     platformId?: string;
   };
-  const openCTIClients = getOpenCTIClients();
 
   try {
-    const targetPlatformId = searchPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
-    if (!client) {
+    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
+    if (!client || !targetPlatformId) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
 
     const labels = await client.searchLabels(search || '', first || 10);
-    sendResponse({ 
-      success: true, 
-      data: labels.map(l => ({ ...l, platformId: targetPlatformId })) 
-    });
+    sendResponse(successResponse(labels.map(l => ({ ...l, platformId: targetPlatformId }))));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search labels',
-    });
+    handleError(error, sendResponse, 'Failed to search labels');
   }
 };
 
@@ -383,12 +350,10 @@ export const handleSearchLabels: MessageHandler = async (payload, sendResponse) 
  * Create label handler
  */
 export const handleCreateLabel: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
-  const { value, color, platformId: createPlatformId } = (payload || {}) as { 
+  const { value, color, platformId } = (payload || {}) as { 
     value: string; 
     color: string;
     platformId?: string;
@@ -399,27 +364,17 @@ export const handleCreateLabel: MessageHandler = async (payload, sendResponse) =
     return;
   }
 
-  const openCTIClients = getOpenCTIClients();
-
   try {
-    const targetPlatformId = createPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
-    if (!client) {
+    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
+    if (!client || !targetPlatformId) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
 
     const label = await client.createLabel(value, color || '#000000');
-    sendResponse({ 
-      success: true, 
-      data: { ...label, platformId: targetPlatformId }
-    });
+    sendResponse(successResponse({ ...label, platformId: targetPlatformId }));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create label',
-    });
+    handleError(error, sendResponse, 'Failed to create label');
   }
 };
 
@@ -427,59 +382,29 @@ export const handleCreateLabel: MessageHandler = async (payload, sendResponse) =
  * Fetch markings handler
  */
 export const handleFetchMarkings: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
-
-  const { platformId: markingsPlatformId } = (payload || {}) as { platformId?: string };
   const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
+
+  const { platformId } = (payload || {}) as { platformId?: string };
 
   try {
-    if (markingsPlatformId) {
-      const client = openCTIClients.get(markingsPlatformId);
-      if (!client) {
-        sendResponse(errorResponse('Platform not found'));
-        return;
-      }
-
+    if (platformId) {
+      const client = getClientOrError(openCTIClients, platformId, sendResponse);
+      if (!client) return;
+      
       const markings = await client.fetchMarkingDefinitions();
-      sendResponse({ success: true, data: markings.map(m => ({ ...m, platformId: markingsPlatformId })) });
+      sendResponse(successResponse(markings.map(m => ({ ...m, platformId }))));
     } else {
-      // Fetch from all platforms in parallel
-      const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-        try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
-          );
-          const markings = await Promise.race([client.fetchMarkingDefinitions(), timeoutPromise]);
-          return { platformId: pId, markings, error: null };
-        } catch (e) {
-          log.warn(`Failed to fetch markings from platform ${pId}:`, e);
-          return { platformId: pId, markings: [], error: e };
-        }
-      });
-
-      const results = await Promise.all(fetchPromises);
-
-      const allMarkings: unknown[] = [];
-      const seenIds = new Set<string>();
-      for (const result of results) {
-        for (const marking of result.markings) {
-          if (!seenIds.has(marking.id)) {
-            seenIds.add(marking.id);
-            allMarkings.push({ ...marking, platformId: result.platformId });
-          }
-        }
-      }
-
-      sendResponse({ success: true, data: allMarkings });
+      const { results } = await fetchFromAllPlatforms(
+        openCTIClients,
+        (client) => client.fetchMarkingDefinitions(),
+        CONTAINER_FETCH_TIMEOUT_MS,
+        '[Markings]'
+      );
+      sendResponse(successResponse(results));
     }
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch markings',
-    });
+    handleError(error, sendResponse, 'Failed to fetch markings');
   }
 };
 
@@ -487,18 +412,13 @@ export const handleFetchMarkings: MessageHandler = async (payload, sendResponse)
  * Fetch vocabulary handler
  */
 export const handleFetchVocabulary: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
-
-  const { category, platformId: vocabPlatformId } = payload as { category: string; platformId?: string };
   const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
+
+  const { category, platformId } = payload as { category: string; platformId?: string };
 
   try {
-    const targetPlatformId = vocabPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
+    const { client } = getTargetClient(openCTIClients, platformId);
     if (!client) {
       sendResponse(errorResponse('Platform not found'));
       return;
@@ -507,10 +427,7 @@ export const handleFetchVocabulary: MessageHandler = async (payload, sendRespons
     const vocabulary = await client.fetchVocabulary(category);
     sendResponse(successResponse(vocabulary));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch vocabulary',
-    });
+    handleError(error, sendResponse, 'Failed to fetch vocabulary');
   }
 };
 
@@ -518,18 +435,13 @@ export const handleFetchVocabulary: MessageHandler = async (payload, sendRespons
  * Fetch identities handler
  */
 export const handleFetchIdentities: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
-
-  const { platformId: identityPlatformId } = (payload || {}) as { platformId?: string };
   const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
+
+  const { platformId } = (payload || {}) as { platformId?: string };
 
   try {
-    const targetPlatformId = identityPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
+    const { client } = getTargetClient(openCTIClients, platformId);
     if (!client) {
       sendResponse(errorResponse('Platform not found'));
       return;
@@ -538,10 +450,7 @@ export const handleFetchIdentities: MessageHandler = async (payload, sendRespons
     const identities = await client.fetchIdentities();
     sendResponse(successResponse(identities));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch identities',
-    });
+    handleError(error, sendResponse, 'Failed to fetch identities');
   }
 };
 
@@ -549,38 +458,26 @@ export const handleFetchIdentities: MessageHandler = async (payload, sendRespons
  * Search identities handler (with limit and search)
  */
 export const handleSearchIdentities: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
-  const { search, first, platformId: searchPlatformId } = (payload || {}) as { 
+  const { search, first, platformId } = (payload || {}) as { 
     search?: string; 
     first?: number;
     platformId?: string;
   };
 
-  const openCTIClients = getOpenCTIClients();
-
   try {
-    const targetPlatformId = searchPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
-    if (!client) {
+    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
+    if (!client || !targetPlatformId) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
 
     const identities = await client.searchIdentities(search || '', first || 50);
-    sendResponse({ 
-      success: true, 
-      data: identities.map(i => ({ ...i, platformId: targetPlatformId })) 
-    });
+    sendResponse(successResponse(identities.map(i => ({ ...i, platformId: targetPlatformId }))));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search identities',
-    });
+    handleError(error, sendResponse, 'Failed to search identities');
   }
 };
 
@@ -588,12 +485,10 @@ export const handleSearchIdentities: MessageHandler = async (payload, sendRespon
  * Create identity handler (Organization or Individual)
  */
 export const handleCreateIdentity: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
-  const { name, entityType, platformId: createPlatformId } = (payload || {}) as { 
+  const { name, entityType, platformId } = (payload || {}) as { 
     name: string; 
     entityType: 'Organization' | 'Individual';
     platformId?: string;
@@ -609,13 +504,9 @@ export const handleCreateIdentity: MessageHandler = async (payload, sendResponse
     return;
   }
 
-  const openCTIClients = getOpenCTIClients();
-
   try {
-    const targetPlatformId = createPlatformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
-    if (!client) {
+    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
+    if (!client || !targetPlatformId) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
@@ -624,15 +515,9 @@ export const handleCreateIdentity: MessageHandler = async (payload, sendResponse
       ? await client.createOrganization(name)
       : await client.createIndividual(name);
       
-    sendResponse({ 
-      success: true, 
-      data: { ...identity, platformId: targetPlatformId }
-    });
+    sendResponse(successResponse({ ...identity, platformId: targetPlatformId }));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create identity',
-    });
+    handleError(error, sendResponse, 'Failed to create identity');
   }
 };
 
@@ -640,62 +525,40 @@ export const handleCreateIdentity: MessageHandler = async (payload, sendResponse
  * Fetch entity containers handler
  */
 export const handleFetchEntityContainers: MessageHandler = async (payload, sendResponse) => {
-  log.debug(' FETCH_ENTITY_CONTAINERS received:', payload);
+  log.debug('FETCH_ENTITY_CONTAINERS received:', payload);
 
-  if (!hasOpenCTIClients()) {
-    log.warn(' FETCH_ENTITY_CONTAINERS: No OpenCTI clients configured');
-    sendResponse(errorResponse('Not configured'));
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) {
+    log.warn('FETCH_ENTITY_CONTAINERS: No OpenCTI clients configured');
     return;
   }
 
-  const { entityId, limit, platformId: specificPlatformId } = payload as {
+  const { entityId, limit, platformId } = payload as {
     entityId: string;
     limit?: number;
     platformId?: string;
   };
 
   if (!entityId) {
-    log.warn(' FETCH_ENTITY_CONTAINERS: No entityId provided');
+    log.warn('FETCH_ENTITY_CONTAINERS: No entityId provided');
     sendResponse(errorResponse('No entityId provided'));
     return;
   }
 
-  const openCTIClients = getOpenCTIClients();
-
   try {
-    const clientsToSearch = specificPlatformId
-      ? [[specificPlatformId, openCTIClients.get(specificPlatformId)] as const].filter(([_, c]) => c)
-      : Array.from(openCTIClients.entries());
-
-    log.debug(' FETCH_ENTITY_CONTAINERS: Searching', clientsToSearch.length, 'platforms');
-
-    const fetchPromises = clientsToSearch.map(async ([pId, client]) => {
-      if (!client) return { platformId: pId, containers: [] };
-
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
-        );
-        const containers = await Promise.race([client.fetchContainersForEntity(entityId, limit), timeoutPromise]);
-        log.debug(` FETCH_ENTITY_CONTAINERS: Found ${containers.length} containers in ${pId}`);
-        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), platformId: pId })) };
-      } catch (e) {
-        log.debug(`No containers/timeout for ${entityId} in platform ${pId}:`, e);
-        return { platformId: pId, containers: [] };
-      }
-    });
-
-    const results = await Promise.all(fetchPromises);
-    const allContainers = results.flatMap(r => r.containers);
-
-    log.debug(' FETCH_ENTITY_CONTAINERS: Total containers found:', allContainers.length);
-    sendResponse(successResponse(allContainers));
+    const results = await searchAcrossPlatforms(
+      openCTIClients,
+      platformId,
+      (client) => client.fetchContainersForEntity(entityId, limit),
+      CONTAINER_FETCH_TIMEOUT_MS,
+      '[Containers]'
+    );
+    
+    log.debug('FETCH_ENTITY_CONTAINERS: Total containers found:', results.length);
+    sendResponse(successResponse(results));
   } catch (error) {
-    log.error(' FETCH_ENTITY_CONTAINERS error:', error);
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch containers',
-    });
+    log.error('FETCH_ENTITY_CONTAINERS error:', error);
+    handleError(error, sendResponse, 'Failed to fetch containers');
   }
 };
 
@@ -703,40 +566,25 @@ export const handleFetchEntityContainers: MessageHandler = async (payload, sendR
  * Find containers by URL handler
  */
 export const handleFindContainersByUrl: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(successResponse([]));
+  const openCTIClients = getOpenCTIClients();
+  if (openCTIClients.size === 0) {
+    sendResponse(successResponse([])); // No error, just no containers
     return;
   }
 
   const { url } = payload as { url: string };
-  const openCTIClients = getOpenCTIClients();
 
   try {
-    const searchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), CONTAINER_FETCH_TIMEOUT_MS)
-        );
-        const containers = await Promise.race([
-          client.findContainersByExternalReferenceUrl(url),
-          timeoutPromise
-        ]);
-        return { platformId: pId, containers: containers.map((c: unknown) => ({ ...(c as object), platformId: pId })) };
-      } catch {
-        log.debug(`No containers found/timeout for URL in platform ${pId}`);
-        return { platformId: pId, containers: [] };
-      }
-    });
-
-    const results = await Promise.all(searchPromises);
-    const allContainers = results.flatMap(r => r.containers);
-
-    sendResponse(successResponse(allContainers));
+    const results = await searchAcrossPlatforms(
+      openCTIClients,
+      undefined,
+      (client) => client.findContainersByExternalReferenceUrl(url),
+      CONTAINER_FETCH_TIMEOUT_MS,
+      '[ContainersByURL]'
+    );
+    sendResponse(successResponse(results));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search containers',
-    });
+    handleError(error, sendResponse, 'Failed to search containers');
   }
 };
 
@@ -744,10 +592,8 @@ export const handleFindContainersByUrl: MessageHandler = async (payload, sendRes
  * Create workbench/investigation handler
  */
 export const handleCreateWorkbench: MessageHandler = async (payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
+  const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
   const { name, description, entityIds, platformId } = payload as {
     name: string;
@@ -756,13 +602,9 @@ export const handleCreateWorkbench: MessageHandler = async (payload, sendRespons
     platformId?: string;
   };
 
-  const openCTIClients = getOpenCTIClients();
-
   try {
-    const targetPlatformId = platformId || openCTIClients.keys().next().value as string;
-    const client = openCTIClients.get(targetPlatformId);
-
-    if (!client) {
+    const { client, targetPlatformId } = getTargetClient(openCTIClients, platformId);
+    if (!client || !targetPlatformId) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
@@ -774,20 +616,9 @@ export const handleCreateWorkbench: MessageHandler = async (payload, sendRespons
     });
 
     const url = client.getInvestigationUrl(investigation.id);
-
-    sendResponse({
-      success: true,
-      data: {
-        ...investigation,
-        url,
-        platformId: targetPlatformId,
-      },
-    });
+    sendResponse(successResponse({ ...investigation, url, platformId: targetPlatformId }));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create workbench',
-    });
+    handleError(error, sendResponse, 'Failed to create workbench');
   }
 };
 
@@ -795,49 +626,18 @@ export const handleCreateWorkbench: MessageHandler = async (payload, sendRespons
  * Get labels and markings handler
  */
 export const handleGetLabelsAndMarkings: MessageHandler = async (_payload, sendResponse) => {
-  if (!hasOpenCTIClients()) {
-    sendResponse(errorResponse('Not configured'));
-    return;
-  }
-
   const openCTIClients = getOpenCTIClients();
+  if (!checkClientsConfigured(openCTIClients, sendResponse)) return;
 
   try {
-    const allLabels: unknown[] = [];
-    const allMarkings: unknown[] = [];
-    const seenLabelIds = new Set<string>();
-    const seenMarkingIds = new Set<string>();
+    const [labelsResult, markingsResult] = await Promise.all([
+      fetchFromAllPlatforms(openCTIClients, (c) => c.fetchLabels(), CONTAINER_FETCH_TIMEOUT_MS, '[Labels]'),
+      fetchFromAllPlatforms(openCTIClients, (c) => c.fetchMarkingDefinitions(), CONTAINER_FETCH_TIMEOUT_MS, '[Markings]'),
+    ]);
 
-    for (const [pId, client] of openCTIClients) {
-      try {
-        const [labels, markings] = await Promise.all([
-          client.fetchLabels(),
-          client.fetchMarkingDefinitions(),
-        ]);
-        
-        for (const label of labels) {
-          if (!seenLabelIds.has(label.id)) {
-            seenLabelIds.add(label.id);
-            allLabels.push({ ...label, platformId: pId });
-          }
-        }
-        for (const marking of markings) {
-          if (!seenMarkingIds.has(marking.id)) {
-            seenMarkingIds.add(marking.id);
-            allMarkings.push({ ...marking, platformId: pId });
-          }
-        }
-      } catch (e) {
-        log.warn(`Failed to fetch labels/markings from platform ${pId}:`, e);
-      }
-    }
-
-    sendResponse({ success: true, data: { labels: allLabels, markings: allMarkings } });
+    sendResponse(successResponse({ labels: labelsResult.results, markings: markingsResult.results }));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch labels/markings',
-    });
+    handleError(error, sendResponse, 'Failed to fetch labels/markings');
   }
 };
 

@@ -49,8 +49,7 @@ import { ScenarioFormView } from '../components/scenario/ScenarioFormView';
 
 const log = loggers.panel;
 
-// Email injector contract ID for table-top scenarios
-const EMAIL_INJECTOR_CONTRACT_ID = '7d647a2e-bb8d-4a58-b1e0-f98d58f5f3ec';
+import { EMAIL_INJECTOR_CONTRACT_ID } from '../../shared/constants/openaev';
 
 export interface OAEVScenarioViewProps extends ScenarioStateReturn {
   mode: 'dark' | 'light';
@@ -573,13 +572,14 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
   };
 
   // Render scenario form view (step 2) - Using extracted component
-  if (panelMode === 'scenario-form') {
+  // Guard: scenarioPlatformId must be set (auto-selected in single-platform mode or user-selected in multi-platform mode)
+  if (panelMode === 'scenario-form' && scenarioPlatformId) {
     return (
       <ScenarioFormView
         mode={mode}
         openaevLogoPath={openaevLogoPath}
         openaevPlatforms={openaevPlatforms}
-        scenarioPlatformId={scenarioPlatformId || ''}
+        scenarioPlatformId={scenarioPlatformId}
         scenarioForm={scenarioForm}
         setScenarioForm={setScenarioForm}
         scenarioTypeAffinity={scenarioTypeAffinity}
@@ -604,20 +604,12 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
         setScenarioEmails={setScenarioEmails}
         scenarioAIEmailLanguage={scenarioAIEmailLanguage}
         setScenarioAIEmailLanguage={setScenarioAIEmailLanguage}
-        aiSettings={{ available: aiSettings.available }}
+        aiSettings={aiSettings}
         aiFillingEmails={aiFillingEmails}
         setAiFillingEmails={setAiFillingEmails}
         currentPageTitle={currentPageTitle}
         currentPageUrl={currentPageUrl}
-        scenarioOverviewData={scenarioOverviewData ? {
-          attackPatterns: scenarioOverviewData.attackPatterns?.map(ap => ({
-            id: ap.id,
-            externalId: ap.externalId,
-            killChainPhases: ap.killChainPhases?.map(kc => 
-              typeof kc === 'string' ? { phase_name: kc } : kc
-            ),
-          })),
-        } : null}
+        scenarioOverviewData={scenarioOverviewData}
         submitting={submitting}
         onCreateScenario={handleCreateScenario}
         onClose={handleClose}
@@ -676,8 +668,8 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       ) : scenarioStep === 0 ? (
         /* Step 0: Affinity Selection */
         renderAffinitySelection()
-      ) : scenarioStep === 1 ? (
-        /* Step 1: Inject Selection */
+      ) : scenarioStep === 1 && scenarioPlatformId ? (
+        /* Step 1: Inject Selection - scenarioPlatformId must be set */
         <ScenarioInjectSelector
           mode={mode}
           scenarioOverviewData={scenarioOverviewData}

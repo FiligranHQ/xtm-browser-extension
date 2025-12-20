@@ -292,7 +292,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
     <Box sx={{ 
       display: 'flex', 
       flexDirection: 'column', 
-      height: '100vh',
+      height: '100%',
       overflow: 'hidden',
     }}>
       {/* Fixed Header Section */}

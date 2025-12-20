@@ -521,54 +521,88 @@ export function createEmptyOCTICache(platformId: string = 'default'): OCTIEntity
   };
 }
 
+// ============================================================================
+// Generic Cache Helpers
+// ============================================================================
+
+/** Helper to add entity to name map for matching */
+function addEntityToNameMap<T extends { id: string }>(
+  nameMap: Map<string, T[]>,
+  key: string,
+  entity: T
+): void {
+  const existing = nameMap.get(key);
+  if (existing) {
+    if (!existing.some(e => e.id === entity.id)) {
+      existing.push(entity);
+    }
+  } else {
+    nameMap.set(key, [entity]);
+  }
+}
+
+/** Generic cache stats calculation */
+function calculateCacheStats(
+  caches: { entities: Record<string, unknown[]>; timestamp: number }[],
+  cacheDuration: number
+): { total: number; byType: Record<string, number>; age: number; isExpired: boolean } | null {
+  if (caches.length === 0) return null;
+  
+  const byType: Record<string, number> = {};
+  let total = 0;
+  let oldestTimestamp = Date.now();
+  
+  for (const cache of caches) {
+    for (const [type, entities] of Object.entries(cache.entities)) {
+      byType[type] = (byType[type] || 0) + entities.length;
+      total += entities.length;
+    }
+    if (cache.timestamp < oldestTimestamp) {
+      oldestTimestamp = cache.timestamp;
+    }
+  }
+  
+  return {
+    total,
+    byType,
+    age: Date.now() - oldestTimestamp,
+    isExpired: Date.now() - oldestTimestamp > cacheDuration,
+  };
+}
+
 /**
  * Get all entity names and aliases for matching from ALL platforms (merged)
  * Filters out names/aliases shorter than MIN_NAME_LENGTH and excluded terms to avoid false positives
  * Returns an array of entities per name to support entities with the same name but different types
- * (e.g., "Phishing" as both Malware and Attack Pattern)
  */
 export async function getAllCachedOCTIEntityNamesForMatching(): Promise<Map<string, CachedOCTIEntity[]>> {
   const multiCache = await getMultiPlatformOCTICache();
   const nameMap = new Map<string, CachedOCTIEntity[]>();
   
-  // Helper to add entity to map
-  const addToMap = (key: string, entity: CachedOCTIEntity) => {
-    const existing = nameMap.get(key);
-    if (existing) {
-      // Only add if not already in the array (by id)
-      if (!existing.some(e => e.id === entity.id)) {
-        existing.push(entity);
-      }
-    } else {
-      nameMap.set(key, [entity]);
-    }
-  };
-  
-  // Merge entities from all platforms
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
     for (const entityType of Object.keys(cache.entities) as Array<keyof OCTIEntityCache['entities']>) {
       for (const entity of cache.entities[entityType]) {
-        // Add main name with platform info (only if long enough and not excluded)
         const entityWithPlatform = { ...entity, platformId };
         const nameLower = entity.name.toLowerCase();
+        
+        // Add main name (only if long enough and not excluded)
         if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          addToMap(nameLower, entityWithPlatform);
+          addEntityToNameMap(nameMap, nameLower, entityWithPlatform);
         }
         
-        // Add aliases (only if long enough and not excluded)
+        // Add aliases
         if (entity.aliases) {
           for (const alias of entity.aliases) {
             const aliasLower = alias.toLowerCase();
             if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              addToMap(aliasLower, entityWithPlatform);
+              addEntityToNameMap(nameMap, aliasLower, entityWithPlatform);
             }
           }
         }
         
-        // Add x_mitre_id for attack patterns (e.g., T1059, T1059.001)
-        // These are short but specific identifiers, so we include them regardless of length
+        // Add x_mitre_id for attack patterns
         if (entity.x_mitre_id) {
-          addToMap(entity.x_mitre_id.toLowerCase(), entityWithPlatform);
+          addEntityToNameMap(nameMap, entity.x_mitre_id.toLowerCase(), entityWithPlatform);
         }
       }
     }
@@ -588,53 +622,16 @@ export async function getOCTICacheStats(platformId?: string): Promise<{
   platformCount?: number;
 } | null> {
   if (platformId) {
-    // Stats for specific platform
     const cache = await getOCTICache(platformId);
     if (!cache) return null;
-    
-    const byType: Record<string, number> = {};
-    let total = 0;
-    
-    for (const [type, entities] of Object.entries(cache.entities)) {
-      byType[type] = entities.length;
-      total += entities.length;
-    }
-    
-    return {
-      total,
-      byType,
-      age: Date.now() - cache.timestamp,
-      isExpired: Date.now() - cache.timestamp > OCTI_CACHE_DURATION,
-    };
+    return calculateCacheStats([cache], OCTI_CACHE_DURATION);
   }
   
-  // Combined stats from all platforms
   const multiCache = await getMultiPlatformOCTICache();
-  const platformIds = Object.keys(multiCache.platforms);
+  const caches = Object.values(multiCache.platforms);
+  const stats = calculateCacheStats(caches, OCTI_CACHE_DURATION);
   
-  if (platformIds.length === 0) return null;
-  
-  const byType: Record<string, number> = {};
-  let total = 0;
-  let oldestTimestamp = Date.now();
-  
-  for (const cache of Object.values(multiCache.platforms)) {
-    for (const [type, entities] of Object.entries(cache.entities)) {
-      byType[type] = (byType[type] || 0) + entities.length;
-      total += entities.length;
-    }
-    if (cache.timestamp < oldestTimestamp) {
-      oldestTimestamp = cache.timestamp;
-    }
-  }
-  
-  return {
-    total,
-    byType,
-    age: Date.now() - oldestTimestamp,
-    isExpired: Date.now() - oldestTimestamp > OCTI_CACHE_DURATION,
-    platformCount: platformIds.length,
-  };
+  return stats ? { ...stats, platformCount: caches.length } : null;
 }
 
 /**
@@ -826,35 +823,23 @@ export async function getAllCachedOAEVEntityNamesForMatching(): Promise<Map<stri
   const multiCache = await getMultiPlatformOAEVCache();
   const nameMap = new Map<string, CachedOAEVEntity[]>();
   
-  // Helper to add entity to map
-  const addToMap = (key: string, entity: CachedOAEVEntity) => {
-    const existing = nameMap.get(key);
-    if (existing) {
-      // Only add if not already in the array (by id)
-      if (!existing.some(e => e.id === entity.id)) {
-        existing.push(entity);
-      }
-    } else {
-      nameMap.set(key, [entity]);
-    }
-  };
-  
   for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
     for (const entityType of Object.keys(cache.entities) as Array<keyof OAEVCache['entities']>) {
       for (const entity of cache.entities[entityType]) {
         const entityWithPlatform = { ...entity, platformId };
-        // Add main name (only if long enough and not excluded)
         const nameLower = entity.name.toLowerCase();
+        
+        // Add main name (only if long enough and not excluded)
         if (entity.name.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(nameLower)) {
-          addToMap(nameLower, entityWithPlatform);
+          addEntityToNameMap(nameMap, nameLower, entityWithPlatform);
         }
         
-        // Add aliases (hostnames, IPs) - only if long enough and not excluded
+        // Add aliases (hostnames, IPs)
         if (entity.aliases) {
           for (const alias of entity.aliases) {
             const aliasLower = alias.toLowerCase();
             if (alias.length >= MIN_NAME_LENGTH && !EXCLUDED_TERMS.has(aliasLower)) {
-              addToMap(aliasLower, entityWithPlatform);
+              addEntityToNameMap(nameMap, aliasLower, entityWithPlatform);
             }
           }
         }
@@ -878,50 +863,14 @@ export async function getOAEVCacheStats(platformId?: string): Promise<{
   if (platformId) {
     const cache = await getOAEVCache(platformId);
     if (!cache) return null;
-    
-    const byType: Record<string, number> = {};
-    let total = 0;
-    
-    for (const [type, entities] of Object.entries(cache.entities)) {
-      byType[type] = entities.length;
-      total += entities.length;
-    }
-    
-    return {
-      total,
-      byType,
-      age: Date.now() - cache.timestamp,
-      isExpired: Date.now() - cache.timestamp > OAEV_CACHE_DURATION,
-    };
+    return calculateCacheStats([cache], OAEV_CACHE_DURATION);
   }
   
-  // Combined stats from all platforms
   const multiCache = await getMultiPlatformOAEVCache();
-  const platformIds = Object.keys(multiCache.platforms);
+  const caches = Object.values(multiCache.platforms);
+  const stats = calculateCacheStats(caches, OAEV_CACHE_DURATION);
   
-  if (platformIds.length === 0) return null;
-  
-  const byType: Record<string, number> = {};
-  let total = 0;
-  let oldestTimestamp = Date.now();
-  
-  for (const cache of Object.values(multiCache.platforms)) {
-    for (const [type, entities] of Object.entries(cache.entities)) {
-      byType[type] = (byType[type] || 0) + entities.length;
-      total += entities.length;
-    }
-    if (cache.timestamp < oldestTimestamp) {
-      oldestTimestamp = cache.timestamp;
-    }
-  }
-  
-  return {
-    total,
-    byType,
-    age: Date.now() - oldestTimestamp,
-    isExpired: Date.now() - oldestTimestamp > OAEV_CACHE_DURATION,
-    platformCount: platformIds.length,
-  };
+  return stats ? { ...stats, platformCount: caches.length } : null;
 }
 
 /**

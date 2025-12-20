@@ -27,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 - **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector, ScenarioTypeSelector) from monolithic views for better maintainability
-- **Custom Hooks**: Extracted reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
-- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, and other dead code
+- **Custom Hooks**: Extracted and integrated reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
+- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, and other dead code
+- **Duplicate Code Removal**: Consolidated duplicate handler functions in scenario-handlers.ts (3 unused handlers removed, now using openaev-handlers.ts)
 - **React Hook Optimization**: Wrapped callbacks in `useCallback` to prevent unnecessary re-renders
 - Shared visualization constants ensure consistent appearance across all scan modes
 

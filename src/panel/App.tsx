@@ -76,11 +76,31 @@ const App: React.FC = () => {
     selectedPlatformId, setSelectedPlatformId,
     platformUrl, setPlatformUrl,
     openctiPlatforms, openaevPlatforms,
+    loadPlatforms,
   } = usePlatforms();
   
   // Keep ref for openctiPlatforms (used in event handlers)
   const openctiPlatformsRef = React.useRef<PlatformInfo[]>([]);
   React.useEffect(() => { openctiPlatformsRef.current = openctiPlatforms; }, [openctiPlatforms]);
+  
+  // Test platform connections for EE status when platforms are loaded
+  const platformsTestedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (availablePlatforms.length > 0 && !platformsTestedRef.current) {
+      platformsTestedRef.current = true;
+      availablePlatforms.forEach((platform) => {
+        chrome.runtime.sendMessage(
+          { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: platform.type } },
+          (testResponse) => {
+            if (chrome.runtime.lastError || !testResponse?.success) return;
+            setAvailablePlatforms(prev => prev.map(p => 
+              p.id === platform.id ? { ...p, version: testResponse.data?.version, isEnterprise: testResponse.data?.enterprise_edition } : p
+            ));
+          }
+        );
+      });
+    }
+  }, [availablePlatforms, setAvailablePlatforms]);
 
   // Entity state hook
   const {
@@ -545,7 +565,7 @@ const App: React.FC = () => {
     const isInSidePanel = window.parent === window;
     setIsSplitScreenMode(isInSidePanel);
 
-    // Get settings and platforms
+    // Get settings for theme, split screen mode, and AI (platforms loaded via usePlatforms hook)
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success) {
@@ -560,44 +580,14 @@ const App: React.FC = () => {
           setIsSplitScreenMode(isInSidePanel || response.data.splitScreenMode);
         }
         
-        const platforms: PlatformConfig[] = response.data?.openctiPlatforms || [];
-        const enabledPlatforms = platforms
-          .filter((p) => p.enabled !== false && p.url && p.apiToken)
-          .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
-        
-        const oaevPlatforms: PlatformConfig[] = response.data?.openaevPlatforms || [];
-        const enabledOAEVPlatforms = oaevPlatforms
-          .filter((p) => p.enabled !== false && p.url && p.apiToken)
-          .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
-        
-        setAvailablePlatforms([...enabledPlatforms, ...enabledOAEVPlatforms]);
-        
         const ai = response.data?.ai;
         const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
         setAiSettings({ enabled: aiAvailable, provider: ai?.provider, available: aiAvailable });
-
-        // Test connections for EE status
-        [...enabledPlatforms, ...enabledOAEVPlatforms].forEach((platform: PlatformInfo) => {
-          chrome.runtime.sendMessage(
-            { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: platform.type } },
-            (testResponse) => {
-              if (chrome.runtime.lastError || !testResponse?.success) return;
-              setAvailablePlatforms(prev => prev.map(p => 
-                p.id === platform.id ? { ...p, version: testResponse.data?.version, isEnterprise: testResponse.data?.enterprise_edition } : p
-              ));
-            }
-          );
-        });
-        
-        if (enabledPlatforms.length > 0) {
-          setPlatformUrl(enabledPlatforms[0].url);
-          setSelectedPlatformId(enabledPlatforms[0].id);
-        } else if (enabledOAEVPlatforms.length > 0) {
-          setPlatformUrl(enabledOAEVPlatforms[0].url);
-          setSelectedPlatformId(enabledOAEVPlatforms[0].id);
-        }
       }
     });
+    
+    // Load platforms via hook
+    loadPlatforms();
 
     window.addEventListener('message', handleMessage);
     window.parent.postMessage({ type: 'XTM_PANEL_READY' }, '*');
@@ -677,22 +667,10 @@ const App: React.FC = () => {
       if (areaName === 'local' && changes.settings) {
         const newSettings = changes.settings.newValue;
         if (newSettings) {
-          const enabledOpenCTI = ((newSettings.openctiPlatforms || []) as PlatformConfig[])
-            .filter((p) => p.enabled !== false && p.url && p.apiToken)
-            .map((p) => ({ id: p.id, name: p.name || 'OpenCTI', url: p.url, type: 'opencti' as const, isEnterprise: p.isEnterprise }));
+          // Reload platforms via hook (handles platform state updates)
+          loadPlatforms();
           
-          const enabledOpenAEV = ((newSettings.openaevPlatforms || []) as PlatformConfig[])
-            .filter((p) => p.enabled !== false && p.url && p.apiToken)
-            .map((p) => ({ id: p.id, name: p.name || 'OpenAEV', url: p.url, type: 'openaev' as const, isEnterprise: p.isEnterprise }));
-          
-          const allPlatforms = [...enabledOpenCTI, ...enabledOpenAEV];
-          setAvailablePlatforms(allPlatforms);
-          
-          if (allPlatforms.length > 0 && !allPlatforms.find(p => p.id === selectedPlatformId)) {
-            setPlatformUrl(allPlatforms[0].url);
-            setSelectedPlatformId(allPlatforms[0].id);
-          }
-          
+          // Update AI settings
           const ai = newSettings.ai;
           const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
           setAiSettings({ enabled: aiAvailable, provider: ai?.provider, available: aiAvailable });
@@ -1385,7 +1363,7 @@ const App: React.FC = () => {
       <CssBaseline />
       <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
         {renderHeader()}
-        <Box sx={{ flex: 1, overflow: 'auto' }}>{renderContent()}</Box>
+        <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>{renderContent()}</Box>
       </Box>
     </ThemeProvider>
   );

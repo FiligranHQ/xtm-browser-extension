@@ -7,13 +7,11 @@
 
 import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
-import { errorResponse } from '../../shared/utils/messaging';
+import { errorResponse, type SendResponseFn } from './types';
 import { loggers } from '../../shared/utils/logger';
 import type { OCTIContainerType } from '../../shared/types/opencti';
 
 const log = loggers.background;
-
-type SendResponse = (response: unknown) => void;
 
 /**
  * CREATE_CONTAINER handler payload
@@ -58,7 +56,7 @@ export interface CreateContainerPayload {
  */
 export async function handleCreateContainer(
   payload: CreateContainerPayload,
-  sendResponse: SendResponse,
+  sendResponse: SendResponseFn,
   openCTIClients: Map<string, OpenCTIClient>
 ): Promise<void> {
   if (openCTIClients.size === 0) {

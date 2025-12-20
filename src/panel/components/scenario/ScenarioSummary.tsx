@@ -12,14 +12,7 @@ import {
   Chip,
 } from '@mui/material';
 import { LockPattern } from 'mdi-material-ui';
-
-interface SelectedInject {
-  attackPatternId: string;
-  attackPatternName: string;
-  contractId: string;
-  contractLabel: string;
-  delayMinutes: number;
-}
+import type { SelectedInject } from '../../types/panel-types';
 
 interface ScenarioSummaryProps {
   selectedInjects: SelectedInject[];
@@ -47,7 +40,7 @@ export const ScenarioSummary: React.FC<ScenarioSummaryProps> = ({
   );
 };
 
-interface ScenarioInjectTimelineProps {
+export interface ScenarioInjectTimelineProps {
   selectedInjects: SelectedInject[];
   isTableTop: boolean;
 }

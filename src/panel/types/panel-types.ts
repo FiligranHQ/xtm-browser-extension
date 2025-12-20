@@ -3,6 +3,14 @@
  * Centralized type definitions for the panel component
  */
 
+// Import shared types
+import type { OAEVInjectorContract, OAEVKillChainPhase } from '../../shared/types/openaev';
+
+// Re-export shared types for convenience
+export type { OAEVInjectorContract, OAEVKillChainPhase } from '../../shared/types/openaev';
+export type { PlatformMatch } from '../../shared/types/platform';
+export type { ResolvedRelationship } from '../../shared/api/ai/types';
+
 // Panel modes
 export type PanelMode =
   | 'empty'
@@ -24,7 +32,13 @@ export type PanelMode =
   | 'scenario-form'
   | 'add-selection';
 
-// Platform match in scan results
+/**
+ * Platform match in scan results
+ * Similar to PlatformMatch from shared/types/platform but with:
+ * - platformType is required (not optional)
+ * - entityId is optional (may not exist for new entities)
+ * - type is required (entity type)
+ */
 export interface ScanResultPlatformMatch {
   platformId: string;
   platformType: 'opencti' | 'openaev';
@@ -155,18 +169,7 @@ export interface PanelAIState {
   available: boolean;
 }
 
-// Resolved relationship from AI
-export interface ResolvedRelationship {
-  fromIndex: number;
-  toIndex: number;
-  /** Entity value for lookup (more reliable than index) */
-  fromEntityValue?: string;
-  toEntityValue?: string;
-  relationshipType: string;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-  excerpt?: string;
-}
+// ResolvedRelationship is now imported from ../../shared/api/ai/types
 
 // Container specific fields
 export interface ContainerSpecificFields {
@@ -321,6 +324,7 @@ export interface AuthorOption {
   id: string;
   name: string;
   entity_type: string;
+  platformId?: string;
 }
 
 // Investigation entity
@@ -344,3 +348,37 @@ export interface RawAttackPattern {
   killChainPhases?: string[];
   platformId?: string;
 }
+
+// Attack pattern for scenario building (from OpenAEV)
+// Uses OAEVInjectorContract from shared types
+export interface ScenarioAttackPattern {
+  id: string;
+  name: string;
+  externalId?: string;
+  description?: string;
+  killChainPhases?: string[] | Array<{ phase_name?: string; kill_chain_name?: string }>;
+  contracts?: OAEVInjectorContract[];
+  entityId?: string;
+  platformId?: string;
+}
+
+/**
+ * @deprecated Use OAEVInjectorContract from '../../shared/types/openaev' instead
+ * Kept for backward compatibility - identical to OAEVInjectorContract
+ */
+export type InjectorContract = OAEVInjectorContract;
+
+// Email timeline item for scenario form
+export interface EmailTimelineItem {
+  attackPatternId: string;
+  attackPatternName: string;
+  externalId?: string;
+  killChainPhases?: string[] | Array<{ phase_name?: string }>;
+  delayMinutes: number;
+}
+
+/**
+ * @deprecated Use OAEVKillChainPhase from '../../shared/types/openaev' instead
+ * Kept for backward compatibility - identical to OAEVKillChainPhase
+ */
+export type KillChainPhase = OAEVKillChainPhase;

@@ -17,6 +17,7 @@ import {
 } from '../services/client-manager';
 import { loggers } from '../../shared/utils/logger';
 import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS } from '../../shared/constants';
+import { EMAIL_INJECTOR_CONTRACT_ID } from '../../shared/constants/openaev';
 
 const log = loggers.background;
 
@@ -415,8 +416,6 @@ export const handleAddInjectToScenario: MessageHandler = async (payload, sendRes
  * Add email inject to scenario handler
  */
 export const handleAddEmailInjectToScenario: MessageHandler = async (payload, sendResponse) => {
-  const EMAIL_INJECTOR_CONTRACT_ID = '138ad8f8-32f8-4a22-8114-aaa12322bd09';
-  
   const { platformId, scenarioId, title, description, subject, body, delayMinutes, teamId } = payload as {
     platformId: string;
     scenarioId: string;

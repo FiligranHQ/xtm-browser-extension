@@ -35,18 +35,10 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
-import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, LabelOption, MarkingOption } from '../types/panel-types';
+import type { PanelMode, EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, LabelOption, MarkingOption, AuthorOption } from '../types/panel-types';
 
 // Debounce delay for search (1.2s is optimal for reducing API calls while remaining responsive)
 const SEARCH_DEBOUNCE_MS = 1200;
-
-// Author type definition
-interface AuthorOption {
-  id: string;
-  name: string;
-  entity_type: string;
-  platformId?: string;
-}
 
 // Generate a random color for new labels
 const generateRandomColor = () => {

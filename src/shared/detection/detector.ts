@@ -622,114 +622,32 @@ export class DetectionEngine {
   }
 
   /**
-   * Detect OpenCTI entities using cached entity names
-   * Now supports multiple entities with the same name but different types
-   * (e.g., "Phishing" as both Malware and Attack Pattern)
+   * Generic entity detection from cached entity names
+   * Supports multiple entities with the same name but different types
    */
-  async detectOCTIEntitiesFromCache(text: string): Promise<DetectedOCTIEntity[]> {
-    const detected: DetectedOCTIEntity[] = [];
+  private detectEntitiesFromCacheGeneric<T>(
+    text: string,
+    entityMap: Map<string, Array<{ id: string; name: string; type: string; platformId?: string; aliases?: string[] }>>,
+    minLength: number,
+    createEntity: (entity: { id: string; name: string; type: string; platformId?: string; aliases?: string[] }, matchedText: string, startIndex: number, endIndex: number) => T,
+    logPrefix: string
+  ): T[] {
+    const detected: T[] = [];
     const seenEntities = new Set<string>();
     const seenRanges = new Set<string>();
     
-    const entityMap = await getAllCachedOCTIEntityNamesForMatching();
-    
     if (entityMap.size === 0) {
-      log.debug('No cached entities available for OpenCTI entity detection');
+      log.debug(`${logPrefix} No cached entities available for detection`);
       return detected;
     }
     
-    log.debug(`Searching for ${entityMap.size} cached entity names/aliases`);
+    log.debug(`${logPrefix} Searching for ${entityMap.size} cached entity names/aliases`);
     
     // Sort by name length (longest first) to match longer names before substrings
     const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
     
     for (const [nameLower, entities] of sortedEntities) {
-      // Skip very short names (< 3 chars) to avoid false positives
-      if (nameLower.length < 3) continue;
-      
-      const regex = createMatchingRegex(nameLower);
-      
-      let match;
-      while ((match = regex.exec(text)) !== null) {
-        const matchedText = match[0];
-        if (!matchedText || matchedText.toLowerCase() !== nameLower) continue;
-        
-        const startIndex = match.index;
-        const endIndex = startIndex + matchedText.length;
-        
-        // For parent MITRE techniques, skip if followed by a dot (part of sub-technique)
-        if (isParentMitreId(nameLower)) {
-          const charAfter = endIndex < text.length ? text[endIndex] : '';
-          if (charAfter === '.') continue;
-        }
-        
-        // For names with special chars (but not IPs/MACs/MITRE IDs), verify boundaries manually
-        if (needsManualBoundaryCheck(nameLower)) {
-          if (!hasValidBoundaries(text, startIndex, endIndex)) continue;
-        }
-        
-        // Check for overlapping ranges
-        const rangeKey = createRangeKey(startIndex, endIndex);
-        if (hasOverlappingRange(startIndex, endIndex, seenRanges)) continue;
-        
-        // Add ALL entities with this name (supports multiple types like Malware + Attack Pattern)
-        for (const entity of entities) {
-          // Skip if we already found this specific entity
-          if (seenEntities.has(entity.id)) continue;
-          
-          detected.push({
-            type: entity.type as DetectedOCTIEntity['type'],
-            name: entity.name,
-            matchedValue: matchedText !== entity.name ? matchedText : undefined,
-            startIndex,
-            endIndex,
-            found: true,
-            entityId: entity.id,
-            platformId: entity.platformId,
-            entityData: {
-              id: entity.id,
-              entity_type: entity.type,
-              name: entity.name,
-              aliases: entity.aliases,
-            } as unknown as OCTIStixDomainObject,
-          });
-          
-          seenEntities.add(entity.id);
-        }
-        
-        seenRanges.add(rangeKey);
-        break; // Only detect first text occurrence per name
-      }
-    }
-    
-    log.debug(`Found ${detected.length} OpenCTI entities from cache`);
-    return detected;
-  }
-
-  /**
-   * Detect OpenAEV entities using cached entity names
-   * Now supports multiple entities with the same name but different types
-   */
-  async detectOAEVEntitiesFromCache(text: string): Promise<DetectedOAEVEntity[]> {
-    const detected: DetectedOAEVEntity[] = [];
-    const seenEntities = new Set<string>();
-    const seenRanges = new Set<string>();
-    
-    const entityMap = await getAllCachedOAEVEntityNamesForMatching();
-    
-    if (entityMap.size === 0) {
-      log.debug(' No cached OpenAEV entities available for detection');
-      return detected;
-    }
-    
-    log.debug(`Searching for ${entityMap.size} cached OpenAEV entity names/aliases`);
-    
-    // Sort by name length (longest first) to match longer names before substrings
-    const sortedEntities = Array.from(entityMap.entries()).sort((a, b) => b[0].length - a[0].length);
-    
-    for (const [nameLower, entities] of sortedEntities) {
-      // Skip very short names (except for MITRE IDs which are 4+ chars)
-      if (nameLower.length < 4) continue;
+      if (nameLower.length < minLength) continue;
       
       const regex = createMatchingRegex(nameLower);
       
@@ -758,22 +676,9 @@ export class DetectionEngine {
         
         // Add ALL entities with this name (supports multiple types)
         for (const entity of entities) {
-          // Skip if we already found this specific entity
           if (seenEntities.has(entity.id)) continue;
           
-          detected.push({
-            platformType: 'openaev',
-            type: entity.type,
-            name: entity.name,
-            value: matchedText,
-            startIndex,
-            endIndex,
-            found: true,
-            entityId: entity.id,
-            platformId: entity.platformId,
-            entityData: entity,
-          });
-          
+          detected.push(createEntity(entity, matchedText, startIndex, endIndex));
           seenEntities.add(entity.id);
         }
         
@@ -782,8 +687,64 @@ export class DetectionEngine {
       }
     }
     
-    log.debug(`Found ${detected.length} OpenAEV entities from cache`);
+    log.debug(`${logPrefix} Found ${detected.length} entities from cache`);
     return detected;
+  }
+
+  /**
+   * Detect OpenCTI entities using cached entity names
+   */
+  async detectOCTIEntitiesFromCache(text: string): Promise<DetectedOCTIEntity[]> {
+    const entityMap = await getAllCachedOCTIEntityNamesForMatching();
+    
+    return this.detectEntitiesFromCacheGeneric(
+      text,
+      entityMap,
+      3, // minLength for OpenCTI
+      (entity, matchedText, startIndex, endIndex) => ({
+        type: entity.type as DetectedOCTIEntity['type'],
+        name: entity.name,
+        matchedValue: matchedText !== entity.name ? matchedText : undefined,
+        startIndex,
+        endIndex,
+        found: true,
+        entityId: entity.id,
+        platformId: entity.platformId,
+        entityData: {
+          id: entity.id,
+          entity_type: entity.type,
+          name: entity.name,
+          aliases: entity.aliases,
+        } as unknown as OCTIStixDomainObject,
+      }),
+      '[OpenCTI]'
+    );
+  }
+
+  /**
+   * Detect OpenAEV entities using cached entity names
+   */
+  async detectOAEVEntitiesFromCache(text: string): Promise<DetectedOAEVEntity[]> {
+    const entityMap = await getAllCachedOAEVEntityNamesForMatching();
+    
+    return this.detectEntitiesFromCacheGeneric(
+      text,
+      entityMap,
+      4, // minLength for OpenAEV (MITRE IDs are 4+ chars)
+      (entity, matchedText, startIndex, endIndex) => ({
+        platformType: 'openaev' as const,
+        type: entity.type,
+        name: entity.name,
+        value: matchedText,
+        startIndex,
+        endIndex,
+        found: true,
+        entityId: entity.id,
+        platformId: entity.platformId,
+        entityData: entity,
+      }),
+      '[OpenAEV]'
+    );
   }
 
   /**

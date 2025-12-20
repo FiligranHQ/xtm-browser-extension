@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13] - 2025-12-20
+
 ### Added
 - **AI Relationship Discovery**: New AI-powered relationship discovery directly from scan results
 - **Clear All Button**: Button to clear all highlights, results, and selections while staying on scan results view
@@ -28,12 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Improved
 - **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector, ScenarioTypeSelector) from monolithic views for better maintainability
 - **Custom Hooks**: Extracted and integrated reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
-- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, and other dead code
+- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, deprecated type aliases, and other dead code
 - **Duplicate Code Removal**: Consolidated duplicate handler functions in scenario-handlers.ts (3 unused handlers removed, now using openaev-handlers.ts)
 - **React Hook Optimization**: Wrapped callbacks in `useCallback` to prevent unnecessary re-renders
 - Shared visualization constants ensure consistent appearance across all scan modes
 
-## [0.0.12] - 2024-12-20
+## [0.0.12] - 2025-12-20
 
 ### Added
 - **PDF Scanning**: Full PDF document scanning with integrated viewer. When clicking "Scan" on a PDF page, the extension opens a dedicated PDF viewer with:
@@ -64,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Firefox PDF Scanner Detection**: Popup now correctly detects PDF scanner pages in Firefox (`moz-extension://` URLs)
 - **AI Discovery Content Retrieval**: AI discovery now properly retrieves PDF content when triggered from the side panel
 
-## [0.0.11] - 2024-12-19
+## [0.0.11] - 2025-12-19
 
 ### Added
 - **Labels field improvements**: Labels autocomplete in container form now fetches only initial 10 labels, searches on the fly with 1.2-second debounce, and includes a "+" button to create new labels directly within the field
@@ -104,13 +106,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Debug logging**: Removed all debug console.log statements from content script for cleaner production builds
 
-## [0.0.10] - 2024-12-19
+## [0.0.10] - 2025-12-19
 
 ### Fixed
 - **Split screen mode on MacOS**: Fixed native side panel not opening reliably on Chrome and Edge on MacOS. The popup now opens the side panel immediately in user gesture context before sending scan messages, which is required by the Chrome sidePanel API
 - **Dual panel opening**: Fixed both native side panel and floating iframe opening simultaneously in split screen mode. The content script now correctly skips iframe creation when split screen mode is enabled
 
-## [0.0.9] - 2024-12-18
+## [0.0.9] - 2025-12-18
 
 ### Added
 - **Cross-browser iframe compatibility**: Floating panel now works correctly on Chrome, Firefox, and Edge with unified iframe loading approach using `requestAnimationFrame` for Edge compatibility

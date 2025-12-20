@@ -26,6 +26,7 @@ export interface NotFoundViewProps {
   setEntityFromScanResults: (value: boolean) => void;
   setPanelMode: (mode: PanelMode) => void;
   setEntitiesToAdd: (entities: EntityData[]) => void;
+  setAddFromNotFound: (fromNotFound: boolean) => void;
 }
 
 /**
@@ -38,6 +39,7 @@ export const CommonNotFoundView: React.FC<NotFoundViewProps> = ({
   setEntityFromScanResults,
   setPanelMode,
   setEntitiesToAdd,
+  setAddFromNotFound,
 }) => {
   if (!entity) return null;
 
@@ -100,6 +102,7 @@ export const CommonNotFoundView: React.FC<NotFoundViewProps> = ({
         startIcon={<AddOutlined />}
         onClick={() => {
           setEntitiesToAdd([entity]);
+          setAddFromNotFound(true);
           setPanelMode('add');
         }}
         fullWidth

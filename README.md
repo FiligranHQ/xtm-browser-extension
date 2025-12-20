@@ -1,7 +1,7 @@
 # Filigran XTM Browser Extension
 
-[![OpenCTI Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-opencti.yml)
-[![OpenAEV Integration Tests](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci-test-openaev.yml)
+[![CI](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/FiligranHQ/xtm-browser-extension/graph/badge.svg)](https://codecov.io/gh/FiligranHQ/xtm-browser-extension)
 
 The **Filigran XTM Browser Extension** transforms your web browser into a powerful threat intelligence workstation. Seamlessly integrated with [OpenCTI](https://filigran.io/solutions/open-cti/) (Cyber Threat Intelligence) and [OpenAEV](https://filigran.io/solutions/openaev/) (Adversarial Exposure Validation) platforms, this extension enables security analysts to detect, enrich, and operationalize threat data directly from any web page.
 
@@ -159,11 +159,16 @@ To run integration tests locally against running OpenCTI/OpenAEV instances:
 
 ### CI/CD
 
-Integration tests run automatically on push and pull requests via GitHub Actions:
-- **OpenCTI Tests**: Spins up Redis, Elasticsearch, MinIO, RabbitMQ, and OpenCTI
-- **OpenAEV Tests**: Spins up PostgreSQL, Elasticsearch, MinIO, RabbitMQ, and OpenAEV
+Tests run automatically on push and pull requests via GitHub Actions with unified coverage reporting:
 
-See `.github/workflows/ci-test-opencti.yml` and `.github/workflows/ci-test-openaev.yml` for details.
+| Job | Description |
+|-----|-------------|
+| **Unit Tests** | Fast unit tests for shared utilities, patterns, and detection logic |
+| **OpenCTI Integration** | Spins up Redis, Elasticsearch, MinIO, RabbitMQ, and OpenCTI |
+| **OpenAEV Integration** | Spins up PostgreSQL, Elasticsearch, MinIO, RabbitMQ, and OpenAEV |
+| **Coverage Upload** | Aggregates all coverage reports and uploads to Codecov |
+
+See `.github/workflows/ci.yml` for details.
 
 ## Documentation
 

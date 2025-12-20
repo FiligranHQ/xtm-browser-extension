@@ -11,6 +11,7 @@ import {
   Paper,
   Button,
 } from '@mui/material';
+import { ChevronLeftOutlined } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import type { PanelMode, EntityData } from '../types/panel-types';
 
@@ -19,6 +20,8 @@ export interface AddViewProps {
   entitiesToAdd: EntityData[];
   handleAddEntities: () => void;
   submitting: boolean;
+  addFromNotFound: boolean;
+  setAddFromNotFound: (fromNotFound: boolean) => void;
 }
 
 export const OCTIAddView: React.FC<AddViewProps> = ({
@@ -26,9 +29,35 @@ export const OCTIAddView: React.FC<AddViewProps> = ({
   entitiesToAdd,
   handleAddEntities,
   submitting,
+  addFromNotFound,
+  setAddFromNotFound,
 }) => {
+  // Handle back navigation to entity overview
+  const handleBackToEntity = () => {
+    setAddFromNotFound(false);
+    setPanelMode('not-found');
+  };
+
   return (
     <Box sx={{ p: 2 }}>
+      {/* Back to entity overview link */}
+      {addFromNotFound && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={handleBackToEntity}
+            sx={{
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            Back to entity overview
+          </Button>
+        </Box>
+      )}
+
       <Typography variant="h6" sx={{ mb: 1 }}>Add to OpenCTI</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
         The following entities will be created:
@@ -71,7 +100,10 @@ export const OCTIAddView: React.FC<AddViewProps> = ({
         >
           {submitting ? 'Creating...' : 'Create Entities'}
         </Button>
-        <Button variant="outlined" onClick={() => setPanelMode('empty')}>
+        <Button variant="outlined" onClick={() => {
+          setAddFromNotFound(false);
+          setPanelMode('empty');
+        }}>
           Cancel
         </Button>
       </Box>

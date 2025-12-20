@@ -1,32 +1,20 @@
-name: OpenCTI Integration Tests
+name: CI
 
 on:
   push:
     branches:
       - main
       - develop
-    paths:
-      - 'src/shared/api/opencti-client.ts'
-      - 'src/shared/detection/**'
-      - 'src/shared/utils/storage.ts'
-      - 'tests/**'
-      - '.github/workflows/ci-test-opencti.yml'
-      - 'package.json'
   pull_request:
     branches:
       - main
       - develop
-    paths:
-      - 'src/shared/api/opencti-client.ts'
-      - 'src/shared/detection/**'
-      - 'src/shared/utils/storage.ts'
-      - 'tests/**'
-      - '.github/workflows/ci-test-opencti.yml'
-      - 'package.json'
   workflow_dispatch:
 
 jobs:
+  # Unit tests - run first and fast
   unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -43,17 +31,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit tests
-        run: npm run test:unit
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage
 
-      - name: Upload coverage
+      - name: Upload unit test coverage
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: unit-test-coverage
-          path: coverage/
+          name: coverage-unit
+          path: coverage/coverage-final.json
+          retention-days: 1
 
-  integration-tests:
+  # OpenCTI integration tests
+  integration-opencti:
+    name: OpenCTI Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -322,7 +312,6 @@ jobs:
           API_URL="http://localhost:8080/graphql"
           AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
           
-          # Query Threat Actor Groups (organizations like GRU)
           echo "Querying Threat Actor Groups..."
           curl -s -X POST "$API_URL" \
             -H "$AUTH_HEADER" \
@@ -330,7 +319,6 @@ jobs:
             -d '{"query":"{ threatActorsGroup(first: 5) { edges { node { id name aliases } } } }"}'
           
           echo ""
-          # Query Intrusion Sets (APT29, APT28, etc.)
           echo "Querying Intrusion Sets..."
           curl -s -X POST "$API_URL" \
             -H "$AUTH_HEADER" \
@@ -351,23 +339,393 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"query":"{ attackPatterns(first: 5) { edges { node { id name x_mitre_id } } } }"}'
 
-      - name: Run OpenCTI integration tests
+      - name: Run OpenCTI integration tests with coverage
         env:
           OPENCTI_URL: http://localhost:8080
           OPENCTI_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
-        run: npm run test:opencti
+        run: npm run test:opencti -- --coverage
 
-      - name: Upload test results
+      - name: Upload OpenCTI integration test coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: opencti-test-results
-          path: |
-            coverage/
-            test-results/
+          name: coverage-opencti
+          path: coverage/coverage-final.json
+          retention-days: 1
 
       - name: Cleanup
         if: always()
         run: |
           docker stop opencti || true
           docker rm opencti || true
+
+  # OpenAEV integration tests
+  integration-openaev:
+    name: OpenAEV Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: openaev
+          POSTGRES_USER: openaev
+          POSTGRES_PASSWORD: openaev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openaev -d openaev"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.16.0
+        env:
+          discovery.type: single-node
+          xpack.ml.enabled: 'false'
+          xpack.security.enabled: 'false'
+          thread_pool.search.queue_size: '5000'
+          ES_JAVA_OPTS: -Xms2g -Xmx2g
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -sf http://localhost:9200 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+      minio:
+        image: lazybit/minio
+        ports:
+          - 9000:9000
+          - 9001:9001
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        options: >-
+          --health-cmd "curl -sf http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      rabbitmq:
+        image: rabbitmq:4.2-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for Elasticsearch to be ready
+        run: |
+          echo "Waiting for Elasticsearch..."
+          for i in {1..60}; do
+            if curl -sf http://localhost:9200 >/dev/null 2>&1; then
+              echo "Elasticsearch is ready!"
+              break
+            fi
+            echo "Attempt $i: Elasticsearch not ready yet..."
+            sleep 5
+          done
+
+      - name: Wait for MinIO to be ready
+        run: |
+          echo "Waiting for MinIO..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO is ready!"
+              break
+            fi
+            echo "Attempt $i: MinIO not ready yet..."
+            sleep 2
+          done
+
+      - name: Pull and run OpenAEV
+        run: |
+          docker run -d --name openaev \
+            --network host \
+            -e OPENAEV_BASE-URL=http://localhost:8080 \
+            -e OPENAEV_AUTH-LOCAL-ENABLE=true \
+            -e OPENAEV_ADMIN_EMAIL=admin@openaev.io \
+            -e OPENAEV_ADMIN_PASSWORD=admin \
+            -e OPENAEV_ADMIN_TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
+            -e OPENAEV_HEALTHCHECK_KEY=healthcheck \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/openaev \
+            -e SPRING_DATASOURCE_USERNAME=openaev \
+            -e SPRING_DATASOURCE_PASSWORD=openaev \
+            -e MINIO_ENDPOINT=localhost \
+            -e MINIO_ACCESS-KEY=minioadmin \
+            -e MINIO_ACCESS-SECRET=minioadmin \
+            -e OPENAEV_RABBITMQ_HOSTNAME=localhost \
+            -e OPENAEV_RABBITMQ_USER=guest \
+            -e OPENAEV_RABBITMQ_PASS=guest \
+            -e ENGINE_URL=http://localhost:9200 \
+            openaev/platform:latest || echo "OpenAEV image may not be available, running mock tests only"
+
+      - name: Wait for OpenAEV to be ready
+        run: |
+          echo "Waiting for OpenAEV to be ready..."
+          for i in {1..90}; do
+            if curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/api/settings 2>/dev/null | grep -q "platform"; then
+              echo "OpenAEV is ready!"
+              curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/api/settings
+              break
+            fi
+            if [ $i -eq 90 ]; then
+              echo "OpenAEV did not start in time, running mock tests only"
+            fi
+            echo "Attempt $i: OpenAEV not ready yet..."
+            docker logs openaev --tail 20 2>/dev/null || true
+            sleep 5
+          done
+
+      - name: Seed test data in OpenAEV
+        run: |
+          echo "Creating test data in OpenAEV..."
+          API_URL="http://localhost:8080/api"
+          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          
+          # Check if OpenAEV is available
+          if ! curl -s -H "$AUTH_HEADER" "$API_URL/settings" 2>/dev/null | grep -q "platform"; then
+            echo "OpenAEV not available, skipping data seeding"
+            exit 0
+          fi
+          
+          # Create test Endpoints (agentless)
+          echo "Creating test Endpoints..."
+          curl -s -X POST "$API_URL/endpoints/agentless" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "asset_name": "Production Web Server",
+              "asset_description": "Main production web server",
+              "endpoint_platform": "Linux",
+              "endpoint_arch": "x86_64"
+            }' || true
+          
+          curl -s -X POST "$API_URL/endpoints/agentless" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "asset_name": "Database Server",
+              "asset_description": "PostgreSQL database server",
+              "endpoint_platform": "Linux",
+              "endpoint_arch": "x86_64",
+              "endpoint_hostname": "db-server-01",
+              "endpoint_ips": ["192.168.1.100", "10.0.0.50"]
+            }' || true
+          
+          curl -s -X POST "$API_URL/endpoints/agentless" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "asset_name": "Workstation Alpha",
+              "asset_description": "Developer workstation",
+              "endpoint_platform": "Windows",
+              "endpoint_arch": "x86_64",
+              "endpoint_hostname": "ws-alpha",
+              "endpoint_mac_addresses": ["00:1A:2B:3C:4D:5E"]
+            }' || true
+          
+          # Create test Asset Groups
+          echo "Creating test Asset Groups..."
+          curl -s -X POST "$API_URL/asset_groups" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "asset_group_name": "Production Servers",
+              "asset_group_description": "All production environment servers"
+            }' || true
+          
+          curl -s -X POST "$API_URL/asset_groups" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "asset_group_name": "Developer Workstations",
+              "asset_group_description": "Development team workstations"
+            }' || true
+          
+          # Create test Teams
+          echo "Creating test Teams..."
+          curl -s -X POST "$API_URL/teams" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "team_name": "Red Team Alpha",
+              "team_description": "Offensive security team"
+            }' || true
+          
+          curl -s -X POST "$API_URL/teams" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "team_name": "Blue Team",
+              "team_description": "Defensive security team"
+            }' || true
+          
+          # Create test Attack Patterns
+          echo "Creating test Attack Patterns..."
+          curl -s -X POST "$API_URL/attack_patterns" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "attack_pattern_name": "Phishing",
+              "attack_pattern_external_id": "T1566",
+              "attack_pattern_stix_id": "attack-pattern--a62a8db3-f23a-4d8f-afd6-9dbc77e7813b",
+              "attack_pattern_description": "Phishing attack technique"
+            }' || true
+          
+          curl -s -X POST "$API_URL/attack_patterns" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "attack_pattern_name": "Command and Scripting Interpreter",
+              "attack_pattern_external_id": "T1059",
+              "attack_pattern_stix_id": "attack-pattern--d1fcf083-a721-4223-aedf-bf8960798d62",
+              "attack_pattern_description": "Execution via command interpreter"
+            }' || true
+          
+          curl -s -X POST "$API_URL/attack_patterns" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "attack_pattern_name": "PowerShell",
+              "attack_pattern_external_id": "T1059.001",
+              "attack_pattern_stix_id": "attack-pattern--970a3432-3237-47ad-bcca-7d8cbb217736",
+              "attack_pattern_description": "Execution via PowerShell"
+            }' || true
+          
+          # Create test Scenarios
+          echo "Creating test Scenarios..."
+          curl -s -X POST "$API_URL/scenarios" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "scenario_name": "Ransomware Simulation",
+              "scenario_description": "Simulated ransomware attack scenario"
+            }' || true
+          
+          curl -s -X POST "$API_URL/scenarios" \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "scenario_name": "Lateral Movement Exercise",
+              "scenario_description": "Testing lateral movement detection"
+            }' || true
+          
+          echo "Test data seeding completed!"
+
+      - name: Verify test data
+        run: |
+          echo "Verifying test data..."
+          API_URL="http://localhost:8080/api"
+          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          
+          # Check if OpenAEV is available
+          if ! curl -s -H "$AUTH_HEADER" "$API_URL/settings" 2>/dev/null | grep -q "platform"; then
+            echo "OpenAEV not available, skipping verification"
+            exit 0
+          fi
+          
+          echo "Querying Endpoints..."
+          curl -s -H "$AUTH_HEADER" "$API_URL/endpoints" || true
+          
+          echo ""
+          echo "Querying Asset Groups..."
+          curl -s -H "$AUTH_HEADER" "$API_URL/asset_groups" || true
+          
+          echo ""
+          echo "Querying Teams..."
+          curl -s -H "$AUTH_HEADER" "$API_URL/teams" || true
+          
+          echo ""
+          echo "Querying Attack Patterns..."
+          curl -s -H "$AUTH_HEADER" "$API_URL/attack_patterns" || true
+
+      - name: Run OpenAEV integration tests with coverage
+        env:
+          OPENAEV_URL: http://localhost:8080
+          OPENAEV_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
+        run: npm run test:openaev -- --coverage
+
+      - name: Upload OpenAEV integration test coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-openaev
+          path: coverage/coverage-final.json
+          retention-days: 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop openaev || true
+          docker rm openaev || true
+
+  # Upload combined coverage to Codecov
+  coverage:
+    name: Upload Coverage
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-opencti, integration-openaev]
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download unit test coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/unit
+        continue-on-error: true
+
+      - name: Download OpenCTI coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-opencti
+          path: coverage/opencti
+        continue-on-error: true
+
+      - name: Download OpenAEV coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-openaev
+          path: coverage/openaev
+        continue-on-error: true
+
+      - name: List coverage files
+        run: |
+          echo "Coverage files downloaded:"
+          find coverage -name "*.json" -type f 2>/dev/null || echo "No coverage files found"
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/unit/coverage-final.json,coverage/opencti/coverage-final.json,coverage/openaev/coverage-final.json
+          flags: unittests,integration-opencti,integration-openaev
+          fail_ci_if_error: false
+          verbose: true
+

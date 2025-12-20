@@ -44,6 +44,10 @@ export interface ContainerStateReturn {
   entitiesToAdd: EntityData[];
   setEntitiesToAdd: React.Dispatch<React.SetStateAction<EntityData[]>>;
   
+  // Track if add was triggered from not-found view (for back navigation)
+  addFromNotFound: boolean;
+  setAddFromNotFound: (fromNotFound: boolean) => void;
+  
   // Form submission
   submitting: boolean;
   setSubmitting: (submitting: boolean) => void;
@@ -126,6 +130,9 @@ export function useContainerState(): ContainerStateReturn {
   // Entities to add
   const [entitiesToAdd, setEntitiesToAdd] = useState<EntityData[]>([]);
   
+  // Track if add was triggered from not-found view
+  const [addFromNotFound, setAddFromNotFound] = useState(false);
+  
   // Form submission
   const [submitting, setSubmitting] = useState(false);
   
@@ -191,6 +198,8 @@ export function useContainerState(): ContainerStateReturn {
     setAvailableMarkings,
     entitiesToAdd,
     setEntitiesToAdd,
+    addFromNotFound,
+    setAddFromNotFound,
     submitting,
     setSubmitting,
     containerSpecificFields,

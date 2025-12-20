@@ -3,9 +3,6 @@
  * Centralized type definitions for the panel component
  */
 
-// Import shared types
-import type { OAEVInjectorContract, OAEVKillChainPhase } from '../../shared/types/openaev';
-
 // Re-export shared types for convenience
 export type { OAEVInjectorContract, OAEVKillChainPhase } from '../../shared/types/openaev';
 export type { PlatformMatch } from '../../shared/types/platform';
@@ -362,12 +359,6 @@ export interface ScenarioAttackPattern {
   platformId?: string;
 }
 
-/**
- * @deprecated Use OAEVInjectorContract from '../../shared/types/openaev' instead
- * Kept for backward compatibility - identical to OAEVInjectorContract
- */
-export type InjectorContract = OAEVInjectorContract;
-
 // Email timeline item for scenario form
 export interface EmailTimelineItem {
   attackPatternId: string;
@@ -376,9 +367,3 @@ export interface EmailTimelineItem {
   killChainPhases?: string[] | Array<{ phase_name?: string }>;
   delayMinutes: number;
 }
-
-/**
- * @deprecated Use OAEVKillChainPhase from '../../shared/types/openaev' instead
- * Kept for backward compatibility - identical to OAEVKillChainPhase
- */
-export type KillChainPhase = OAEVKillChainPhase;

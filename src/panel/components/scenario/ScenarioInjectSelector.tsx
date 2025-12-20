@@ -34,12 +34,12 @@ import { loggers } from '../../../shared/utils/logger';
 import type {
   PlatformInfo,
   PanelMode,
-  InjectorContract,
   SelectedInject,
   ScenarioOverviewData,
   ScenarioFormData,
   PanelAIState,
 } from '../../types/panel-types';
+import type { OAEVInjectorContract } from '../../../shared/types/openaev';
 
 const log = loggers.panel;
 
@@ -63,7 +63,7 @@ interface ScenarioInjectSelectorProps {
   currentPageTitle: string;
   currentPageUrl: string;
   scenarioForm: ScenarioFormData;
-  getFilteredContracts: (contracts: unknown[]) => InjectorContract[];
+  getFilteredContracts: (contracts: unknown[]) => OAEVInjectorContract[];
 }
 
 export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
@@ -164,7 +164,7 @@ export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
             name: ap.name,
             id: ap.externalId,
             description: ap.description,
-            availableInjects: getFilteredContracts(ap.contracts || []).map((c: InjectorContract) => ({
+            availableInjects: getFilteredContracts(ap.contracts || []).map((c: OAEVInjectorContract) => ({
               id: c.injector_contract_id,
               label: c.injector_contract_labels?.en || c.injector_name || 'Unknown',
             })),

@@ -148,18 +148,6 @@ export interface UnifiedSearchResult {
   data?: Record<string, unknown>;
 }
 
-// Merged search result (for grouping across platforms)
-export interface MergedSearchResult {
-  representativeKey: string;
-  name: string;
-  type: string;
-  platforms: Array<{
-    platformId: string;
-    platformName: string;
-    result: SearchResult;
-  }>;
-}
-
 // AI settings
 export interface AISettings {
   enabled: boolean;
@@ -307,13 +295,6 @@ export interface MultiPlatformResult {
   platformId: string;
   platformName: string;
   entity: EntityData;
-}
-
-// AI settings state
-export interface AISettingsState {
-  enabled: boolean;
-  provider?: string;
-  available: boolean;
 }
 
 // Label option for autocomplete

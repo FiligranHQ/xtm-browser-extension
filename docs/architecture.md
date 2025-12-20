@@ -97,7 +97,8 @@ src/content/
 ├── index.ts              # Main entry point, event handlers, message handling
 ├── styles.ts             # CSS styles for highlights, tooltips, panel
 ├── highlighting.ts       # Entity highlighting logic
-├── highlight-utils.ts    # Shared highlighting utilities (Shadow DOM, element creation)
+├── utils/
+│   └── highlight.ts      # Shared highlighting utilities (Shadow DOM, element creation)
 ├── extraction.ts         # Content extraction for PDFs and descriptions
 ├── page-content.ts       # Page content utilities
 ├── panel.ts              # Side panel iframe management
@@ -216,14 +217,14 @@ src/shared/
 │   │   ├── types.ts      # OpenCTI-specific types (query responses)
 │   │   ├── fragments.ts  # Reusable GraphQL fragments
 │   │   ├── queries.ts    # GraphQL queries, mutations, and filter builders
-│   │   └── observable-utils.ts # Observable type mapping and input builders
+│   │   └── observable-mapping.ts # Observable type mapping and input builders
 │   └── openaev/          # OpenAEV REST modules
 │       └── filters.ts    # Filter builders, payload builders, and type utilities
 ├── detection/            # Detection engine
 │   ├── detector.ts       # Main detection orchestrator
 │   ├── patterns.ts       # Regex patterns for entity types
 │   ├── matching.ts       # Entity matching logic
-│   └── text-utils.ts     # Text processing utilities
+│   └── text-extraction.ts # Text extraction from DOM
 ├── extraction/           # Content extraction
 │   ├── content-extractor.ts # Main extractor
 │   ├── pdf-generator.ts     # PDF generation
@@ -270,13 +271,13 @@ src/shared/api/opencti/
 ├── types.ts           # Query response types (SDOQueryResponse, etc.)
 ├── fragments.ts       # Reusable GraphQL fragments (OBSERVABLE_PROPERTIES, SDO_PROPERTIES)
 ├── queries.ts         # All GraphQL queries, mutations, and filter builders
-└── observable-utils.ts # Observable type mapping (STIX ↔ GraphQL)
+└── observable-mapping.ts # Observable type mapping (STIX ↔ GraphQL)
 ```
 
 **Key modules:**
 - **fragments.ts**: GraphQL fragments for consistent entity field selection
 - **queries.ts**: All queries/mutations extracted (~350 lines) with filter builder functions
-- **observable-utils.ts**: Maps observable types between STIX and GraphQL formats
+- **observable-mapping.ts**: Maps observable types between STIX and GraphQL formats
 
 **Design pattern:**
 ```typescript
@@ -1052,15 +1053,15 @@ src/shared/visualization/
 
 ### Entity Icons (`entity-icons.ts`)
 
-Centralized SVG path definitions for entity type icons used in graph visualizations:
+Centralized SVG path definitions for entity type icons and color utilities:
 
 ```typescript
-import { getIconPath, getEntityColor } from '@/shared/visualization';
+import { getIconPath, getEntityColor, DEFAULT_ENTITY_COLOR } from '../shared/visualization/entity-icons';
 
 // Get SVG path for a specific entity type
 const svgPath = getIconPath('Malware');
 
-// Get color for entity type
+// Get color for entity type (uses theme colors with fallback)
 const color = getEntityColor('Threat-Actor-Group');
 ```
 
@@ -1115,44 +1116,52 @@ const rotation = calculateLabelRotation(startPoint, endPoint);
 
 ### Relationship Styles (`relationship-styles.ts`)
 
-Styling constants and CSS utilities:
+Styling constants and CSS utilities for consistent appearance across web and PDF:
 
 ```typescript
 import { 
   LINE_STYLES, 
   LABEL_STYLES,
   MINIMAP_STYLES,
+  GRAPH_NODE_STYLES,
+  getGraphNodeStyle,
   getLineAnimationCSS 
-} from '@/shared/visualization';
+} from '../shared/visualization/relationship-styles';
 
 // Use predefined style constants
-const lineColor = LINE_STYLES.DEFAULT_COLOR;
-const lineWidth = LINE_STYLES.DEFAULT_WIDTH;
+const lineColor = LINE_STYLES.color;
+const lineWidth = LINE_STYLES.width;
 
-// Generate CSS for animated line drawing
-const animationCSS = getLineAnimationCSS(pathLength);
+// Get graph node styling based on expanded state
+const style = getGraphNodeStyle(isExpanded);
+const { nodeRadius, fontSize, labelOffset } = style;
+
+// Generate CSS for animated line drawing (prefix for scoping)
+const animationCSS = getLineAnimationCSS('pdf');
 ```
+
+**GRAPH_NODE_STYLES** ensures visual consistency between web page and PDF viewer:
+- `nodeRadiusSmall/Expanded` - Node circle radius
+- `fontSizeSmall/Expanded` - Label font sizes  
+- `labelOffsetSmall/Expanded` - Label positioning
+- `edgeCurveOffset` - Bezier curve control point offset
+- `edgeStrokeWidth/Opacity` - Edge line styling
 
 ### Usage in Components
 
 **Content Script (relationship-lines.ts, relationship-minimap.ts):**
 ```typescript
-import { 
-  calculateCurveControlPoints, 
-  calculateLabelRotation,
-  LINE_STYLES 
-} from '@/shared/visualization';
+import { calculateCurveControlPoints, calculateLabelRotation } from '../shared/visualization/graph-layout';
+import { LINE_STYLES, GRAPH_NODE_STYLES, getGraphNodeStyle } from '../shared/visualization/relationship-styles';
+import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
 ```
 
 **PDF Scanner (RelationshipLinesOverlay.tsx, RelationshipMinimap.tsx):**
 ```typescript
-import { 
-  calculateLayout, 
-  getIconPath, 
-  getEntityColor,
-  GraphNode, 
-  GraphEdge 
-} from '@/shared/visualization';
+import { calculateLayout } from '../shared/visualization/graph-layout';
+import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
+import { GRAPH_NODE_STYLES, getGraphNodeStyle, ANIMATION_STYLES } from '../shared/visualization/relationship-styles';
+import type { GraphNode, GraphEdge } from '../shared/visualization/graph-types';
 ```
 
 ## Panel Display Modes

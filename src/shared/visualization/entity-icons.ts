@@ -1,9 +1,11 @@
 /**
  * Entity Icons
  * 
- * SVG path definitions for entity type icons.
+ * SVG path definitions for entity type icons and color utilities.
  * Used in relationship minimaps and graph visualizations.
  */
+
+import { itemColor } from '../theme/colors';
 
 /**
  * Entity type to SVG path mapping
@@ -73,3 +75,19 @@ export function getIconPath(type: string): string {
   return ENTITY_ICONS['default'];
 }
 
+/**
+ * Default color for unknown entity types
+ */
+export const DEFAULT_ENTITY_COLOR = '#9c27b0';
+
+/**
+ * Get color for entity type
+ * Uses the theme's itemColor function, falling back to default if not found.
+ */
+export function getEntityColor(type: string): string {
+  try {
+    return itemColor(type) || DEFAULT_ENTITY_COLOR;
+  } catch {
+    return DEFAULT_ENTITY_COLOR;
+  }
+}

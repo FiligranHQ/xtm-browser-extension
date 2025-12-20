@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
 
 ### Improved
-- Major code refactoring: shared visualization module, message dispatcher service, dead code cleanup
-- Removed unused message types, handlers, and barrel files for cleaner codebase
+- Unified visual styling between web page and PDF viewer for relationship graph, minimap, and lines
+- Shared visualization constants ensure consistent appearance across all scan modes
 
 ## [0.0.12] - 2024-12-20
 

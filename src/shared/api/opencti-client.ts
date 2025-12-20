@@ -77,7 +77,7 @@ import {
   normalizeToStixType,
   stixToGraphQLType,
   buildObservableInput,
-} from './opencti/observable-utils';
+} from './opencti/observable-mapping';
 
 import type { ExtensionSettings } from '../types/settings';
 import type { ObservableType, HashType } from '../types/observables';

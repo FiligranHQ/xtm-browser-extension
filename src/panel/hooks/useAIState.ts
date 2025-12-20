@@ -5,24 +5,10 @@
  */
 
 import { useState } from 'react';
+import type { AISettings, ResolvedRelationship } from '../types/panel-types';
 
-export interface AISettings {
-  enabled: boolean;
-  provider?: string;
-  available: boolean;
-}
-
-export interface ResolvedRelationship {
-  fromIndex: number;
-  toIndex: number;
-  /** Entity value for lookup (more reliable than index) */
-  fromEntityValue?: string;
-  toEntityValue?: string;
-  relationshipType: string;
-  confidence: 'high' | 'medium' | 'low';
-  reason: string;
-  excerpt?: string;
-}
+// Re-export types for backward compatibility
+export type { AISettings, ResolvedRelationship };
 
 export interface AIStateReturn {
   // AI Configuration

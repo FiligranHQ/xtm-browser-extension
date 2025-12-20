@@ -31,6 +31,8 @@ interface OpenCTITabProps {
   onRemoveAll: () => void;
   onSave: () => void;
   isSaveDisabled: boolean;
+  /** Check if URL is duplicate for a given platform */
+  getUrlError: (platformId: string) => string | undefined;
 }
 
 const OpenCTITab: React.FC<OpenCTITabProps> = ({
@@ -47,6 +49,7 @@ const OpenCTITab: React.FC<OpenCTITabProps> = ({
   onRemoveAll,
   onSave,
   isSaveDisabled,
+  getUrlError,
 }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -68,6 +71,7 @@ const OpenCTITab: React.FC<OpenCTITabProps> = ({
               isTesting={testing[key] || false}
               testResult={testResults[key]}
               isTested={testedPlatforms.has(key)}
+              urlError={getUrlError(platform.id)}
               onToggleTokenVisibility={() => onToggleTokenVisibility(key)}
               onUpdate={(updates) => onUpdatePlatform('opencti', index, updates)}
               onRemove={() => onRemovePlatform('opencti', index)}

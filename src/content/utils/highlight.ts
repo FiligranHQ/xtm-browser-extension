@@ -5,7 +5,7 @@
  * (regular scan, investigation, atomic testing, scenarios, AI discovery).
  */
 
-import { HIGHLIGHT_STYLES } from './styles';
+import { HIGHLIGHT_STYLES } from '../styles';
 
 // Track shadow roots that have had styles injected
 const styledShadowRoots = new WeakSet<ShadowRoot>();

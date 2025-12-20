@@ -14,7 +14,7 @@ import type {
   ImportResults,
   ContainerFormState,
   ContainerSpecificFields,
-  AISettingsState,
+  AISettings,
   ScenarioOverviewData,
   SelectedInject,
   ScenarioEmail,
@@ -178,8 +178,8 @@ export interface PanelStateReturn {
   setAvailableAuthors: (authors: AuthorOption[]) => void;
   
   // AI State
-  aiSettings: AISettingsState;
-  setAiSettings: (settings: AISettingsState) => void;
+  aiSettings: AISettings;
+  setAiSettings: (settings: AISettings) => void;
   aiGeneratingDescription: boolean;
   setAiGeneratingDescription: (generating: boolean) => void;
   aiSelectingInjects: boolean;
@@ -464,7 +464,7 @@ export function usePanelState(): PanelStateReturn {
   const [availableAuthors, setAvailableAuthors] = useState<AuthorOption[]>([]);
   
   // AI State
-  const [aiSettings, setAiSettings] = useState<AISettingsState>({ enabled: false, available: false });
+  const [aiSettings, setAiSettings] = useState<AISettings>({ enabled: false, available: false });
   const [aiGeneratingDescription, setAiGeneratingDescription] = useState(false);
   const [aiSelectingInjects, setAiSelectingInjects] = useState(false);
   const [aiFillingEmails, setAiFillingEmails] = useState(false);

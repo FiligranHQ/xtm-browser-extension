@@ -204,6 +204,45 @@ const App: React.FC = () => {
   // Platform Handler Functions
   // ============================================================================
 
+  /**
+   * Normalize URL by removing trailing slashes for consistent comparison
+   */
+  const normalizeUrl = (url: string): string => {
+    return url.trim().replace(/\/+$/, '').toLowerCase();
+  };
+
+  /**
+   * Check if a URL already exists in the configured platforms (excluding the current one)
+   */
+  const isDuplicateUrl = (type: 'opencti' | 'openaev', platformId: string, url: string): boolean => {
+    if (!settings || !url) return false;
+    
+    const normalizedUrl = normalizeUrl(url);
+    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    
+    return platforms.some(p => 
+      p.id !== platformId && normalizeUrl(p.url) === normalizedUrl
+    );
+  };
+
+  /**
+   * Get URL error message for a platform (for displaying in UI)
+   */
+  const getUrlError = (type: 'opencti' | 'openaev') => (platformId: string): string | undefined => {
+    if (!settings) return undefined;
+    
+    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const platform = platforms.find(p => p.id === platformId);
+    
+    if (!platform?.url) return undefined;
+    
+    if (isDuplicateUrl(type, platformId, platform.url)) {
+      return 'This URL is already configured for another platform';
+    }
+    
+    return undefined;
+  };
+
   const handleTestConnection = async (type: 'opencti' | 'openaev', platformId: string) => {
     if (!settings) return;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
@@ -220,6 +259,16 @@ const App: React.FC = () => {
       setTestResults({
         ...testResults,
         [key]: { type: 'error', message: 'URL and API Token are required' },
+      });
+      return;
+    }
+
+    // Check for duplicate URL
+    if (isDuplicateUrl(type, platformId, platform.url)) {
+      setTesting({ ...testing, [key]: false });
+      setTestResults({
+        ...testResults,
+        [key]: { type: 'error', message: 'This platform URL is already configured. Each platform must have a unique URL.' },
       });
       return;
     }

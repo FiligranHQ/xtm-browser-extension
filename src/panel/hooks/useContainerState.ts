@@ -5,44 +5,27 @@
  */
 
 import { useState } from 'react';
-import type { ContainerData, EntityData, ImportResults } from '../types/panel-types';
+import type {
+  ContainerData,
+  EntityData,
+  ImportResults,
+  ContainerFormState,
+  ContainerSpecificFields,
+  LabelOption,
+  MarkingOption,
+  VocabularyOption,
+  AuthorOption,
+} from '../types/panel-types';
 
-export interface ContainerFormState {
-  name: string;
-  description: string;
-  content: string;
-}
-
-export interface ContainerSpecificFields {
-  report_types: string[];
-  context: string;
-  severity: string;
-  priority: string;
-  response_types: string[];
-  createdBy: string;
-}
-
-export interface LabelOption {
-  id: string;
-  value: string;
-  color: string;
-}
-
-export interface MarkingOption {
-  id: string;
-  definition: string;
-}
-
-export interface VocabularyOption {
-  id: string;
-  name: string;
-}
-
-export interface AuthorOption {
-  id: string;
-  name: string;
-  entity_type: string;
-}
+// Re-export types for backward compatibility
+export type {
+  ContainerFormState,
+  ContainerSpecificFields,
+  LabelOption,
+  MarkingOption,
+  VocabularyOption,
+  AuthorOption,
+};
 
 export interface ContainerStateReturn {
   // Container type and form

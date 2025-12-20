@@ -16,35 +16,11 @@ import type {
   ScenarioFormData,
   ScenarioEmail,
   SelectedInject,
+  AIGeneratedScenario,
 } from '../types/panel-types';
 
-export interface AIGeneratedScenario {
-  name: string;
-  description: string;
-  subtitle?: string;
-  category?: string;
-  mainFocus?: string;
-  severity?: 'low' | 'medium' | 'high' | 'critical';
-  injects: Array<{
-    title: string;
-    description: string;
-    type: string;
-    content?: string;
-    executor?: string;
-    delayMinutes?: number;
-    subject?: string;
-    body?: string;
-    attackPatternId?: string;
-    attackPatternName?: string;
-    contractId?: string;
-    contractLabel?: string;
-  }>;
-  emails?: Array<{
-    attackPatternId: string;
-    subject: string;
-    body: string;
-  }>;
-}
+// Re-export type for backward compatibility
+export type { AIGeneratedScenario };
 
 export interface ScenarioStateReturn {
   // Overview data

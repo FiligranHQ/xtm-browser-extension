@@ -10,7 +10,7 @@ import {
   calculateLabelRotation,
   getPointOnBezier,
 } from '../shared/visualization/graph-layout';
-import { LINE_STYLES, LABEL_STYLES } from '../shared/visualization/relationship-styles';
+import { LINE_STYLES, LABEL_STYLES, ANIMATION_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
 import type { RelationshipData, HighlightPosition, Point } from '../shared/visualization/graph-types';
 
 // ============================================================================
@@ -201,8 +201,8 @@ export const RelationshipLinesOverlay: React.FC<Props> = ({
               style={{
                 strokeDasharray: 1000,
                 strokeDashoffset: 0,
-                animation: `pdf-draw-line 0.6s ease-out forwards`,
-                animationDelay: `${index * 0.1}s`,
+                animation: `pdf-draw-line ${ANIMATION_STYLES.lineDrawDuration}s ease-out forwards`,
+                animationDelay: `${index * ANIMATION_STYLES.staggerDelay}s`,
               }}
             />
 
@@ -211,8 +211,8 @@ export const RelationshipLinesOverlay: React.FC<Props> = ({
               transform={`translate(${mid.x}, ${mid.y}) rotate(${rotation})`}
               style={{
                 opacity: 1,
-                animation: `pdf-fade-in 0.3s ease-out forwards`,
-                animationDelay: `${index * 0.1 + 0.3}s`,
+                animation: `pdf-fade-in ${ANIMATION_STYLES.fadeInDuration}s ease-out forwards`,
+                animationDelay: `${index * ANIMATION_STYLES.staggerDelay + ANIMATION_STYLES.fadeInDuration}s`,
               }}
             >
               {/* Label background */}
@@ -246,29 +246,7 @@ export const RelationshipLinesOverlay: React.FC<Props> = ({
         );
       })}
 
-      <style>
-        {`
-          @keyframes pdf-draw-line {
-            from {
-              stroke-dashoffset: 1000;
-            }
-            to {
-              stroke-dashoffset: 0;
-            }
-          }
-
-          @keyframes pdf-fade-in {
-            from {
-              opacity: 0;
-              transform: scale(0.8);
-            }
-            to {
-              opacity: 1;
-              transform: scale(1);
-            }
-          }
-        `}
-      </style>
+      <style>{getLineAnimationCSS('pdf')}</style>
     </svg>
   );
 };

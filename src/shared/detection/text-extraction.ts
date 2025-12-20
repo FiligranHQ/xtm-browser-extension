@@ -1,5 +1,7 @@
 /**
- * Text manipulation utilities for detection
+ * Text Extraction
+ * 
+ * Utilities for extracting and processing text from DOM elements for detection.
  */
 
 /**

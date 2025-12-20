@@ -6,11 +6,16 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import { itemColor } from '../shared/theme/colors';
-import { getIconPath } from '../shared/visualization/entity-icons';
+import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
 import { calculateLayout } from '../shared/visualization/graph-layout';
 import type { GraphNode, GraphEdge, RelationshipData, EntityData } from '../shared/visualization/graph-types';
-import { MINIMAP_STYLES, DIALOG_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
+import { 
+  MINIMAP_STYLES, 
+  DIALOG_STYLES, 
+  GRAPH_NODE_STYLES,
+  getGraphNodeStyle,
+  getLineAnimationCSS,
+} from '../shared/visualization/relationship-styles';
 
 const log = loggers.content;
 
@@ -22,21 +27,6 @@ let minimapContainer: HTMLDivElement | null = null;
 let dialogContainer: HTMLDivElement | null = null;
 let currentNodes: GraphNode[] = [];
 let currentEdges: GraphEdge[] = [];
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get color for entity type
- */
-function getEntityColor(type: string): string {
-  try {
-    return itemColor(type) || '#9c27b0';
-  } catch {
-    return '#9c27b0';
-  }
-}
 
 // ============================================================================
 // SVG Generation
@@ -52,9 +42,9 @@ function createGraphSVG(
   height: number,
   isExpanded: boolean
 ): string {
-  const nodeRadius = isExpanded ? 18 : 8;
-  const fontSize = isExpanded ? 11 : 6;
-  const labelOffset = isExpanded ? 28 : 14;
+  // Use shared constants for consistent styling between web and PDF
+  const style = getGraphNodeStyle(isExpanded);
+  const { nodeRadius, fontSize, labelOffset, maxLabelLength, truncateLength, strokeWidth, edgeStrokeWidth } = style;
   
   // Calculate layout
   const layoutNodes = calculateLayout(nodes, edges, width, height);
@@ -99,14 +89,14 @@ function createGraphSVG(
       // Calculate control point for curved edge
       const midX = (x1 + x2) / 2;
       const midY = (y1 + y2) / 2;
-      const perpX = -dy / dist * 20;
-      const perpY = dx / dist * 20;
+      const perpX = -dy / dist * GRAPH_NODE_STYLES.edgeCurveOffset;
+      const perpY = dx / dist * GRAPH_NODE_STYLES.edgeCurveOffset;
       const ctrlX = midX + perpX;
       const ctrlY = midY + perpY;
       
       svg += `<path d="M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}" 
-        fill="none" stroke="#666" stroke-width="${isExpanded ? 1.5 : 1}" 
-        stroke-opacity="0.6" marker-end="url(#arrow-mini)"/>`;
+        fill="none" stroke="#666" stroke-width="${edgeStrokeWidth}" 
+        stroke-opacity="${GRAPH_NODE_STYLES.edgeStrokeOpacity}" marker-end="url(#arrow-mini)"/>`;
       
       // Edge label for expanded view
       if (isExpanded) {
@@ -116,8 +106,8 @@ function createGraphSVG(
         const rotateAngle = angle > 90 || angle < -90 ? angle + 180 : angle;
         
         svg += `<g transform="translate(${labelX}, ${labelY}) rotate(${rotateAngle})">
-          <rect x="-30" y="-8" width="60" height="14" rx="3" fill="#333" fill-opacity="0.9"/>
-          <text x="0" y="3" text-anchor="middle" fill="#fff" font-size="8" font-family="sans-serif">${edge.type}</text>
+          <rect x="${GRAPH_NODE_STYLES.edgeLabelRectX}" y="${GRAPH_NODE_STYLES.edgeLabelRectY}" width="${GRAPH_NODE_STYLES.edgeLabelRectWidth}" height="${GRAPH_NODE_STYLES.edgeLabelRectHeight}" rx="3" fill="${GRAPH_NODE_STYLES.edgeLabelBgColor}" fill-opacity="${GRAPH_NODE_STYLES.edgeLabelBgOpacity}"/>
+          <text x="0" y="3" text-anchor="middle" fill="#fff" font-size="${GRAPH_NODE_STYLES.edgeLabelFontSize}" font-family="sans-serif">${edge.type}</text>
         </g>`;
       }
     }
@@ -130,7 +120,7 @@ function createGraphSVG(
     
     // Node circle with shadow
     svg += `<g filter="url(#shadow-mini)">
-      <circle cx="${node.x}" cy="${node.y}" r="${nodeRadius}" fill="${node.color}" stroke="#fff" stroke-width="${isExpanded ? 2 : 1}"/>
+      <circle cx="${node.x}" cy="${node.y}" r="${nodeRadius}" fill="${node.color}" stroke="#fff" stroke-width="${strokeWidth}"/>
     </g>`;
     
     // Icon (scaled and centered)
@@ -140,8 +130,8 @@ function createGraphSVG(
     </g>`;
     
     // Label
-    const labelText = node.value.length > (isExpanded ? 20 : 10) 
-      ? node.value.substring(0, isExpanded ? 17 : 7) + '...' 
+    const labelText = node.value.length > maxLabelLength 
+      ? node.value.substring(0, truncateLength) + '...' 
       : node.value;
     
     svg += `<text x="${node.x}" y="${node.y + labelOffset}" text-anchor="middle" 

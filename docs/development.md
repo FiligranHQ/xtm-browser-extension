@@ -80,7 +80,7 @@ src/
 │   │   ├── opencti/             # OpenCTI modules
 │   │   │   ├── queries.ts       # GraphQL queries & filters
 │   │   │   ├── fragments.ts     # GraphQL fragments
-│   │   │   ├── observable-utils.ts # Observable type mapping
+│   │   │   ├── observable-mapping.ts # Observable type mapping
 │   │   │   └── types.ts         # Response types
 │   │   └── openaev/             # OpenAEV modules
 │   │       ├── types.ts         # API request/response types
@@ -93,7 +93,7 @@ src/
 │   │   ├── detector.ts  # Entity and observable detection
 │   │   ├── patterns.ts  # Regex patterns for observables
 │   │   ├── matching.ts  # Entity matching logic
-│   │   └── text-utils.ts # Text processing utilities
+│   │   └── text-extraction.ts # Text extraction from DOM
 │   ├── extraction/      # Content extraction & PDF
 │   │   ├── content-extractor.ts # Mozilla Readability wrapper
 │   │   ├── pdf-generator.ts     # jsPDF-based PDF generation
@@ -124,16 +124,33 @@ src/
 
 ```
 tests/
-├── setup.ts             # Vitest setup (Chrome API mocks)
-├── unit/                # Unit tests (no external dependencies)
-│   ├── logger.test.ts   # Logger utility tests
-│   └── patterns.test.ts # Regex pattern tests
-└── integration/         # Integration tests (require running platforms)
-    ├── opencti/
-    │   └── client.test.ts   # OpenCTI API tests
-    └── openaev/
-        └── client.test.ts   # OpenAEV API tests
+├── setup.ts                    # Vitest setup (Chrome API mocks)
+├── unit/                       # Unit tests (no external dependencies)
+│   ├── ai-client.test.ts       # AI client and JSON parsing tests
+│   ├── defang.test.ts          # IOC defanging/refanging tests
+│   ├── detection.test.ts       # Observable detection and text extraction
+│   ├── handler-types.test.ts   # Response helpers and handler context
+│   ├── logger.test.ts          # Logger utility tests
+│   ├── message-dispatcher.test.ts # Message routing tests
+│   ├── messages.test.ts        # Message types coverage (prevents accidental deletions)
+│   ├── patterns.test.ts        # Regex pattern tests
+│   └── visualization.test.ts   # Graph layout and styling tests
+├── integration/                # Integration tests (require running platforms)
+│   ├── opencti/
+│   │   └── client.test.ts      # OpenCTI API tests
+│   └── openaev/
+│       └── client.test.ts      # OpenAEV API tests
+└── manual/                     # Manual test HTML files for scanning
 ```
+
+### Test Coverage
+
+The test suite includes:
+- **Message Type Coverage**: Ensures all message types have handlers (prevents accidental deletion)
+- **Handler Registry Tests**: Verifies handler modules export correct functions
+- **Dispatcher Tests**: Tests message routing and error handling
+- **Visualization Tests**: Tests graph layout algorithms and styling
+- **Detection Tests**: Tests observable pattern matching and type normalization
 
 ### Running Tests
 

@@ -17,23 +17,15 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import { itemColor } from '../shared/theme/colors';
-import { getIconPath } from '../shared/visualization/entity-icons';
+import { getIconPath, getEntityColor } from '../shared/visualization/entity-icons';
 import { calculateLayout } from '../shared/visualization/graph-layout';
 import type { GraphNode, GraphEdge, RelationshipData, EntityData } from '../shared/visualization/graph-types';
-import { MINIMAP_STYLES, DIALOG_STYLES } from '../shared/visualization/relationship-styles';
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function getEntityColor(type: string): string {
-  try {
-    return itemColor(type) || '#9c27b0';
-  } catch {
-    return '#9c27b0';
-  }
-}
+import { 
+  MINIMAP_STYLES, 
+  DIALOG_STYLES, 
+  GRAPH_NODE_STYLES,
+  getGraphNodeStyle,
+} from '../shared/visualization/relationship-styles';
 
 // ============================================================================
 // Components
@@ -54,9 +46,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   height,
   isExpanded,
 }) => {
-  const nodeRadius = isExpanded ? 20 : 8;
-  const fontSize = isExpanded ? 11 : 6;
-  const labelOffset = isExpanded ? 30 : 14;
+  // Use shared constants for consistent styling between web and PDF
+  const style = getGraphNodeStyle(isExpanded);
+  const { nodeRadius, fontSize, labelOffset, maxLabelLength, truncateLength, strokeWidth, edgeStrokeWidth } = style;
 
   const layoutNodes = useMemo(
     () => calculateLayout(nodes, edges, width, height),
@@ -100,8 +92,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
 
         const midX = (x1 + x2) / 2;
         const midY = (y1 + y2) / 2;
-        const perpX = (-dy / dist) * 20;
-        const perpY = (dx / dist) * 20;
+        const perpX = (-dy / dist) * GRAPH_NODE_STYLES.edgeCurveOffset;
+        const perpY = (dx / dist) * GRAPH_NODE_STYLES.edgeCurveOffset;
         const ctrlX = midX + perpX;
         const ctrlY = midY + perpY;
 
@@ -111,26 +103,27 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
               d={`M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}`}
               fill="none"
               stroke="#666"
-              strokeWidth={isExpanded ? 1.5 : 1}
-              strokeOpacity={0.6}
+              strokeWidth={edgeStrokeWidth}
+              strokeOpacity={GRAPH_NODE_STYLES.edgeStrokeOpacity}
               markerEnd={`url(#arrow-${isExpanded ? 'lg' : 'sm'})`}
             />
             {isExpanded && (
               <g transform={`translate(${midX + perpX * 0.5}, ${midY + perpY * 0.5})`}>
                 <rect
-                  x="-35"
-                  y="-9"
-                  width="70"
-                  height="16"
-                  rx="4"
-                  fill="rgba(0,0,0,0.7)"
+                  x={GRAPH_NODE_STYLES.edgeLabelRectX}
+                  y={GRAPH_NODE_STYLES.edgeLabelRectY}
+                  width={GRAPH_NODE_STYLES.edgeLabelRectWidth}
+                  height={GRAPH_NODE_STYLES.edgeLabelRectHeight}
+                  rx="3"
+                  fill={GRAPH_NODE_STYLES.edgeLabelBgColor}
+                  fillOpacity={GRAPH_NODE_STYLES.edgeLabelBgOpacity}
                 />
                 <text
                   x="0"
-                  y="4"
+                  y="3"
                   textAnchor="middle"
                   fill="#fff"
-                  fontSize="9"
+                  fontSize={GRAPH_NODE_STYLES.edgeLabelFontSize}
                   fontFamily="sans-serif"
                 >
                   {edge.type}
@@ -144,9 +137,10 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       {/* Nodes */}
       {layoutNodes.map((node, i) => {
         const iconScale = nodeRadius / 12;
+        const iconSize = nodeRadius * 1.2;
         const labelText =
-          node.value.length > (isExpanded ? 20 : 10)
-            ? node.value.substring(0, isExpanded ? 17 : 7) + '...'
+          node.value.length > maxLabelLength
+            ? node.value.substring(0, truncateLength) + '...'
             : node.value;
 
         return (
@@ -157,10 +151,10 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
               r={nodeRadius}
               fill={node.color}
               stroke="#fff"
-              strokeWidth={isExpanded ? 2 : 1}
+              strokeWidth={strokeWidth}
             />
             <g
-              transform={`translate(${node.x - nodeRadius * 0.6}, ${node.y - nodeRadius * 0.6}) scale(${iconScale})`}
+              transform={`translate(${node.x - iconSize / 2}, ${node.y - iconSize / 2}) scale(${iconScale})`}
             >
               <path d={getIconPath(node.type)} fill="#fff" fillOpacity={0.9} />
             </g>

@@ -1,6 +1,8 @@
 /**
- * OpenCTI Observable Utility Functions
- * Type normalization and input building for observables
+ * Observable Type Mapping
+ * 
+ * Type normalization and input building for OpenCTI observables.
+ * Handles conversion between different type formats (STIX, GraphQL, internal).
  */
 
 import type { HashType } from '../../types/observables';

@@ -31,6 +31,8 @@ interface PlatformCardProps {
   isTesting: boolean;
   testResult?: TestResult;
   isTested: boolean;
+  /** Error message if URL is duplicate */
+  urlError?: string;
   onToggleTokenVisibility: () => void;
   onUpdate: (updates: Partial<PlatformConfig>) => void;
   onRemove: () => void;
@@ -44,6 +46,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
   isTesting,
   testResult,
   isTested,
+  urlError,
   onToggleTokenVisibility,
   onUpdate,
   onRemove,
@@ -79,6 +82,8 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
             value={platform.url}
             onChange={(e) => onUpdate({ url: e.target.value })}
             fullWidth
+            error={!!urlError}
+            helperText={urlError}
           />
           <TextField
             label="API Token"
@@ -111,7 +116,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
           size="small"
           variant="outlined"
           onClick={onTestConnection}
-          disabled={isTesting || !platform.url || !platform.apiToken}
+          disabled={isTesting || !platform.url || !platform.apiToken || !!urlError}
           startIcon={<CheckOutlined />}
         >
           {isTesting ? 'Testing...' : 'Test'}

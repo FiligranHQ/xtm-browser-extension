@@ -10,7 +10,7 @@ import { loggers } from '../shared/utils/logger';
 import type { DetectedObservable } from '../shared/types/observables';
 import type { DetectedOCTIEntity } from '../shared/types/opencti';
 import type { ScanResultPayload } from '../shared/types/messages';
-import { getTextNodes } from '../shared/detection/text-utils';
+import { getTextNodes } from '../shared/detection/text-extraction';
 import { 
   getPlatformFromEntity, 
   getDisplayType, 

@@ -107,6 +107,7 @@ export const FETCH_SDOS_FOR_CACHE_QUERY = `
           ... on Campaign { name aliases }
           ... on Incident { name aliases }
           ... on Malware { name aliases }
+          ... on Tool { name aliases }
           ... on Vulnerability { name x_opencti_aliases }
           ... on Sector { name x_opencti_aliases }
           ... on Country { name x_opencti_aliases }
@@ -116,8 +117,11 @@ export const FETCH_SDOS_FOR_CACHE_QUERY = `
           ... on Position { name x_opencti_aliases }
           ... on Organization { name x_opencti_aliases }
           ... on Individual { name x_opencti_aliases }
+          ... on System { name x_opencti_aliases }
           ... on Event { name aliases }
           ... on AttackPattern { name aliases x_mitre_id }
+          ... on Narrative { name aliases }
+          ... on Channel { name aliases }
         }
       }
       pageInfo { hasNextPage endCursor globalCount }
@@ -257,9 +261,15 @@ export const CREATE_INTRUSION_SET_MUTATION = `
   }
 `;
 
-export const CREATE_THREAT_ACTOR_MUTATION = `
+export const CREATE_THREAT_ACTOR_GROUP_MUTATION = `
   mutation ThreatActorGroupAdd($input: ThreatActorGroupAddInput!) {
     threatActorGroupAdd(input: $input) { id standard_id entity_type name aliases }
+  }
+`;
+
+export const CREATE_THREAT_ACTOR_INDIVIDUAL_MUTATION = `
+  mutation ThreatActorIndividualAdd($input: ThreatActorIndividualAddInput!) {
+    threatActorIndividualAdd(input: $input) { id standard_id entity_type name aliases }
   }
 `;
 
@@ -302,6 +312,24 @@ export const CREATE_COUNTRY_MUTATION = `
 export const CREATE_SECTOR_MUTATION = `
   mutation SectorAdd($input: SectorAddInput!) {
     sectorAdd(input: $input) { id standard_id entity_type name }
+  }
+`;
+
+export const CREATE_NARRATIVE_MUTATION = `
+  mutation NarrativeAdd($input: NarrativeAddInput!) {
+    narrativeAdd(input: $input) { id standard_id entity_type name aliases }
+  }
+`;
+
+export const CREATE_CHANNEL_MUTATION = `
+  mutation ChannelAdd($input: ChannelAddInput!) {
+    channelAdd(input: $input) { id standard_id entity_type name aliases }
+  }
+`;
+
+export const CREATE_SYSTEM_MUTATION = `
+  mutation SystemAdd($input: SystemAddInput!) {
+    systemAdd(input: $input) { id standard_id entity_type name x_opencti_aliases }
   }
 `;
 
@@ -566,16 +594,29 @@ export function buildObjectsFilter(entityId: string): object {
 export const ENTITY_TYPE_PATH_MAP: Record<string, string> = {
   'Intrusion-Set': 'threats/intrusion_sets',
   'Malware': 'arsenal/malwares',
-  'Threat-Actor': 'threats/threat_actors_group',
+  'Threat-Actor-Group': 'threats/threat_actors_group',
+  'Threat-Actor-Individual': 'threats/threat_actors_individual',
   'Campaign': 'threats/campaigns',
   'Vulnerability': 'arsenal/vulnerabilities',
   'Tool': 'arsenal/tools',
   'Attack-Pattern': 'techniques/attack_patterns',
+  'Narrative': 'techniques/narratives',
+  'Channel': 'techniques/channels',
   'Indicator': 'observations/indicators',
   'Report': 'analyses/reports',
   'Case-Incident': 'cases/incidents',
   'Grouping': 'analyses/groupings',
   'Investigation': 'workspaces/investigations',
+  'Organization': 'entities/organizations',
+  'Individual': 'entities/individuals',
+  'System': 'entities/systems',
+  'Sector': 'entities/sectors',
+  'Event': 'entities/events',
+  'Country': 'locations/countries',
+  'Region': 'locations/regions',
+  'City': 'locations/cities',
+  'Administrative-Area': 'locations/administrative_areas',
+  'Position': 'locations/positions',
   'IPv4-Addr': 'observations/observables',
   'IPv6-Addr': 'observations/observables',
   'Domain-Name': 'observations/observables',

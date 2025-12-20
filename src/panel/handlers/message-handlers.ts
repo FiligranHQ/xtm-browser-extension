@@ -62,11 +62,6 @@ interface ShowEntityPayload extends EntityData {
   }>;
 }
 
-/** Payload for atomic testing select */
-interface AtomicTestingSelectPayload extends AtomicTestingTarget {
-  entityId?: string;
-}
-
 /** Payload for scenario */
 interface ScenarioPayload {
   attackPatterns?: AttackPatternData[];
@@ -205,16 +200,6 @@ export interface MessageHandlerContext {
   fetchEntityContainers: (entityId: string, platformId?: string) => Promise<void>;
 }
 
-export function handleShowPreview(ctx: MessageHandlerContext, payload: ShowPreviewPayload | undefined) {
-  ctx.setEntitiesToAdd(payload?.entities || []);
-  ctx.setCurrentPageUrl(payload?.pageUrl || '');
-  ctx.setCurrentPageTitle(payload?.pageTitle || '');
-  const previewDescription = payload?.pageDescription || generateDescription(payload?.pageContent || '');
-  const previewContent = payload?.pageHtmlContent || payload?.pageContent || '';
-  ctx.setContainerForm({ name: payload?.pageTitle || '', description: previewDescription, content: cleanHtmlContent(previewContent) });
-  ctx.setPanelMode('preview');
-}
-
 export async function handleShowContainer(ctx: MessageHandlerContext, payload: ShowPreviewPayload | undefined) {
   const pageContent = payload?.pageContent || '';
   const pageHtmlContent = payload?.pageHtmlContent || pageContent;
@@ -301,23 +286,6 @@ export function handleShowAtomicTesting(ctx: MessageHandlerContext, payload: { t
   ctx.setPanelMode('atomic-testing');
 }
 
-export function handleAtomicTestingSelect(ctx: MessageHandlerContext, payload: AtomicTestingSelectPayload | null) {
-  ctx.setSelectedAtomicTarget(payload);
-  ctx.setAtomicTestingTitle(`Atomic Test - ${payload?.name || ''}`);
-  ctx.setAtomicTestingShowList(false);
-  ctx.setAtomicTestingInjectorContracts([]);
-  ctx.setAtomicTestingSelectedContract(null);
-  
-  const entityId = payload?.entityId || payload?.data?.entityId || payload?.data?.attack_pattern_id || payload?.data?.id;
-  if (payload?.type === 'attack-pattern' && entityId && ctx.atomicTestingPlatformId) {
-    chrome.runtime.sendMessage({
-      type: 'FETCH_INJECTOR_CONTRACTS',
-      payload: { attackPatternId: entityId, platformId: ctx.atomicTestingPlatformId },
-    }).then((res: ChromeMessageResponse<OAEVInjectorContract[]>) => {
-      if (res?.success) ctx.setAtomicTestingInjectorContracts(res.data || []);
-    });
-  }
-}
 
 interface InvestigationResultEntity {
   entityId?: string;

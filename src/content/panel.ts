@@ -600,39 +600,6 @@ export async function showAddPanel(entity: DetectedObservable | DetectedOCTIEnti
 }
 
 /**
- * Show preview panel with selected entities
- */
-export async function showPreviewPanel(
-  selectedEntities: Array<DetectedObservable | DetectedOCTIEntity>
-): Promise<void> {
-  await checkSplitScreenMode(true); // Always fetch fresh settings
-  
-  const article = extractArticleContent();
-  const description = extractFirstParagraph(article.textContent);
-  const theme = await getCurrentTheme();
-  
-  const messagePayload = { 
-    entities: selectedEntities, 
-    pageUrl: window.location.href, 
-    pageTitle: article.title,
-    pageContent: article.textContent,
-    pageHtmlContent: article.content,
-    pageDescription: description,
-    pageExcerpt: article.excerpt,
-    theme: theme,
-  };
-  
-  if (splitScreenMode) {
-    await sendPanelMessageAndWait('SHOW_PREVIEW', messagePayload);
-    await openNativeSidePanel();
-  } else {
-    ensurePanelElements();
-    showPanelElements();
-    sendPanelMessage('SHOW_PREVIEW', messagePayload);
-  }
-}
-
-/**
  * Show container creation panel
  */
 export async function showContainerPanel(): Promise<void> {

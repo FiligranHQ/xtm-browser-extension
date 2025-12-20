@@ -37,12 +37,13 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 - 🔮 **AI Discovery on Empty Results** - Trigger AI-based entity discovery even when initial scan finds nothing
 
 **Detected Entity Types:**
-- **Threat Entities**: Threat Actor Groups, Intrusion Sets (APT29, Cozy Bear...), Malware, Campaigns
+- **Threat Entities**: Threat Actor Groups/Individuals, Intrusion Sets (APT29, Cozy Bear...), Malware, Tools, Campaigns
+- **Disinformation**: Narratives, Channels (Telegram groups, Discord servers, forums)
 - **Observables**: IPs, Domains, URLs, Hashes, Emails, CVEs, Crypto Wallets, MAC Addresses
 - **Defanged IOCs**: Automatic detection of defanged indicators (e.g., `example[.]com`, `hxxps://`)
 - **MITRE ATT&CK**: Attack Patterns (T1566, T1059.001...)
-- **Locations**: Countries, Regions, Cities
-- **Identities**: Organizations, Sectors, Individuals
+- **Locations**: Countries, Regions, Cities, Administrative Areas
+- **Identities**: Organizations, Sectors, Individuals, Systems
 
 ### OpenAEV Integration
 - 🖥️ **Asset Detection** - Find endpoints matching by name, hostname, IP addresses, and MAC addresses
@@ -82,8 +83,13 @@ Generate AI-powered table-top exercises across diverse domains:
 - 🎭 **Theme-Aware Generation** - AI adapts to selected scenario theme with domain-specific knowledge
 - ✉️ **Multi-Language Emails** - Generate realistic email content in 13 languages for table-top exercises
 - ⚡ **Atomic Testing AI** - Generate proper command lines for atomic tests with cleanup commands
-- 🔍 **Smart Entity Discovery** - Discover additional entities that regex patterns might miss (only visible/highlightable entities included)
+- 🔍 **Smart Entity Discovery** - Discover additional entities that regex patterns might miss with three options:
+  - "Entities (AI)" for entity-only discovery
+  - "Relations (AI)" for relationship discovery between entities
+  - "Scan All (AI)" for combined entity and relationship discovery
 - 🔗 **Relationship Resolution** - AI identifies relationships using valid STIX 2.1 and OpenCTI relationship types only
+- 📊 **Relationship Visualization** - Visual lines connecting related entities on the page with relationship type labels
+- 🗺️ **Relationship Graph Mini-Map** - Interactive force-directed graph visualization showing entities and relationships, expandable to full-screen dialog
 - 📊 **Model Selection** - Browse and select from available models for each provider
 - 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
@@ -219,10 +225,13 @@ xtm-browser-extension/
 │   │   ├── handlers/            # Message handlers split by domain
 │   │   │   ├── ai-handlers.ts       # AI generation requests
 │   │   │   ├── cache-handlers.ts    # Cache management
+│   │   │   ├── container-handlers.ts # Container creation
+│   │   │   ├── misc-handlers.ts     # Misc handlers (injection, panel, PDF)
 │   │   │   ├── openaev-handlers.ts  # OpenAEV API operations
 │   │   │   ├── opencti-handlers.ts  # OpenCTI API operations
 │   │   │   ├── scan-handlers.ts     # Page scanning logic
-│   │   │   └── settings-handlers.ts # Settings management
+│   │   │   ├── scenario-handlers.ts # Scenario creation
+│   │   │   └── types.ts             # Handler type definitions
 │   │   └── services/            # Background services
 │   │       ├── cache-manager.ts     # Entity cache management
 │   │       ├── client-manager.ts    # API client lifecycle
@@ -232,11 +241,13 @@ xtm-browser-extension/
 │   │   ├── index.ts             # Main entry, event coordination
 │   │   ├── styles.ts            # CSS for highlights, tooltips, panel
 │   │   ├── highlighting.ts      # Entity highlighting engine
+│   │   ├── highlight-utils.ts   # Shared highlighting utilities
 │   │   ├── extraction.ts        # Content extraction for PDFs
 │   │   ├── page-content.ts      # Page content utilities
 │   │   ├── panel.ts             # Side panel iframe management
 │   │   ├── toast.ts             # Toast notifications
-│   │   └── message-handlers.ts  # Message handling
+│   │   ├── relationship-lines.ts    # Relationship line visualization
+│   │   └── relationship-minimap.ts  # Relationship graph mini-map
 │   │
 │   ├── panel/                   # Side panel (entity details, forms)
 │   │   ├── App.tsx              # Main orchestrator component
@@ -284,7 +295,8 @@ xtm-browser-extension/
 │   │   │   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
 │   │   │   ├── cvss-helpers.ts          # CVSS score formatting
 │   │   │   ├── marking-helpers.ts       # TLP/PAP colors
-│   │   │   └── description-helpers.ts
+│   │   │   ├── description-helpers.ts   # Description generation
+│   │   │   └── content-messaging.ts     # Content script messaging
 │   │   └── types/               # TypeScript definitions
 │   │       ├── panel-types.ts           # Panel-specific types
 │   │       └── view-props.ts            # View component props
@@ -303,6 +315,8 @@ xtm-browser-extension/
 │   │
 │   ├── pdf-scanner/             # PDF viewer with scanning
 │   │   ├── App.tsx              # PDF viewer component
+│   │   ├── RelationshipLinesOverlay.tsx  # Relationship lines on PDF
+│   │   ├── RelationshipMinimap.tsx       # Graph mini-map for PDF
 │   │   ├── index.html           # Entry point
 │   │   └── main.tsx             # React entry
 │   │
@@ -336,6 +350,12 @@ xtm-browser-extension/
 │       │   ├── ThemeDark.ts
 │       │   ├── ThemeLight.ts
 │       │   └── colors.ts
+│       ├── visualization/       # Graph visualization utilities
+│       │   ├── entity-icons.ts      # SVG icon paths for entity types
+│       │   ├── graph-types.ts       # Graph node, edge, and layout types
+│       │   ├── graph-layout.ts      # Force-directed layout algorithms
+│       │   ├── relationship-styles.ts # Line and label styling
+│       │   └── index.ts             # Barrel exports
 │       ├── components/          # Shared React components
 │       │   ├── ItemIcon.tsx         # Entity type icons
 │       │   ├── ActionButton.tsx     # Stylized action button

@@ -7,8 +7,6 @@
 
 import type {
   DetectedObservable,
-  ObservableType,
-  HashType,
 } from './observables';
 import type {
   DetectedOCTIEntity,
@@ -22,16 +20,10 @@ import type { DetectedOAEVEntity } from './openaev';
 
 export type MessageType =
   | 'SCAN_PAGE'
-  | 'SCAN_RESULT'
-  | 'HIGHLIGHT_OBSERVABLE'
-  | 'SHOW_ENTITY_PANEL'
   | 'HIDE_PANEL'
-  | 'ADD_OBSERVABLE'
-  | 'ADD_OBSERVABLES_BULK'
   | 'CREATE_ENTITY'
   | 'CREATE_CONTAINER'
   | 'CREATE_INVESTIGATION'
-  | 'ADD_TO_INVESTIGATION'
   | 'GET_SETTINGS'
   | 'SAVE_SETTINGS'
   | 'TEST_PLATFORM_CONNECTION'
@@ -43,12 +35,6 @@ export type MessageType =
   | 'REFRESH_CACHE'
   | 'GET_CACHE_STATS'
   | 'SELECTION_CHANGED'
-  | 'SHOW_PREVIEW_PANEL'
-  | 'PREVIEW_SELECTION'
-  | 'SHOW_BULK_IMPORT_PANEL'
-  | 'SHOW_UNIFIED_SEARCH_PANEL'
-  | 'SHOW_CONTAINER_PANEL'
-  | 'SHOW_INVESTIGATION_PANEL'
   | 'GET_PANEL_STATE'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_SIDE_PANEL_IMMEDIATE'
@@ -76,9 +62,6 @@ export type MessageType =
   | 'SCAN_OAEV'
   // Atomic Testing
   | 'SCAN_ATOMIC_TESTING'
-  | 'SHOW_ATOMIC_TESTING_PANEL'
-  | 'ATOMIC_TESTING_SCAN_RESULTS'
-  | 'ATOMIC_TESTING_SELECT'
   | 'FETCH_INJECTOR_CONTRACTS'
   | 'FETCH_OAEV_ASSETS'
   | 'FETCH_OAEV_ASSET_GROUPS'
@@ -91,7 +74,6 @@ export type MessageType =
   // Content Script Injection
   | 'INJECT_CONTENT_SCRIPT'
   | 'INJECT_ALL_TABS'
-  | 'PING'
   // AI Features
   | 'AI_GENERATE_DESCRIPTION'
   | 'AI_GENERATE_SCENARIO'
@@ -106,7 +88,6 @@ export type MessageType =
   | 'ADD_EMAIL_INJECT_TO_SCENARIO'
   | 'ADD_TECHNICAL_INJECT_TO_SCENARIO'
   // Scenario Generation
-  | 'OPEN_SCENARIO_PANEL'
   | 'SHOW_SCENARIO_PANEL'
   | 'CREATE_SCENARIO'
   | 'FETCH_SCENARIO_OVERVIEW'
@@ -116,7 +97,6 @@ export type MessageType =
   | 'CREATE_SCENARIO_FROM_PAGE'
   // Unified scan
   | 'SCAN_ALL'
-  | 'SCAN_STARTED'
   // AI model management
   | 'AI_TEST_AND_FETCH_MODELS'
   // PDF Generation
@@ -129,7 +109,14 @@ export type MessageType =
   | 'SCAN_PDF_CONTENT'
   | 'OPEN_PDF_SCANNER_PANEL'
   | 'PDF_SCANNER_RESCAN'
-  | 'FORWARD_TO_PDF_SCANNER';
+  | 'FORWARD_TO_PDF_SCANNER'
+  // Content Script Highlight Control
+  | 'CLEAR_HIGHLIGHTS_ONLY'
+  | 'DRAW_RELATIONSHIP_LINES'
+  | 'CLEAR_RELATIONSHIP_LINES'
+  // PDF Content for AI
+  | 'GET_PDF_CONTENT'
+  | 'GET_PDF_CONTENT_FROM_PDF_SCANNER';
 
 // ============================================================================
 // Message Interfaces
@@ -170,23 +157,6 @@ export interface ScanResultPayload {
   }>;
   scanTime: number;
   url: string;
-}
-
-export interface ShowEntityPanelPayload {
-  /** 
-   * Entity source type
-   * 'observable' and 'octi' are for OpenCTI
-   * 'platform' is for any non-default platform (identified by entity type prefix)
-   */
-  entityType: 'observable' | 'octi' | 'platform';
-  entity: DetectedObservable | DetectedOCTIEntity | DetectedOAEVEntity;
-}
-
-export interface AddObservablePayload {
-  type: ObservableType;
-  value: string;
-  hashType?: HashType;
-  createIndicator?: boolean;
 }
 
 export interface CreateContainerPayload {

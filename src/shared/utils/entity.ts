@@ -22,9 +22,10 @@ export const OPENCTI_ENTITY_TYPES = [
   'Data-Source', 'Grouping', 'Identity', 'Incident', 'Indicator',
   'Infrastructure', 'Intrusion-Set', 'Location', 'Malware',
   'Malware-Analysis', 'Note', 'Observed-Data', 'Opinion', 'Report',
-  'Threat-Actor', 'Tool', 'Vulnerability', 'Narrative', 'Channel',
-  'Event', 'Language', 'Administrative-Area', 'City', 'Country',
-  'Position', 'Region', 'Individual', 'Organization', 'Sector', 'System'
+  'Threat-Actor-Group', 'Threat-Actor-Individual', 'Tool', 'Vulnerability', 
+  'Narrative', 'Channel', 'Event', 'Language', 'Administrative-Area', 
+  'City', 'Country', 'Position', 'Region', 'Individual', 'Organization', 
+  'Sector', 'System'
 ] as const;
 
 /**

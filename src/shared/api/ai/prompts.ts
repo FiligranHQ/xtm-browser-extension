@@ -40,9 +40,12 @@ CRITICAL RULES - READ CAREFULLY:
 WHAT TO EXTRACT (only these specific types):
 - Malware: ONLY well-known malware families/names (e.g., "Emotet", "Cobalt Strike", "TrickBot") - NOT generic terms
 - Threat-Actor-Group: ONLY named APT groups or cybercrime groups (e.g., "APT29", "Lazarus Group", "FIN7") - must be a KNOWN threat actor
-- Intrusion-Set: ONLY named intrusion sets explicitly identified as such
+- Intrusion-Set: ONLY named intrusion sets explicitly identified as such (e.g., "Midnight Blizzard", "Cozy Bear")
 - Campaign: ONLY named campaigns explicitly identified as campaigns
 - Tool: ONLY known offensive security/hacking tools (e.g., "Mimikatz", "BloodHound", "Metasploit") - NOT common software
+- Narrative: ONLY named disinformation/misinformation narratives explicitly identified in threat context
+- Channel: ONLY named communication channels used for malicious purposes (e.g., Telegram groups, Discord servers used by threat actors)
+- System: ONLY named IT systems, platforms, or security platforms when explicitly targeted or mentioned as attack targets
 
 WHAT TO AVOID (DO NOT EXTRACT):
 - Generic software names (Windows, Chrome, Office, etc.)
@@ -578,11 +581,14 @@ THREAT ENTITIES:
 - Campaign: Named attack campaigns (e.g., SolarWinds attack, Operation Aurora)
 - Malware: Named malware families (e.g., Emotet, TrickBot, Cobalt Strike, SUNBURST)
 - Tool: Security tools, hacking tools (e.g., Mimikatz, Metasploit)
-- Attack-Pattern: MITRE ATT&CK techniques (e.g., T1055 Process Injection, T1566 Phishing)
+- Attack-Pattern: Attack techniques and tactics (e.g., T1055 Process Injection, Phishing, Spearphishing)
+- Narrative: Named disinformation/misinformation narratives (e.g., election fraud narratives, vaccine conspiracies)
+- Channel: Communication channels used for malicious purposes (e.g., specific Telegram groups, Discord servers, forums)
 
 CONTEXT ENTITIES:
 - Sector: Industries, sectors (e.g., Financial Services, Healthcare, Energy, Government, Defense)
 - Organization: Companies, agencies, institutions (e.g., Microsoft, CISA, FBI)
+- System: IT systems, platforms, security platforms (e.g., Active Directory, SIEM, EDR systems when targeted)
 - Country: Countries (e.g., Russia, China, United States, Iran, North Korea)
 - Region: Geographic regions (e.g., Eastern Europe, Middle East, Southeast Asia)
 - City: Cities (e.g., Moscow, Beijing, Washington D.C.)
@@ -601,7 +607,7 @@ EXTRACTION RULES:
 2. Do NOT include entities already listed above
 3. Return MAXIMUM 15 entities - prefer quality over quantity
 4. Focus on entities that are DISCUSSED or ANALYZED in the text, not just mentioned in passing
-5. For Attack-Pattern, include MITRE ATT&CK ID if mentioned (e.g., T1055)
+5. For Attack-Pattern, include technique ID if mentioned (e.g., T1055)
 
 Return JSON in this EXACT format:
 {

@@ -6,9 +6,13 @@
  */
 
 import { loggers } from '../../shared/utils/logger';
-import { createHandlerRegistry } from '../handlers/index';
-import { settingsHandlers } from '../handlers/settings-handlers';
-import { scanHandlers } from '../handlers/scan-handlers';
+import { openctiHandlers } from '../handlers/opencti-handlers';
+import { openaevHandlers } from '../handlers/openaev-handlers';
+import { aiHandlers } from '../handlers/ai-handlers';
+import { miscHandlers } from '../handlers/misc-handlers';
+// Note: settingsHandlers and scanHandlers are NOT included here because they have custom 
+// function signatures that require dependency injection (getDetectionEngine, getOpenCTIClients, etc.).
+// They are handled by the switch statement in index.ts.
 import {
   errorResponse,
   createHandlerContext,
@@ -19,17 +23,20 @@ import type { ExtensionMessage } from '../../shared/types/messages';
 
 const log = loggers.background;
 
-// Build the complete handler registry
-const handlerRegistry = createHandlerRegistry();
+// Build the complete handler registry from all handler modules
+const handlerRegistry = new Map<string, MessageHandler>();
 
-// Add settings handlers
-for (const [type, handler] of Object.entries(settingsHandlers)) {
-  handlerRegistry.set(type, handler as MessageHandler);
-}
+const allHandlers = [
+  openctiHandlers,
+  openaevHandlers,
+  aiHandlers,
+  miscHandlers,
+];
 
-// Add scan handlers  
-for (const [type, handler] of Object.entries(scanHandlers)) {
-  handlerRegistry.set(type, handler as MessageHandler);
+for (const handlers of allHandlers) {
+  for (const [type, handler] of Object.entries(handlers)) {
+    handlerRegistry.set(type, handler as MessageHandler);
+  }
 }
 
 // Handler context for all handlers

@@ -24,6 +24,12 @@ import ThemeLight from '../shared/theme/ThemeLight';
 import { HIGHLIGHT_FOUND, HIGHLIGHT_NOT_FOUND, HIGHLIGHT_AI_DISCOVERED } from '../shared/constants';
 import type { ScanResultPayload } from '../shared/types/messages';
 import RelationshipLinesOverlay from './RelationshipLinesOverlay';
+import RelationshipMinimap from './RelationshipMinimap';
+
+interface MinimapEntityData {
+  value: string;
+  type: string;
+}
 
 interface RelationshipData {
   fromValue: string;
@@ -183,6 +189,19 @@ function PageRenderer({
         highlightRegionsRef.current = await renderHighlightsOnCanvas(
           page, viewport, highlightCanvas, scanResultsRef.current, selectedEntities
         );
+        
+        // Report highlight positions for relationship lines
+        if (onHighlightPositions && highlightRegionsRef.current.length > 0) {
+          const positions = highlightRegionsRef.current.map(r => ({
+            entityValue: 'value' in r.entity && r.entity.value ? r.entity.value : 
+                        'name' in r.entity && r.entity.name ? r.entity.name : '',
+            x: r.x,
+            y: r.y,
+            width: r.width,
+            height: r.height,
+          }));
+          onHighlightPositions(pageNumber, positions);
+        }
       } catch (err) {
         // Ignore cancellation errors
         if (err instanceof Error && err.message.includes('Rendering cancelled')) {
@@ -202,7 +221,7 @@ function PageRenderer({
         renderTaskRef.current = null;
       }
     };
-  }, [pdfDocument, pageNumber, scale, selectedEntities]);
+  }, [pdfDocument, pageNumber, scale, selectedEntities, onHighlightPositions]);
 
   // Re-render highlights when scan results or selection changes
   useEffect(() => {
@@ -216,13 +235,26 @@ function PageRenderer({
         highlightRegionsRef.current = await renderHighlightsOnCanvas(
           page, viewport, highlightCanvas, scanResults, selectedEntities
         );
+        
+        // Report highlight positions for relationship lines
+        if (onHighlightPositions && highlightRegionsRef.current.length > 0) {
+          const positions = highlightRegionsRef.current.map(r => ({
+            entityValue: 'value' in r.entity && r.entity.value ? r.entity.value : 
+                        'name' in r.entity && r.entity.name ? r.entity.name : '',
+            x: r.x,
+            y: r.y,
+            width: r.width,
+            height: r.height,
+          }));
+          onHighlightPositions(pageNumber, positions);
+        }
       } catch (err) {
         console.error(`Failed to render highlights for page ${pageNumber}:`, err);
       }
     };
 
     renderHighlightsAsync();
-  }, [pdfDocument, pageNumber, scale, scanResults, selectedEntities]);
+  }, [pdfDocument, pageNumber, scale, scanResults, selectedEntities, onHighlightPositions]);
 
   // Handle clicks on highlights
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -281,6 +313,7 @@ function PageRenderer({
   return (
     <Box
       ref={containerRef}
+      data-page-number={pageNumber}
       sx={{
         position: 'relative',
         mb: 3,
@@ -604,6 +637,7 @@ export default function App() {
   const [hoveredEntity, setHoveredEntity] = useState<{ entity: ScanEntity; x: number; y: number } | null>(null);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
   const [relationships, setRelationships] = useState<RelationshipData[]>([]);
+  const [minimapEntities, setMinimapEntities] = useState<MinimapEntityData[]>([]);
   const [highlightPositions, setHighlightPositions] = useState<Map<string, HighlightPosition[]>>(new Map());
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -613,10 +647,15 @@ export default function App() {
   // Store refs for stable references in message handlers
   const scanAndShowPanelRef = useRef<((content: string) => Promise<void>) | undefined>(undefined);
   const pageTextsRef = useRef<string[]>([]);
+  const pdfUrlRef = useRef<string>(pdfUrl || '');
   
   useEffect(() => {
     pageTextsRef.current = pageTexts;
   }, [pageTexts]);
+  
+  useEffect(() => {
+    pdfUrlRef.current = pdfUrl || '';
+  }, [pdfUrl]);
 
   const theme = useMemo(() => {
     const themeOptions = mode === 'dark' ? ThemeDark() : ThemeLight();
@@ -679,8 +718,8 @@ export default function App() {
           if (tab?.windowId) {
             await chrome.sidePanel.open({ windowId: tab.windowId });
           }
-        } catch (e) {
-          console.log('Failed to open native side panel:', e);
+        } catch {
+          // Silently ignore - side panel may not be available
         }
       }
       // In split screen mode without user gesture, we can't open the panel
@@ -822,6 +861,52 @@ export default function App() {
     }
   }, []);
 
+  // Handle highlight positions update from PageRenderer
+  const handleHighlightPositions = useCallback((pageNumber: number, positions: Array<{ entityValue: string; x: number; y: number; width: number; height: number }>) => {
+    setHighlightPositions(prev => {
+      const newMap = new Map(prev);
+      
+      // Get the page container to calculate absolute positions
+      const pagesContainer = pagesContainerRef.current;
+      if (!pagesContainer) return prev;
+      
+      const pageElements = pagesContainer.querySelectorAll('[data-page-number]');
+      let pageOffsetY = 0;
+      
+      // Calculate the vertical offset for this page
+      for (const pageEl of pageElements) {
+        const pn = parseInt(pageEl.getAttribute('data-page-number') || '0', 10);
+        if (pn === pageNumber) break;
+        pageOffsetY += pageEl.getBoundingClientRect().height + 24; // 24px gap between pages
+      }
+      
+      positions.forEach(pos => {
+        const key = pos.entityValue.toLowerCase();
+        const existingPositions = newMap.get(key) || [];
+        
+        // Add this position with page offset
+        const newPosition: HighlightPosition = {
+          entityValue: pos.entityValue,
+          x: pos.x,
+          y: pos.y + pageOffsetY,
+          width: pos.width,
+          height: pos.height,
+        };
+        
+        // Check if we already have this exact position
+        const exists = existingPositions.some(
+          p => Math.abs(p.x - newPosition.x) < 5 && Math.abs(p.y - newPosition.y) < 5
+        );
+        
+        if (!exists) {
+          newMap.set(key, [...existingPositions, newPosition]);
+        }
+      });
+      
+      return newMap;
+    });
+  }, []);
+
   // Send scan results to the panel
   // In iframe mode: opens panel automatically
   // In split screen mode: only sends results (user must click button to open)
@@ -947,6 +1032,7 @@ export default function App() {
         setSelectedEntities(new Set());
         setHoveredEntity(null);
         setRelationships([]);
+        setMinimapEntities([]);
         setHighlightPositions(new Map());
         chrome.runtime.sendMessage({
           type: 'FORWARD_TO_PANEL',
@@ -959,6 +1045,7 @@ export default function App() {
         setSelectedEntities(new Set());
         setHoveredEntity(null);
         setRelationships([]);
+        setMinimapEntities([]);
         setHighlightPositions(new Map());
         sendResponse({ success: true });
       } else if (message.type === 'ADD_AI_ENTITIES_TO_PDF') {
@@ -993,16 +1080,20 @@ export default function App() {
           data: {
             content: fullText,
             title: document.title || 'PDF Document',
-            url: pdfUrl || '',
+            url: pdfUrlRef.current,
           },
         });
       } else if (message.type === 'DRAW_RELATIONSHIP_LINES') {
         // Draw relationship lines between highlighted entities
-        const rels = message.payload?.relationships || [];
+        const payload = message.payload as { relationships?: RelationshipData[]; entities?: MinimapEntityData[] } | undefined;
+        const rels = payload?.relationships || [];
+        const entities = payload?.entities || [];
         setRelationships(rels);
+        setMinimapEntities(entities);
         sendResponse({ success: true });
       } else if (message.type === 'CLEAR_RELATIONSHIP_LINES') {
         setRelationships([]);
+        setMinimapEntities([]);
         sendResponse({ success: true });
       }
       return true;
@@ -1014,55 +1105,66 @@ export default function App() {
     };
   }, []);
 
-  // Listen for postMessage for relationship lines from the panel iframe
+  // Listen for postMessage from the panel iframe
   useEffect(() => {
     const handlePostMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
+      if (event.data?.type === 'XTM_CLOSE_PANEL') {
+        // Close the iframe panel when X button is clicked inside the panel
+        closeIframePanel();
+      } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
         const rels = event.data.payload?.relationships || [];
+        const entities = event.data.payload?.entities || [];
         setRelationships(rels);
+        setMinimapEntities(entities);
       } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
         setRelationships([]);
+        setMinimapEntities([]);
+      } else if (event.data?.type === 'XTM_GET_PDF_CONTENT') {
+        // Panel iframe is requesting PDF content for AI analysis
+        const fullText = pageTextsRef.current.join('\n');
+        // Send response back to the iframe
+        const iframe = panelIframeRef.current;
+        if (iframe?.contentWindow) {
+          iframe.contentWindow.postMessage({
+            type: 'XTM_PDF_CONTENT_RESPONSE',
+            payload: {
+              success: true,
+              data: {
+                content: fullText,
+                title: document.title || 'PDF Document',
+                url: pdfUrl || '',
+              },
+            },
+          }, '*');
+        }
+        // Also send via chrome runtime for split screen mode
+        if (event.source && event.source !== window) {
+          (event.source as Window).postMessage({
+            type: 'XTM_PDF_CONTENT_RESPONSE',
+            payload: {
+              success: true,
+              data: {
+                content: fullText,
+                title: document.title || 'PDF Document',
+                url: pdfUrl || '',
+              },
+            },
+          }, '*');
+        }
       }
     };
 
     window.addEventListener('message', handlePostMessage);
     return () => window.removeEventListener('message', handlePostMessage);
-  }, []);
+  }, [pdfUrl, closeIframePanel]);
 
-  // Track highlight positions when scan results change
-  // This is done by observing changes and updating a positions map
+  // Clear highlight positions when scan results are cleared
   useEffect(() => {
-    if (!scanResults || !pagesContainerRef.current) {
+    if (!scanResults) {
       setHighlightPositions(new Map());
-      return;
+      setRelationships([]);
+      setMinimapEntities([]);
     }
-
-    // Build a map of entity values to their positions
-    // We need to parse the scanResults to get entity values
-    const positions = new Map<string, HighlightPosition[]>();
-    
-    const allEntities = [
-      ...(scanResults.observables || []),
-      ...(scanResults.openctiEntities || []),
-      ...(scanResults.cves || []),
-      ...(scanResults.openaevEntities || []),
-      ...(scanResults.aiEntities || []),
-    ];
-
-    allEntities.forEach(entity => {
-      const value = 'value' in entity && entity.value ? entity.value : 
-                   'name' in entity && entity.name ? entity.name : '';
-      if (value) {
-        // We'll estimate positions based on the scroll container
-        // The actual positions are computed by PageRenderer
-        const key = value.toLowerCase();
-        if (!positions.has(key)) {
-          positions.set(key, []);
-        }
-      }
-    });
-
-    setHighlightPositions(positions);
   }, [scanResults]);
 
   // Load PDF document
@@ -1311,10 +1413,17 @@ export default function App() {
         <Box
           ref={pagesContainerRef}
           onClick={(e) => {
-            // Close iframe panel when clicking on background (not on highlights)
+            // Close iframe panel when clicking on background or PDF canvas (not on highlights)
             // Only in iframe mode - native panel is controlled by browser
-            if (!splitScreenMode && e.target === e.currentTarget && isIframePanelOpen()) {
-              closeIframePanel();
+            if (!splitScreenMode && isIframePanelOpen()) {
+              const target = e.target as HTMLElement;
+              // Don't close if clicking on a highlight (has data-entity-value) or the panel itself
+              const isHighlight = target.hasAttribute?.('data-entity-value') || 
+                                  target.closest?.('[data-entity-value]') ||
+                                  target.closest?.('.xtm-panel-iframe');
+              if (!isHighlight) {
+                closeIframePanel();
+              }
             }
           }}
           sx={{
@@ -1338,8 +1447,18 @@ export default function App() {
               selectedEntities={selectedEntities}
               onEntityClick={handleEntityClick}
               onEntityHover={handleEntityHover}
+              onHighlightPositions={handleHighlightPositions}
             />
           ))}
+          
+          {/* Relationship lines overlay */}
+          {relationships.length > 0 && (
+            <RelationshipLinesOverlay
+              relationships={relationships}
+              containerRef={pagesContainerRef}
+              highlightPositions={highlightPositions}
+            />
+          )}
         </Box>
 
         {/* Tooltip for hovered entity */}
@@ -1428,6 +1547,14 @@ export default function App() {
               </Typography>
             )}
           </Box>
+        )}
+
+        {/* Relationship Minimap */}
+        {relationships.length > 0 && (
+          <RelationshipMinimap
+            entities={minimapEntities}
+            relationships={relationships}
+          />
         )}
       </Box>
     </ThemeProvider>

@@ -49,33 +49,9 @@ import { loggers } from '../../shared/utils/logger';
 import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
 import { getAiColor } from '../utils/platform-helpers';
 import { isDefaultPlatform, getCanonicalTypeName, getUniqueCanonicalTypes } from '../../shared/platform/registry';
+import { sendToContentScript } from '../utils/content-messaging';
 
 const log = loggers.panel;
-
-/**
- * Send a message to the content script.
- * Handles both floating iframe mode (postMessage) and split screen mode (chrome.tabs.sendMessage)
- */
-const sendToContentScript = async (message: { type: string; payload?: unknown; value?: unknown; values?: unknown }) => {
-  // Check if we're in split screen mode (not in iframe)
-  const isInSidePanel = window.parent === window;
-  
-  if (isInSidePanel && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-    // Split screen mode - send directly to active tab
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, message);
-      }
-    } catch {
-      // Fallback to postMessage
-      window.parent.postMessage(message, '*');
-    }
-  } else {
-    // Floating iframe mode - use postMessage
-    window.parent.postMessage(message, '*');
-  }
-};
 
 // Check if entity is selectable for OpenCTI import (not oaev-* type)
 const isSelectableForOpenCTI = (entity: ScanResultEntity): boolean => {
@@ -192,7 +168,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Track when "Scan all" is specifically running (vs individual scans)
   const [scanAllRunning, setScanAllRunning] = useState(false);
 
-  // Send relationship lines to content script when relationships change
+  // Send relationship lines and graph data to content script when relationships change
   useEffect(() => {
     const sendRelationshipLines = async () => {
       if (resolvedRelationships.length > 0) {
@@ -203,10 +179,24 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           confidence: rel.confidence,
         })).filter(r => r.fromValue && r.toValue);
 
-        // Send via postMessage for iframe mode
+        // Build entity data for minimap graph
+        const entityData = scanResultsEntities.map(e => ({
+          value: e.value || e.name || '',
+          type: e.type || 'Unknown',
+        })).filter(e => e.value);
+
+        const payload = { relationships: relationshipData, entities: entityData };
+
+        // Send via postMessage for iframe mode (including PDF scanner)
         window.parent.postMessage({
           type: 'XTM_DRAW_RELATIONSHIP_LINES',
-          payload: { relationships: relationshipData },
+          payload,
+        }, '*');
+
+        // Also try sending to window itself for PDF scanner where panel is embedded
+        window.postMessage({
+          type: 'XTM_DRAW_RELATIONSHIP_LINES',
+          payload,
         }, '*');
 
         // Send via chrome.tabs for split screen mode
@@ -216,11 +206,13 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             if (tab?.id) {
               chrome.tabs.sendMessage(tab.id, {
                 type: 'DRAW_RELATIONSHIP_LINES',
-                payload: { relationships: relationshipData },
-              }).catch(() => {});
+                payload,
+              }).catch(() => {
+                // Silently ignore - content script may not be injected
+              });
             }
           } catch {
-            // Silently handle errors
+            // Silently ignore - chrome.tabs may not be available
           }
         }
       } else {
@@ -240,7 +232,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     };
 
     sendRelationshipLines();
-  }, [resolvedRelationships]);
+  }, [resolvedRelationships, scanResultsEntities]);
 
   // Calculate statistics
   const scanResultsFoundCount = useMemo(() => 
@@ -492,23 +484,23 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                                     tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
             
             if (isPdfScannerPage) {
-              // For PDF scanner, request content via runtime message to extension page
-              // Also try window.parent.postMessage for iframe context
+              // For PDF scanner, request content via postMessage to parent (works in iframe mode)
               try {
-                // First try runtime message (works when PDF scanner has listener)
                 const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  // Set a timeout to avoid hanging
-                  const timeout = setTimeout(() => resolve({ success: false }), 1000);
+                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
                   
-                  // Try chrome.runtime.sendMessage to reach the PDF scanner extension page
-                  chrome.runtime.sendMessage({ type: 'GET_PDF_CONTENT_FROM_PDF_SCANNER' }, (response) => {
-                    clearTimeout(timeout);
-                    if (chrome.runtime.lastError) {
-                      resolve({ success: false });
-                    } else {
-                      resolve(response || { success: false });
+                  // Listen for response from PDF scanner
+                  const handleResponse = (event: MessageEvent) => {
+                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
+                      clearTimeout(timeout);
+                      window.removeEventListener('message', handleResponse);
+                      resolve(event.data.payload || { success: false });
                     }
-                  });
+                  };
+                  window.addEventListener('message', handleResponse);
+                  
+                  // Request content from PDF scanner via postMessage
+                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
                 });
                 
                 if (pdfContentResponse?.success) {
@@ -763,18 +755,21 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                                     tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
             
             if (isPdfScannerPage) {
-              // For PDF scanner, request content via runtime message to extension page
+              // For PDF scanner, request content via postMessage to parent
               try {
                 const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  const timeout = setTimeout(() => resolve({ success: false }), 1000);
-                  chrome.runtime.sendMessage({ type: 'GET_PDF_CONTENT_FROM_PDF_SCANNER' }, (response) => {
-                    clearTimeout(timeout);
-                    if (chrome.runtime.lastError) {
-                      resolve({ success: false });
-                    } else {
-                      resolve(response || { success: false });
+                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
+                  
+                  const handleResponse = (event: MessageEvent) => {
+                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
+                      clearTimeout(timeout);
+                      window.removeEventListener('message', handleResponse);
+                      resolve(event.data.payload || { success: false });
                     }
-                  });
+                  };
+                  window.addEventListener('message', handleResponse);
+                  
+                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
                 });
                 if (pdfContentResponse?.success) {
                   pageContent = pdfContentResponse.data?.content || '';
@@ -890,18 +885,21 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                                     tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
             
             if (isPdfScannerPage) {
-              // For PDF scanner, request content via runtime message to extension page
+              // For PDF scanner, request content via postMessage to parent
               try {
                 const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-                  const timeout = setTimeout(() => resolve({ success: false }), 1000);
-                  chrome.runtime.sendMessage({ type: 'GET_PDF_CONTENT_FROM_PDF_SCANNER' }, (response) => {
-                    clearTimeout(timeout);
-                    if (chrome.runtime.lastError) {
-                      resolve({ success: false });
-                    } else {
-                      resolve(response || { success: false });
+                  const timeout = setTimeout(() => resolve({ success: false }), 3000);
+                  
+                  const handleResponse = (event: MessageEvent) => {
+                    if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
+                      clearTimeout(timeout);
+                      window.removeEventListener('message', handleResponse);
+                      resolve(event.data.payload || { success: false });
                     }
-                  });
+                  };
+                  window.addEventListener('message', handleResponse);
+                  
+                  window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
                 });
                 if (pdfContentResponse?.success) {
                   pageContent = pdfContentResponse.data?.content || '';

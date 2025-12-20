@@ -12,36 +12,12 @@ import {
   createPrefixedType,
   type PlatformType,
 } from '../shared/platform/registry';
-import { HIGHLIGHT_STYLES } from './styles';
+import {
+  ensureStylesInShadowRoot,
+  isValidWordBoundary,
+} from './highlight-utils';
 
 const log = loggers.content;
-
-// Track shadow roots that have had styles injected
-const styledShadowRoots = new WeakSet<ShadowRoot>();
-
-/**
- * Ensure highlight styles are injected into a shadow root
- * This is necessary because Shadow DOM has style encapsulation
- */
-function ensureStylesInShadowRoot(node: Node): void {
-  // Find the shadow root this node belongs to, if any
-  let current: Node | null = node;
-  while (current) {
-    if (current instanceof ShadowRoot) {
-      if (!styledShadowRoots.has(current)) {
-        // Inject styles into this shadow root
-        const styleEl = document.createElement('style');
-        styleEl.setAttribute('data-xtm-highlight-styles', 'true');
-        styleEl.textContent = HIGHLIGHT_STYLES;
-        current.appendChild(styleEl);
-        styledShadowRoots.add(current);
-        log.debug('Injected highlight styles into shadow root');
-      }
-      return;
-    }
-    current = current.parentNode;
-  }
-}
 
 // ============================================================================
 // Types
@@ -62,10 +38,11 @@ export interface HighlightMeta {
 
 // OpenCTI Types - these are detected from platform cache
 // When not found, they can be added via AI discovery feature
+// Note: 'Threat-Actor' is kept for backward compatibility but should not be used for new entities
+// Always use 'Threat-Actor-Group' or 'Threat-Actor-Individual' for proper STIX classification
 const OPENCTI_TYPES_SET = new Set([
   'Intrusion-Set',
   'Malware',
-  'Threat-Actor',
   'Threat-Actor-Group',
   'Threat-Actor-Individual',
   'Attack-Pattern',
@@ -77,6 +54,7 @@ const OPENCTI_TYPES_SET = new Set([
   'Sector',
   'Organization',
   'Individual',
+  'System',
   'Event',
   'Country',
   'Region',
@@ -90,6 +68,8 @@ const OPENCTI_TYPES_SET = new Set([
   'Case-Rfi',
   'Case-Rft',
   'Feedback',
+  'Narrative',
+  'Channel',
 ]);
 
 export interface NodeMapEntry {
@@ -160,15 +140,6 @@ export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; full
   const fullText = textNodes.map((n) => n.textContent).join('');
   
   return { nodeMap, fullText };
-}
-
-/**
- * Check if a character is a valid word boundary
- */
-export function isValidWordBoundary(char: string | undefined): boolean {
-  if (!char || char === '') return true;
-  if (/[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t.]/.test(char)) return true;
-  return !/[a-zA-Z0-9]/.test(char);
 }
 
 // ============================================================================

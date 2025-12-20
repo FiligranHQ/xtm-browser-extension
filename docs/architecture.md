@@ -68,17 +68,14 @@ The background service worker is the central hub that:
 src/background/
 ├── index.ts                 # Main entry point, client initialization
 ├── handlers/                # Message handlers split by domain
-│   ├── index.ts            # Handler registry (createHandlerRegistry function)
 │   ├── types.ts            # Handler type definitions
 │   ├── ai-handlers.ts      # AI-related message handlers
-│   ├── cache-handlers.ts   # Cache management handlers
 │   ├── container-handlers.ts # Container creation handlers
-│   ├── misc-handlers.ts    # Miscellaneous handlers
+│   ├── misc-handlers.ts    # Miscellaneous handlers (injection, panel, PDF)
 │   ├── openaev-handlers.ts # OpenAEV-specific handlers
 │   ├── opencti-handlers.ts # OpenCTI-specific handlers
 │   ├── scan-handlers.ts    # Page scanning handlers
-│   ├── scenario-handlers.ts # Scenario generation handlers
-│   └── settings-handlers.ts # Settings management handlers
+│   └── scenario-handlers.ts # Scenario generation handlers
 └── services/
     ├── cache-manager.ts    # Entity cache management (OpenCTI & OpenAEV)
     ├── client-manager.ts   # API client lifecycle management
@@ -100,10 +97,13 @@ src/content/
 ├── index.ts              # Main entry point, event handlers, message handling
 ├── styles.ts             # CSS styles for highlights, tooltips, panel
 ├── highlighting.ts       # Entity highlighting logic
+├── highlight-utils.ts    # Shared highlighting utilities (Shadow DOM, element creation)
 ├── extraction.ts         # Content extraction for PDFs and descriptions
 ├── page-content.ts       # Page content utilities
 ├── panel.ts              # Side panel iframe management
-└── toast.ts              # Toast notification system
+├── toast.ts              # Toast notification system
+├── relationship-lines.ts # Relationship line visualization between entities
+└── relationship-minimap.ts # Interactive graph mini-map for relationships
 ```
 
 **Key State:**
@@ -242,6 +242,11 @@ src/shared/
 │   ├── ThemeDark.ts
 │   ├── ThemeLight.ts
 │   └── colors.ts
+├── visualization/        # Graph visualization utilities
+│   ├── entity-icons.ts       # SVG icon paths for entity types
+│   ├── graph-types.ts        # Graph node/edge interfaces
+│   ├── graph-layout.ts       # Force-directed layout algorithms
+│   └── relationship-styles.ts # Line and label styling
 ├── components/           # Shared React components
 │   ├── ItemIcon.tsx      # Entity type icons
 │   ├── ActionButton.tsx  # Stylized action button
@@ -1031,6 +1036,125 @@ import {
 | `description-helpers.ts` | `generateDescription`, `cleanHtmlContent`, `escapeHtml` | HTML content processing for descriptions |
 | `marking-helpers.ts` | `getMarkingColor`, `getMarkingChipStyle` | TLP/PAP marking colors |
 
+## Visualization Module
+
+The `src/shared/visualization/` module provides shared graph visualization utilities used by both web page content scripts and the PDF scanner. This eliminates code duplication between relationship visualization components.
+
+### Module Structure
+
+```
+src/shared/visualization/
+├── entity-icons.ts       # SVG icon paths for entity types
+├── graph-types.ts        # TypeScript interfaces for graph data
+├── graph-layout.ts       # Layout algorithms and geometry utilities
+└── relationship-styles.ts # Styling constants and helpers
+```
+
+### Entity Icons (`entity-icons.ts`)
+
+Centralized SVG path definitions for entity type icons used in graph visualizations:
+
+```typescript
+import { getIconPath, getEntityColor } from '@/shared/visualization';
+
+// Get SVG path for a specific entity type
+const svgPath = getIconPath('Malware');
+
+// Get color for entity type
+const color = getEntityColor('Threat-Actor-Group');
+```
+
+### Graph Types (`graph-types.ts`)
+
+Common TypeScript interfaces for graph visualization:
+
+```typescript
+interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+  color: string;
+  x?: number;
+  y?: number;
+}
+
+interface GraphEdge {
+  source: string;
+  target: string;
+  label: string;
+}
+
+interface RelationshipData {
+  sourceEntityId: string;
+  targetEntityId: string;
+  relationshipType: string;
+}
+```
+
+### Graph Layout (`graph-layout.ts`)
+
+Force-directed layout algorithm and geometry utilities:
+
+```typescript
+import { 
+  calculateLayout, 
+  calculateCurveControlPoints,
+  calculateLabelRotation,
+  getPointOnBezier 
+} from '@/shared/visualization';
+
+// Calculate force-directed layout for nodes
+const positionedNodes = calculateLayout(nodes, edges, width, height);
+
+// Calculate bezier curve control points for edge rendering
+const controlPoints = calculateCurveControlPoints(startPoint, endPoint, curveOffset);
+
+// Calculate rotation angle for edge label positioning
+const rotation = calculateLabelRotation(startPoint, endPoint);
+```
+
+### Relationship Styles (`relationship-styles.ts`)
+
+Styling constants and CSS utilities:
+
+```typescript
+import { 
+  LINE_STYLES, 
+  LABEL_STYLES,
+  MINIMAP_STYLES,
+  getLineAnimationCSS 
+} from '@/shared/visualization';
+
+// Use predefined style constants
+const lineColor = LINE_STYLES.DEFAULT_COLOR;
+const lineWidth = LINE_STYLES.DEFAULT_WIDTH;
+
+// Generate CSS for animated line drawing
+const animationCSS = getLineAnimationCSS(pathLength);
+```
+
+### Usage in Components
+
+**Content Script (relationship-lines.ts, relationship-minimap.ts):**
+```typescript
+import { 
+  calculateCurveControlPoints, 
+  calculateLabelRotation,
+  LINE_STYLES 
+} from '@/shared/visualization';
+```
+
+**PDF Scanner (RelationshipLinesOverlay.tsx, RelationshipMinimap.tsx):**
+```typescript
+import { 
+  calculateLayout, 
+  getIconPath, 
+  getEntityColor,
+  GraphNode, 
+  GraphEdge 
+} from '@/shared/visualization';
+```
+
 ## Panel Display Modes
 
 The extension supports two panel display modes, configurable in Settings > Appearance:
@@ -1092,6 +1216,33 @@ In floating mode, the side panel iframe uses multiple defensive CSS strategies t
 2. **Content Isolation**: Panel runs in isolated iframe
 3. **CSP Compliance**: All scripts bundled, no eval or inline scripts
 4. **Message Validation**: All messages validated before processing
+
+## Code Organization Guidelines
+
+### File Size Targets
+
+Files should generally be kept under 1000 lines for maintainability. When a file exceeds this:
+- Extract reusable utilities to `src/shared/` modules
+- Split large React components into sub-components
+- Use dedicated handler files for message processing
+
+### Shared Module Structure
+
+Common patterns extracted to `src/shared/`:
+- **API clients** (`api/`) - Platform-specific GraphQL/REST clients
+- **Detection** (`detection/`) - Pattern matching and entity detection
+- **Extraction** (`extraction/`) - Content extraction and PDF generation
+- **Visualization** (`visualization/`) - Graph visualization utilities (NEW)
+- **Types** (`types/`) - TypeScript interfaces organized by domain
+- **Theme** (`theme/`) - Color definitions and theme configurations
+
+### Handler Pattern
+
+Background message handlers follow a modular pattern:
+1. Individual handlers in `background/handlers/` by domain
+2. Handler registries exported from each module
+3. Message dispatcher routes to appropriate handlers
+4. Legacy switch statement as fallback (being migrated)
 
 ## Known Issues & Mitigations
 

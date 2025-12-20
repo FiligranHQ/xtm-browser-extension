@@ -97,7 +97,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
   // Check for Enterprise Edition platform (OpenCTI or OpenAEV)
   const hasEnterprisePlatform = availablePlatforms.some(p => p.isEnterprise);
 
-  // Send relationship lines to content script when relationships change
+  // Send relationship lines and graph data to content script when relationships change
   useEffect(() => {
     const sendRelationshipLines = async () => {
       if (resolvedRelationships.length > 0) {
@@ -108,10 +108,18 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
           confidence: rel.confidence,
         })).filter(r => r.fromValue && r.toValue);
 
+        // Build entity data for minimap graph
+        const entityData = entitiesToAdd.map(e => ({
+          value: e.value || e.name || '',
+          type: e.type || 'Unknown',
+        })).filter(e => e.value);
+
+        const payload = { relationships: relationshipData, entities: entityData };
+
         // Send via postMessage for iframe mode
         window.parent.postMessage({
           type: 'XTM_DRAW_RELATIONSHIP_LINES',
-          payload: { relationships: relationshipData },
+          payload,
         }, '*');
 
         // Send via chrome.tabs for split screen mode
@@ -121,7 +129,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
             if (tab?.id) {
               chrome.tabs.sendMessage(tab.id, {
                 type: 'DRAW_RELATIONSHIP_LINES',
-                payload: { relationships: relationshipData },
+                payload,
               }).catch(() => {});
             }
           } catch {
@@ -145,7 +153,7 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
     };
 
     sendRelationshipLines();
-  }, [resolvedRelationships]);
+  }, [resolvedRelationships, entitiesToAdd]);
 
   const handleRemoveEntity = (index: number, entity: EntityData) => {
     // Remove entity from the list
@@ -334,85 +342,330 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
     }
   };
 
+  // Calculate if we have relationships to show equal height sections
+  const hasRelationships = entitiesToAdd.length >= 2;
+
   return (
-    <Box sx={{ p: 2 }}>
-      {/* Back to scan results button */}
-      <Box sx={{ mb: 1.5 }}>
-        <Button
-          size="small"
-          startIcon={<ChevronLeftOutlined />}
-          onClick={() => {
-            setPanelMode('scan-results');
-            // Keep resolved relationships when going back so they're preserved
-          }}
-          sx={{
-            color: 'text.secondary',
-            textTransform: 'none',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          Back to scan results
-        </Button>
-      </Box>
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <ArrowForwardOutlined sx={{ color: 'primary.main' }} />
-        <Typography variant="h6">Import Selection</Typography>
-      </Box>
-
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-        {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} selected for import
-      </Typography>
-
-      {/* Entity list */}
-      <Box sx={{ maxHeight: 250, overflow: 'auto', mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-        {entitiesToAdd.map((e, i) => (
-          <Paper
-            key={i}
-            elevation={0}
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100vh',
+      overflow: 'hidden',
+    }}>
+      {/* Fixed Header Section */}
+      <Box sx={{ p: 2, pb: 1, flexShrink: 0 }}>
+        {/* Back to scan results button */}
+        <Box sx={{ mb: 1 }}>
+          <Button
+            size="small"
+            startIcon={<ChevronLeftOutlined />}
+            onClick={() => {
+              setPanelMode('scan-results');
+              // Keep resolved relationships when going back so they're preserved
+            }}
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              p: 1.5,
-              borderBottom: i < entitiesToAdd.length - 1 ? 1 : 0,
-              borderColor: 'divider',
-              bgcolor: 'transparent',
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            <ItemIcon type={e.type} size="small" />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-                {e.value || e.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {e.type?.replace(/-/g, ' ')}
-              </Typography>
-            </Box>
-            <Chip
-              label={e.existsInPlatform ? 'Exists' : 'New'}
-              size="small"
-              color={e.existsInPlatform ? 'success' : 'warning'}
-              variant="outlined"
-            />
-            <IconButton
-              size="small"
-              onClick={() => handleRemoveEntity(i, e)}
-              sx={{
-                color: 'text.secondary',
-                '&:hover': {
-                  color: 'error.main',
-                },
-              }}
-            >
-              <DeleteOutlined fontSize="small" />
-            </IconButton>
-          </Paper>
-        ))}
+            Back to scan results
+          </Button>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <ArrowForwardOutlined sx={{ color: 'primary.main' }} />
+          <Typography variant="h6">Import Selection</Typography>
+        </Box>
+
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {entitiesToAdd.length} entit{entitiesToAdd.length === 1 ? 'y' : 'ies'} selected for import
+        </Typography>
       </Box>
 
-      {/* Options */}
-      <Box sx={{ mb: 2 }}>
+      {/* Scrollable Content Section - Equal Height Lists */}
+      <Box sx={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column',
+        gap: 1.5,
+        px: 2,
+        overflow: 'hidden',
+        minHeight: 0,
+      }}>
+        {/* Entity list */}
+        <Box sx={{ 
+          flex: hasRelationships ? 1 : 'none',
+          minHeight: hasRelationships ? 0 : 'auto',
+          maxHeight: hasRelationships ? 'none' : 300,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 500 }}>
+            Entities ({entitiesToAdd.length})
+          </Typography>
+          <Box sx={{ 
+            flex: 1,
+            overflow: 'auto', 
+            border: 1, 
+            borderColor: 'divider', 
+            borderRadius: 1,
+            minHeight: 0,
+          }}>
+            {entitiesToAdd.map((e, i) => (
+              <Paper
+                key={i}
+                elevation={0}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  p: 1,
+                  borderBottom: i < entitiesToAdd.length - 1 ? 1 : 0,
+                  borderColor: 'divider',
+                  bgcolor: 'transparent',
+                }}
+              >
+                <ItemIcon type={e.type} size="small" />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word', fontSize: '0.8rem' }}>
+                    {e.value || e.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                    {e.type?.replace(/-/g, ' ')}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={e.existsInPlatform ? 'Exists' : 'New'}
+                  size="small"
+                  color={e.existsInPlatform ? 'success' : 'warning'}
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.65rem' }}
+                />
+                <IconButton
+                  size="small"
+                  onClick={() => handleRemoveEntity(i, e)}
+                  sx={{
+                    p: 0.25,
+                    color: 'text.secondary',
+                    '&:hover': {
+                      color: 'error.main',
+                    },
+                  }}
+                >
+                  <DeleteOutlined sx={{ fontSize: '1rem' }} />
+                </IconButton>
+              </Paper>
+            ))}
+          </Box>
+        </Box>
+
+        {/* AI Relationship Resolution - Equal Height */}
+        {hasRelationships && (
+          <Box sx={{ 
+            flex: 1, 
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            p: 1.5, 
+            border: 1, 
+            borderColor: 'divider', 
+            borderRadius: 1, 
+            bgcolor: 'background.paper',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexShrink: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.1rem' }} />
+                <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.secondary' }}>
+                  AI Relationships{resolvedRelationships.length > 0 && ` (${resolvedRelationships.length})`}
+                </Typography>
+              </Box>
+              <Tooltip title={!aiSettings.available ? 'AI not configured' : !hasEnterprisePlatform ? 'Requires Enterprise platform' : 'Analyze page context to find relationships between entities'}>
+                <span>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform}
+                    onClick={handleResolveRelationships}
+                    startIcon={aiResolvingRelationships ? <CircularProgress size={12} color="inherit" /> : <AutoAwesomeOutlined sx={{ fontSize: '0.9rem' }} />}
+                    sx={{
+                      textTransform: 'none',
+                      fontSize: '0.7rem',
+                      py: 0.25,
+                      color: getAiColor(mode).main,
+                      borderColor: getAiColor(mode).main,
+                      '&:hover': {
+                        borderColor: getAiColor(mode).dark,
+                        bgcolor: hexToRGB(getAiColor(mode).main, 0.1),
+                      },
+                    }}
+                  >
+                    {aiResolvingRelationships ? 'Scanning...' : 'Discover'}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+
+            {/* Resolved relationships list */}
+            {resolvedRelationships.length > 0 ? (
+              <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                {resolvedRelationships.map((rel, index) => {
+                  // Look up entities by value (more reliable) or fallback to index
+                  const fromEntity = rel.fromEntityValue 
+                    ? entitiesToAdd.find(e => (e.value || e.name) === rel.fromEntityValue)
+                    : entitiesToAdd[rel.fromIndex];
+                  const toEntity = rel.toEntityValue
+                    ? entitiesToAdd.find(e => (e.value || e.name) === rel.toEntityValue)
+                    : entitiesToAdd[rel.toIndex];
+                  if (!fromEntity || !toEntity) return null;
+
+                  const aiColors = getAiColor(mode);
+                  const fromColor = itemColor(fromEntity.type, mode === 'dark');
+                  const toColor = itemColor(toEntity.type, mode === 'dark');
+                  const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
+
+                  return (
+                    <Paper
+                      key={index}
+                      elevation={0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        p: 0.75,
+                        mb: 0.5,
+                        bgcolor: hexToRGB(aiColors.main, 0.05),
+                        border: 1,
+                        borderColor: hexToRGB(aiColors.main, 0.2),
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {/* One-line relationship display */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
+                          {/* From entity */}
+                          <Tooltip title={fromEntity.type?.replace(/-/g, ' ') || ''} placement="top">
+                            <Box sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              bgcolor: hexToRGB(fromColor, 0.15),
+                              borderRadius: 0.5,
+                              p: 0.25,
+                              flexShrink: 0,
+                            }}>
+                              <ItemIcon type={fromEntity.type} size="small" color={fromColor} />
+                            </Box>
+                          </Tooltip>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontWeight: 500, 
+                              color: 'text.primary',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              minWidth: 0,
+                              flex: '0 1 auto',
+                              fontSize: '0.7rem',
+                            }}
+                          >
+                            {fromEntity.name || fromEntity.value}
+                          </Typography>
+                          {/* Relationship type */}
+                          <Chip
+                            label={rel.relationshipType}
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: '0.6rem',
+                              bgcolor: hexToRGB(aiColors.main, 0.2),
+                              color: aiColors.main,
+                              flexShrink: 0,
+                              '& .MuiChip-label': { px: 0.5 },
+                            }}
+                          />
+                          {/* To entity */}
+                          <Tooltip title={toEntity.type?.replace(/-/g, ' ') || ''} placement="top">
+                            <Box sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              bgcolor: hexToRGB(toColor, 0.15),
+                              borderRadius: 0.5,
+                              p: 0.25,
+                              flexShrink: 0,
+                            }}>
+                              <ItemIcon type={toEntity.type} size="small" color={toColor} />
+                            </Box>
+                          </Tooltip>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontWeight: 500, 
+                              color: 'text.primary',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              minWidth: 0,
+                              flex: '0 1 auto',
+                              fontSize: '0.7rem',
+                            }}
+                          >
+                            {toEntity.name || toEntity.value}
+                          </Typography>
+                        </Box>
+                        {/* Reason */}
+                        <Tooltip title={rel.reason} placement="bottom-start">
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontStyle: 'italic', fontSize: '0.65rem' }} noWrap>
+                            {rel.reason}
+                          </Typography>
+                        </Tooltip>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
+                        <Chip
+                          label={rel.confidence}
+                          size="small"
+                          sx={{
+                            height: 16,
+                            fontSize: '0.55rem',
+                            color: confidenceColor,
+                            borderColor: confidenceColor,
+                          }}
+                          variant="outlined"
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          sx={{
+                            p: 0.25,
+                            color: 'text.secondary',
+                            '&:hover': { color: 'error.main' },
+                          }}
+                        >
+                          <DeleteOutlined sx={{ fontSize: '0.85rem' }} />
+                        </IconButton>
+                      </Box>
+                    </Paper>
+                  );
+                })}
+              </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                  {aiResolvingRelationships ? 'Discovering relationships...' : 'Use AI to discover relationships between entities'}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+      </Box>
+
+      {/* Fixed Footer Section */}
+      <Box sx={{ p: 2, pt: 1.5, flexShrink: 0 }}>
+        {/* Options */}
         <FormControlLabel
           control={
             <Switch
@@ -422,224 +675,34 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
             />
           }
           label={
-            <Box>
-              <Typography variant="body2">Create indicators from observables</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Automatically generate STIX indicators for each observable
-              </Typography>
-            </Box>
-          }
-          sx={{ alignItems: 'flex-start', ml: 0 }}
-        />
-      </Box>
-
-      {/* AI Relationship Resolution */}
-      {entitiesToAdd.length >= 2 && (
-        <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: resolvedRelationships.length > 0 ? 1.5 : 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <AutoAwesomeOutlined sx={{ color: getAiColor(mode).main, fontSize: '1.2rem' }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                AI Relationships{resolvedRelationships.length > 0 && ` (${resolvedRelationships.length} relationship${resolvedRelationships.length > 1 ? 's' : ''} found)`}
-              </Typography>
-            </Box>
-            <Tooltip title={!aiSettings.available ? 'AI not configured' : !hasEnterprisePlatform ? 'Requires Enterprise platform' : 'Analyze page context to find relationships between entities'}>
-              <span>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={aiResolvingRelationships || !aiSettings.available || !hasEnterprisePlatform}
-                  onClick={handleResolveRelationships}
-                  startIcon={aiResolvingRelationships ? <CircularProgress size={14} color="inherit" /> : <AutoAwesomeOutlined />}
-                  sx={{
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    color: getAiColor(mode).main,
-                    borderColor: getAiColor(mode).main,
-                    '&:hover': {
-                      borderColor: getAiColor(mode).dark,
-                      bgcolor: hexToRGB(getAiColor(mode).main, 0.1),
-                    },
-                  }}
-                >
-                  {aiResolvingRelationships ? 'Scanning...' : 'Discover'}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-
-          {/* Resolved relationships list */}
-          {resolvedRelationships.length > 0 && (
-            <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
-              {resolvedRelationships.map((rel, index) => {
-                // Look up entities by value (more reliable) or fallback to index
-                const fromEntity = rel.fromEntityValue 
-                  ? entitiesToAdd.find(e => (e.value || e.name) === rel.fromEntityValue)
-                  : entitiesToAdd[rel.fromIndex];
-                const toEntity = rel.toEntityValue
-                  ? entitiesToAdd.find(e => (e.value || e.name) === rel.toEntityValue)
-                  : entitiesToAdd[rel.toIndex];
-                if (!fromEntity || !toEntity) return null;
-
-                const aiColors = getAiColor(mode);
-                const fromColor = itemColor(fromEntity.type, mode === 'dark');
-                const toColor = itemColor(toEntity.type, mode === 'dark');
-                const confidenceColor = rel.confidence === 'high' ? 'success.main' : rel.confidence === 'medium' ? 'warning.main' : 'text.secondary';
-
-                return (
-                  <Paper
-                    key={index}
-                    elevation={0}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      p: 1,
-                      mb: 0.5,
-                      bgcolor: hexToRGB(aiColors.main, 0.05),
-                      border: 1,
-                      borderColor: hexToRGB(aiColors.main, 0.2),
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      {/* One-line relationship display */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap' }}>
-                        {/* From entity */}
-                        <Tooltip title={fromEntity.type?.replace(/-/g, ' ') || ''} placement="top">
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            bgcolor: hexToRGB(fromColor, 0.15),
-                            borderRadius: 0.5,
-                            p: 0.3,
-                            flexShrink: 0,
-                          }}>
-                            <ItemIcon type={fromEntity.type} size="small" color={fromColor} />
-                          </Box>
-                        </Tooltip>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            fontWeight: 500, 
-                            color: 'text.primary',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: '0 1 auto',
-                          }}
-                        >
-                          {fromEntity.name || fromEntity.value}
-                        </Typography>
-                        {/* Relationship type */}
-                        <Chip
-                          label={rel.relationshipType}
-                          size="small"
-                          sx={{
-                            height: 18,
-                            fontSize: '0.65rem',
-                            bgcolor: hexToRGB(aiColors.main, 0.2),
-                            color: aiColors.main,
-                            flexShrink: 0,
-                            '& .MuiChip-label': { px: 0.75 },
-                          }}
-                        />
-                        {/* To entity */}
-                        <Tooltip title={toEntity.type?.replace(/-/g, ' ') || ''} placement="top">
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            bgcolor: hexToRGB(toColor, 0.15),
-                            borderRadius: 0.5,
-                            p: 0.3,
-                            flexShrink: 0,
-                          }}>
-                            <ItemIcon type={toEntity.type} size="small" color={toColor} />
-                          </Box>
-                        </Tooltip>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            fontWeight: 500, 
-                            color: 'text.primary',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: '0 1 auto',
-                          }}
-                        >
-                          {toEntity.name || toEntity.value}
-                        </Typography>
-                      </Box>
-                      {/* Reason */}
-                      <Tooltip title={rel.reason} placement="bottom-start">
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25, fontStyle: 'italic' }} noWrap>
-                          {rel.reason}
-                        </Typography>
-                      </Tooltip>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                      <Chip
-                        label={rel.confidence}
-                        size="small"
-                        sx={{
-                          height: 18,
-                          fontSize: '0.6rem',
-                          color: confidenceColor,
-                          borderColor: confidenceColor,
-                        }}
-                        variant="outlined"
-                      />
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setResolvedRelationships(prev => prev.filter((_, i) => i !== index));
-                        }}
-                        sx={{
-                          p: 0.25,
-                          color: 'text.secondary',
-                          '&:hover': { color: 'error.main' },
-                        }}
-                      >
-                        <DeleteOutlined sx={{ fontSize: '0.9rem' }} />
-                      </IconButton>
-                    </Box>
-                  </Paper>
-                );
-              })}
-            </Box>
-          )}
-
-          {resolvedRelationships.length === 0 && !aiResolvingRelationships && (
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              Use AI to discover relationships between selected entities based on page context
+              Create indicators from observables
             </Typography>
-          )}
-        </Box>
-      )}
+          }
+          sx={{ mb: 1.5, ml: 0 }}
+        />
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleCreateContainer}
-          startIcon={<DescriptionOutlined />}
-          fullWidth
-        >
-          Create Container{resolvedRelationships.length > 0 ? ` (${entitiesToAdd.length} entities, ${resolvedRelationships.length} relationships)` : ` with ${entitiesToAdd.length} entities`}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={handleImportWithoutContainer}
-          disabled={submitting}
-          fullWidth
-        >
-          {submitting ? 'Importing...' : 'Import without Container'}
-        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleCreateContainer}
+            startIcon={<DescriptionOutlined />}
+            fullWidth
+            size="small"
+          >
+            Create Container{resolvedRelationships.length > 0 ? ` (${entitiesToAdd.length}+${resolvedRelationships.length})` : ` (${entitiesToAdd.length})`}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleImportWithoutContainer}
+            disabled={submitting}
+            fullWidth
+            size="small"
+          >
+            {submitting ? 'Importing...' : 'Import without Container'}
+          </Button>
+        </Box>
       </Box>
     </Box>
   );

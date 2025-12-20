@@ -49,6 +49,10 @@ import {
   clearRelationshipLines,
 } from './relationship-lines';
 import {
+  updateMinimap,
+  clearMinimap,
+} from './relationship-minimap';
+import {
   sendPanelMessage,
   flushPanelMessageQueue,
   ensurePanelElements,
@@ -57,7 +61,6 @@ import {
   isPanelHidden,
   showPanel,
   showAddPanel,
-  showPreviewPanel,
   showContainerPanel,
   showInvestigationPanel,
   showSearchPanel,
@@ -237,6 +240,7 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
   } else if (event.data?.type === 'XTM_CLEAR_HIGHLIGHTS') {
     clearHighlights();
     clearRelationshipLines();
+    clearMinimap();
     currentScanMode = null;
     lastScanData = null;
     // Notify panel to clear scan results and reset to empty state
@@ -245,18 +249,27 @@ async function handlePanelMessage(event: MessageEvent): Promise<void> {
     // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
     clearHighlights();
     clearRelationshipLines();
+    clearMinimap();
     currentScanMode = null;
     lastScanData = null;
   } else if (event.data?.type === 'XTM_DRAW_RELATIONSHIP_LINES') {
     // Draw relationship lines between highlighted entities
     const relationships = event.data.payload?.relationships || [];
+    const entities = event.data.payload?.entities || [];
+    log.info('[XTM] Received XTM_DRAW_RELATIONSHIP_LINES:', relationships.length, 'relationships,', entities.length, 'entities');
     if (relationships.length > 0) {
+      log.info('[XTM] Drawing relationship lines and updating minimap...');
       drawRelationshipLines(relationships);
+      updateMinimap(entities, relationships);
+      log.info('[XTM] Minimap update complete');
     } else {
+      log.info('[XTM] No relationships to draw, clearing...');
       clearRelationshipLines();
+      clearMinimap();
     }
   } else if (event.data?.type === 'XTM_CLEAR_RELATIONSHIP_LINES') {
     clearRelationshipLines();
+    clearMinimap();
   } else if (event.data?.type === 'XTM_ADD_AI_ENTITIES') {
     // Update lastScanData with AI-discovered entities so they persist when panel re-opens
     const aiEntities = event.data.payload?.entities;
@@ -796,7 +809,7 @@ async function handleFoundEntityClick(
   target: HTMLElement,
   entity: DetectedObservable | DetectedOCTIEntity,
   value: string,
-  isMultiPlatform: boolean
+  _isMultiPlatform: boolean
 ): Promise<void> {
   const rect = target.getBoundingClientRect();
   const clickX = event.clientX;
@@ -1649,10 +1662,6 @@ async function scanPageForInvestigation(platformId?: string): Promise<void> {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   switch (message.type) {
-    case 'PING':
-      sendResponse({ success: true, loaded: true });
-      break;
-      
     case 'SCAN_PAGE':
     case 'AUTO_SCAN_PAGE':
       scanPage().then(() => {
@@ -1683,6 +1692,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'CLEAR_HIGHLIGHTS':
       clearHighlights();
       clearRelationshipLines();
+      clearMinimap();
       selectedForImport.clear();
       currentScanMode = null;
       lastScanData = null;
@@ -1695,6 +1705,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // Clear highlights only - don't send CLEAR_SCAN_RESULTS (user stays on scan results view)
       clearHighlights();
       clearRelationshipLines();
+      clearMinimap();
       selectedForImport.clear();
       currentScanMode = null;
       lastScanData = null;
@@ -1704,10 +1715,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'DRAW_RELATIONSHIP_LINES': {
       // Draw relationship lines between highlighted entities
       const relationships = message.payload?.relationships || [];
+      const entities = message.payload?.entities || [];
       if (relationships.length > 0) {
         drawRelationshipLines(relationships);
+        updateMinimap(entities, relationships);
       } else {
         clearRelationshipLines();
+        clearMinimap();
       }
       sendResponse({ success: true });
       break;
@@ -1715,6 +1729,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     
     case 'CLEAR_RELATIONSHIP_LINES':
       clearRelationshipLines();
+      clearMinimap();
       sendResponse({ success: true });
       break;
       
@@ -1850,24 +1865,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       showContainerPanel();
       sendResponse({ success: true });
       break;
-      
-    case 'PREVIEW_SELECTION': {
-      const entities: Array<DetectedObservable | DetectedOCTIEntity> = [];
-      selectedForImport.forEach(value => {
-        const highlight = document.querySelector(`.xtm-highlight[data-value="${CSS.escape(value)}"]`);
-        if (highlight) {
-          const entityData = (highlight as HTMLElement).dataset.entity;
-          if (entityData) {
-            try {
-              entities.push(JSON.parse(entityData));
-            } catch { /* skip */ }
-          }
-        }
-      });
-      showPreviewPanel(entities);
-      sendResponse({ success: true });
-      break;
-    }
       
     case 'CREATE_INVESTIGATION':
       showInvestigationPanel();

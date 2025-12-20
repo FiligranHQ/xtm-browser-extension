@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AI Relationship Discovery**: New AI-powered relationship discovery directly from scan results with visual relationship lines on pages and PDFs
+- **Relationship Graph Mini-Map**: Interactive graph visualization showing entities and their relationships with force-directed layout
+- **Clear All Button**: Button to clear all highlights, results, and selections while staying on scan results view
+- **New OpenCTI Entity Types**: Added support for Narrative, Channel, System, and Tool entity types
+
+### Changed
+- **AI Buttons Styling**: Redesigned AI buttons with consistent styling and magic sparkle icons
+- **Relationship Display**: Unified relationship display format with entity type icons and proper colors
+
+### Fixed
+- **PDF Viewer**: Fixed iframe panel not closing and AI scanning not working in PDF viewer mode
+- **Relationship Persistence**: Resolved relationships now preserved when navigating back from import screen
+- **Select All Behavior**: Fixed "Select all" sometimes visually selecting non-importable entities
+- **AI JSON Parsing**: Enhanced parsing with more robust strategies for handling truncated AI responses
+- **Threat Actor Types**: Properly distinguish between `Threat-Actor-Group` and `Threat-Actor-Individual`
+
+### Improved
+- Major code refactoring: shared visualization module, message dispatcher service, dead code cleanup
+- Removed unused message types, handlers, and barrel files for cleaner codebase
+
 ## [0.0.12] - 2024-12-20
 
 ### Added

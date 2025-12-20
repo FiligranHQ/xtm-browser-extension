@@ -22,22 +22,33 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import type { PanelMode, PlatformInfo } from '../types/panel-types';
 
-// Available observable types for manual selection - sorted alphabetically by label
-const OBSERVABLE_TYPES = [
-  { value: 'Attack-Pattern', label: 'Attack Pattern (MITRE)' },
+// Available entity types for manual selection - includes both Observables and SDOs
+// Sorted alphabetically by label
+const SELECTABLE_ENTITY_TYPES = [
+  // SDOs (STIX Domain Objects) - Threats
+  { value: 'Attack-Pattern', label: 'Attack Pattern' },
   { value: 'Campaign', label: 'Campaign' },
+  { value: 'Channel', label: 'Channel' },
+  { value: 'Intrusion-Set', label: 'Intrusion Set' },
+  { value: 'Malware', label: 'Malware' },
+  { value: 'Narrative', label: 'Narrative' },
+  { value: 'Threat-Actor-Group', label: 'Threat Actor Group' },
+  { value: 'Threat-Actor-Individual', label: 'Threat Actor Individual' },
+  { value: 'Tool', label: 'Tool' },
+  { value: 'Vulnerability', label: 'Vulnerability' },
+  // SDOs - Identities & Locations
+  { value: 'Country', label: 'Country' },
+  { value: 'Organization', label: 'Organization' },
+  { value: 'Sector', label: 'Sector' },
+  { value: 'System', label: 'System' },
+  // Observables (SCOs - STIX Cyber Observables)
   { value: 'Domain-Name', label: 'Domain Name' },
   { value: 'Email-Addr', label: 'Email Address' },
   { value: 'StixFile', label: 'File Hash' },
   { value: 'Hostname', label: 'Hostname' },
-  { value: 'Intrusion-Set', label: 'Intrusion Set' },
   { value: 'IPv4-Addr', label: 'IPv4 Address' },
   { value: 'IPv6-Addr', label: 'IPv6 Address' },
-  { value: 'Malware', label: 'Malware' },
-  { value: 'Threat-Actor', label: 'Threat Actor' },
-  { value: 'Tool', label: 'Tool' },
   { value: 'Url', label: 'URL' },
-  { value: 'Vulnerability', label: 'Vulnerability (CVE)' },
 ];
 
 export interface AddSelectionViewProps {
@@ -116,9 +127,9 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
       </Paper>
 
       <Autocomplete
-        options={OBSERVABLE_TYPES}
+        options={SELECTABLE_ENTITY_TYPES}
         getOptionLabel={(option) => option.label}
-        value={OBSERVABLE_TYPES.find(t => t.value === addSelectionEntityType) || null}
+        value={SELECTABLE_ENTITY_TYPES.find(t => t.value === addSelectionEntityType) || null}
         onChange={(_, newValue) => setAddSelectionEntityType(newValue?.value || '')}
         renderInput={(params) => (
           <TextField

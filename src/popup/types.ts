@@ -36,21 +36,6 @@ export interface ConnectionStatus {
 export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'complete';
 
 /**
- * Setup wizard state
- */
-export interface SetupWizardState {
-  step: SetupStep;
-  isInWizard: boolean;
-  url: string;
-  token: string;
-  name: string;
-  showToken: boolean;
-  testing: boolean;
-  error: string | null;
-  success: boolean;
-}
-
-/**
  * Props for platform setup form
  */
 export interface PlatformSetupFormProps {
@@ -67,17 +52,6 @@ export interface PlatformSetupFormProps {
   onToggleShowToken: () => void;
   onConnect: () => void;
   onSkip: () => void;
-}
-
-/**
- * Props for platform details in the popover
- */
-export interface PlatformDetailsProps {
-  platforms: PlatformStatus[];
-  logoSuffix: string;
-  platformLabel: string;
-  mode: 'dark' | 'light';
-  onOpenPlatform: (url: string) => void;
 }
 
 /**

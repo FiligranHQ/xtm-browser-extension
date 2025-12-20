@@ -29,61 +29,6 @@ function getClient(platformId?: string) {
 }
 
 /**
- * Fetch attack patterns handler
- */
-export const handleFetchAttackPatterns: MessageHandler = async (payload, sendResponse) => {
-  const { platformId } = (payload || {}) as { platformId?: string };
-  
-  try {
-    const client = getClient(platformId);
-    if (!client) {
-      sendResponse(errorResponse('OpenAEV not configured'));
-      return;
-    }
-    
-    const attackPatterns = await client.getAllAttackPatterns();
-    sendResponse(successResponse(attackPatterns));
-  } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch attack patterns',
-    });
-  }
-};
-
-/**
- * Search attack patterns handler
- */
-export const handleSearchAttackPatterns: MessageHandler = async (payload, sendResponse) => {
-  const { searchTerm, platformId } = payload as {
-    searchTerm: string;
-    platformId?: string;
-  };
-  
-  try {
-    const client = getClient(platformId);
-    if (!client) {
-      sendResponse(errorResponse('OpenAEV not configured'));
-      return;
-    }
-    
-    // Get all attack patterns and filter by search term
-    const allAttackPatterns = await client.getAllAttackPatterns();
-    const searchLower = searchTerm.toLowerCase();
-    const attackPatterns = allAttackPatterns.filter((ap: { attack_pattern_name?: string; attack_pattern_external_id?: string }) => 
-      ap.attack_pattern_name?.toLowerCase().includes(searchLower) ||
-      ap.attack_pattern_external_id?.toLowerCase().includes(searchLower)
-    );
-    sendResponse(successResponse(attackPatterns));
-  } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to search attack patterns',
-    });
-  }
-};
-
-/**
  * Fetch kill chain phases handler
  */
 export const handleFetchKillChainPhases: MessageHandler = async (payload, sendResponse) => {
@@ -832,8 +777,6 @@ export const handleFetchInjectorContractsForAttackPatterns: MessageHandler = asy
  * Export all OpenAEV handlers
  */
 export const openaevHandlers: Record<string, MessageHandler> = {
-  FETCH_ATTACK_PATTERNS: handleFetchAttackPatterns,
-  SEARCH_ATTACK_PATTERNS: handleSearchAttackPatterns,
   FETCH_KILL_CHAIN_PHASES: handleFetchKillChainPhases,
   FETCH_INJECTOR_CONTRACTS: handleFetchInjectorContracts,
   FETCH_OAEV_ASSETS: handleFetchOAEVAssets,

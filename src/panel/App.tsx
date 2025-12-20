@@ -47,6 +47,7 @@ import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
 import type { PlatformConfig } from '../shared/types/settings';
 import { processScanResults } from './handlers/scan-results-handler';
+import { sendMessageToContentScript } from './utils/content-messaging';
 import type {
   PanelMode,
   EntityData,
@@ -379,18 +380,8 @@ const App: React.FC = () => {
     await handleUnifiedSearch(availablePlatforms, queryOverride);
   };
 
-  // Helper to send message to content script
-  const sendToContentScript = async (type: string, payload?: unknown) => {
-    if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { type, payload });
-      }
-    } catch (error) {
-      log.error(`Failed to send ${type} to content script:`, error);
-    }
-  };
+  // Helper to send message to content script - uses shared utility
+  const sendToContentScript = sendMessageToContentScript;
 
   // Helper to check if current tab is a PDF or PDF scanner page
   const checkAndHandlePdfPage = async (): Promise<boolean> => {
@@ -564,18 +555,38 @@ const App: React.FC = () => {
     
     chrome.runtime.onMessage.addListener(handleRuntimeMessage);
     
+    // Track last processed message timestamp to avoid processing stale messages
+    let lastProcessedMessageTime = 0;
+    
     // Check for pending panel state from session storage (split screen mode in Chrome/Edge)
     // This handles the case where context menu was used but panel wasn't ready yet
     const checkPendingState = () => {
-      sessionStorage.get<{ type: string; payload?: unknown }>('pendingPanelState').then((pendingState) => {
+      sessionStorage.get<{ type: string; payload?: unknown; timestamp?: number }>('pendingPanelState').then((pendingState) => {
         if (pendingState) {
-          handlePanelState(pendingState);
+          // Only process if this message is newer than the last one we processed
+          const messageTime = pendingState.timestamp || 0;
+          if (messageTime > lastProcessedMessageTime) {
+            lastProcessedMessageTime = messageTime || Date.now();
+            handlePanelState(pendingState);
+          }
           sessionStorage.remove('pendingPanelState');
         }
       }).catch(() => {
         // Session storage not available
       });
     };
+    
+    // Update handleMessage to use timestamp tracking
+    const originalHandleMessage = handleMessage;
+    const handleMessageWithTimestamp = (event: MessageEvent) => {
+      const { type } = event.data;
+      if (type) {
+        lastProcessedMessageTime = Date.now();
+      }
+      originalHandleMessage(event);
+    };
+    window.removeEventListener('message', handleMessage);
+    window.addEventListener('message', handleMessageWithTimestamp);
     
     // Initial check after a small delay (same as GET_PANEL_STATE)
     setTimeout(() => checkPendingState(), 100);
@@ -624,7 +635,7 @@ const App: React.FC = () => {
     chrome.storage.onChanged.addListener(handleStorageChange);
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('message', handleMessageWithTimestamp);
       chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
       chrome.storage.onChanged.removeListener(handleStorageChange);
       clearInterval(pollInterval);
@@ -704,10 +715,6 @@ const App: React.FC = () => {
         setEntitiesToAdd(data.payload?.entities || []);
         setPanelMode('add');
         break;
-      case 'SHOW_PREVIEW':
-      case 'SHOW_PREVIEW_PANEL':
-        handleShowPreview(data.payload);
-        break;
       case 'SHOW_CREATE_CONTAINER':
       case 'SHOW_CONTAINER_PANEL':
         await handleShowContainer(data.payload);
@@ -715,12 +722,8 @@ const App: React.FC = () => {
       case 'SHOW_INVESTIGATION_PANEL':
         handleShowInvestigation();
         break;
-      case 'SHOW_ATOMIC_TESTING_PANEL':
       case 'ATOMIC_TESTING_SCAN_RESULTS':
         handleShowAtomicTesting(data.payload);
-        break;
-      case 'ATOMIC_TESTING_SELECT':
-        handleAtomicTestingSelect(data.payload);
         break;
       case 'INVESTIGATION_SCAN_RESULTS':
         handleInvestigationResults(data.payload);
@@ -919,17 +922,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Handler: Show Preview
-  const handleShowPreview = (payload: any) => {
-    setEntitiesToAdd(payload?.entities || []);
-    setCurrentPageUrl(payload?.pageUrl || '');
-    setCurrentPageTitle(payload?.pageTitle || '');
-    const previewDescription = payload?.pageDescription || generateDescription(payload?.pageContent || '');
-    const previewContent = payload?.pageHtmlContent || payload?.pageContent || '';
-    setContainerForm({ name: payload?.pageTitle || '', description: previewDescription, content: cleanHtmlContent(previewContent) });
-    setPanelMode('preview');
-  };
-
   // Handler: Show Container
   const handleShowContainer = async (payload: any) => {
     const pageContent = payload?.pageContent || '';
@@ -1017,25 +1009,6 @@ const App: React.FC = () => {
     setAtomicTestingShowList(true);
     setAtomicTestingTypeFilter('all');
     setPanelMode('atomic-testing');
-  };
-
-  // Handler: Atomic Testing Select
-  const handleAtomicTestingSelect = (payload: any) => {
-    setSelectedAtomicTarget(payload);
-    setAtomicTestingTitle(`Atomic Test - ${payload?.name || ''}`);
-    setAtomicTestingShowList(false);
-    setAtomicTestingInjectorContracts([]);
-    setAtomicTestingSelectedContract(null);
-    
-    const entityId = payload?.entityId || payload?.data?.entityId || payload?.data?.attack_pattern_id || payload?.data?.id;
-    if (payload?.type === 'attack-pattern' && entityId && atomicTestingPlatformId) {
-      chrome.runtime.sendMessage({
-        type: 'FETCH_INJECTOR_CONTRACTS',
-        payload: { attackPatternId: entityId, platformId: atomicTestingPlatformId },
-      }).then((res: any) => {
-        if (res?.success) setAtomicTestingInjectorContracts(res.data || []);
-      });
-    }
   };
 
   // Handler: Investigation Results

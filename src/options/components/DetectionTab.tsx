@@ -24,6 +24,7 @@ import type { ExtensionSettings } from '../../shared/types/settings';
 import { type CacheStats, OBSERVABLE_TYPES, OPENCTI_TYPES, OPENAEV_TYPES } from '../constants';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor } from '../../shared/theme/colors';
+import { formatNumber, formatNumberCompact } from '../../shared/utils/formatters';
 
 interface DetectionTabProps {
   settings: ExtensionSettings;
@@ -111,7 +112,7 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: cacheStats?.byPlatform?.length ? 2 : 0 }}>
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {cacheStats ? `${cacheStats.total} entities cached` : 'No cache data'}
+                {cacheStats ? `${formatNumberCompact(cacheStats.total)} entities cached` : 'No cache data'}
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 {isRefreshingCache 
@@ -160,7 +161,7 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       {platform.total === 0 && platform.age === 0
                         ? 'Building cache...' 
-                        : `${platform.total} entities • ${platform.age}m ago`}
+                        : `${formatNumberCompact(platform.total)} entities • ${platform.age}m ago`}
                     </Typography>
                   </Box>
                   {/* Type breakdown - always visible */}
@@ -191,7 +192,7 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
                               </Typography>
                             </Box>
                             <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                              {count}
+                              {formatNumber(count)}
                             </Typography>
                           </Box>
                         ))}
@@ -230,7 +231,7 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       {platform.total === 0 && platform.age === 0
                         ? 'Building cache...' 
-                        : `${platform.total} entities • ${platform.age}m ago`}
+                        : `${formatNumberCompact(platform.total)} entities • ${platform.age}m ago`}
                     </Typography>
                   </Box>
                   {/* Type breakdown - always visible */}
@@ -261,7 +262,7 @@ const DetectionTab: React.FC<DetectionTabProps> = ({
                               </Typography>
                             </Box>
                             <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                              {count}
+                              {formatNumber(count)}
                             </Typography>
                           </Box>
                         ))}

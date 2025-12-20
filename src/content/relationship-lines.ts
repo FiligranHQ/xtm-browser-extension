@@ -5,30 +5,28 @@
  */
 
 import { loggers } from '../shared/utils/logger';
+import {
+  calculateCurveControlPoints,
+  calculateLabelRotation,
+  getPointOnBezier,
+} from '../shared/visualization/graph-layout';
+import { LINE_STYLES, LABEL_STYLES, getLineAnimationCSS } from '../shared/visualization/relationship-styles';
+import type { RelationshipData, Point } from '../shared/visualization/graph-types';
 
 const log = loggers.content;
 
-// Constants for styling
-const LINE_COLOR = '#9c27b0'; // Purple (AI accent color)
-const LINE_WIDTH = 2;
-const LINE_OPACITY = 0.7;
-const LABEL_BG_COLOR = '#9c27b0';
-const LABEL_TEXT_COLOR = '#ffffff';
-const LABEL_FONT_SIZE = 10;
-const LABEL_PADDING = 4;
-const CURVE_OFFSET = 40; // Base curve offset for bezier
-
-interface RelationshipLine {
-  fromValue: string;
-  toValue: string;
-  relationshipType: string;
-  confidence?: 'high' | 'medium' | 'low';
-}
+// ============================================================================
+// State
+// ============================================================================
 
 let svgOverlay: SVGSVGElement | null = null;
-let currentRelationships: RelationshipLine[] = [];
+let currentRelationships: RelationshipData[] = [];
 let resizeObserver: ResizeObserver | null = null;
 let scrollHandler: (() => void) | null = null;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
  * Create or get the SVG overlay element
@@ -56,10 +54,9 @@ function getOrCreateSvgOverlay(): SVGSVGElement {
   `;
   document.body.appendChild(svgOverlay);
 
-  // Add gradient definition for nicer lines
+  // Add arrow marker definition
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   
-  // Arrow marker for line direction
   const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
   marker.setAttribute('id', 'xtm-arrowhead');
   marker.setAttribute('markerWidth', '10');
@@ -71,8 +68,8 @@ function getOrCreateSvgOverlay(): SVGSVGElement {
   
   const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
   arrowPath.setAttribute('points', '0 0, 10 3.5, 0 7');
-  arrowPath.setAttribute('fill', LINE_COLOR);
-  arrowPath.setAttribute('fill-opacity', String(LINE_OPACITY));
+  arrowPath.setAttribute('fill', LINE_STYLES.color);
+  arrowPath.setAttribute('fill-opacity', String(LINE_STYLES.opacity));
   marker.appendChild(arrowPath);
   defs.appendChild(marker);
   
@@ -85,43 +82,98 @@ function getOrCreateSvgOverlay(): SVGSVGElement {
  * Find the best highlight element for an entity value
  */
 function findHighlightElement(value: string): HTMLElement | null {
-  // Try exact match first
-  const highlights = document.querySelectorAll(`.xtm-highlight[data-value="${CSS.escape(value)}"]`);
+  const normalizedValue = value.toLowerCase().trim();
+  const allHighlights = document.querySelectorAll('.xtm-highlight');
+  const candidates: HTMLElement[] = [];
   
-  if (highlights.length === 0) {
-    // Try case-insensitive search
-    const allHighlights = document.querySelectorAll('.xtm-highlight');
-    for (const h of allHighlights) {
-      const hValue = (h as HTMLElement).getAttribute('data-value') || '';
-      if (hValue.toLowerCase() === value.toLowerCase()) {
-        return h as HTMLElement;
+  for (const h of allHighlights) {
+    const el = h as HTMLElement;
+    
+    // Try data-value attribute
+    const dataValue = el.getAttribute('data-value') || '';
+    if (dataValue.toLowerCase() === normalizedValue) {
+      candidates.push(el);
+      continue;
+    }
+    
+    // Try text content
+    const textContent = el.textContent?.toLowerCase().trim() || '';
+    if (textContent === normalizedValue) {
+      candidates.push(el);
+      continue;
+    }
+    
+    // Try data-entity-value attribute
+    const entityValue = el.getAttribute('data-entity-value') || '';
+    if (entityValue.toLowerCase() === normalizedValue) {
+      candidates.push(el);
+      continue;
+    }
+    
+    // Try parsing data-entity JSON
+    const entityJson = el.getAttribute('data-entity');
+    if (entityJson) {
+      try {
+        const entity = JSON.parse(entityJson);
+        const entityName = (entity.name || '').toLowerCase();
+        const entityVal = (entity.value || '').toLowerCase();
+        if (entityName === normalizedValue || entityVal === normalizedValue) {
+          candidates.push(el);
+          continue;
+        }
+        // Check aliases
+        if (entity.aliases && Array.isArray(entity.aliases)) {
+          const aliasMatch = entity.aliases.some((alias: string) => 
+            alias.toLowerCase() === normalizedValue
+          );
+          if (aliasMatch) {
+            candidates.push(el);
+            continue;
+          }
+        }
+      } catch {
+        // JSON parse error, skip
       }
     }
+    
+    // Partial match as fallback
+    if (normalizedValue.length >= 3 && (
+      dataValue.toLowerCase().includes(normalizedValue) ||
+      normalizedValue.includes(dataValue.toLowerCase()) ||
+      textContent.includes(normalizedValue) ||
+      normalizedValue.includes(textContent)
+    )) {
+      candidates.push(el);
+    }
+  }
+  
+  if (candidates.length === 0) {
+    log.debug(`No highlight found for: ${value}`);
     return null;
   }
   
-  // If multiple, find the most visible one
+  // Find the most visible candidate
   let bestHighlight: HTMLElement | null = null;
   let bestScore = -1;
   
-  highlights.forEach(h => {
+  for (const h of candidates) {
     const rect = h.getBoundingClientRect();
     const inViewport = rect.top >= 0 && rect.top <= window.innerHeight;
-    const score = inViewport ? rect.width * rect.height : 0;
+    const score = inViewport ? rect.width * rect.height + 1000 : rect.width * rect.height;
     
     if (score > bestScore) {
       bestScore = score;
-      bestHighlight = h as HTMLElement;
+      bestHighlight = h;
     }
-  });
+  }
   
-  return bestHighlight || (highlights[0] as HTMLElement);
+  return bestHighlight || candidates[0];
 }
 
 /**
  * Get the center point of an element
  */
-function getElementCenter(el: HTMLElement): { x: number; y: number } {
+function getElementCenter(el: HTMLElement): Point {
   const rect = el.getBoundingClientRect();
   return {
     x: rect.left + rect.width / 2,
@@ -129,66 +181,9 @@ function getElementCenter(el: HTMLElement): { x: number; y: number } {
   };
 }
 
-/**
- * Calculate control points for a smooth bezier curve
- */
-function calculateCurveControlPoints(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-  index: number
-): { cp1: { x: number; y: number }; cp2: { x: number; y: number } } {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  // Perpendicular direction for curve offset
-  const perpX = -dy / distance;
-  const perpY = dx / distance;
-  
-  // Vary curve based on index and distance
-  const curveMultiplier = Math.min(distance * 0.3, CURVE_OFFSET);
-  const offset = curveMultiplier * (1 + (index % 3) * 0.3); // Alternate curve directions
-  const sign = index % 2 === 0 ? 1 : -1;
-  
-  // For close elements, use more curve; for far elements, use less
-  const midX = (start.x + end.x) / 2;
-  const midY = (start.y + end.y) / 2;
-  
-  // Control points offset perpendicular to the line
-  const cp1 = {
-    x: midX + perpX * offset * sign,
-    y: midY + perpY * offset * sign,
-  };
-  
-  const cp2 = {
-    x: midX + perpX * offset * sign,
-    y: midY + perpY * offset * sign,
-  };
-  
-  return { cp1, cp2 };
-}
-
-/**
- * Calculate the angle of the line at the midpoint for label rotation
- */
-function calculateLabelRotation(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-  cp: { x: number; y: number }
-): number {
-  // At midpoint of bezier, calculate tangent angle
-  // For quadratic bezier: B'(0.5) = 2*(1-0.5)*(cp-start) + 2*0.5*(end-cp)
-  const tangentX = (end.x - start.x);
-  const tangentY = (end.y - start.y);
-  
-  let angle = Math.atan2(tangentY, tangentX) * (180 / Math.PI);
-  
-  // Keep text readable (not upside down)
-  if (angle > 90) angle -= 180;
-  if (angle < -90) angle += 180;
-  
-  return angle;
-}
+// ============================================================================
+// Drawing Functions
+// ============================================================================
 
 /**
  * Draw a single relationship line
@@ -197,17 +192,16 @@ function drawRelationshipLine(
   svg: SVGSVGElement,
   fromEl: HTMLElement,
   toEl: HTMLElement,
-  relationship: RelationshipLine,
+  relationship: RelationshipData,
   index: number
 ): void {
   const start = getElementCenter(fromEl);
   const end = getElementCenter(toEl);
   
-  // Calculate offset for line endpoints to not overlap highlights
+  // Calculate offset for line endpoints
   const fromRect = fromEl.getBoundingClientRect();
   const toRect = toEl.getBoundingClientRect();
   
-  // Adjust start and end to be at the edge of highlights
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
@@ -217,24 +211,19 @@ function drawRelationshipLine(
   const unitX = dx / distance;
   const unitY = dy / distance;
   
-  // Move start point to edge of fromEl
-  const startOffsetX = (fromRect.width / 2) * unitX;
-  const startOffsetY = (fromRect.height / 2) * unitY;
-  const adjustedStart = {
-    x: start.x + startOffsetX * 0.8,
-    y: start.y + startOffsetY * 0.8,
+  // Move start and end to edges of highlights
+  const adjustedStart: Point = {
+    x: start.x + (fromRect.width / 2) * unitX * 0.8,
+    y: start.y + (fromRect.height / 2) * unitY * 0.8,
   };
   
-  // Move end point to edge of toEl
-  const endOffsetX = (toRect.width / 2) * unitX;
-  const endOffsetY = (toRect.height / 2) * unitY;
-  const adjustedEnd = {
-    x: end.x - endOffsetX * 0.8,
-    y: end.y - endOffsetY * 0.8,
+  const adjustedEnd: Point = {
+    x: end.x - (toRect.width / 2) * unitX * 0.8,
+    y: end.y - (toRect.height / 2) * unitY * 0.8,
   };
   
   // Calculate curve control points
-  const { cp1 } = calculateCurveControlPoints(adjustedStart, adjustedEnd, index);
+  const { cp1 } = calculateCurveControlPoints(adjustedStart, adjustedEnd, index, LINE_STYLES.curveOffset);
   
   // Create group for this relationship
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -242,18 +231,18 @@ function drawRelationshipLine(
   group.setAttribute('data-from', relationship.fromValue);
   group.setAttribute('data-to', relationship.toValue);
   
-  // Draw the curved line using quadratic bezier
+  // Draw the curved line
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   const d = `M ${adjustedStart.x} ${adjustedStart.y} Q ${cp1.x} ${cp1.y} ${adjustedEnd.x} ${adjustedEnd.y}`;
   path.setAttribute('d', d);
   path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', LINE_COLOR);
-  path.setAttribute('stroke-width', String(LINE_WIDTH));
-  path.setAttribute('stroke-opacity', String(LINE_OPACITY));
+  path.setAttribute('stroke', LINE_STYLES.color);
+  path.setAttribute('stroke-width', String(LINE_STYLES.width));
+  path.setAttribute('stroke-opacity', String(LINE_STYLES.opacity));
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('marker-end', 'url(#xtm-arrowhead)');
   
-  // Add subtle animation
+  // Add animation
   path.style.cssText = `
     stroke-dasharray: 1000;
     stroke-dashoffset: 1000;
@@ -263,35 +252,28 @@ function drawRelationshipLine(
   
   group.appendChild(path);
   
-  // Calculate midpoint on the curve for label placement
-  // For quadratic bezier: B(0.5) = (1-0.5)²*start + 2*(1-0.5)*0.5*cp + 0.5²*end
-  const t = 0.5;
-  const midX = Math.pow(1 - t, 2) * adjustedStart.x + 2 * (1 - t) * t * cp1.x + Math.pow(t, 2) * adjustedEnd.x;
-  const midY = Math.pow(1 - t, 2) * adjustedStart.y + 2 * (1 - t) * t * cp1.y + Math.pow(t, 2) * adjustedEnd.y;
+  // Calculate midpoint on curve for label
+  const mid = getPointOnBezier(adjustedStart, cp1, adjustedEnd, 0.5);
+  const rotation = calculateLabelRotation(adjustedStart, adjustedEnd);
   
-  // Calculate rotation angle for the label
-  const rotation = calculateLabelRotation(adjustedStart, adjustedEnd, cp1);
-  
-  // Create label background
+  // Create label
   const labelText = relationship.relationshipType;
-  const textWidth = labelText.length * (LABEL_FONT_SIZE * 0.6) + LABEL_PADDING * 2;
-  const textHeight = LABEL_FONT_SIZE + LABEL_PADDING * 2;
+  const textWidth = labelText.length * (LABEL_STYLES.fontSize * 0.6) + LABEL_STYLES.padding * 2;
+  const textHeight = LABEL_STYLES.fontSize + LABEL_STYLES.padding * 2;
   
   const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  labelGroup.setAttribute('transform', `translate(${midX}, ${midY}) rotate(${rotation})`);
+  labelGroup.setAttribute('transform', `translate(${mid.x}, ${mid.y}) rotate(${rotation})`);
   
-  // Label background rectangle
+  // Label background
   const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   labelBg.setAttribute('x', String(-textWidth / 2));
   labelBg.setAttribute('y', String(-textHeight / 2));
   labelBg.setAttribute('width', String(textWidth));
   labelBg.setAttribute('height', String(textHeight));
-  labelBg.setAttribute('rx', '3');
-  labelBg.setAttribute('ry', '3');
-  labelBg.setAttribute('fill', LABEL_BG_COLOR);
+  labelBg.setAttribute('rx', String(LABEL_STYLES.borderRadius));
+  labelBg.setAttribute('ry', String(LABEL_STYLES.borderRadius));
+  labelBg.setAttribute('fill', LABEL_STYLES.backgroundColor);
   labelBg.setAttribute('fill-opacity', '0.9');
-  
-  // Add subtle shadow
   labelBg.style.filter = 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))';
   
   labelGroup.appendChild(labelBg);
@@ -302,8 +284,8 @@ function drawRelationshipLine(
   text.setAttribute('y', '0');
   text.setAttribute('text-anchor', 'middle');
   text.setAttribute('dominant-baseline', 'central');
-  text.setAttribute('fill', LABEL_TEXT_COLOR);
-  text.setAttribute('font-size', String(LABEL_FONT_SIZE));
+  text.setAttribute('fill', LABEL_STYLES.textColor);
+  text.setAttribute('font-size', String(LABEL_STYLES.fontSize));
   text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
   text.setAttribute('font-weight', '500');
   text.textContent = labelText;
@@ -331,22 +313,7 @@ function ensureAnimationStyles(): void {
   const style = document.createElement('style');
   style.id = styleId;
   style.textContent = `
-    @keyframes xtm-draw-line {
-      to {
-        stroke-dashoffset: 0;
-      }
-    }
-    
-    @keyframes xtm-fade-in {
-      from {
-        opacity: 0;
-        transform: scale(0.8);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
+    ${getLineAnimationCSS('xtm')}
     
     .xtm-relationship-line {
       transition: opacity 0.2s ease-out;
@@ -384,7 +351,6 @@ function updateLines(): void {
  * Setup scroll and resize handlers
  */
 function setupEventHandlers(): void {
-  // Remove existing handlers
   cleanupEventHandlers();
   
   // Throttled update function
@@ -402,7 +368,7 @@ function setupEventHandlers(): void {
   window.addEventListener('scroll', scrollHandler, { passive: true });
   document.addEventListener('scroll', scrollHandler, { passive: true, capture: true });
   
-  // Resize observer for container changes
+  // Resize observer
   resizeObserver = new ResizeObserver(throttledUpdate);
   resizeObserver.observe(document.body);
 }
@@ -423,11 +389,15 @@ function cleanupEventHandlers(): void {
   }
 }
 
+// ============================================================================
+// Public API
+// ============================================================================
+
 /**
  * Draw relationship lines on the page
  */
-export function drawRelationshipLines(relationships: RelationshipLine[]): void {
-  log.debug('Drawing relationship lines:', relationships.length);
+export function drawRelationshipLines(relationships: RelationshipData[]): void {
+  log.info('[RelationshipLines] Drawing relationship lines:', relationships.length);
   
   if (!relationships || relationships.length === 0) {
     clearRelationshipLines();
@@ -443,6 +413,13 @@ export function drawRelationshipLines(relationships: RelationshipLine[]): void {
   const existingLines = svg.querySelectorAll('.xtm-relationship-line');
   existingLines.forEach(line => line.remove());
   
+  // Log available highlights for debugging
+  const allHighlights = document.querySelectorAll('.xtm-highlight');
+  log.info(`[RelationshipLines] Found ${allHighlights.length} highlights on page`);
+  
+  let drawnCount = 0;
+  let failedCount = 0;
+  
   // Draw each relationship
   relationships.forEach((rel, index) => {
     const fromEl = findHighlightElement(rel.fromValue);
@@ -450,10 +427,14 @@ export function drawRelationshipLines(relationships: RelationshipLine[]): void {
     
     if (fromEl && toEl) {
       drawRelationshipLine(svg, fromEl, toEl, rel, index);
+      drawnCount++;
     } else {
-      log.debug(`Could not find highlights for relationship: ${rel.fromValue} -> ${rel.toValue}`);
+      failedCount++;
+      log.warn(`[RelationshipLines] Could not find highlights for: "${rel.fromValue}" -> "${rel.toValue}"`);
     }
   });
+  
+  log.info(`[RelationshipLines] Drew ${drawnCount} lines, failed ${failedCount}`);
   
   setupEventHandlers();
 }
@@ -482,4 +463,3 @@ export function clearRelationshipLines(): void {
 export function hasRelationshipLines(): boolean {
   return currentRelationships.length > 0;
 }
-

@@ -95,25 +95,6 @@ export const handleInjectAllTabs: MessageHandler = async (_payload, sendResponse
 };
 
 /**
- * Show panel handlers - forward to content script
- */
-export const handleShowPanel: MessageHandler = async (payload, sendResponse) => {
-  const { tabId } = payload as { tabId?: number };
-  
-  if (!tabId) {
-    sendResponse(errorResponse('No tabId provided'));
-    return;
-  }
-  
-  try {
-    await chrome.tabs.sendMessage(tabId, { type: 'SHOW_PANEL', payload });
-    sendResponse(successResponse({ shown: true }));
-  } catch (error) {
-    sendResponse(errorResponse('Failed to show panel'));
-  }
-};
-
-/**
  * Get panel state
  */
 export const handleGetPanelState: MessageHandler = async (_payload, sendResponse) => {
@@ -224,11 +205,6 @@ export const handleFetchImageAsDataURL: MessageHandler = async (payload, sendRes
 export const miscHandlers: Record<string, MessageHandler> = {
   INJECT_CONTENT_SCRIPT: handleInjectContentScript,
   INJECT_ALL_TABS: handleInjectAllTabs,
-  SHOW_CONTAINER_PANEL: handleShowPanel,
-  SHOW_SEARCH_PANEL: handleShowPanel,
-  SHOW_ENTITY_PANEL: handleShowPanel,
-  SHOW_INVESTIGATION_PANEL: handleShowPanel,
-  SHOW_BULK_IMPORT_PANEL: handleShowPanel,
   GET_PANEL_STATE: handleGetPanelState,
   GENERATE_NATIVE_PDF: handleGenerateNativePDF,
   FETCH_IMAGE_AS_DATA_URL: handleFetchImageAsDataURL,

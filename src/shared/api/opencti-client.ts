@@ -26,7 +26,8 @@ import {
   CREATE_INDIVIDUAL_MUTATION,
   buildCreateObservableMutation,
   CREATE_INTRUSION_SET_MUTATION,
-  CREATE_THREAT_ACTOR_MUTATION,
+  CREATE_THREAT_ACTOR_GROUP_MUTATION,
+  CREATE_THREAT_ACTOR_INDIVIDUAL_MUTATION,
   CREATE_MALWARE_MUTATION,
   CREATE_TOOL_MUTATION,
   CREATE_CAMPAIGN_MUTATION,
@@ -34,6 +35,9 @@ import {
   CREATE_ATTACK_PATTERN_MUTATION,
   CREATE_COUNTRY_MUTATION,
   CREATE_SECTOR_MUTATION,
+  CREATE_NARRATIVE_MUTATION,
+  CREATE_CHANNEL_MUTATION,
+  CREATE_SYSTEM_MUTATION,
   CREATE_EXTERNAL_REFERENCE_MUTATION,
   ADD_EXTERNAL_REFERENCE_TO_ENTITY_MUTATION,
   FIND_EXTERNAL_REFERENCES_QUERY,
@@ -480,11 +484,18 @@ export class OpenCTIClient {
     return data.intrusionSetAdd;
   }
 
-  async createThreatActor(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_MUTATION, {
+  async createThreatActorGroup(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
+    const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_GROUP_MUTATION, {
       input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
     });
     return data.threatActorGroupAdd;
+  }
+
+  async createThreatActorIndividual(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
+    const data = await this.query<{ threatActorIndividualAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_INDIVIDUAL_MUTATION, {
+      input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
+    });
+    return data.threatActorIndividualAdd;
   }
 
   async createMalware(input: { name: string; description?: string; malware_types?: string[]; is_family?: boolean; objectMarking?: string[]; objectLabel?: string[] }) {
@@ -524,6 +535,21 @@ export class OpenCTIClient {
     return data.sectorAdd;
   }
 
+  async createNarrative(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
+    const data = await this.query<{ narrativeAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_NARRATIVE_MUTATION, { input });
+    return data.narrativeAdd;
+  }
+
+  async createChannel(input: { name: string; description?: string; channel_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
+    const data = await this.query<{ channelAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CHANNEL_MUTATION, { input });
+    return data.channelAdd;
+  }
+
+  async createSystem(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
+    const data = await this.query<{ systemAdd: { id: string; standard_id: string; entity_type: string; name: string; x_opencti_aliases?: string[] } }>(CREATE_SYSTEM_MUTATION, { input });
+    return data.systemAdd;
+  }
+
   async createEntity(input: {
     type: string;
     value?: string;
@@ -535,11 +561,10 @@ export class OpenCTIClient {
     const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
     const entityName = input.name || input.value || 'Unknown';
 
-    const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_mitre_id?: string }>> = {
+    const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_opencti_aliases?: string[]; x_mitre_id?: string }>> = {
       'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'threat-actor': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'threat-actor-group': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'threat-actor-individual': () => this.createThreatActor({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'threat-actor-group': () => this.createThreatActorGroup({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'threat-actor-individual': () => this.createThreatActorIndividual({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'malware': () => this.createMalware({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'tool': () => this.createTool({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'campaign': () => this.createCampaign({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
@@ -547,6 +572,9 @@ export class OpenCTIClient {
       'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'country': () => this.createCountry({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'narrative': () => this.createNarrative({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'channel': () => this.createChannel({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'system': () => this.createSystem({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
     };
 
     if (sdoTypes[normalizedType]) {

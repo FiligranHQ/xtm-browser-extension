@@ -591,10 +591,13 @@ THREAT ENTITIES:
 - Tool: Hacking/security tools (e.g., Mimikatz, Metasploit)
 - Attack-Pattern: MITRE ATT&CK techniques (e.g., T1055, T1566)
 - Vulnerability: CVE identifiers (e.g., CVE-2024-1234)
+- Narrative: Named disinformation/misinformation narratives
+- Channel: Communication channels used for malicious purposes (e.g., Telegram groups, Discord servers, forums)
 
 CONTEXT ENTITIES (IMPORTANT - don't skip these):
 - Sector: Industries mentioned (e.g., Financial Services, Healthcare, Energy, Government, Defense, Manufacturing)
 - Organization: Companies, agencies (e.g., Microsoft, CISA, specific victim organizations)
+- System: IT systems, platforms, security platforms when targeted or relevant
 - Country: Countries (e.g., Russia, China, United States, Iran, North Korea)
 - Region: Geographic regions (e.g., Eastern Europe, Middle East, Asia-Pacific)
 - City: Cities mentioned

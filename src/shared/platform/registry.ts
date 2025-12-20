@@ -651,3 +651,22 @@ export function getPlatformUrlPlaceholder(platformType: PlatformType): string {
   const name = PLATFORM_REGISTRY[platformType].name.toLowerCase();
   return `https://${name}.example.com`;
 }
+
+/**
+ * Format an entity type for display, replacing platform prefixes with readable names.
+ * e.g., "oaev-Asset" -> "OpenAEV Asset", "Attack-Pattern" -> "Attack Pattern"
+ */
+export function formatEntityTypeForDisplay(entityType: string): string {
+  // Parse the type to extract platform and clean type
+  const parsed = parsePrefixedType(entityType);
+  
+  if (parsed) {
+    // Type has a platform prefix (e.g., oaev-Asset)
+    const formattedType = parsed.entityType.replace(/-/g, ' ');
+    const platformName = PLATFORM_REGISTRY[parsed.platformType].name;
+    return `${platformName} ${formattedType}`;
+  }
+  
+  // Type has no prefix (OpenCTI types) - just format it
+  return entityType.replace(/-/g, ' ');
+}

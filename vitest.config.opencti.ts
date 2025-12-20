@@ -11,9 +11,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
       include: [
-        'src/shared/api/opencti-client.ts',
-        'src/shared/detection/**/*.ts',
-        'src/shared/utils/storage.ts',
+        'src/shared/**/*.ts',
+        'src/background/**/*.ts',
+      ],
+      exclude: [
+        'src/**/*.tsx',
+        'src/**/*.d.ts',
+        'node_modules/**',
       ],
     },
     // Longer timeout for integration tests with real OpenCTI instance

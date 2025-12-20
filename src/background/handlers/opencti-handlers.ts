@@ -27,8 +27,8 @@ import {
   fetchFromAllPlatforms,
   searchAcrossPlatforms,
   handleError,
-  isObservableType,
 } from './platform-utils';
+import { isObservableType } from '../../shared/utils/entity';
 
 const log = loggers.background;
 

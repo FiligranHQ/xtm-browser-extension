@@ -18,7 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created `searchAcrossPlatforms` utility in `platform-utils.ts` for parallel platform search with timeout
   - Removed duplicate platform navigation handlers (~50 lines per entity view)
   - Removed duplicate AI entity payload creation code (4 instances consolidated)
+  - **Highlight Utilities**: Refactored `findMatchPositions` to delegate to `findMatchPositionsWithBoundaries`, eliminating ~40 lines of duplicate matching logic
+  - **Highlighting Module**: `highlighting.ts` now uses shared utilities from `utils/highlight.ts` via `applyHighlightsWithConfig`, removing duplicate `createHighlightElement` and `applyHighlightsInReverse` implementations
+  - **Side Panel Helpers**: Created `tryOpenSidePanel` and `getSidePanelTarget` helpers in `misc-handlers.ts`, reducing ~100 lines of duplicated side panel opening logic
+  - **Toast Icons**: Created `createSvgElement`, `createCircle`, and `createLine` helpers for toast notification SVG icons
+  - **Content Extractor**: Standardized image extraction using `extractUniqueImage` helper across all extraction methods
+  - **Test Helpers**: Created `testPagination` helper in OpenAEV integration tests, consolidating 5 pagination test blocks
+- **Multi-Platform Abstraction**: Improved platform registry for future scalability:
+  - Added `formatEntityTypeForDisplay()` for consistent entity type formatting across all platforms
+  - Added `getDefaultPlatformName()`, `getPlatformUrlPlaceholder()`, `getPlatformSettingsKey()` helpers
+  - Replaced all hardcoded platform ternaries (e.g., `type === 'opencti' ? 'OpenCTI' : 'OpenAEV'`) with registry lookups
+  - Updated `PlatformCard`, options/App, EntityTooltip, entity views to use platform-agnostic helpers
+  - Extension now properly supports 3+ platforms without code changes (just registry additions)
 - **Dead Code Cleanup**: Removed unused `side-panel-helpers.ts` file and empty `background/utils/` directory
+
+### Fixed
+- **Platform Type Consistency**: Detection engine now explicitly sets `platformType` on all enriched entities (observables, OpenCTI entities, CVEs, OpenAEV entities), eliminating reliance on fallback defaults throughout the codebase
 
 ## [0.0.12] - 2025-12-20
 

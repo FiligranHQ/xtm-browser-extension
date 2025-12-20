@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
+import { formatEntityTypeForDisplay } from '../../shared/platform/registry';
 import type { PlatformInfo, InvestigationEntity } from '../types/panel-types';
 import { useTheme } from '@mui/material/styles';
 
@@ -283,7 +284,7 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
                   {investigationEntityTypes.map(type => (
                     <MenuItem key={type} value={type}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
+                        <span>{formatEntityTypeForDisplay(type)}</span>
                         <Chip label={investigationEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                       </Box>
                     </MenuItem>

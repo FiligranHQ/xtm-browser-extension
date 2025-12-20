@@ -46,6 +46,31 @@ export interface HighlightEventHandlers {
 }
 
 /**
+ * Attach event handlers to a highlight element
+ * Centralized helper to avoid code duplication
+ */
+export function attachHighlightEventHandlers(
+  element: HTMLElement,
+  handlers: HighlightEventHandlers
+): void {
+  const eventMap: Array<[keyof HighlightEventHandlers, string]> = [
+    ['onHover', 'mouseenter'],
+    ['onLeave', 'mouseleave'],
+    ['onClick', 'click'],
+    ['onMouseDown', 'mousedown'],
+    ['onMouseUp', 'mouseup'],
+    ['onRightClick', 'contextmenu'],
+  ];
+  
+  for (const [handlerKey, eventName] of eventMap) {
+    const handler = handlers[handlerKey];
+    if (handler) {
+      element.addEventListener(eventName, handler as EventListener, { capture: true });
+    }
+  }
+}
+
+/**
  * Node map entry for text node tracking
  */
 export interface NodeMapEntry {
@@ -95,13 +120,7 @@ export function createHighlightElement(options: CreateHighlightOptions): HTMLSpa
   
   // Add event handlers
   if (options.handlers) {
-    const h = options.handlers;
-    if (h.onHover) highlight.addEventListener('mouseenter', h.onHover, { capture: true });
-    if (h.onLeave) highlight.addEventListener('mouseleave', h.onLeave, { capture: true });
-    if (h.onClick) highlight.addEventListener('click', h.onClick, { capture: true });
-    if (h.onMouseDown) highlight.addEventListener('mousedown', h.onMouseDown, { capture: true });
-    if (h.onMouseUp) highlight.addEventListener('mouseup', h.onMouseUp, { capture: true });
-    if (h.onRightClick) highlight.addEventListener('contextmenu', h.onRightClick, { capture: true });
+    attachHighlightEventHandlers(highlight, options.handlers);
   }
   
   return highlight;
@@ -135,6 +154,39 @@ export function findMatchPositions(
 }
 
 /**
+ * Validate a match position and create a range for highlighting
+ * Returns null if the match is invalid or should be skipped
+ */
+function validateMatchAndCreateRange(
+  node: Text,
+  localStart: number,
+  localEnd: number
+): Range | null {
+  // Verify node is still valid and not already highlighted
+  if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
+    return null;
+  }
+  
+  const currentNodeText = node.textContent || '';
+  if (localEnd > currentNodeText.length) {
+    return null;
+  }
+  
+  // Ensure styles are injected if this node is in a Shadow DOM
+  ensureStylesInShadowRoot(node);
+  
+  const range = document.createRange();
+  range.setStart(node, localStart);
+  range.setEnd(node, localEnd);
+  
+  if (range.toString().trim().length === 0) {
+    return null;
+  }
+  
+  return range;
+}
+
+/**
  * Apply highlights in reverse order to avoid DOM position invalidation
  */
 export function applyHighlightsInReverse(
@@ -146,26 +198,8 @@ export function applyHighlightsInReverse(
     const { node, localStart, localEnd } = matches[i];
     
     try {
-      // Verify node is still valid and not already highlighted
-      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
-        continue;
-      }
-      
-      const currentNodeText = node.textContent || '';
-      if (localEnd > currentNodeText.length) {
-        continue;
-      }
-      
-      // Ensure styles are injected if this node is in a Shadow DOM
-      ensureStylesInShadowRoot(node);
-      
-      const range = document.createRange();
-      range.setStart(node, localStart);
-      range.setEnd(node, localEnd);
-      
-      if (range.toString().trim().length === 0) {
-        continue;
-      }
+      const range = validateMatchAndCreateRange(node, localStart, localEnd);
+      if (!range) continue;
       
       const highlight = createHighlight(node, localStart, localEnd);
       if (highlight) {
@@ -235,26 +269,8 @@ export function applyHighlightsWithConfig<T extends ExtendedMatchInfo>(
     const { node, localStart, localEnd } = match;
     
     try {
-      // Verify node is still valid and not already highlighted
-      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) {
-        continue;
-      }
-      
-      const currentNodeText = node.textContent || '';
-      if (localEnd > currentNodeText.length) {
-        continue;
-      }
-      
-      // Ensure styles are injected if this node is in a Shadow DOM
-      ensureStylesInShadowRoot(node);
-      
-      const range = document.createRange();
-      range.setStart(node, localStart);
-      range.setEnd(node, localEnd);
-      
-      if (range.toString().trim().length === 0) {
-        continue;
-      }
+      const range = validateMatchAndCreateRange(node, localStart, localEnd);
+      if (!range) continue;
       
       const config = createConfig(match);
       if (!config) continue;
@@ -270,13 +286,7 @@ export function applyHighlightsWithConfig<T extends ExtendedMatchInfo>(
       
       // Add event handlers
       if (config.handlers) {
-        const h = config.handlers;
-        if (h.onHover) highlight.addEventListener('mouseenter', h.onHover, { capture: true });
-        if (h.onLeave) highlight.addEventListener('mouseleave', h.onLeave, { capture: true });
-        if (h.onClick) highlight.addEventListener('click', h.onClick, { capture: true });
-        if (h.onMouseDown) highlight.addEventListener('mousedown', h.onMouseDown, { capture: true });
-        if (h.onMouseUp) highlight.addEventListener('mouseup', h.onMouseUp, { capture: true });
-        if (h.onRightClick) highlight.addEventListener('contextmenu', h.onRightClick, { capture: true });
+        attachHighlightEventHandlers(highlight, config.handlers);
       }
       
       range.surroundContents(highlight);

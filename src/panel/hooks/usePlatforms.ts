@@ -117,6 +117,43 @@ export function usePlatforms() {
     return availablePlatforms.find(p => p.id === selectedPlatformId);
   }, [availablePlatforms, selectedPlatformId]);
   
+  /**
+   * Helper to navigate to platform selection or auto-select based on platform count
+   * Returns the mode to navigate to and whether a platform was auto-selected
+   */
+  const navigateToPlatformOrMode = useCallback((
+    platforms: PlatformInfo[],
+    targetMode: 'container-type' | 'import' | string,
+    setPanelMode: (mode: string) => void
+  ): { autoSelected: boolean; platformId?: string } => {
+    if (platforms.length > 1) {
+      setPanelMode('platform-select');
+      return { autoSelected: false };
+    } else if (platforms.length === 1) {
+      setSelectedPlatformId(platforms[0].id);
+      setPlatformUrl(platforms[0].url);
+      setPanelMode(targetMode);
+      return { autoSelected: true, platformId: platforms[0].id };
+    } else {
+      // No platforms configured
+      setPanelMode(targetMode);
+      return { autoSelected: false };
+    }
+  }, [setSelectedPlatformId, setPlatformUrl]);
+  
+  /**
+   * Auto-select single platform if available, without changing mode
+   * Returns true if a platform was auto-selected
+   */
+  const autoSelectSinglePlatform = useCallback((platforms: PlatformInfo[]): boolean => {
+    if (platforms.length === 1) {
+      setSelectedPlatformId(platforms[0].id);
+      setPlatformUrl(platforms[0].url);
+      return true;
+    }
+    return false;
+  }, [setSelectedPlatformId, setPlatformUrl]);
+  
   return {
     availablePlatforms,
     setAvailablePlatforms,
@@ -131,6 +168,8 @@ export function usePlatforms() {
     loadPlatforms,
     selectPlatform,
     getPlatform,
+    navigateToPlatformOrMode,
+    autoSelectSinglePlatform,
   };
 }
 

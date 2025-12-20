@@ -282,7 +282,7 @@ export class DetectionEngine {
    */
   async enrichObservables(observables: DetectedObservable[]): Promise<DetectedObservable[]> {
     const searchPromises = observables.map(async (obs) => {
-      const platformMatches: Array<{ platformId: string; entityId: string; entityData: OCTIStixCyberObservable }> = [];
+      const platformMatches: Array<{ platformId: string; platformType: 'opencti'; entityId: string; entityData: OCTIStixCyberObservable }> = [];
       const searchValue = obs.refangedValue || obs.value;
       
       for (const [platformId, client] of this.clients) {
@@ -296,7 +296,7 @@ export class DetectionEngine {
           }
 
           if (result) {
-            platformMatches.push({ platformId, entityId: result.id, entityData: result });
+            platformMatches.push({ platformId, platformType: 'opencti', entityId: result.id, entityData: result });
           }
         } catch {
           // Continue to next platform
@@ -311,6 +311,7 @@ export class DetectionEngine {
           entityId: firstMatch.entityId,
           entityData: firstMatch.entityData,
           platformId: firstMatch.platformId,
+          platformType: firstMatch.platformType,
           platformMatches: platformMatches.length > 1 ? platformMatches : undefined,
         };
       }
@@ -361,8 +362,10 @@ export class DetectionEngine {
           entityId: firstMatch.entity.id,
           entityData: firstMatch.entity,
           platformId: firstMatch.platformId,
+          platformType: 'opencti' as const,
           platformMatches: matches.length > 1 ? matches.map(m => ({
             platformId: m.platformId,
+            platformType: 'opencti' as const,
             entityId: m.entity.id,
             entityData: m.entity,
           })) : undefined,
@@ -558,6 +561,7 @@ export class DetectionEngine {
           entityId: firstMatch.entityId,
           entityData: firstMatch.entityData as unknown as OCTIStixDomainObject,
           platformId: firstMatch.platformId,
+          platformType: firstMatch.platformType,
           platformMatches: this.enrichmentMatchesToPlatformMatches(matches),
         };
       }
@@ -607,6 +611,7 @@ export class DetectionEngine {
           entityId: firstMatch.entityId,
           entityData: firstMatch.entityData as unknown as OCTIStixCyberObservable,
           platformId: firstMatch.platformId,
+          platformType: firstMatch.platformType,
           platformMatches: this.enrichmentMatchesToPlatformMatches(matches),
         };
       }
@@ -703,6 +708,7 @@ export class DetectionEngine {
         found: true,
         entityId: entity.id,
         platformId: entity.platformId,
+        platformType: 'opencti' as const,
         entityData: {
           id: entity.id,
           entity_type: entity.type,

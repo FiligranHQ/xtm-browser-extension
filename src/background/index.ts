@@ -143,6 +143,88 @@ function getOpenAEVClient(platformId?: string): OpenAEVClient | undefined {
 }
 
 /**
+ * Platform stats entry for cache statistics
+ */
+interface PlatformStatsEntry {
+  platformId: string;
+  platformName: string;
+  total: number;
+  timestamp: number;
+  age: number;
+  byType: Record<string, number>;
+}
+
+/**
+ * Accumulator for tracking cache totals across platforms
+ */
+interface CacheStatsAccumulator {
+  grandTotal: number;
+  oldestTimestamp: number;
+}
+
+/**
+ * Calculate platform cache stats from a multi-platform cache
+ * Extracts common logic used for both OpenCTI and OpenAEV cache stats
+ */
+function calculatePlatformCacheStats(
+  platformsCache: Record<string, { entities: Record<string, unknown[]>; timestamp: number }>,
+  platformNameMap: Map<string, string>,
+  configuredPlatforms: Array<{ id: string; name: string; url?: string; apiToken?: string }>,
+  accumulator: CacheStatsAccumulator
+): { stats: PlatformStatsEntry[]; platformTotal: number } {
+  const stats: PlatformStatsEntry[] = [];
+  const processedPlatforms = new Set<string>();
+  let platformTypeTotal = 0;
+  
+  // Process cached platforms
+  for (const [platformId, cache] of Object.entries(platformsCache)) {
+    let platformTotal = 0;
+    const byType: Record<string, number> = {};
+    
+    for (const [type, entities] of Object.entries(cache.entities)) {
+      const count = entities.length;
+      if (count > 0) {
+        byType[type] = count;
+      }
+      platformTotal += count;
+    }
+    
+    platformTypeTotal += platformTotal;
+    accumulator.grandTotal += platformTotal;
+    
+    if (cache.timestamp < accumulator.oldestTimestamp) {
+      accumulator.oldestTimestamp = cache.timestamp;
+    }
+    
+    stats.push({
+      platformId,
+      platformName: platformNameMap.get(platformId) || platformId,
+      total: platformTotal,
+      timestamp: cache.timestamp,
+      age: Date.now() - cache.timestamp,
+      byType,
+    });
+    processedPlatforms.add(platformId);
+  }
+  
+  // Add platforms from settings that don't have cache entries yet
+  for (const p of configuredPlatforms) {
+    if (p.url && p.apiToken && !processedPlatforms.has(p.id)) {
+      stats.push({
+        platformId: p.id,
+        platformName: p.name,
+        total: 0,
+        timestamp: 0,
+        age: 0,
+        byType: {},
+      });
+    }
+  }
+  
+  return { stats, platformTotal: platformTypeTotal };
+}
+
+/**
  * Check if a URL is a PDF file
  * Detects PDF URLs by extension or common PDF viewer patterns
  */
@@ -924,29 +1006,9 @@ async function handleMessage(
         try {
           const multiCache = await getMultiPlatformOCTICache();
           const oaevMultiCache = await getMultiPlatformOAEVCache();
-          
-          // Build per-platform stats for OpenCTI
-          const openctiPlatformStats: Array<{
-            platformId: string;
-            platformName: string;
-            total: number;
-            timestamp: number;
-            age: number;
-            byType: Record<string, number>;
-          }> = [];
-          
-          // Build per-platform stats for OpenAEV
-          const oaevPlatformStats: Array<{
-            platformId: string;
-            platformName: string;
-            total: number;
-            timestamp: number;
-            age: number;
-            byType: Record<string, number>;
-          }> = [];
-          
-          // Get platform names from settings
           const currentSettings = await getSettings();
+          
+          // Build platform name maps
           const openctiPlatformNameMap = new Map<string, string>();
           for (const p of currentSettings.openctiPlatforms || []) {
             openctiPlatformNameMap.set(p.id, p.name);
@@ -956,103 +1018,36 @@ async function handleMessage(
             oaevPlatformNameMap.set(p.id, p.name);
           }
           
-          let grandTotal = 0;
-          let oldestTimestamp = Date.now();
+          // Shared accumulator for tracking totals
+          const accumulator: CacheStatsAccumulator = {
+            grandTotal: 0,
+            oldestTimestamp: Date.now(),
+          };
           
-          // OpenCTI stats - include all configured platforms (even if not yet cached)
-          const processedOpenctiPlatforms = new Set<string>();
-          for (const [platformId, cache] of Object.entries(multiCache.platforms)) {
-            let platformTotal = 0;
-            const byType: Record<string, number> = {};
-            for (const [type, entities] of Object.entries(cache.entities)) {
-              const count = entities.length;
-              if (count > 0) {
-                byType[type] = count;
-              }
-              platformTotal += count;
-            }
-            grandTotal += platformTotal;
-            if (cache.timestamp < oldestTimestamp) {
-              oldestTimestamp = cache.timestamp;
-            }
-            
-            openctiPlatformStats.push({
-              platformId,
-              platformName: openctiPlatformNameMap.get(platformId) || platformId,
-              total: platformTotal,
-              timestamp: cache.timestamp,
-              age: Date.now() - cache.timestamp,
-              byType,
-            });
-            processedOpenctiPlatforms.add(platformId);
-          }
+          // Calculate OpenCTI stats
+          const { stats: openctiPlatformStats } = calculatePlatformCacheStats(
+            multiCache.platforms,
+            openctiPlatformNameMap,
+            currentSettings.openctiPlatforms || [],
+            accumulator
+          );
           
-          // Add platforms from settings that don't have cache entries yet
-          for (const p of currentSettings.openctiPlatforms || []) {
-            if (p.url && p.apiToken && !processedOpenctiPlatforms.has(p.id)) {
-              openctiPlatformStats.push({
-                platformId: p.id,
-                platformName: p.name,
-                total: 0,
-                timestamp: 0,
-                age: 0,
-                byType: {},
-              });
-            }
-          }
-          
-          // OpenAEV stats - include all configured platforms (even if not yet cached)
-          const processedOaevPlatforms = new Set<string>();
-          let oaevGrandTotal = 0;
-          for (const [platformId, cache] of Object.entries(oaevMultiCache.platforms)) {
-            let platformTotal = 0;
-            const byType: Record<string, number> = {};
-            for (const [type, entities] of Object.entries(cache.entities)) {
-              const count = entities.length;
-              if (count > 0) {
-                byType[type] = count;
-              }
-              platformTotal += count;
-            }
-            oaevGrandTotal += platformTotal;
-            grandTotal += platformTotal;
-            if (cache.timestamp < oldestTimestamp) {
-              oldestTimestamp = cache.timestamp;
-            }
-            
-            oaevPlatformStats.push({
-              platformId,
-              platformName: oaevPlatformNameMap.get(platformId) || platformId,
-              total: platformTotal,
-              timestamp: cache.timestamp,
-              age: Date.now() - cache.timestamp,
-              byType,
-            });
-            processedOaevPlatforms.add(platformId);
-          }
-          
-          // Add OpenAEV platforms from settings that don't have cache entries yet
-          for (const p of currentSettings.openaevPlatforms || []) {
-            if (p.url && p.apiToken && !processedOaevPlatforms.has(p.id)) {
-              oaevPlatformStats.push({
-                platformId: p.id,
-                platformName: p.name,
-                total: 0,
-                timestamp: 0,
-                age: 0,
-                byType: {},
-              });
-            }
-          }
+          // Calculate OpenAEV stats
+          const { stats: oaevPlatformStats, platformTotal: oaevGrandTotal } = calculatePlatformCacheStats(
+            oaevMultiCache.platforms,
+            oaevPlatformNameMap,
+            currentSettings.openaevPlatforms || [],
+            accumulator
+          );
           
           sendResponse({
             success: true,
             data: {
-              total: grandTotal,
+              total: accumulator.grandTotal,
               byPlatform: openctiPlatformStats,
               oaevByPlatform: oaevPlatformStats,
               oaevTotal: oaevGrandTotal,
-              age: grandTotal > 0 ? Date.now() - oldestTimestamp : 0,
+              age: accumulator.grandTotal > 0 ? Date.now() - accumulator.oldestTimestamp : 0,
               isRefreshing: getCacheRefreshStatus().octi || getCacheRefreshStatus().oaev,
             },
           });

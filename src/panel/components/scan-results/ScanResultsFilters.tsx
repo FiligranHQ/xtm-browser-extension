@@ -21,6 +21,7 @@ import {
   SearchOutlined,
 } from '@mui/icons-material';
 import type { ScanResultEntity } from '../../../shared/types/scan';
+import { formatEntityTypeForDisplay } from '../../../shared/platform/registry';
 
 type FoundFilterType = 'all' | 'found' | 'not-found' | 'ai-discovered';
 
@@ -183,7 +184,7 @@ export const ScanResultsFilters: React.FC<ScanResultsFiltersProps> = ({
               {scanResultsEntityTypes.map(type => (
                 <MenuItem key={type} value={type}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                    <span>{type.replace(/-/g, ' ').replace(/^oaev-/, 'OpenAEV ')}</span>
+                    <span>{formatEntityTypeForDisplay(type)}</span>
                     <Chip label={scanResultsEntities.filter(e => e.type === type).length} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
                   </Box>
                 </MenuItem>

@@ -862,7 +862,8 @@ const App: React.FC = () => {
         const matchPlatformType = (match.platformType || platform?.type || 'opencti') as PlatformType;
         const matchType = match.type || match.entityData?.entity_type || payload?.type || entityType || '';
         // Remove any existing prefix and get the clean type
-        const { type: cleanType } = parsePrefixedType(matchType);
+        const parsed = parsePrefixedType(matchType);
+        const cleanType = parsed ? parsed.entityType : matchType;
         // Apply proper prefix based on platform type
         const displayType = prefixEntityType(cleanType, matchPlatformType);
         

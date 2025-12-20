@@ -12,10 +12,13 @@ import {
   type PlatformType,
 } from '../shared/platform/registry';
 import {
-  ensureStylesInShadowRoot,
   findMatchPositionsWithBoundaries,
-  collectRegexMatches as collectRegexMatchesUtil,
+  collectRegexMatches as sharedCollectRegexMatches,
+  applyHighlightsWithConfig,
   type NodeMapEntry,
+  type HighlightConfig,
+  type HighlightEventHandlers,
+  type ExtendedMatchInfo,
 } from './utils/highlight';
 import { escapeRegex } from '../shared/detection/matching';
 
@@ -36,31 +39,6 @@ export interface HighlightMeta {
   }>;
 }
 
-/** Configuration for highlight element creation */
-interface HighlightConfig {
-  className: string;
-  dataAttributes: Record<string, string>;
-  handlers?: HighlightHandlers;
-}
-
-/** Standard event handlers for highlights */
-interface HighlightHandlers {
-  onHover?: (e: MouseEvent) => void;
-  onLeave?: (e: MouseEvent) => void;
-  onClick?: (e: MouseEvent) => void;
-  onRightClick?: (e: MouseEvent) => void;
-  onMouseDown?: (e: MouseEvent) => void;
-  onMouseUp?: (e: MouseEvent) => void;
-}
-
-/** Match information for highlight positioning */
-interface MatchInfo {
-  node: Text;
-  localStart: number;
-  localEnd: number;
-  pos?: number;
-  matchLength?: number;
-}
 
 // OpenCTI Types - these are detected from platform cache
 const OPENCTI_TYPES_SET = new Set([
@@ -124,30 +102,6 @@ export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; full
 // ============================================================================
 
 /**
- * Create a highlight element with standard configuration
- */
-function createHighlightElement(config: HighlightConfig): HTMLSpanElement {
-  const highlight = document.createElement('span');
-  highlight.className = config.className;
-  
-  for (const [key, value] of Object.entries(config.dataAttributes)) {
-    highlight.dataset[key] = value;
-  }
-  
-  if (config.handlers) {
-    const h = config.handlers;
-    if (h.onHover) highlight.addEventListener('mouseenter', h.onHover, { capture: true });
-    if (h.onLeave) highlight.addEventListener('mouseleave', h.onLeave, { capture: true });
-    if (h.onClick) highlight.addEventListener('click', h.onClick, { capture: true });
-    if (h.onRightClick) highlight.addEventListener('contextmenu', h.onRightClick, { capture: true });
-    if (h.onMouseDown) highlight.addEventListener('mousedown', h.onMouseDown, { capture: true });
-    if (h.onMouseUp) highlight.addEventListener('mouseup', h.onMouseUp, { capture: true });
-  }
-  
-  return highlight;
-}
-
-/**
  * Collect text matches using string search (case-insensitive)
  * Delegates to the shared utility function
  */
@@ -156,7 +110,7 @@ function collectStringMatches(
   searchValue: string,
   nodeMap: NodeMapEntry[],
   options: { checkBoundaries?: boolean } = {}
-): MatchInfo[] {
+): ExtendedMatchInfo[] {
   return findMatchPositionsWithBoundaries(fullText, searchValue, nodeMap, {
     caseSensitive: false,
     skipHighlighted: true,
@@ -172,50 +126,19 @@ function collectRegexMatches(
   fullText: string,
   pattern: RegExp,
   nodeMap: NodeMapEntry[]
-): MatchInfo[] {
-  return collectRegexMatchesUtil(fullText, pattern, nodeMap, true);
+): ExtendedMatchInfo[] {
+  return sharedCollectRegexMatches(fullText, pattern, nodeMap, true);
 }
 
 /**
  * Apply highlights in reverse order to avoid DOM invalidation
+ * Delegates to shared applyHighlightsWithConfig utility
  */
 function applyHighlightsInReverse(
-  matches: MatchInfo[],
-  createConfig: (match: MatchInfo) => HighlightConfig | null
+  matches: ExtendedMatchInfo[],
+  createConfig: (match: ExtendedMatchInfo) => HighlightConfig | null
 ): HTMLElement[] {
-  const createdHighlights: HTMLElement[] = [];
-  
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const match = matches[i];
-    const { node, localStart, localEnd } = match;
-    
-    try {
-      if (!node.parentNode || node.parentElement?.closest('.xtm-highlight')) continue;
-      
-      const currentNodeText = node.textContent || '';
-      if (localEnd > currentNodeText.length) continue;
-      
-      ensureStylesInShadowRoot(node);
-      
-      const range = document.createRange();
-      range.setStart(node, localStart);
-      range.setEnd(node, localEnd);
-      
-      if (range.toString().trim().length === 0) continue;
-      
-      const config = createConfig(match);
-      if (!config) continue;
-      
-      const highlight = createHighlightElement(config);
-      range.surroundContents(highlight);
-      highlights.push(highlight);
-      createdHighlights.push(highlight);
-    } catch {
-      // Range might cross node boundaries or node may have been modified
-    }
-  }
-  
-  return createdHighlights;
+  return applyHighlightsWithConfig(matches, createConfig, highlights);
 }
 
 // ============================================================================
@@ -265,7 +188,7 @@ function getHighlightStateClass(meta: HighlightMeta): string {
 function createScanResultHighlightConfig(
   meta: HighlightMeta,
   value: string,
-  handlers: HighlightHandlers
+  handlers: HighlightEventHandlers
 ): HighlightConfig {
   const stateClass = getHighlightStateClass(meta);
   const hasMixedState = !meta.found && meta.foundInPlatforms && meta.foundInPlatforms.length > 0;
@@ -302,7 +225,7 @@ function createScanResultHighlightConfig(
  */
 export function highlightResults(
   results: ScanResultPayload,
-  handlers: HighlightHandlers
+  handlers: HighlightEventHandlers
 ): void {
   let textNodes = getTextNodes(document.body);
   let { nodeMap, fullText } = buildNodeMap(textNodes);

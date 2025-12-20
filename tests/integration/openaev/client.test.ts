@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createServiceGuard } from '../test-helpers';
 
 // OpenAEV client types and helpers
 interface OpenAEVConfig {
@@ -202,6 +203,13 @@ async function checkOpenAEVConnection(): Promise<boolean> {
   }
 }
 
+// Create a service guard for skipping tests when OpenAEV is unavailable
+const skipIfUnavailable = createServiceGuard(
+  () => isOpenAEVAvailable,
+  'OpenAEV',
+  () => connectionError || undefined
+);
+
 // Integration tests that require OpenAEV to be running
 describe('OpenAEV Client Integration Tests', () => {
   let client: TestOpenAEVClient;
@@ -266,11 +274,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Asset Groups', () => {
     it('should get asset groups list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const groups = await client.getAssetGroups();
       expect(Array.isArray(groups)).toBe(true);
@@ -279,11 +283,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Players', () => {
     it('should get players list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const players = await client.getPlayers();
       expect(Array.isArray(players)).toBe(true);
@@ -292,11 +292,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Teams', () => {
     it('should get teams list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const teams = await client.getTeams();
       expect(Array.isArray(teams)).toBe(true);
@@ -305,11 +301,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Attack Patterns', () => {
     it('should get attack patterns list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const patterns = await client.getAttackPatterns();
       expect(Array.isArray(patterns)).toBe(true);
@@ -318,11 +310,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Scenarios', () => {
     it('should get scenarios list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const scenarios = await client.getScenarios();
       expect(Array.isArray(scenarios)).toBe(true);
@@ -331,11 +319,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Cache Simulation', () => {
     it('should fetch all cacheable entity types', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const [endpoints, assetGroups, players, teams, attackPatterns] = await Promise.all([
         client.getEndpoints(),
@@ -379,64 +363,42 @@ describe('Seeded Data Tests', () => {
   });
 
   it('should find seeded Production Web Server endpoint', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
-      return;
-    }
+    if (skipIfUnavailable(context)) return;
     
     const endpoints = await client.searchEndpoints('Production Web Server', 5);
     expect(Array.isArray(endpoints)).toBe(true);
   });
 
   it('should find seeded Database Server endpoint with IPs', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
-      return;
-    }
+    if (skipIfUnavailable(context)) return;
     
     const endpoints = await client.searchEndpoints('Database Server', 5);
     expect(Array.isArray(endpoints)).toBe(true);
   });
 
   it('should find seeded Production Servers asset group', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
-      return;
-    }
+    if (skipIfUnavailable(context)) return;
     
     const groups = await client.getAssetGroups();
     expect(Array.isArray(groups)).toBe(true);
   });
 
   it('should find seeded Red Team Alpha', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
-      return;
-    }
+    if (skipIfUnavailable(context)) return;
     
     const teams = await client.getTeams();
     expect(Array.isArray(teams)).toBe(true);
   });
 
   it('should find seeded attack patterns T1566 and T1059', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
-      return;
-    }
+    if (skipIfUnavailable(context)) return;
     
     const patterns = await client.getAttackPatterns();
     expect(Array.isArray(patterns)).toBe(true);
   });
 
   it('should find seeded scenarios', async (context) => {
-    if (!isOpenAEVAvailable) {
-      console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-      context.skip();
+    if (skipIfUnavailable(context)) return;
       return;
     }
     

@@ -8,7 +8,7 @@ import {
   extractContent, 
   type ExtractedContent 
 } from '../shared/extraction/content-extractor';
-import { generatePDF as generateEnhancedPDF } from '../shared/extraction/pdf-generator';
+import { generatePDF } from '../shared/extraction/pdf-generator';
 import { jsPDF } from 'jspdf';
 
 const log = loggers.content;
@@ -840,7 +840,7 @@ export async function generateArticlePDF(): Promise<{ data: string; filename: st
     
     log.debug(' Starting enhanced PDF generation, title:', extractedContent.title, 'images:', extractedContent.images.length);
     
-    const result = await generateEnhancedPDF(extractedContent, {
+    const result = await generatePDF(extractedContent, {
       includeImages: true,
       paperSize: 'a4',
       headerText: 'Filigran XTM Browser Extension',

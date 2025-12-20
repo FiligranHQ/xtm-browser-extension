@@ -169,6 +169,35 @@ export function skipIfNotAvailable(
 }
 
 /**
+ * Create a test guard function for a specific service
+ * Returns a function that can be called at the start of each test
+ * to skip if the service is not available
+ * 
+ * @example
+ * const skipIfUnavailable = createServiceGuard(() => isOpenAEVAvailable, 'OpenAEV', () => connectionError);
+ * 
+ * it('should do something', async (context) => {
+ *   if (skipIfUnavailable(context)) return;
+ *   // ... test logic
+ * });
+ */
+export function createServiceGuard(
+  isAvailable: () => boolean,
+  serviceName: string,
+  getError?: () => string | undefined
+): (context: { skip: () => void }) => boolean {
+  return (context: { skip: () => void }): boolean => {
+    if (!isAvailable()) {
+      const error = getError?.();
+      console.log(`Skipping: ${serviceName} not available${error ? ` - ${error}` : ''}`);
+      context.skip();
+      return true;
+    }
+    return false;
+  };
+}
+
+/**
  * Test retry helper for flaky tests
  */
 export async function withRetry<T>(

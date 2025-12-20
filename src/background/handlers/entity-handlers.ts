@@ -9,7 +9,49 @@ import { ENTITY_FETCH_TIMEOUT_MS } from '../../shared/constants';
 import type { OpenCTIClient } from '../../shared/api/opencti-client';
 import type { OpenAEVClient } from '../../shared/api/openaev-client';
 import type { PlatformType } from '../../shared/platform/registry';
-import { isObservableType } from './platform-utils';
+import { isObservableType } from '../../shared/utils/entity';
+
+/**
+ * Execute a promise with a timeout that rejects on timeout
+ * Used for operations where we want to fail fast on timeout
+ */
+async function withTimeoutReject<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage = 'Operation timed out'
+): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
+/**
+ * Execute a promise with a timeout that resolves to null on timeout
+ * Used for parallel searches where we want to continue with other results
+ */
+async function withTimeoutNull<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T | null> {
+  const timeoutPromise = new Promise<null>((resolve) =>
+    setTimeout(() => resolve(null), timeoutMs)
+  );
+  return Promise.race([promise, timeoutPromise]);
+}
+
+/**
+ * Fetch an OpenCTI entity by ID with proper type handling
+ */
+function fetchOpenCTIEntity(
+  client: OpenCTIClient,
+  id: string,
+  entityType: string
+): Promise<unknown> {
+  return isObservableType(entityType)
+    ? client.getObservableById(id)
+    : client.getSDOById(id);
+}
 
 /**
  * Dependency container for entity handlers
@@ -60,19 +102,11 @@ export async function handleGetEntityDetails(
             break;
           }
 
-          const timeoutPromise = new Promise<null>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-          );
-
           try {
-            let entityPromise;
-            if (isObservableType(entityType)) {
-              entityPromise = client.getObservableById(id);
-            } else {
-              entityPromise = client.getSDOById(id);
-            }
-
-            const entity = await Promise.race([entityPromise, timeoutPromise]);
+            const entity = await withTimeoutReject(
+              fetchOpenCTIEntity(client, id, entityType),
+              ENTITY_FETCH_TIMEOUT_MS
+            );
             if (entity) {
               sendResponse(successResponse({ ...entity, platformId: specificPlatformId, platformType: 'opencti' }));
             } else {
@@ -84,19 +118,11 @@ export async function handleGetEntityDetails(
         } else {
           // Search all OpenCTI platforms in PARALLEL
           const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
-            const timeoutPromise = new Promise<null>((resolve) =>
-              setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
-            );
-
             try {
-              let entityPromise;
-              if (isObservableType(entityType)) {
-                entityPromise = client.getObservableById(id);
-              } else {
-                entityPromise = client.getSDOById(id);
-              }
-
-              const entity = await Promise.race([entityPromise, timeoutPromise]);
+              const entity = await withTimeoutNull(
+                fetchOpenCTIEntity(client, id, entityType),
+                ENTITY_FETCH_TIMEOUT_MS
+              );
               return { platformId: pId, entity };
             } catch {
               return { platformId: pId, entity: null };
@@ -127,10 +153,6 @@ export async function handleGetEntityDetails(
           break;
         }
 
-        const oaevTimeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
-        );
-
         // Ensure caches are populated for resolution
         await oaevClient.ensureTagsCached();
 
@@ -143,10 +165,10 @@ export async function handleGetEntityDetails(
           ]);
         }
 
-        const oaevEntity = await Promise.race([
+        const oaevEntity = await withTimeoutReject(
           oaevClient.getEntityById(id, entityType),
-          oaevTimeoutPromise
-        ]) as Record<string, unknown> | null;
+          ENTITY_FETCH_TIMEOUT_MS
+        ) as Record<string, unknown> | null;
 
         if (oaevEntity) {
           // Resolve tags if present (convert IDs to labels)

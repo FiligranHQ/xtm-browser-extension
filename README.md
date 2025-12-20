@@ -384,7 +384,6 @@ xtm-browser-extension/
 │           ├── formatters.ts        # Data formatters
 │           ├── highlight-colors.ts  # Highlight color utilities
 │           ├── logger.ts            # Logging
-│           ├── messaging.ts         # Messaging utilities
 │           └── storage.ts           # Chrome storage wrapper
 │
 ├── tests/

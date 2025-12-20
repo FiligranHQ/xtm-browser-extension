@@ -5,8 +5,8 @@
  * Handles cache refresh scheduling, background refresh, and cache statistics.
  */
 
-import { OpenCTIClient } from '../../shared/api/opencti-client';
-import { OpenAEVClient } from '../../shared/api/openaev-client';
+import type { OpenCTIClient } from '../../shared/api/opencti-client';
+import type { OpenAEVClient } from '../../shared/api/openaev-client';
 import { loggers } from '../../shared/utils/logger';
 import type {
   OAEVAsset,
@@ -27,60 +27,17 @@ import {
   type CachedOCTIEntity,
   type OAEVCache,
 } from '../../shared/utils/storage';
+import {
+  getOpenCTIClients,
+  getOpenAEVClients,
+  setOpenCTIClientGetter,
+  setOpenAEVClientGetter,
+} from './client-registry';
 
 const log = loggers.background;
 
-// ============================================================================
-// Client Getter Configuration
-// ============================================================================
-
-/**
- * Client getter functions - must be configured before use
- * These allow the cache manager to access the actual client instances
- * from the background script without circular dependencies
- */
-let octiClientGetter: (() => Map<string, OpenCTIClient>) | null = null;
-let oaevClientGetter: (() => Map<string, OpenAEVClient>) | null = null;
-
-/**
- * Configure the OpenCTI client getter function
- * Must be called before startOCTICacheRefresh()
- */
-export function setOpenCTIClientGetter(getter: () => Map<string, OpenCTIClient>): void {
-  octiClientGetter = getter;
-  log.debug('OpenCTI client getter configured');
-}
-
-/**
- * Configure the OpenAEV client getter function
- * Must be called before startOAEVCacheRefresh()
- */
-export function setOpenAEVClientGetter(getter: () => Map<string, OpenAEVClient>): void {
-  oaevClientGetter = getter;
-  log.debug('OpenAEV client getter configured');
-}
-
-/**
- * Get OpenCTI clients using the configured getter
- */
-function getOpenCTIClients(): Map<string, OpenCTIClient> {
-  if (!octiClientGetter) {
-    log.warn('OpenCTI client getter not configured, returning empty map');
-    return new Map();
-  }
-  return octiClientGetter();
-}
-
-/**
- * Get OpenAEV clients using the configured getter
- */
-function getOpenAEVClients(): Map<string, OpenAEVClient> {
-  if (!oaevClientGetter) {
-    log.warn('OpenAEV client getter not configured, returning empty map');
-    return new Map();
-  }
-  return oaevClientGetter();
-}
+// Re-export the setter functions for backwards compatibility
+export { setOpenCTIClientGetter, setOpenAEVClientGetter };
 
 // ============================================================================
 // Constants

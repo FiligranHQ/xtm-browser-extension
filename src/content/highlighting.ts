@@ -11,8 +11,13 @@ import {
   createPrefixedType,
   type PlatformType,
 } from '../shared/platform/registry';
-import { ensureStylesInShadowRoot, type NodeMapEntry } from './utils/highlight';
-import { escapeRegex, isValidBoundary } from '../shared/detection/matching';
+import {
+  ensureStylesInShadowRoot,
+  findMatchPositionsWithBoundaries,
+  collectRegexMatches as collectRegexMatchesUtil,
+  type NodeMapEntry,
+} from './utils/highlight';
+import { escapeRegex } from '../shared/detection/matching';
 
 // ============================================================================
 // Types
@@ -144,6 +149,7 @@ function createHighlightElement(config: HighlightConfig): HTMLSpanElement {
 
 /**
  * Collect text matches using string search (case-insensitive)
+ * Delegates to the shared utility function
  */
 function collectStringMatches(
   fullText: string,
@@ -151,83 +157,23 @@ function collectStringMatches(
   nodeMap: NodeMapEntry[],
   options: { checkBoundaries?: boolean } = {}
 ): MatchInfo[] {
-  if (!searchValue || searchValue.length < 2) return [];
-  
-  const matchesToHighlight: MatchInfo[] = [];
-  const searchLower = searchValue.toLowerCase();
-  const fullTextLower = fullText.toLowerCase();
-  
-  let pos = 0;
-  while ((pos = fullTextLower.indexOf(searchLower, pos)) !== -1) {
-    const endPos = pos + searchValue.length;
-    
-    // Boundary check if requested
-    if (options.checkBoundaries) {
-      const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
-      const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
-      if (!isValidBoundary(charBefore) || !isValidBoundary(charAfter)) {
-        pos++;
-        continue;
-      }
-    }
-    
-    for (const { node, start, end } of nodeMap) {
-      if (pos >= start && pos < end) {
-        if (node.parentElement?.closest('.xtm-highlight')) break;
-        
-        const nodeText = node.textContent || '';
-        const localStart = pos - start;
-        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
-        
-        const textToHighlight = nodeText.substring(localStart, localEnd);
-        if (!textToHighlight || textToHighlight.toLowerCase() !== searchLower.substring(0, textToHighlight.length)) {
-          break;
-        }
-        
-        if (localEnd <= nodeText.length && textToHighlight.length > 0) {
-          matchesToHighlight.push({ pos, node, localStart, localEnd });
-        }
-        break;
-      }
-    }
-    pos = endPos;
-  }
-  
-  return matchesToHighlight;
+  return findMatchPositionsWithBoundaries(fullText, searchValue, nodeMap, {
+    caseSensitive: false,
+    skipHighlighted: true,
+    checkBoundaries: options.checkBoundaries ?? false,
+  });
 }
 
 /**
  * Collect text matches using regex pattern
+ * Delegates to the shared utility function
  */
 function collectRegexMatches(
   fullText: string,
   pattern: RegExp,
   nodeMap: NodeMapEntry[]
 ): MatchInfo[] {
-  const matchesToHighlight: MatchInfo[] = [];
-  
-  let match;
-  while ((match = pattern.exec(fullText)) !== null) {
-    const pos = match.index;
-    const matchLength = match[0].length;
-    
-    for (const { node, start, end } of nodeMap) {
-      if (pos >= start && pos < end) {
-        if (node.parentElement?.closest('.xtm-highlight')) break;
-        
-        const nodeText = node.textContent || '';
-        const localStart = pos - start;
-        const localEnd = Math.min(localStart + matchLength, nodeText.length);
-        
-        if (localEnd <= nodeText.length) {
-          matchesToHighlight.push({ pos, matchLength, node, localStart, localEnd });
-        }
-        break;
-      }
-    }
-  }
-  
-  return matchesToHighlight;
+  return collectRegexMatchesUtil(fullText, pattern, nodeMap, true);
 }
 
 /**

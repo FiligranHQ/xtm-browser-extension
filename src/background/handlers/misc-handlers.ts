@@ -16,6 +16,92 @@ import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction
 const log = loggers.background;
 
 /**
+ * Result from attempting to open side panel
+ */
+export interface SidePanelOpenResult {
+  opened: boolean;
+  lastError?: unknown;
+  method?: 'tabId' | 'windowId' | 'freshWindowId';
+}
+
+/**
+ * Try multiple strategies to open the side panel
+ * Strategy order: tabId first (Windows), windowId (MacOS), fresh windowId (fallback)
+ */
+export async function tryOpenSidePanel(
+  tabId: number | undefined,
+  windowId: number | undefined,
+  verbose = false
+): Promise<SidePanelOpenResult> {
+  if (!tabId && !windowId) {
+    return { opened: false };
+  }
+  
+  let lastError: unknown;
+  
+  // Strategy 1: Try with tabId first (works best on Windows Chrome)
+  if (tabId) {
+    try {
+      await chrome.sidePanel.open({ tabId });
+      if (verbose) log.debug('Side panel opened with tabId:', tabId);
+      return { opened: true, method: 'tabId' };
+    } catch (tabError) {
+      lastError = tabError;
+      if (verbose) log.debug('Failed to open side panel with tabId, will try windowId:', tabError);
+    }
+  }
+  
+  // Strategy 2: Try with windowId (works better on MacOS Chrome/Edge)
+  if (windowId) {
+    try {
+      await chrome.sidePanel.open({ windowId });
+      if (verbose) log.debug('Side panel opened with windowId:', windowId);
+      return { opened: true, method: 'windowId' };
+    } catch (windowError) {
+      lastError = windowError;
+      if (verbose) log.debug('Failed to open side panel with windowId:', windowError);
+    }
+  }
+  
+  // Strategy 3: Get fresh tab info and retry with windowId
+  if (tabId) {
+    try {
+      const freshTab = await chrome.tabs.get(tabId);
+      if (freshTab.windowId) {
+        await chrome.sidePanel.open({ windowId: freshTab.windowId });
+        if (verbose) log.debug('Side panel opened with fresh windowId:', freshTab.windowId);
+        return { opened: true, method: 'freshWindowId' };
+      }
+    } catch (retryError) {
+      lastError = retryError;
+      if (verbose) log.debug('Failed to open side panel with fresh windowId:', retryError);
+    }
+  }
+  
+  return { opened: false, lastError };
+}
+
+/**
+ * Get tabId and windowId from sender or active tab
+ */
+export async function getSidePanelTarget(
+  senderTab?: { id?: number; windowId?: number }
+): Promise<{ tabId?: number; windowId?: number }> {
+  let tabId = senderTab?.id;
+  let windowId: number | undefined;
+  
+  if (!tabId) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    tabId = activeTab?.id;
+    windowId = activeTab?.windowId;
+  } else if (senderTab?.windowId) {
+    windowId = senderTab.windowId;
+  }
+  
+  return { tabId, windowId };
+}
+
+/**
  * Inject content script into a tab
  */
 export const handleInjectContentScript: MessageHandler = async (payload, sendResponse) => {

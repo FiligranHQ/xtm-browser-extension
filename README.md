@@ -163,6 +163,7 @@ Tests run automatically on push and pull requests via GitHub Actions with unifie
 
 | Job | Description |
 |-----|-------------|
+| **Lint & Type Check** | ESLint and TypeScript compilation check (runs first) |
 | **Unit Tests** | Fast unit tests for shared utilities, patterns, and detection logic |
 | **OpenCTI Integration** | Spins up Redis, Elasticsearch, MinIO, RabbitMQ, and OpenCTI |
 | **OpenAEV Integration** | Spins up PostgreSQL, Elasticsearch, MinIO, RabbitMQ, and OpenAEV |
@@ -227,11 +228,13 @@ xtm-browser-extension/
 │   │   ├── index.ts             # Main entry, client init, message handling
 │   │   ├── handlers/            # Message handlers split by domain
 │   │   │   ├── ai-handlers.ts       # AI generation requests
-│   │   │   ├── cache-handlers.ts    # Cache management
 │   │   │   ├── container-handlers.ts # Container creation
+│   │   │   ├── entity-handlers.ts   # Entity operations
 │   │   │   ├── misc-handlers.ts     # Misc handlers (injection, panel, PDF)
 │   │   │   ├── openaev-handlers.ts  # OpenAEV API operations
 │   │   │   ├── opencti-handlers.ts  # OpenCTI API operations
+│   │   │   ├── pdf-handlers.ts      # PDF scanning handlers
+│   │   │   ├── platform-utils.ts    # Shared platform utilities
 │   │   │   ├── scan-handlers.ts     # Page scanning logic
 │   │   │   ├── scenario-handlers.ts # Scenario creation
 │   │   │   └── types.ts             # Handler type definitions
@@ -296,6 +299,7 @@ xtm-browser-extension/
 │   │   │   ├── useEntityState.ts        # Entity state
 │   │   │   ├── useInvestigationActions.ts # Investigation actions
 │   │   │   ├── useInvestigationState.ts # Investigation state
+│   │   │   ├── usePlatformNavigation.ts # Platform navigation (shared)
 │   │   │   ├── usePlatforms.ts          # Platform data
 │   │   │   ├── useScanResultsState.ts   # Scan results state
 │   │   │   ├── useScenarioState.ts      # Scenario state
@@ -304,6 +308,7 @@ xtm-browser-extension/
 │   │   ├── handlers/            # Message handlers
 │   │   │   └── scan-results-handler.ts  # Scan results handler
 │   │   ├── utils/               # Panel utilities
+│   │   │   ├── ai-entity-helpers.ts     # AI entity payload utilities
 │   │   │   ├── platform-helpers.tsx     # Platform icons, colors, AI theme
 │   │   │   ├── cvss-helpers.ts          # CVSS score formatting
 │   │   │   ├── marking-helpers.ts       # TLP/PAP colors

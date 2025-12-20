@@ -6,6 +6,7 @@
 
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { getPlatformName } from '../../shared/platform/registry';
 import type { HoveredEntityState } from '../types';
 
 interface EntityTooltipProps {
@@ -30,7 +31,7 @@ export function EntityTooltip({ hoveredEntity }: EntityTooltipProps) {
   const statusText = entity.discoveredByAI 
     ? '✨ AI Discovered' 
     : entity.found 
-      ? `✓ Found in ${entity.platformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}` 
+      ? `✓ Found in ${getPlatformName(entity.platformType || 'opencti')}` 
       : 'ℹ Not found';
 
   return (

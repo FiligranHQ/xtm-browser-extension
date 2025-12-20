@@ -37,12 +37,12 @@ export function ensureStylesInShadowRoot(node: Node): void {
  * Event handlers type for highlight interactions
  */
 export interface HighlightEventHandlers {
-  onHover: (e: MouseEvent) => void;
-  onLeave: (e: MouseEvent) => void;
-  onClick: (e: MouseEvent) => void;
-  onRightClick: (e: MouseEvent) => void;
-  onMouseDown: (e: MouseEvent) => void;
-  onMouseUp: (e: MouseEvent) => void;
+  onHover?: (e: MouseEvent) => void;
+  onLeave?: (e: MouseEvent) => void;
+  onClick?: (e: MouseEvent) => void;
+  onRightClick?: (e: MouseEvent) => void;
+  onMouseDown?: (e: MouseEvent) => void;
+  onMouseUp?: (e: MouseEvent) => void;
 }
 
 /**
@@ -95,12 +95,13 @@ export function createHighlightElement(options: CreateHighlightOptions): HTMLSpa
   
   // Add event handlers
   if (options.handlers) {
-    highlight.addEventListener('mouseenter', options.handlers.onHover, { capture: true });
-    highlight.addEventListener('mouseleave', options.handlers.onLeave, { capture: true });
-    highlight.addEventListener('click', options.handlers.onClick, { capture: true });
-    highlight.addEventListener('mousedown', options.handlers.onMouseDown, { capture: true });
-    highlight.addEventListener('mouseup', options.handlers.onMouseUp, { capture: true });
-    highlight.addEventListener('contextmenu', options.handlers.onRightClick, { capture: true });
+    const h = options.handlers;
+    if (h.onHover) highlight.addEventListener('mouseenter', h.onHover, { capture: true });
+    if (h.onLeave) highlight.addEventListener('mouseleave', h.onLeave, { capture: true });
+    if (h.onClick) highlight.addEventListener('click', h.onClick, { capture: true });
+    if (h.onMouseDown) highlight.addEventListener('mousedown', h.onMouseDown, { capture: true });
+    if (h.onMouseUp) highlight.addEventListener('mouseup', h.onMouseUp, { capture: true });
+    if (h.onRightClick) highlight.addEventListener('contextmenu', h.onRightClick, { capture: true });
   }
   
   return highlight;
@@ -118,6 +119,7 @@ export interface MatchPosition {
 
 /**
  * Find all occurrences of a search value in the text and collect match positions
+ * This is a convenience wrapper around findMatchPositionsWithBoundaries
  */
 export function findMatchPositions(
   fullText: string,
@@ -125,53 +127,11 @@ export function findMatchPositions(
   nodeMap: NodeMapEntry[],
   options: { caseSensitive?: boolean; skipHighlighted?: boolean } = {}
 ): MatchPosition[] {
-  const { caseSensitive = false, skipHighlighted = true } = options;
-  
-  if (!searchValue || searchValue.length < 2) return [];
-  
-  const searchText = caseSensitive ? searchValue : searchValue.toLowerCase();
-  const textToSearch = caseSensitive ? fullText : fullText.toLowerCase();
-  
-  const matches: MatchPosition[] = [];
-  let pos = 0;
-  
-  while ((pos = textToSearch.indexOf(searchText, pos)) !== -1) {
-    const endPos = pos + searchValue.length;
-    
-    for (const { node, start, end } of nodeMap) {
-      if (pos >= start && pos < end) {
-        // Skip if already highlighted
-        if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) {
-          break;
-        }
-        
-        const nodeText = node.textContent || '';
-        const localStart = pos - start;
-        const localEnd = Math.min(localStart + searchValue.length, nodeText.length);
-        
-        const textToHighlight = nodeText.substring(localStart, localEnd);
-        const expectedText = caseSensitive 
-          ? searchValue.substring(0, textToHighlight.length)
-          : searchValue.substring(0, textToHighlight.length).toLowerCase();
-        const actualText = caseSensitive 
-          ? textToHighlight 
-          : textToHighlight.toLowerCase();
-          
-        if (!textToHighlight || actualText !== expectedText) {
-          break;
-        }
-        
-        if (localEnd <= nodeText.length && textToHighlight.length > 0) {
-          matches.push({ pos, node, localStart, localEnd });
-        }
-        break;
-      }
-    }
-    
-    pos = endPos;
-  }
-  
-  return matches;
+  return findMatchPositionsWithBoundaries(fullText, searchValue, nodeMap, {
+    caseSensitive: options.caseSensitive,
+    skipHighlighted: options.skipHighlighted,
+    checkBoundaries: false,
+  });
 }
 
 /**
@@ -310,12 +270,13 @@ export function applyHighlightsWithConfig<T extends ExtendedMatchInfo>(
       
       // Add event handlers
       if (config.handlers) {
-        highlight.addEventListener('mouseenter', config.handlers.onHover, { capture: true });
-        highlight.addEventListener('mouseleave', config.handlers.onLeave, { capture: true });
-        highlight.addEventListener('click', config.handlers.onClick, { capture: true });
-        highlight.addEventListener('mousedown', config.handlers.onMouseDown, { capture: true });
-        highlight.addEventListener('mouseup', config.handlers.onMouseUp, { capture: true });
-        highlight.addEventListener('contextmenu', config.handlers.onRightClick, { capture: true });
+        const h = config.handlers;
+        if (h.onHover) highlight.addEventListener('mouseenter', h.onHover, { capture: true });
+        if (h.onLeave) highlight.addEventListener('mouseleave', h.onLeave, { capture: true });
+        if (h.onClick) highlight.addEventListener('click', h.onClick, { capture: true });
+        if (h.onMouseDown) highlight.addEventListener('mousedown', h.onMouseDown, { capture: true });
+        if (h.onMouseUp) highlight.addEventListener('mouseup', h.onMouseUp, { capture: true });
+        if (h.onRightClick) highlight.addEventListener('contextmenu', h.onRightClick, { capture: true });
       }
       
       range.surroundContents(highlight);

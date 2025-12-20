@@ -620,3 +620,34 @@ export function getUniqueCanonicalTypes(types: string[]): string[] {
 export function areTypesEquivalent(type1: string, type2: string): boolean {
   return getCanonicalTypeName(type1) === getCanonicalTypeName(type2);
 }
+
+// ============================================================================
+// Settings Helper Functions
+// ============================================================================
+
+/**
+ * Platform settings key type for type-safe access
+ */
+export type PlatformSettingsKey = 'openctiPlatforms' | 'openaevPlatforms' | 'opengrcPlatforms';
+
+/**
+ * Get the settings key for a platform type
+ */
+export function getPlatformSettingsKey(platformType: PlatformType): PlatformSettingsKey {
+  return PLATFORM_REGISTRY[platformType].settingsKey as PlatformSettingsKey;
+}
+
+/**
+ * Get the default name for a new platform of the given type
+ */
+export function getDefaultPlatformName(platformType: PlatformType): string {
+  return `New ${PLATFORM_REGISTRY[platformType].name}`;
+}
+
+/**
+ * Get a URL placeholder for a platform type (for input fields)
+ */
+export function getPlatformUrlPlaceholder(platformType: PlatformType): string {
+  const name = PLATFORM_REGISTRY[platformType].name.toLowerCase();
+  return `https://${name}.example.com`;
+}

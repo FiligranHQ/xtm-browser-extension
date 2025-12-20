@@ -179,6 +179,9 @@ export function handleError(
   });
 }
 
+// Re-export isObservableType from shared utilities for handler convenience
+export { isObservableType } from '../../shared/utils/entity';
+
 /**
  * Create a handler that requires configured clients
  */

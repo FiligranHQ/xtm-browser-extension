@@ -32,6 +32,10 @@ import {
   handleGetEntityDetails,
   type GetEntityDetailsPayload,
 } from './handlers/entity-handlers';
+import {
+  tryOpenSidePanel,
+  getSidePanelTarget,
+} from './handlers/misc-handlers';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -54,7 +58,7 @@ import {
   CONTAINER_FETCH_TIMEOUT_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/types/common';
-// Note: generateNativePDF and isNativePDFAvailable are used in misc-handlers.ts (dispatcher)
+import { searchAcrossPlatforms } from './handlers/platform-utils';
 import {
   startOCTICacheRefresh,
   startOAEVCacheRefresh,
@@ -762,28 +766,14 @@ async function handleMessage(
               // Refang search term in case user searches for defanged indicator
               const cleanSearchTerm = refangIndicator(searchTerm);
               
-              // Search across all OpenCTI platforms in PARALLEL with timeout
-              const clientsToSearch = platformId 
-                ? [[platformId, openCTIClients.get(platformId)] as const].filter(([_, c]) => c)
-                : Array.from(openCTIClients.entries());
-              
-              const searchPromises = clientsToSearch.map(async ([pId, client]) => {
-                if (!client) return { platformId: pId, results: [] };
-                
-                try {
-                  const timeoutPromise = new Promise<never>((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
-                  );
-                  const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-                  return { platformId: pId, results: results.map((r) => ({ ...r, platformId: pId })) };
-                } catch (e) {
-                  log.warn(`Search timeout/error for platform ${pId}:`, e);
-                  return { platformId: pId, results: [] };
-                }
-              });
-              
-              const searchResults = await Promise.all(searchPromises);
-              const allResults = searchResults.flatMap(r => r.results);
+              // Search across all OpenCTI platforms using shared utility
+              const allResults = await searchAcrossPlatforms(
+                openCTIClients,
+                platformId,
+                (client) => client.globalSearch(cleanSearchTerm, types, limit),
+                SEARCH_TIMEOUT_MS,
+                'Global search'
+              );
               sendResponse(successResponse(allResults));
               break;
             }
@@ -883,8 +873,7 @@ async function handleMessage(
         }
         
         try {
-          // Placeholder: Create a basic scenario from page content
-          // AI integration will be added later
+          // Create a basic scenario from page content
           const scenario = await clientToUse.createScenario({
             scenario_name: `Scenario from: ${pageTitle}`,
             scenario_description: `Auto-generated scenario from web page: ${pageUrl}\n\nContent summary will be processed by AI.`,
@@ -1129,59 +1118,14 @@ async function handleMessage(
         // Open the native side panel (Chrome/Edge only)
         // NOTE: Firefox sidebar must be opened from popup (requires user gesture context)
         try {
-          // Chrome/Edge: Use chrome.sidePanel.open()
           const settings = await getSettings();
           
           if (settings.splitScreenMode && chrome.sidePanel) {
-            // Use sender's tab if available, otherwise query for active tab
-            let tabId = sender?.tab?.id;
-            let windowId: number | undefined;
-            
-            if (!tabId) {
-              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-              tabId = activeTab?.id;
-              windowId = activeTab?.windowId;
-            } else if (sender?.tab?.windowId) {
-              windowId = sender.tab.windowId;
-            }
+            const { tabId, windowId } = await getSidePanelTarget(sender?.tab);
             
             if (tabId || windowId) {
-              let opened = false;
-              
-              // Try with tabId first (works best on Windows Chrome)
-              if (tabId) {
-                try {
-                  await chrome.sidePanel.open({ tabId });
-                  opened = true;
-                } catch {
-                  // Fallback to windowId
-                }
-              }
-              
-              // Try with windowId (works better on MacOS Chrome/Edge)
-              if (!opened && windowId) {
-                try {
-                  await chrome.sidePanel.open({ windowId });
-                  opened = true;
-                } catch {
-                  // Both methods failed
-                }
-              }
-              
-              // Last resort: get fresh tab info and try windowId
-              if (!opened && tabId) {
-                try {
-                  const tab = await chrome.tabs.get(tabId);
-                  if (tab.windowId) {
-                    await chrome.sidePanel.open({ windowId: tab.windowId });
-                    opened = true;
-                  }
-                } catch {
-                  // All methods failed
-                }
-              }
-              
-              sendResponse(successResponse({ opened }));
+              const result = await tryOpenSidePanel(tabId, windowId, false);
+              sendResponse(successResponse({ opened: result.opened }));
             } else {
               sendResponse(successResponse({ opened: false, reason: 'No tab found' }));
             }
@@ -1199,79 +1143,23 @@ async function handleMessage(
         // Open the native side panel immediately without checking settings
         // Content script should only send this when split screen mode is confirmed
         // This preserves the user gesture context for Edge compatibility
-        // 
-        // MacOS Chrome/Edge behavior:
-        // - Chrome on MacOS may require windowId instead of tabId
-        // - Edge on MacOS may have additional restrictions
-        // - We try multiple approaches with delays to handle timing issues
         try {
           if (chrome.sidePanel) {
-            // Use sender's tab if available, otherwise query for active tab
-            let tabId = sender?.tab?.id;
-            let windowId: number | undefined;
-            
-            if (!tabId) {
-              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-              tabId = activeTab?.id;
-              windowId = activeTab?.windowId;
-            } else if (sender?.tab?.windowId) {
-              windowId = sender.tab.windowId;
-            }
+            const { tabId, windowId } = await getSidePanelTarget(sender?.tab);
             
             if (tabId || windowId) {
-              // Strategy 1: Try with tabId first (works best on Windows Chrome)
-              let opened = false;
-              let lastError: unknown;
+              const result = await tryOpenSidePanel(tabId, windowId, true);
               
-              if (tabId) {
-                try {
-                  await chrome.sidePanel.open({ tabId });
-                  opened = true;
-                  log.debug('Side panel opened with tabId:', tabId);
-                } catch (tabError) {
-                  lastError = tabError;
-                  log.debug('Failed to open side panel with tabId, will try windowId:', tabError);
-                }
-              }
-              
-              // Strategy 2: Try with windowId (works better on MacOS Chrome/Edge)
-              if (!opened && windowId) {
-                try {
-                  await chrome.sidePanel.open({ windowId });
-                  opened = true;
-                  log.debug('Side panel opened with windowId:', windowId);
-                } catch (windowError) {
-                  lastError = windowError;
-                  log.debug('Failed to open side panel with windowId:', windowError);
-                }
-              }
-              
-              // Strategy 3: If both failed, get fresh tab info and retry with windowId
-              if (!opened && tabId) {
-                try {
-                  const freshTab = await chrome.tabs.get(tabId);
-                  if (freshTab.windowId) {
-                    await chrome.sidePanel.open({ windowId: freshTab.windowId });
-                    opened = true;
-                    log.debug('Side panel opened with fresh windowId:', freshTab.windowId);
-                  }
-                } catch (retryError) {
-                  lastError = retryError;
-                  log.debug('Failed to open side panel with fresh windowId:', retryError);
-                }
-              }
-              
-              if (opened) {
+              if (result.opened) {
                 sendResponse(successResponse({ opened: true }));
               } else {
                 // Check if error is about user gesture - this is expected when popup already opened the panel
-                const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+                const errorMessage = result.lastError instanceof Error ? result.lastError.message : String(result.lastError);
                 const isUserGestureError = errorMessage.includes('user gesture');
                 if (isUserGestureError) {
-                  // This is expected in split screen mode - popup opened it, content script fallback fails
                   log.debug('Side panel requires user gesture (likely already opened by popup)');
                 } else {
-                  log.warn('Failed to open side panel with all strategies. Last error:', lastError);
+                  log.warn('Failed to open side panel with all strategies. Last error:', result.lastError);
                 }
                 sendResponse(successResponse({ opened: false, reason: isUserGestureError ? 'User gesture required (panel may already be open)' : 'Failed to open with all strategies' }));
               }

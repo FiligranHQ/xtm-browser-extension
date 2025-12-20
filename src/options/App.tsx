@@ -16,6 +16,7 @@ import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
+import { getDefaultPlatformName, getPlatformSettingsKey, getPlatformName, type PlatformType } from '../shared/platform/registry';
 
 const log = loggers.options;
 
@@ -214,11 +215,12 @@ const App: React.FC = () => {
   /**
    * Check if a URL already exists in the configured platforms (excluding the current one)
    */
-  const isDuplicateUrl = (type: 'opencti' | 'openaev', platformId: string, url: string): boolean => {
+  const isDuplicateUrl = (type: PlatformType, platformId: string, url: string): boolean => {
     if (!settings || !url) return false;
     
     const normalizedUrl = normalizeUrl(url);
-    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const settingsKey = getPlatformSettingsKey(type);
+    const platforms = settings[settingsKey] || [];
     
     return platforms.some(p => 
       p.id !== platformId && normalizeUrl(p.url) === normalizedUrl
@@ -228,10 +230,11 @@ const App: React.FC = () => {
   /**
    * Get URL error message for a platform (for displaying in UI)
    */
-  const getUrlError = (type: 'opencti' | 'openaev') => (platformId: string): string | undefined => {
+  const getUrlError = (type: PlatformType) => (platformId: string): string | undefined => {
     if (!settings) return undefined;
     
-    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const settingsKey = getPlatformSettingsKey(type);
+    const platforms = settings[settingsKey] || [];
     const platform = platforms.find(p => p.id === platformId);
     
     if (!platform?.url) return undefined;
@@ -243,7 +246,7 @@ const App: React.FC = () => {
     return undefined;
   };
 
-  const handleTestConnection = async (type: 'opencti' | 'openaev', platformId: string) => {
+  const handleTestConnection = async (type: PlatformType, platformId: string) => {
     if (!settings) return;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     
@@ -251,7 +254,8 @@ const App: React.FC = () => {
     setTesting({ ...testing, [key]: true });
     setTestResults({ ...testResults, [key]: undefined as any });
 
-    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const settingsKey = getPlatformSettingsKey(type);
+    const platforms = settings[settingsKey] || [];
     const platform = platforms?.find(p => p.id === platformId);
     
     if (!platform?.url || !platform?.apiToken) {
@@ -289,21 +293,21 @@ const App: React.FC = () => {
     }
     
     if (response?.success) {
-      const remotePlatformName = type === 'opencti' 
-        ? response.data?.settings?.platform_title 
-        : response.data?.platform_name;
+      // Different platforms return the platform name in different response fields
+      const remotePlatformName = response.data?.settings?.platform_title || response.data?.platform_name;
       
       const platformIndex = platforms?.findIndex(p => p.id === platformId) ?? -1;
       const currentPlatform = platforms?.[platformIndex];
       
-      const isDefaultName = currentPlatform?.name === 'New OpenCTI' || 
-                           currentPlatform?.name === 'New OpenAEV' ||
+      const defaultName = getDefaultPlatformName(type);
+      const platformDisplayName = getPlatformName(type);
+      const isDefaultName = currentPlatform?.name === defaultName || 
+                           currentPlatform?.name === platformDisplayName ||
                            !currentPlatform?.name;
       
       const isEnterprise = response.data?.enterprise_edition ?? false;
       
-      const settingsKey = `${type}Platforms` as const;
-      const updatedPlatforms = [...(settings[settingsKey] || [])];
+      const updatedPlatforms = [...platforms];
       if (platformIndex >= 0 && currentPlatform) {
         const updatedPlatform: PlatformConfig = { 
           ...currentPlatform,
@@ -316,13 +320,15 @@ const App: React.FC = () => {
       
       setSettings(updatedSettings);
       
+      // Build connection message based on available data
+      const displayName = remotePlatformName || platformDisplayName;
+      const versionSuffix = response.data?.version ? ` v${response.data.version}` : '';
+      
       setTestResults({
         ...testResults,
         [key]: {
           type: 'success',
-          message: type === 'opencti' 
-            ? `Connected to ${remotePlatformName || 'OpenCTI'} v${response.data?.version}`
-            : `Connected to ${remotePlatformName || 'OpenAEV'}`,
+          message: `Connected to ${displayName}${versionSuffix}`,
         },
       });
       setTestedPlatforms(prev => new Set(prev).add(key));
@@ -366,21 +372,19 @@ const App: React.FC = () => {
     setTesting({ ...testing, [key]: false });
   };
 
-  const addPlatform = (type: 'opencti' | 'openaev') => {
+  const addPlatform = (type: PlatformType) => {
     if (!settings) return;
     const id = Date.now().toString();
     const newPlatform: PlatformConfig = {
       id,
-      name: type === 'opencti' ? 'New OpenCTI' : 'New OpenAEV',
+      name: getDefaultPlatformName(type),
       url: '',
       apiToken: '',
       enabled: true,
     };
-    if (type === 'opencti') {
-      updateSetting('openctiPlatforms', [...settings.openctiPlatforms, newPlatform]);
-    } else {
-      updateSetting('openaevPlatforms', [...settings.openaevPlatforms, newPlatform]);
-    }
+    const settingsKey = getPlatformSettingsKey(type);
+    const currentPlatforms = settings[settingsKey] || [];
+    updateSetting(settingsKey, [...currentPlatforms, newPlatform]);
   };
 
   const updatePlatform = (type: 'opencti' | 'openaev', index: number, updates: Partial<PlatformConfig>) => {
@@ -778,10 +782,11 @@ const App: React.FC = () => {
   // Utility Functions
   // ============================================================================
 
-  const hasPlatformChanges = (type: 'opencti' | 'openaev'): boolean => {
+  const hasPlatformChanges = (type: PlatformType): boolean => {
     if (!settings || !savedSettings) return false;
-    const currentPlatforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
-    const savedPlatforms = type === 'opencti' ? savedSettings.openctiPlatforms : savedSettings.openaevPlatforms;
+    const settingsKey = getPlatformSettingsKey(type);
+    const currentPlatforms = settings[settingsKey] || [];
+    const savedPlatforms = savedSettings[settingsKey] || [];
     
     if (currentPlatforms.length !== savedPlatforms.length) return true;
     
@@ -802,9 +807,10 @@ const App: React.FC = () => {
     return false;
   };
 
-  const isPlatformSaveDisabled = (type: 'opencti' | 'openaev') => {
+  const isPlatformSaveDisabled = (type: PlatformType) => {
     if (!settings) return true;
-    const platforms = type === 'opencti' ? settings.openctiPlatforms : settings.openaevPlatforms;
+    const settingsKey = getPlatformSettingsKey(type);
+    const platforms = settings[settingsKey] || [];
     
     for (const platform of platforms) {
       const key = `${type}-${platform.id}`;

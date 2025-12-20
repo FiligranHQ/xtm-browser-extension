@@ -9,6 +9,7 @@ import { ENTITY_FETCH_TIMEOUT_MS } from '../../shared/constants';
 import type { OpenCTIClient } from '../../shared/api/opencti-client';
 import type { OpenAEVClient } from '../../shared/api/openaev-client';
 import type { PlatformType } from '../../shared/platform/registry';
+import { isObservableType } from './platform-utils';
 
 /**
  * Dependency container for entity handlers
@@ -180,21 +181,6 @@ export async function handleGetEntityDetails(
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Check if entity type is an observable type
- */
-function isObservableType(entityType: string): boolean {
-  return (
-    entityType.includes('Addr') ||
-    entityType.includes('Domain') ||
-    entityType.includes('Url') ||
-    entityType.includes('File') ||
-    entityType.includes('Email') ||
-    entityType.includes('Mac') ||
-    entityType.includes('Observable')
-  );
-}
 
 /**
  * Resolve tag IDs to labels for OpenAEV entities

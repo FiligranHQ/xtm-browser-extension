@@ -10,6 +10,47 @@ let toastShadowRoot: ShadowRoot | null = null;
 let currentToast: HTMLElement | null = null;
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
+// ============================================================================
+// SVG Icon Helpers
+// ============================================================================
+
+/**
+ * Create SVG element with standard attributes for toast icons
+ */
+function createSvgElement(color: string): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '20');
+  svg.setAttribute('height', '20');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke-width', '2.5');
+  svg.setAttribute('stroke', color);
+  return svg;
+}
+
+/**
+ * Create circle element for toast icons
+ */
+function createCircle(): SVGCircleElement {
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', '12');
+  circle.setAttribute('cy', '12');
+  circle.setAttribute('r', '10');
+  return circle;
+}
+
+/**
+ * Create line element for toast icons
+ */
+function createLine(x1: string, y1: string, x2: string, y2: string): SVGLineElement {
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  return line;
+}
+
 // Complete toast styles - fully self-contained
 const TOAST_STYLES = `
   :host {
@@ -189,73 +230,28 @@ export function showToast(options: ToastOptions): void {
     spinner.className = 'toast-spinner';
     iconContainer.appendChild(spinner);
   } else {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '20');
-    svg.setAttribute('height', '20');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke-width', '2.5');
-    
     const color = type === 'success' ? '#4caf50' : type === 'error' ? '#f44336' : type === 'warning' ? '#ff9800' : '#0fbcff';
-    svg.setAttribute('stroke', color);
+    const svg = createSvgElement(color);
     
     if (type === 'success') {
       const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
       polyline.setAttribute('points', '20 6 9 17 4 12');
       svg.appendChild(polyline);
     } else if (type === 'error') {
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', '12');
-      circle.setAttribute('cy', '12');
-      circle.setAttribute('r', '10');
-      svg.appendChild(circle);
-      const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line1.setAttribute('x1', '15');
-      line1.setAttribute('y1', '9');
-      line1.setAttribute('x2', '9');
-      line1.setAttribute('y2', '15');
-      svg.appendChild(line1);
-      const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line2.setAttribute('x1', '9');
-      line2.setAttribute('y1', '9');
-      line2.setAttribute('x2', '15');
-      line2.setAttribute('y2', '15');
-      svg.appendChild(line2);
+      svg.appendChild(createCircle());
+      svg.appendChild(createLine('15', '9', '9', '15'));
+      svg.appendChild(createLine('9', '9', '15', '15'));
     } else if (type === 'warning') {
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z');
       svg.appendChild(path);
-      const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line1.setAttribute('x1', '12');
-      line1.setAttribute('y1', '9');
-      line1.setAttribute('x2', '12');
-      line1.setAttribute('y2', '13');
-      svg.appendChild(line1);
-      const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line2.setAttribute('x1', '12');
-      line2.setAttribute('y1', '17');
-      line2.setAttribute('x2', '12.01');
-      line2.setAttribute('y2', '17');
-      svg.appendChild(line2);
+      svg.appendChild(createLine('12', '9', '12', '13'));
+      svg.appendChild(createLine('12', '17', '12.01', '17'));
     } else {
       // info
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', '12');
-      circle.setAttribute('cy', '12');
-      circle.setAttribute('r', '10');
-      svg.appendChild(circle);
-      const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line1.setAttribute('x1', '12');
-      line1.setAttribute('y1', '16');
-      line1.setAttribute('x2', '12');
-      line1.setAttribute('y2', '12');
-      svg.appendChild(line1);
-      const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line2.setAttribute('x1', '12');
-      line2.setAttribute('y1', '8');
-      line2.setAttribute('x2', '12.01');
-      line2.setAttribute('y2', '8');
-      svg.appendChild(line2);
+      svg.appendChild(createCircle());
+      svg.appendChild(createLine('12', '16', '12', '12'));
+      svg.appendChild(createLine('12', '8', '12.01', '8'));
     }
     
     iconContainer.appendChild(svg);
@@ -297,20 +293,8 @@ export function showToast(options: ToastOptions): void {
     closeSvg.setAttribute('fill', 'none');
     closeSvg.setAttribute('stroke', 'currentColor');
     closeSvg.setAttribute('stroke-width', '2');
-    
-    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line1.setAttribute('x1', '18');
-    line1.setAttribute('y1', '6');
-    line1.setAttribute('x2', '6');
-    line1.setAttribute('y2', '18');
-    closeSvg.appendChild(line1);
-    
-    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line2.setAttribute('x1', '6');
-    line2.setAttribute('y1', '6');
-    line2.setAttribute('x2', '18');
-    line2.setAttribute('y2', '18');
-    closeSvg.appendChild(line2);
+    closeSvg.appendChild(createLine('18', '6', '6', '18'));
+    closeSvg.appendChild(createLine('6', '6', '18', '18'));
     
     closeBtn.appendChild(closeSvg);
     closeBtn.addEventListener('click', (e) => {

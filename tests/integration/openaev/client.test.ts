@@ -595,6 +595,76 @@ describe('Domain/Hostname Detection for Atomic Testing', () => {
   });
 });
 
+/**
+ * Helper function for pagination tests to reduce duplication
+ */
+async function testPagination(options: {
+  endpoint: string;
+  entityName: string;
+  pageSize: number;
+  idField: string | string[];
+}): Promise<void> {
+  const { endpoint, entityName, pageSize, idField } = options;
+  
+  let allResults: any[] = [];
+  let currentPage = 0;
+  let totalPages = 1;
+  let pageCount = 0;
+  
+  while (currentPage < totalPages) {
+    const response = await fetch(`${config.url}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.token}`,
+      },
+      body: JSON.stringify({
+        page: currentPage,
+        size: pageSize,
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    // Handle paginated response
+    if (result.content) {
+      allResults = allResults.concat(result.content);
+      totalPages = result.totalPages || 1;
+    } else if (Array.isArray(result)) {
+      allResults = allResults.concat(result);
+      totalPages = 1; // No pagination info
+    }
+    
+    currentPage++;
+    pageCount++;
+    
+    // Safety limit
+    if (pageCount > 100) break;
+  }
+  
+  console.log(`Fetched ${allResults.length} ${entityName} in ${pageCount} pages`);
+  
+  // Verify pagination worked
+  expect(pageCount).toBeGreaterThanOrEqual(1);
+  
+  // Verify no duplicate IDs if we have results
+  if (allResults.length > 0) {
+    const idFields = Array.isArray(idField) ? idField : [idField];
+    const ids = allResults.map(r => {
+      for (const field of idFields) {
+        if (r[field]) return r[field];
+      }
+      return undefined;
+    });
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  }
+}
+
 describe('Findings Tests', () => {
   let client: TestOpenAEVClient;
 
@@ -640,55 +710,12 @@ describe('Findings Tests', () => {
       return;
     }
     
-    const pageSize = 10;
-    let allResults: any[] = [];
-    let currentPage = 0;
-    let totalPages = 1;
-    let pageCount = 0;
-    
-    while (currentPage < totalPages) {
-      const response = await fetch(`${config.url}/api/findings/search?distinct=true`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.token}`,
-        },
-        body: JSON.stringify({
-          page: currentPage,
-          size: pageSize,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.content) {
-        allResults = allResults.concat(result.content);
-        totalPages = result.totalPages || 1;
-      } else if (Array.isArray(result)) {
-        allResults = allResults.concat(result);
-        totalPages = 1;
-      }
-      
-      currentPage++;
-      pageCount++;
-      
-      if (pageCount > 100) break;
-    }
-    
-    console.log(`Fetched ${allResults.length} findings in ${pageCount} pages`);
-    
-    expect(pageCount).toBeGreaterThanOrEqual(1);
-    
-    // Verify no duplicate IDs if we have results
-    if (allResults.length > 0) {
-      const ids = allResults.map(r => r.finding_id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    await testPagination({
+      endpoint: '/api/findings/search?distinct=true',
+      entityName: 'findings',
+      pageSize: 10,
+      idField: 'finding_id',
+    });
   });
 
   it('should have finding_value field for exact matching', async (context) => {
@@ -738,58 +765,12 @@ describe('Pagination Tests', () => {
       return;
     }
     
-    const pageSize = 5;
-    let allResults: any[] = [];
-    let currentPage = 0;
-    let totalPages = 1;
-    let pageCount = 0;
-    
-    while (currentPage < totalPages) {
-      const response = await fetch(`${config.url}/api/endpoints/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.token}`,
-        },
-        body: JSON.stringify({
-          page: currentPage,
-          size: pageSize,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      // Handle paginated response
-      if (result.content) {
-        allResults = allResults.concat(result.content);
-        totalPages = result.totalPages || 1;
-      } else if (Array.isArray(result)) {
-        allResults = allResults.concat(result);
-        totalPages = 1; // No pagination info
-      }
-      
-      currentPage++;
-      pageCount++;
-      
-      // Safety limit
-      if (pageCount > 100) break;
-    }
-    
-    console.log(`Fetched ${allResults.length} endpoints in ${pageCount} pages`);
-    
-    // Verify pagination worked
-    expect(pageCount).toBeGreaterThanOrEqual(1);
-    
-    // Verify no duplicate IDs if we have results
-    if (allResults.length > 0) {
-      const ids = allResults.map(r => r.asset_id || r.endpoint_id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    await testPagination({
+      endpoint: '/api/endpoints/search',
+      entityName: 'endpoints',
+      pageSize: 5,
+      idField: ['asset_id', 'endpoint_id'],
+    });
   });
 
   it('should paginate through teams', async (context) => {
@@ -799,54 +780,12 @@ describe('Pagination Tests', () => {
       return;
     }
     
-    const pageSize = 5;
-    let allResults: any[] = [];
-    let currentPage = 0;
-    let totalPages = 1;
-    let pageCount = 0;
-    
-    while (currentPage < totalPages) {
-      const response = await fetch(`${config.url}/api/teams/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.token}`,
-        },
-        body: JSON.stringify({
-          page: currentPage,
-          size: pageSize,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.content) {
-        allResults = allResults.concat(result.content);
-        totalPages = result.totalPages || 1;
-      } else if (Array.isArray(result)) {
-        allResults = allResults.concat(result);
-        totalPages = 1;
-      }
-      
-      currentPage++;
-      pageCount++;
-      
-      if (pageCount > 100) break;
-    }
-    
-    console.log(`Fetched ${allResults.length} teams in ${pageCount} pages`);
-    
-    expect(pageCount).toBeGreaterThanOrEqual(1);
-    
-    if (allResults.length > 0) {
-      const ids = allResults.map(r => r.team_id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    await testPagination({
+      endpoint: '/api/teams/search',
+      entityName: 'teams',
+      pageSize: 5,
+      idField: 'team_id',
+    });
   });
 
   it('should paginate through attack patterns', async (context) => {
@@ -856,54 +795,12 @@ describe('Pagination Tests', () => {
       return;
     }
     
-    const pageSize = 10;
-    let allResults: any[] = [];
-    let currentPage = 0;
-    let totalPages = 1;
-    let pageCount = 0;
-    
-    while (currentPage < totalPages) {
-      const response = await fetch(`${config.url}/api/attack_patterns/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.token}`,
-        },
-        body: JSON.stringify({
-          page: currentPage,
-          size: pageSize,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.content) {
-        allResults = allResults.concat(result.content);
-        totalPages = result.totalPages || 1;
-      } else if (Array.isArray(result)) {
-        allResults = allResults.concat(result);
-        totalPages = 1;
-      }
-      
-      currentPage++;
-      pageCount++;
-      
-      if (pageCount > 100) break;
-    }
-    
-    console.log(`Fetched ${allResults.length} attack patterns in ${pageCount} pages`);
-    
-    expect(pageCount).toBeGreaterThanOrEqual(1);
-    
-    if (allResults.length > 0) {
-      const ids = allResults.map(r => r.attack_pattern_id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    await testPagination({
+      endpoint: '/api/attack_patterns/search',
+      entityName: 'attack patterns',
+      pageSize: 10,
+      idField: 'attack_pattern_id',
+    });
   });
 
   it('should paginate through players', async (context) => {
@@ -913,53 +810,11 @@ describe('Pagination Tests', () => {
       return;
     }
     
-    const pageSize = 5;
-    let allResults: any[] = [];
-    let currentPage = 0;
-    let totalPages = 1;
-    let pageCount = 0;
-    
-    while (currentPage < totalPages) {
-      const response = await fetch(`${config.url}/api/players/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.token}`,
-        },
-        body: JSON.stringify({
-          page: currentPage,
-          size: pageSize,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.content) {
-        allResults = allResults.concat(result.content);
-        totalPages = result.totalPages || 1;
-      } else if (Array.isArray(result)) {
-        allResults = allResults.concat(result);
-        totalPages = 1;
-      }
-      
-      currentPage++;
-      pageCount++;
-      
-      if (pageCount > 100) break;
-    }
-    
-    console.log(`Fetched ${allResults.length} players in ${pageCount} pages`);
-    
-    expect(pageCount).toBeGreaterThanOrEqual(1);
-    
-    if (allResults.length > 0) {
-      const ids = allResults.map(r => r.user_id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    await testPagination({
+      endpoint: '/api/players/search',
+      entityName: 'players',
+      pageSize: 5,
+      idField: 'user_id',
+    });
   });
 });

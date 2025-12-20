@@ -29,6 +29,7 @@ import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
 import { ScanResultsRelationshipItem } from '../components/scan-results/ScanResultsRelationshipItem';
+import { getPageContent } from '../utils/scan-results-helpers';
 import type { PanelMode, EntityData, PlatformInfo, ContainerData, PanelAIState } from '../types/panel-types';
 import type { ResolvedRelationship } from '../../shared/api/ai/types';
 
@@ -127,26 +128,12 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
     setAiResolvingRelationships(true);
 
     try {
-      // Get page content for AI analysis
-      let pageContent = scanPageContent;
-      let pageTitle = currentPageTitle || '';
-      let pageUrl = currentPageUrl || '';
-
-      if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-        try {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab?.id) {
-            const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-            if (contentResponse?.success) {
-              pageContent = contentResponse.data?.content || '';
-              pageTitle = contentResponse.data?.title || pageTitle;
-              pageUrl = contentResponse.data?.url || tab.url || pageUrl;
-            }
-          }
-        } catch {
-          // Silently handle page content retrieval errors
-        }
-      }
+      // Get page content for AI analysis using shared helper
+      const { content: pageContent, title: pageTitle, url: pageUrl } = await getPageContent(
+        scanPageContent,
+        currentPageTitle,
+        currentPageUrl
+      );
 
       if (!pageContent) {
         log.error('No page content available for AI relationship resolution');

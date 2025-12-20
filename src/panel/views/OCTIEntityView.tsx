@@ -40,6 +40,7 @@ import { formatDate } from '../../shared/utils/formatters';
 import { getCvssChipStyle, getSeverityColor } from '../utils/cvss-helpers';
 import { getMarkingColor } from '../utils/marking-helpers';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
+import { usePlatformNavigation, useBackNavigation } from '../hooks/usePlatformNavigation';
 import type { EntityData } from '../types/panel-types';
 import type { OCTIEntityViewProps } from '../types/view-props';
 
@@ -70,6 +71,80 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 }) => {
   const logoSuffix = useLogoSuffix(mode);
   const contentTextStyle = useContentTextStyle(mode);
+
+  // Fire-and-forget fetch for entity details (defined early for hook usage)
+  const fetchEntityDetailsInBackground = React.useCallback((targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
+    const platformType = targetEntity.platformType || inferPlatformTypeFromEntityType(targetEntity.type);
+    const entityIdToFetch = targetEntity.entityId || targetEntity.id;
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
+    
+    if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setEntityDetailsLoading(true);
+    chrome.runtime.sendMessage({
+      type: 'GET_ENTITY_DETAILS',
+      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        setEntityDetailsLoading(false);
+        return;
+      }
+      if (currentPlatformIndexRef.current !== targetIdx) {
+        setEntityDetailsLoading(false);
+        return;
+      }
+      
+      if (response?.success && response.data) {
+        const fullEntity = {
+          ...targetEntity,
+          ...response.data,
+          entityData: response.data,
+          existsInPlatform: true,
+          platformId: targetPlatformId,
+          platformType: platformType,
+          isNonDefaultPlatform: platformType !== 'opencti',
+        };
+        setEntity(fullEntity);
+        multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
+          i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
+        );
+      }
+      setEntityDetailsLoading(false);
+    });
+  }, [currentPlatformIndexRef, multiPlatformResultsRef, setEntity, setEntityDetailsLoading]);
+
+  // Platform navigation using shared hook (must be called unconditionally)
+  const {
+    handlePreviousPlatform: handlePrevPlatform,
+    handleNextPlatform,
+    hasMultiplePlatforms,
+  } = usePlatformNavigation({
+    state: {
+      multiPlatformResults,
+      currentPlatformIndex,
+      currentPlatformIndexRef,
+      multiPlatformResultsRef,
+    },
+    setters: {
+      setMultiPlatformResults,
+      setCurrentPlatformIndex,
+      setEntity,
+      setSelectedPlatformId,
+      setPlatformUrl,
+    },
+    availablePlatforms,
+    fetchEntityDetailsInBackground,
+  });
+
+  // Back navigation using shared hook (must be called unconditionally)
+  const handleBackToList = useBackNavigation({
+    entityFromScanResults,
+    setEntityFromScanResults,
+    entityFromSearchMode,
+    setEntityFromSearchMode,
+    setMultiPlatformResults,
+    setPanelMode,
+  });
 
   if (!entity) {
     return null;
@@ -118,7 +193,6 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const currentPlatform = entityPlatformId 
     ? availablePlatforms.find(p => p.id === entityPlatformId)
     : availablePlatforms[0];
-  const hasMultiplePlatforms = multiPlatformResults.length > 1;
   
   // Determine if this is an observable or SDO
   const observableTypes = ['IPv4-Addr', 'IPv6-Addr', 'Domain-Name', 'Hostname', 'Url', 'Email-Addr', 'Mac-Addr', 'StixFile', 'Artifact', 'Cryptocurrency-Wallet', 'User-Agent', 'Phone-Number', 'Bank-Account'];
@@ -138,96 +212,6 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const epssScore = entityData.x_opencti_epss_score;
   const epssPercentile = entityData.x_opencti_epss_percentile;
   const isVulnerability = type.toLowerCase() === 'vulnerability';
-
-  // Fire-and-forget fetch for entity details
-  const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
-    const platformType = targetEntity.platformType || inferPlatformTypeFromEntityType(targetEntity.type);
-    const entityIdToFetch = targetEntity.entityId || targetEntity.id;
-    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
-    
-    if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    setEntityDetailsLoading(true);
-    chrome.runtime.sendMessage({
-      type: 'GET_ENTITY_DETAILS',
-      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        setEntityDetailsLoading(false);
-        return;
-      }
-      if (currentPlatformIndexRef.current !== targetIdx) {
-        setEntityDetailsLoading(false);
-        return;
-      }
-      
-      if (response?.success && response.data) {
-        const fullEntity = {
-          ...targetEntity,
-          ...response.data,
-          entityData: response.data,
-          existsInPlatform: true,
-          platformId: targetPlatformId,
-          platformType: platformType,
-          isNonDefaultPlatform: platformType !== 'opencti',
-        };
-        setEntity(fullEntity);
-        multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
-          i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
-        );
-      }
-      setEntityDetailsLoading(false);
-    });
-  };
-
-  // Platform navigation handlers
-  // Always fetch entity details when navigating to ensure fresh data
-  const handlePrevPlatform = () => {
-    const idx = currentPlatformIndexRef.current;
-    const results = multiPlatformResultsRef.current;
-    if (idx > 0 && results.length > 1) {
-      const newIdx = idx - 1;
-      const target = results[newIdx];
-      const platform = availablePlatforms.find(p => p.id === target.platformId);
-      currentPlatformIndexRef.current = newIdx;
-      setCurrentPlatformIndex(newIdx);
-      setEntity(target.entity);
-      setSelectedPlatformId(target.platformId);
-      if (platform) setPlatformUrl(platform.url);
-      // Always fetch to ensure fresh data when navigating
-      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-    }
-  };
-
-  const handleNextPlatform = () => {
-    const idx = currentPlatformIndexRef.current;
-    const results = multiPlatformResultsRef.current;
-    if (idx < results.length - 1) {
-      const newIdx = idx + 1;
-      const target = results[newIdx];
-      const platform = availablePlatforms.find(p => p.id === target.platformId);
-      currentPlatformIndexRef.current = newIdx;
-      setCurrentPlatformIndex(newIdx);
-      setEntity(target.entity);
-      setSelectedPlatformId(target.platformId);
-      if (platform) setPlatformUrl(platform.url);
-      // Always fetch to ensure fresh data when navigating
-      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-    }
-  };
-
-  // Handle back to search/scan results
-  const handleBackToList = () => {
-    if (entityFromScanResults) {
-      setEntityFromScanResults(false);
-      setMultiPlatformResults([]);
-      setPanelMode('scan-results');
-    } else if (entityFromSearchMode) {
-      setMultiPlatformResults([]);
-      setPanelMode(entityFromSearchMode);
-      setEntityFromSearchMode(null);
-    }
-  };
 
   // Determine current platform type for logo display
   const currentPlatformType = currentPlatform?.type || 'opencti';

@@ -46,7 +46,7 @@ import { OCTIAddSelectionView } from './views/OCTIAddSelectionView';
 import { OAEVEntityView } from './views/OAEVEntityView';
 import { OAEVAtomicTestingView } from './views/OAEVAtomicTestingView';
 import { OAEVScenarioView } from './views/OAEVScenarioView';
-import { parsePrefixedType } from '../shared/platform/registry';
+import { parsePrefixedType, prefixEntityType, type PlatformType } from '../shared/platform/registry';
 import { formatDate } from '../shared/utils/formatters';
 import { SCENARIO_DEFAULT_VALUES } from '../shared/types/openaev';
 import type { PlatformConfig } from '../shared/types/settings';
@@ -859,10 +859,12 @@ const App: React.FC = () => {
           platform = availablePlatforms.find(p => p.type === match.platformType);
         }
         
-        const matchPlatformType = match.platformType || platform?.type || 'opencti';
+        const matchPlatformType = (match.platformType || platform?.type || 'opencti') as PlatformType;
         const matchType = match.type || match.entityData?.entity_type || payload?.type || entityType || '';
-        const cleanType = matchType.replace(/^oaev-/, '');
-        const displayType = matchPlatformType === 'openaev' && !matchType.startsWith('oaev-') ? `oaev-${cleanType}` : matchType;
+        // Remove any existing prefix and get the clean type
+        const { type: cleanType } = parsePrefixedType(matchType);
+        // Apply proper prefix based on platform type
+        const displayType = prefixEntityType(cleanType, matchPlatformType);
         
         // Use the found platform's ID if available
         const resolvedPlatformId = platform?.id || match.platformId;

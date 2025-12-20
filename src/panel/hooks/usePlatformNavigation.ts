@@ -6,13 +6,13 @@
  */
 
 import { useCallback } from 'react';
-import type { EntityData, MultiPlatformResult, PlatformInfo } from '../types/panel-types';
+import type { EntityData, MultiPlatformResult, PlatformInfo, PanelMode } from '../types/panel-types';
 
 export interface PlatformNavigationState {
   multiPlatformResults: MultiPlatformResult[];
   currentPlatformIndex: number;
-  currentPlatformIndexRef: React.MutableRefObject<number>;
-  multiPlatformResultsRef: React.MutableRefObject<MultiPlatformResult[]>;
+  currentPlatformIndexRef: React.RefObject<number>;
+  multiPlatformResultsRef: React.RefObject<MultiPlatformResult[]>;
 }
 
 export interface PlatformNavigationSetters {
@@ -156,10 +156,10 @@ export function useBackNavigation({
 }: {
   entityFromScanResults: boolean;
   setEntityFromScanResults: (value: boolean) => void;
-  entityFromSearchMode: string | null;
-  setEntityFromSearchMode: (mode: string | null) => void;
+  entityFromSearchMode: 'unified-search' | null;
+  setEntityFromSearchMode: (mode: 'unified-search' | null) => void;
   setMultiPlatformResults: (results: MultiPlatformResult[]) => void;
-  setPanelMode: (mode: string) => void;
+  setPanelMode: (mode: PanelMode) => void;
 }) {
   return useCallback(() => {
     if (entityFromScanResults) {

@@ -484,13 +484,6 @@ export class DetectionEngine {
       }
     }
 
-    // TODO: Search OpenAEV platforms for observables (Findings)
-    // When OpenAEV adds observable/finding search by value, implement here:
-    // for (const [platformId, client] of this.oaevClients) {
-    //   const result = await client.searchFindingByValue(observableValue);
-    //   if (result) matches.push({ platformId, platformType: 'openaev', ... });
-    // }
-
     return matches;
   }
 

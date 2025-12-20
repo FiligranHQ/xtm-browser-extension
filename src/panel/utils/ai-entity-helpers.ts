@@ -14,9 +14,9 @@ export interface AIEntityPayload {
   id: string;
   type: string;
   name: string;
-  value: string;
+  value?: string;
   aiReason?: string;
-  aiConfidence?: number;
+  aiConfidence?: 'low' | 'medium' | 'high';
 }
 
 /**

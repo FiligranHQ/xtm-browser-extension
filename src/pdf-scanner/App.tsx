@@ -13,6 +13,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import type { ScanResultPayload } from '../shared/types/messages';
+import { inferPlatformTypeFromEntityType } from '../shared/platform/registry';
 
 // PDF.js imports
 import * as pdfjsLib from 'pdfjs-dist';
@@ -106,7 +107,7 @@ export default function App() {
     }
     const entityType = entity.type || '';
     const cleanType = entityType.replace(/^(oaev|ogrc)-/, '');
-    const platformType = entityType.startsWith('oaev-') ? 'openaev' : 'opencti';
+    const platformType = inferPlatformTypeFromEntityType(entityType);
     const entityId = entity.entityId || (entity as unknown as { id?: string }).id || '';
     const platformId = entity.platformId || '';
     

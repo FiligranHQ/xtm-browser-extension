@@ -226,14 +226,14 @@ function detachDebugger(target: chrome.debugger.Debuggee): Promise<void> {
 function sendDebuggerCommand(
   target: chrome.debugger.Debuggee,
   method: string,
-  params?: object
-): Promise<{ [key: string]: unknown } | undefined> {
+  params?: Record<string, unknown>
+): Promise<Record<string, unknown> | undefined> {
   return new Promise((resolve, reject) => {
     chrome.debugger.sendCommand(target, method, params, (result) => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
-        resolve(result as { [key: string]: unknown } | undefined);
+        resolve(result as Record<string, unknown> | undefined);
       }
     });
   });

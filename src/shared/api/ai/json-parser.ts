@@ -7,6 +7,87 @@ import { loggers } from '../../utils/logger';
 
 const log = loggers.ai;
 
+// ============================================================================
+// Shared JSON Traversal Utilities
+// ============================================================================
+
+/**
+ * State for JSON string traversal
+ */
+interface JsonTraversalState {
+  braceCount: number;
+  bracketCount: number;
+  inString: boolean;
+  escaped: boolean;
+}
+
+/**
+ * Callback for each character during JSON traversal
+ * Return false to stop traversal
+ */
+type JsonTraversalCallback = (
+  char: string,
+  index: number,
+  state: JsonTraversalState
+) => boolean | void;
+
+/**
+ * Traverse a JSON string, properly handling string escaping
+ * This is a shared utility to avoid duplicating the string parsing logic
+ */
+function traverseJsonString(
+  content: string,
+  startIndex: number,
+  callback: JsonTraversalCallback
+): JsonTraversalState {
+  const state: JsonTraversalState = {
+    braceCount: 0,
+    bracketCount: 0,
+    inString: false,
+    escaped: false,
+  };
+  
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+    
+    if (state.escaped) {
+      state.escaped = false;
+      continue;
+    }
+    
+    if (char === '\\' && state.inString) {
+      state.escaped = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      state.inString = !state.inString;
+      continue;
+    }
+    
+    if (!state.inString) {
+      if (char === '{') state.braceCount++;
+      else if (char === '}') state.braceCount--;
+      else if (char === '[') state.bracketCount++;
+      else if (char === ']') state.bracketCount--;
+    }
+    
+    // Call the callback - stop if it returns false
+    if (callback(char, i, state) === false) {
+      break;
+    }
+  }
+  
+  return state;
+}
+
+/**
+ * Count unclosed braces/brackets in JSON content
+ */
+function countUnclosedStructures(content: string): JsonTraversalState {
+  return traverseJsonString(content, 0, () => {});
+}
+
 /**
  * Parse JSON from AI response (handles markdown code blocks and various edge cases)
  */
@@ -175,38 +256,11 @@ export function parseAIJsonResponse<T>(content: string): T | null {
 
 /**
  * Try to complete truncated JSON by adding missing closing brackets
+ * Uses shared traversal utility
  */
 function tryCompleteJson(content: string): string | null {
-  let braceCount = 0;
-  let bracketCount = 0;
-  let inString = false;
-  let escaped = false;
-  
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-    
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
-      if (char === '{') braceCount++;
-      else if (char === '}') braceCount--;
-      else if (char === '[') bracketCount++;
-      else if (char === ']') bracketCount--;
-    }
-  }
+  const state = countUnclosedStructures(content);
+  const { braceCount, bracketCount, inString } = state;
   
   // If we have unclosed structures, try to close them
   if (braceCount > 0 || bracketCount > 0 || inString) {
@@ -247,48 +301,30 @@ function tryCompleteJson(content: string): string | null {
 
 /**
  * Extract complete objects from an array in truncated JSON
+ * Uses shared traversal utility with custom callback
  */
 function extractCompleteObjectsFromArray(content: string, arrayStart: number): string[] {
   const completeObjects: string[] = [];
   let depth = 0;
   let objectStart = -1;
-  let inString = false;
-  let escaped = false;
   
-  for (let i = arrayStart; i < content.length; i++) {
-    const char = content[i];
-    
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
+  traverseJsonString(content, arrayStart, (char, index, state) => {
+    if (!state.inString) {
       if (char === '{') {
-        if (depth === 0) objectStart = i;
+        if (depth === 0) objectStart = index;
         depth++;
       } else if (char === '}') {
         depth--;
         if (depth === 0 && objectStart !== -1) {
-          completeObjects.push(content.substring(objectStart, i + 1));
+          completeObjects.push(content.substring(objectStart, index + 1));
           objectStart = -1;
         }
       } else if (char === ']' && depth === 0) {
-        // End of array
-        break;
+        // End of array - stop traversal
+        return false;
       }
     }
-  }
+  });
   
   return completeObjects;
 }
@@ -340,45 +376,29 @@ function tryExtractCompleteItems(content: string): string | null {
 
 /**
  * Extract balanced JSON from a string by counting braces
+ * Uses shared traversal utility
  */
 function extractBalancedJson(content: string): string | null {
   const startIndex = content.indexOf('{');
   if (startIndex === -1) return null;
   
   let depth = 0;
-  let inString = false;
-  let escaped = false;
+  let endIndex = -1;
   
-  for (let i = startIndex; i < content.length; i++) {
-    const char = content[i];
-    
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    
-    if (char === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
+  traverseJsonString(content, startIndex, (char, index, state) => {
+    if (!state.inString) {
       if (char === '{') {
         depth++;
       } else if (char === '}') {
         depth--;
         if (depth === 0) {
-          return content.substring(startIndex, i + 1);
+          endIndex = index;
+          return false; // Stop traversal
         }
       }
     }
-  }
+  });
   
-  return null;
+  return endIndex !== -1 ? content.substring(startIndex, endIndex + 1) : null;
 }
 

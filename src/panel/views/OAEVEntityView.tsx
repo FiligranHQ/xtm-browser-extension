@@ -49,8 +49,9 @@ import {
   getOAEVEntityUrl,
   getOAEVEntityColor,
 } from '../../shared/utils/entity';
-import { getPlatformLogoName } from '../../shared/platform/registry';
+import { getPlatformLogoName, getPlatformName } from '../../shared/platform/registry';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
+import { usePlatformNavigation, useBackNavigation } from '../hooks/usePlatformNavigation';
 import type { EntityData } from '../types/panel-types';
 import type { OAEVEntityViewProps } from '../types/view-props';
 
@@ -78,6 +79,88 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
 }) => {
   const logoSuffix = useLogoSuffix(mode);
   const contentTextStyle = useContentTextStyle(mode);
+
+  // Fire-and-forget fetch for entity details (defined early for hook usage)
+  const fetchEntityDetailsInBackground = React.useCallback((targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
+    // Determine the correct platform type based on target entity or platform
+    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
+    const platformType = targetEntity.platformType || targetPlatform?.type || 'openaev';
+    const isNonDefault = platformType !== 'opencti';
+    
+    const entityIdToFetch = targetEntity.entityId || targetEntity.id;
+    // Remove prefix based on platform type
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '')
+      .replace(/^(oaev|ogrc)-/, '');
+    
+    if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    
+    setEntityDetailsLoading(true);
+    chrome.runtime.sendMessage({
+      type: 'GET_ENTITY_DETAILS',
+      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        setEntityDetailsLoading(false);
+        return;
+      }
+      if (currentPlatformIndexRef.current !== targetIdx) {
+        setEntityDetailsLoading(false);
+        return;
+      }
+      
+      if (response?.success && response.data) {
+        const fullEntity = {
+          ...targetEntity,
+          ...response.data,
+          entityData: response.data,
+          existsInPlatform: true,
+          platformId: targetPlatformId,
+          platformType: platformType,
+          isNonDefaultPlatform: isNonDefault,
+        };
+        setEntity(fullEntity);
+        multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
+          i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
+        );
+      }
+      setEntityDetailsLoading(false);
+    });
+  }, [availablePlatforms, currentPlatformIndexRef, multiPlatformResultsRef, setEntity, setEntityDetailsLoading]);
+
+  // Platform navigation using shared hook (must be called unconditionally)
+  const {
+    handlePreviousPlatform: handlePrevPlatform,
+    handleNextPlatform,
+    hasMultiplePlatforms,
+    currentResult,
+    currentPlatform: navCurrentPlatform,
+  } = usePlatformNavigation({
+    state: {
+      multiPlatformResults,
+      currentPlatformIndex,
+      currentPlatformIndexRef,
+      multiPlatformResultsRef,
+    },
+    setters: {
+      setMultiPlatformResults,
+      setCurrentPlatformIndex,
+      setEntity,
+      setSelectedPlatformId,
+      setPlatformUrl,
+    },
+    availablePlatforms,
+    fetchEntityDetailsInBackground,
+  });
+
+  // Back navigation using shared hook (must be called unconditionally)
+  const handleBackToList = useBackNavigation({
+    entityFromScanResults,
+    setEntityFromScanResults,
+    entityFromSearchMode,
+    setEntityFromSearchMode,
+    setMultiPlatformResults,
+    setPanelMode,
+  });
 
   if (!entity) return null;
   
@@ -142,106 +225,14 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
     }
   };
 
-  // Fire-and-forget fetch for entity details
-  const fetchEntityDetailsInBackground = (targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
-    // Determine the correct platform type based on target entity or platform
-    const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-    const platformType = targetEntity.platformType || targetPlatform?.type || 'openaev';
-    const isNonDefault = platformType !== 'opencti';
-    
-    const entityIdToFetch = targetEntity.entityId || targetEntity.id;
-    // Remove prefix based on platform type
-    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '')
-      .replace(/^(oaev|ogrc)-/, '');
-    
-    if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
-    setEntityDetailsLoading(true);
-    chrome.runtime.sendMessage({
-      type: 'GET_ENTITY_DETAILS',
-      payload: { id: entityIdToFetch, entityType: entityTypeToFetch, platformId: targetPlatformId, platformType },
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        setEntityDetailsLoading(false);
-        return;
-      }
-      if (currentPlatformIndexRef.current !== targetIdx) {
-        setEntityDetailsLoading(false);
-        return;
-      }
-      
-      if (response?.success && response.data) {
-        const fullEntity = {
-          ...targetEntity,
-          ...response.data,
-          entityData: response.data,
-          existsInPlatform: true,
-          platformId: targetPlatformId,
-          platformType: platformType,
-          isNonDefaultPlatform: isNonDefault,
-        };
-        setEntity(fullEntity);
-        multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
-          i === targetIdx ? { ...r, entity: fullEntity as EntityData } : r
-        );
-      }
-      setEntityDetailsLoading(false);
-    });
-  };
-
-  // Platform navigation handlers
-  // Always fetch entity details when navigating to ensure fresh data
-  const handlePrevPlatform = () => {
-    const idx = currentPlatformIndexRef.current;
-    const results = multiPlatformResultsRef.current;
-    if (idx > 0 && results.length > 1) {
-      const newIdx = idx - 1;
-      const target = results[newIdx];
-      const plat = availablePlatforms.find(p => p.id === target.platformId);
-      currentPlatformIndexRef.current = newIdx;
-      setCurrentPlatformIndex(newIdx);
-      setEntity(target.entity);
-      setSelectedPlatformId(target.platformId);
-      if (plat) setPlatformUrl(plat.url);
-      // Always fetch to ensure fresh data when navigating
-      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-    }
-  };
-
-  const handleNextPlatform = () => {
-    const idx = currentPlatformIndexRef.current;
-    const results = multiPlatformResultsRef.current;
-    if (idx < results.length - 1) {
-      const newIdx = idx + 1;
-      const target = results[newIdx];
-      const plat = availablePlatforms.find(p => p.id === target.platformId);
-      currentPlatformIndexRef.current = newIdx;
-      setCurrentPlatformIndex(newIdx);
-      setEntity(target.entity);
-      setSelectedPlatformId(target.platformId);
-      if (plat) setPlatformUrl(plat.url);
-      // Always fetch to ensure fresh data when navigating
-      fetchEntityDetailsInBackground(target.entity, target.platformId, newIdx);
-    }
-  };
-
   // Determine display
-  const currentResult = multiPlatformResults[currentPlatformIndex];
-  const currentPlatform = availablePlatforms.find(p => p.id === currentResult?.platformId);
-  const currentPlatformType = currentResult?.entity?.platformType || currentPlatform?.type || 'openaev';
+  const currentPlatformType = currentResult?.entity?.platformType || navCurrentPlatform?.type || 'openaev';
   const platformLogo = getPlatformLogoName(currentPlatformType);
-  const hasMultiplePlatforms = multiPlatformResults.length > 1;
-  
+
   // Handle back button click
   const handleBackClick = () => {
-    if (entityFromScanResults) {
-      setEntityFromScanResults(false);
-      setMultiPlatformResults([]);
-      setPanelMode('scan-results');
-    } else if (entityFromSearchMode) {
-      setMultiPlatformResults([]);
-      setPanelMode(entityFromSearchMode);
-      setEntityFromSearchMode(null);
+    if (entityFromSearchMode || entityFromScanResults) {
+      handleBackToList();
     } else {
       setPanelMode('empty');
     }
@@ -299,13 +290,13 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
                       ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
                       : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
                     }
-                    alt={currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI'}
+                    alt={getPlatformName(currentPlatformType)}
                     width={18}
                     height={18}
                   />
                 )}
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {currentPlatform?.name || (currentPlatformType === 'openaev' ? 'OpenAEV' : 'OpenCTI')}
+                  {navCurrentPlatform?.name || getPlatformName(currentPlatformType)}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   ({currentPlatformIndex + 1}/{multiPlatformResults.length})

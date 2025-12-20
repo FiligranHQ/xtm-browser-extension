@@ -27,6 +27,7 @@ import {
   fetchFromAllPlatforms,
   searchAcrossPlatforms,
   handleError,
+  isObservableType,
 } from './platform-utils';
 
 const log = loggers.background;
@@ -39,21 +40,6 @@ const CACHEABLE_OPENCTI_TYPES = [
   'City', 'Administrative-Area', 'Position', 'Tool', 'Narrative',
   'Channel', 'System'
 ];
-
-/**
- * Helper to determine if entity type is an observable
- */
-function isObservableType(entityType: string): boolean {
-  return (
-    entityType.includes('Addr') ||
-    entityType.includes('Domain') ||
-    entityType.includes('Url') ||
-    entityType.includes('File') ||
-    entityType.includes('Email') ||
-    entityType.includes('Mac') ||
-    entityType.includes('Observable')
-  );
-}
 
 /**
  * Get entity details handler
@@ -157,35 +143,18 @@ export const handleSearchEntities: MessageHandler = async (payload, sendResponse
     // Refang search term in case user searches for defanged indicator
     const cleanSearchTerm = refangIndicator(searchTerm);
 
-    // Search across all OpenCTI platforms in parallel with timeout
-    const clientsToSearch = platformId
-      ? [[platformId, openCTIClients.get(platformId)] as const].filter(([_, c]) => c)
-      : Array.from(openCTIClients.entries());
-
-    const searchPromises = clientsToSearch.map(async ([pId, client]) => {
-      if (!client) return { platformId: pId, results: [] };
-
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), SEARCH_TIMEOUT_MS)
-        );
-        const results = await Promise.race([client.globalSearch(cleanSearchTerm, types, limit), timeoutPromise]);
-        return { platformId: pId, results: results.map((r: unknown) => ({ ...(r as object), platformId: pId })) };
-      } catch (e) {
-        log.warn(`Search timeout/error for platform ${pId}:`, e);
-        return { platformId: pId, results: [] };
-      }
-    });
-
-    const searchResults = await Promise.all(searchPromises);
-    const allResults = searchResults.flatMap(r => r.results);
+    // Search across all OpenCTI platforms in parallel with timeout using shared utility
+    const allResults = await searchAcrossPlatforms(
+      openCTIClients,
+      platformId,
+      (client) => client.globalSearch(cleanSearchTerm, types, limit),
+      SEARCH_TIMEOUT_MS,
+      'Global search'
+    );
 
     sendResponse(successResponse(allResults));
   } catch (error) {
-    sendResponse({
-      success: false,
-      error: error instanceof Error ? error.message : 'Search failed',
-    });
+    handleError(error, sendResponse, 'Search failed');
   }
 };
 

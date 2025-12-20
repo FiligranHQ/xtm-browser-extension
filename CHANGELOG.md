@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **CI/CD Lint & Type Check Job**: Added ESLint and TypeScript type checking to GitHub Actions CI pipeline, running before all other jobs to catch issues early
+
+### Improved
+- **Code Refactoring**: Major deduplication and code organization improvements:
+  - Extracted `usePlatformNavigation` and `useBackNavigation` hooks for platform navigation logic shared between OCTIEntityView and OAEVEntityView
+  - Created `ai-entity-helpers.ts` with shared utilities for AI entity payload creation and broadcasting
+  - Consolidated `isObservableType` function - now single source in `shared/utils/entity.ts`, re-exported from `platform-utils.ts`
+  - Created `searchAcrossPlatforms` utility in `platform-utils.ts` for parallel platform search with timeout
+  - Removed duplicate platform navigation handlers (~50 lines per entity view)
+  - Removed duplicate AI entity payload creation code (4 instances consolidated)
+- **Dead Code Cleanup**: Removed unused `side-panel-helpers.ts` file and empty `background/utils/` directory
+
 ## [0.0.12] - 2025-12-20
 
 ### Added

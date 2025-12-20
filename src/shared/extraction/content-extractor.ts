@@ -192,20 +192,9 @@ function extractFromShadowDOM(): ExtractedContent | null {
         htmlParts.push(clonedContent);
       }
       
-      // Extract images from shadow root
+      // Extract images from shadow root using shared helper
       shadowRoot.querySelectorAll('img').forEach(img => {
-        const imgEl = img as HTMLImageElement;
-        const src = getImageSrc(imgEl);
-        if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
-          seenImages.add(src);
-          images.push({
-            src: makeAbsoluteUrl(src),
-            alt: imgEl.alt || '',
-            caption: getFigureCaption(imgEl),
-            width: imgEl.naturalWidth || imgEl.width || 0,
-            height: imgEl.naturalHeight || imgEl.height || 0,
-          });
-        }
+        extractUniqueImage(img as HTMLImageElement, seenImages, images);
       });
     }
     
@@ -597,6 +586,32 @@ function findHeroImage(): ExtractedImage | null {
   
   log.debug('[ContentExtractor] No hero image found');
   return null;
+}
+
+/**
+ * Extract image data if not already seen (for deduplication)
+ * Returns true if the image was added, false if skipped
+ */
+export function extractUniqueImage(
+  img: HTMLImageElement,
+  seenImages: Set<string>,
+  images: ExtractedImage[]
+): boolean {
+  const src = getImageSrc(img);
+  if (!src || seenImages.has(src) || !isContentImage(src, img)) {
+    return false;
+  }
+  
+  seenImages.add(src);
+  images.push({
+    src: makeAbsoluteUrl(src),
+    alt: img.alt || '',
+    caption: getFigureCaption(img),
+    width: img.naturalWidth || img.width || 0,
+    height: img.naturalHeight || img.height || 0,
+  });
+  
+  return true;
 }
 
 /**
@@ -1463,22 +1478,10 @@ function extractFromAppPage(): ExtractedContent | null {
       }
     }
     
-    // Extract images
+    // Extract images using shared helper
     document.body.querySelectorAll('img').forEach(img => {
       if (!isElementVisible(img)) return;
-      
-      const imgEl = img as HTMLImageElement;
-      const src = getImageSrc(imgEl);
-      if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
-        seenImages.add(src);
-        images.push({
-          src: makeAbsoluteUrl(src),
-          alt: imgEl.alt || '',
-          caption: getFigureCaption(imgEl),
-          width: imgEl.naturalWidth || imgEl.width || 0,
-          height: imgEl.naturalHeight || imgEl.height || 0,
-        });
-      }
+      extractUniqueImage(img as HTMLImageElement, seenImages, images);
     });
     
     const textContent = cleanText(structuredContent.join('\n'));
@@ -1547,20 +1550,9 @@ function extractFromVisibleContent(): ExtractedContent {
       return;
     }
     
-    // Handle images
+    // Handle images using shared helper
     if (tagName === 'img') {
-      const imgEl = element as HTMLImageElement;
-      const src = getImageSrc(imgEl);
-      if (src && !seenImages.has(src) && isContentImage(src, imgEl)) {
-        seenImages.add(src);
-        images.push({
-          src: makeAbsoluteUrl(src),
-          alt: imgEl.alt || '',
-          caption: getFigureCaption(imgEl),
-          width: imgEl.naturalWidth || imgEl.width || 0,
-          height: imgEl.naturalHeight || imgEl.height || 0,
-        });
-      }
+      extractUniqueImage(element as HTMLImageElement, seenImages, images);
       return;
     }
     

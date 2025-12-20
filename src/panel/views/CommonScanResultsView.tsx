@@ -27,6 +27,7 @@ import { loggers } from '../../shared/utils/logger';
 import { generateDescription, cleanHtmlContent } from '../utils/description-helpers';
 import { getAiColor } from '../utils/platform-helpers';
 import { isDefaultPlatform } from '../../shared/platform/registry';
+import { broadcastAIEntities, formatEntityCountMessage } from '../utils/ai-entity-helpers';
 import {
   isSelectableForOpenCTI,
   isFoundInOpenCTI,
@@ -402,34 +403,14 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                         if (visibleEntities.length > 0) {
                           // Put AI-discovered entities at the TOP of the list for visibility
                           setScanResultsEntities((prev: ScanResultEntity[]) => [...visibleEntities, ...prev]);
-                          // Send AI entities to content script to persist in lastScanData
-                          const aiEntityPayload = visibleEntities.map(e => ({
-                            id: e.id,
-                            type: e.type,
-                            name: e.name,
-                            value: e.value,
-                            aiReason: e.aiReason,
-                            aiConfidence: e.aiConfidence,
-                          }));
-                          window.parent.postMessage({
-                            type: 'XTM_ADD_AI_ENTITIES',
-                            payload: { entities: aiEntityPayload },
-                          }, '*');
-                          // Also send to PDF scanner (if active) via runtime message
-                          chrome.runtime.sendMessage({
-                            type: 'FORWARD_TO_PDF_SCANNER',
-                            payload: {
-                              type: 'ADD_AI_ENTITIES_TO_PDF',
-                              payload: aiEntityPayload,
-                            },
-                          });
+                          // Broadcast to content script and PDF scanner
+                          broadcastAIEntities(visibleEntities);
+                          const notVisibleCount = newEntities.length - visibleEntities.length;
                           showToast({ 
                             type: 'success', 
-                            message: `AI discovered ${visibleEntities.length} additional entit${visibleEntities.length === 1 ? 'y' : 'ies'}${
-                              newEntities.length > visibleEntities.length 
-                                ? ` (${newEntities.length - visibleEntities.length} not visible on page)` 
-                                : ''
-                            }` 
+                            message: formatEntityCountMessage(visibleEntities.length) + (
+                              notVisibleCount > 0 ? ` (${notVisibleCount} not visible on page)` : ''
+                            )
                           });
                         } else if (newEntities.length > 0) {
                           // AI found entities but none could be highlighted
@@ -442,54 +423,14 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   } else {
                     // No tab - add all entities at TOP (can't verify highlighting)
                     setScanResultsEntities((prev: ScanResultEntity[]) => [...newEntities, ...prev]);
-                    // Send AI entities to content script to persist in lastScanData
-                    const aiEntityPayload = newEntities.map(e => ({
-                      id: e.id,
-                      type: e.type,
-                      name: e.name,
-                      value: e.value,
-                      aiReason: e.aiReason,
-                      aiConfidence: e.aiConfidence,
-                    }));
-                    window.parent.postMessage({
-                      type: 'XTM_ADD_AI_ENTITIES',
-                      payload: { entities: aiEntityPayload },
-                    }, '*');
-                    // Also send to PDF scanner (if active) via runtime message
-                    chrome.runtime.sendMessage({
-                      type: 'FORWARD_TO_PDF_SCANNER',
-                      payload: {
-                        type: 'ADD_AI_ENTITIES_TO_PDF',
-                        payload: aiEntityPayload,
-                      },
-                    });
-                    showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
+                    broadcastAIEntities(newEntities);
+                    showToast({ type: 'success', message: formatEntityCountMessage(newEntities.length) });
                   }
                 } catch {
                   // On error, add all entities at TOP (fallback)
                   setScanResultsEntities((prev: ScanResultEntity[]) => [...newEntities, ...prev]);
-                  // Send AI entities to content script to persist in lastScanData
-                  const aiEntityPayload = newEntities.map(e => ({
-                    id: e.id,
-                    type: e.type,
-                    name: e.name,
-                    value: e.value,
-                    aiReason: e.aiReason,
-                    aiConfidence: e.aiConfidence,
-                  }));
-                  window.parent.postMessage({
-                    type: 'XTM_ADD_AI_ENTITIES',
-                    payload: { entities: aiEntityPayload },
-                  }, '*');
-                  // Also send to PDF scanner (if active) via runtime message
-                  chrome.runtime.sendMessage({
-                    type: 'FORWARD_TO_PDF_SCANNER',
-                    payload: {
-                      type: 'ADD_AI_ENTITIES_TO_PDF',
-                      payload: aiEntityPayload,
-                    },
-                  });
-                  showToast({ type: 'success', message: `AI discovered ${newEntities.length} additional entit${newEntities.length === 1 ? 'y' : 'ies'}` });
+                  broadcastAIEntities(newEntities);
+                  showToast({ type: 'success', message: formatEntityCountMessage(newEntities.length) });
                 }
               })();
             } else {
@@ -723,25 +664,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                         if (visibleEntities.length > 0) {
                           // Put AI-discovered entities at the TOP of the list for visibility
                           setScanResultsEntities((prev: ScanResultEntity[]) => [...visibleEntities, ...prev]);
-                          const aiEntityPayload = visibleEntities.map(e => ({
-                            id: e.id,
-                            type: e.type,
-                            name: e.name,
-                            value: e.value,
-                            aiReason: e.aiReason,
-                            aiConfidence: e.aiConfidence,
-                          }));
-                          window.parent.postMessage({
-                            type: 'XTM_ADD_AI_ENTITIES',
-                            payload: { entities: aiEntityPayload },
-                          }, '*');
-                          chrome.runtime.sendMessage({
-                            type: 'FORWARD_TO_PDF_SCANNER',
-                            payload: {
-                              type: 'ADD_AI_ENTITIES_TO_PDF',
-                              payload: aiEntityPayload,
-                            },
-                          });
+                          broadcastAIEntities(visibleEntities);
                         }
                         
                         // Process relationships - values are already set by backend

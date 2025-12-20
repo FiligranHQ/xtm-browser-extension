@@ -22,10 +22,16 @@ import {
 } from '@mui/icons-material';
 import type { PlatformConfig } from '../../shared/types/settings';
 import type { TestResult } from '../constants';
+import { 
+  getPlatformUrlPlaceholder, 
+  getDefaultPlatformName, 
+  getPlatformName,
+  type PlatformType,
+} from '../../shared/platform/registry';
 
 interface PlatformCardProps {
   platform: PlatformConfig;
-  type: 'opencti' | 'openaev';
+  type: PlatformType;
   index: number;
   showToken: boolean;
   isTesting: boolean;
@@ -53,10 +59,10 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
   onTestConnection,
 }) => {
   // Platform name is only shown after it has been tested (auto-resolved from remote)
-  const isDefaultName = platform.name === 'New OpenCTI' || 
-                       platform.name === 'New OpenAEV' ||
-                       platform.name === 'OpenCTI' ||
-                       platform.name === 'OpenAEV' ||
+  const defaultName = getDefaultPlatformName(type);
+  const platformDisplayName = getPlatformName(type);
+  const isDefaultName = platform.name === defaultName || 
+                       platform.name === platformDisplayName ||
                        !platform.name;
   const showNameField = isTested || !isDefaultName;
 
@@ -78,7 +84,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
           <TextField
             label="URL"
             size="small"
-            placeholder={type === 'opencti' ? 'https://opencti.example.com' : 'https://openaev.example.com'}
+            placeholder={getPlatformUrlPlaceholder(type)}
             value={platform.url}
             onChange={(e) => onUpdate({ url: e.target.value })}
             fullWidth

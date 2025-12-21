@@ -6,6 +6,7 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { errorResponse, successResponse } from '../../shared/types/common';
+import type { ExtensionSettings } from '../../shared/types/settings';
 
 const log = loggers.background;
 
@@ -218,5 +219,128 @@ export function withClientCheck<T>(
     if (!checkClientsConfigured(clients, sendResponse)) return;
     await handler(clients, sendResponse);
   };
+}
+
+// ============================================================================
+// Platform Connection Testing
+// ============================================================================
+
+/** Client interface for connection testing */
+export interface TestableClient {
+  testConnection(): Promise<unknown>;
+}
+
+/** Client factory function */
+export type ClientFactory<T extends TestableClient> = (config: {
+  id: string;
+  name: string;
+  url: string;
+  apiToken: string;
+  enabled: boolean;
+}) => T;
+
+/** Platform connection test request */
+export interface ConnectionTestRequest {
+  platformId?: string;
+  url?: string;
+  apiToken?: string;
+  temporary?: boolean;
+}
+
+/** Platform connection test dependencies */
+export interface ConnectionTestDeps<T extends TestableClient> {
+  /** Get settings function */
+  getSettings: () => Promise<ExtensionSettings>;
+  /** Map of cached clients */
+  clients: Map<string, T>;
+  /** Client factory for creating new clients */
+  createClient: ClientFactory<T>;
+  /** Settings key for platform configs (e.g., 'openctiPlatforms' or 'openaevPlatforms') */
+  settingsKey: 'openctiPlatforms' | 'openaevPlatforms';
+  /** Connection timeout in ms */
+  timeoutMs?: number;
+}
+
+/**
+ * Test platform connection with support for both temporary and saved platforms.
+ * 
+ * This utility consolidates the duplicated connection testing logic that was in
+ * background/index.ts for OpenCTI and OpenAEV platforms.
+ * 
+ * @example
+ * ```typescript
+ * await testPlatformConnection(
+ *   { platformId: 'my-platform', temporary: false },
+ *   {
+ *     getSettings,
+ *     clients: openCTIClients,
+ *     createClient: (config) => new OpenCTIClient(config),
+ *     settingsKey: 'openctiPlatforms',
+ *   },
+ *   sendResponse
+ * );
+ * ```
+ */
+export async function testPlatformConnection<T extends TestableClient>(
+  request: ConnectionTestRequest,
+  deps: ConnectionTestDeps<T>,
+  sendResponse: SendResponse
+): Promise<void> {
+  const { platformId, url, apiToken, temporary } = request;
+  const { getSettings, clients, createClient, settingsKey, timeoutMs = 30000 } = deps;
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
+  );
+
+  try {
+    if (temporary && url && apiToken) {
+      // Test with temporary credentials
+      const tempClient = createClient({
+        id: 'temp',
+        name: 'temp',
+        url,
+        apiToken,
+        enabled: true,
+      });
+      const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
+      sendResponse(successResponse(info));
+    } else if (platformId) {
+      // Test saved platform
+      const currentSettings = await getSettings();
+      let client = clients.get(platformId);
+      
+      if (!client) {
+        const platformConfigs = currentSettings[settingsKey] || [];
+        const platformConfig = platformConfigs.find(p => p.id === platformId);
+        
+        if (platformConfig?.url && platformConfig?.apiToken) {
+          client = createClient({
+            id: platformConfig.id,
+            name: platformConfig.name,
+            url: platformConfig.url,
+            apiToken: platformConfig.apiToken,
+            enabled: platformConfig.enabled ?? true,
+          });
+          clients.set(platformId, client);
+        }
+      }
+      
+      if (!client) {
+        sendResponse(errorResponse('Platform not configured'));
+        return;
+      }
+      
+      const info = await Promise.race([client.testConnection(), timeoutPromise]);
+      sendResponse(successResponse(info));
+    } else {
+      sendResponse(errorResponse('Missing platformId or temporary credentials'));
+    }
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Connection failed',
+    });
+  }
 }
 

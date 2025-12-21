@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createServiceGuard } from '../test-helpers';
+import { createServiceGuard, assertEntityList } from '../test-helpers';
 
 // OpenAEV client types and helpers
 interface OpenAEVConfig {
@@ -337,10 +337,11 @@ class TestOpenAEVClient {
   }
 
   async findDnsResolutionPayloadByHostname(hostname: string): Promise<any | null> {
+    // Note: payload_type is not a filterable field in OpenAEV API
+    // Only dns_resolution_hostname is filterable, which uniquely identifies DnsResolution payloads
     const filterGroup = {
       mode: 'and',
       filters: [
-        { key: 'payload_type', operator: 'eq', values: ['DnsResolution'] },
         { key: 'dns_resolution_hostname', operator: 'eq', values: [hostname] },
       ],
     };
@@ -527,11 +528,7 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Connection', () => {
     it('should connect to OpenAEV and get settings', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const result = await client.testConnection();
       expect(result).toBeDefined();
@@ -540,25 +537,17 @@ describe('OpenAEV Client Integration Tests', () => {
 
   describe('Endpoints', () => {
     it('should get endpoints list', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const endpoints = await client.getEndpoints();
-      expect(Array.isArray(endpoints)).toBe(true);
+      assertEntityList(endpoints);
     });
 
     it('should search endpoints', async (context) => {
-      if (!isOpenAEVAvailable) {
-        console.log(`Skipping: OpenAEV not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const endpoints = await client.searchEndpoints('test', 5);
-      expect(Array.isArray(endpoints)).toBe(true);
+      assertEntityList(endpoints);
     });
   });
 
@@ -821,7 +810,9 @@ describe('Full Text Search Tests', () => {
   it('should perform full text search by class', async (context) => {
     if (skipIfUnavailable(context)) return;
     
-    const result = await client.fullTextSearchByClass('Endpoint', 'server', 0, 10);
+    // OpenAEV API requires full class names (e.g., io.openaev.database.model.Asset)
+    // Asset is the parent class of Endpoint
+    const result = await client.fullTextSearchByClass('io.openaev.database.model.Asset', 'server', 0, 10);
     expect(result).toBeDefined();
     expect(Array.isArray(result.content)).toBe(true);
   });
@@ -829,7 +820,12 @@ describe('Full Text Search Tests', () => {
   it('should search by different entity classes', async (context) => {
     if (skipIfUnavailable(context)) return;
     
-    const classes = ['Endpoint', 'Team', 'Scenario'];
+    // OpenAEV API requires full class names
+    const classes = [
+      'io.openaev.database.model.Asset',
+      'io.openaev.database.model.Team',
+      'io.openaev.database.model.Scenario'
+    ];
     for (const className of classes) {
       const result = await client.fullTextSearchByClass(className, 'test', 0, 5);
       expect(result).toBeDefined();

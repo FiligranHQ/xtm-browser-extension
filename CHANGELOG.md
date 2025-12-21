@@ -5,36 +5,6 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- **CI/CD Lint & Type Check Job**: Added ESLint and TypeScript type checking to GitHub Actions CI pipeline, running before all other jobs to catch issues early
-
-### Improved
-- **Code Refactoring**: Major deduplication and code organization improvements:
-  - Extracted `usePlatformNavigation` and `useBackNavigation` hooks for platform navigation logic shared between OCTIEntityView and OAEVEntityView
-  - Created `ai-entity-helpers.ts` with shared utilities for AI entity payload creation and broadcasting
-  - Consolidated `isObservableType` function - now single source in `shared/utils/entity.ts`, re-exported from `platform-utils.ts`
-  - Created `searchAcrossPlatforms` utility in `platform-utils.ts` for parallel platform search with timeout
-  - Removed duplicate platform navigation handlers (~50 lines per entity view)
-  - Removed duplicate AI entity payload creation code (4 instances consolidated)
-  - **Highlight Utilities**: Refactored `findMatchPositions` to delegate to `findMatchPositionsWithBoundaries`, eliminating ~40 lines of duplicate matching logic
-  - **Highlighting Module**: `highlighting.ts` now uses shared utilities from `utils/highlight.ts` via `applyHighlightsWithConfig`, removing duplicate `createHighlightElement` and `applyHighlightsInReverse` implementations
-  - **Side Panel Helpers**: Created `tryOpenSidePanel` and `getSidePanelTarget` helpers in `misc-handlers.ts`, reducing ~100 lines of duplicated side panel opening logic
-  - **Toast Icons**: Created `createSvgElement`, `createCircle`, and `createLine` helpers for toast notification SVG icons
-  - **Content Extractor**: Standardized image extraction using `extractUniqueImage` helper across all extraction methods
-  - **Test Helpers**: Created `testPagination` helper in OpenAEV integration tests, consolidating 5 pagination test blocks
-- **Multi-Platform Abstraction**: Improved platform registry for future scalability:
-  - Added `formatEntityTypeForDisplay()` for consistent entity type formatting across all platforms
-  - Added `getDefaultPlatformName()`, `getPlatformUrlPlaceholder()`, `getPlatformSettingsKey()` helpers
-  - Replaced all hardcoded platform ternaries (e.g., `type === 'opencti' ? 'OpenCTI' : 'OpenAEV'`) with registry lookups
-  - Updated `PlatformCard`, options/App, EntityTooltip, entity views to use platform-agnostic helpers
-  - Extension now properly supports 3+ platforms without code changes (just registry additions)
-- **Dead Code Cleanup**: Removed unused `side-panel-helpers.ts` file and empty `background/utils/` directory
-
-### Fixed
-- **Platform Type Consistency**: Detection engine now explicitly sets `platformType` on all enriched entities (observables, OpenCTI entities, CVEs, OpenAEV entities), eliminating reliance on fallback defaults throughout the codebase
-
 ## [0.0.12] - 2025-12-20
 
 ### Added
@@ -77,14 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PDF Highlight Click to Entity Overview**: Clicking a highlight in the PDF scanner now correctly opens the entity overview with full data
 - **Firefox PDF Scanner Detection**: Popup now correctly detects PDF scanner pages in Firefox (`moz-extension://` URLs)
 - **AI Discovery Content Retrieval**: AI discovery now properly retrieves PDF content when triggered from the side panel
-
-### Improved
-- **Code Refactoring**: Extracted reusable components (ScanResultsAIButtons, ScanResultsSelectionActions, ScanResultsFilters, ScanResultsRelationshipItem, ScanResultsEntityItem, ScenarioPlatformSelector, ScenarioSummary, ScenarioFormView, ScenarioInjectSelector, ScenarioTypeSelector) from monolithic views for better maintainability
-- **Custom Hooks**: Extracted and integrated reusable hooks (useContainerActions, useInvestigationActions, usePlatforms, useToast) from App.tsx for better code organization
-- **Dead Code Cleanup**: Removed unused visualization files (relationship-lines, minimap, graph-layout), unused message-handlers.ts, duplicate scenario handlers, deprecated type aliases, and other dead code
-- **Duplicate Code Removal**: Consolidated duplicate handler functions in scenario-handlers.ts (3 unused handlers removed, now using openaev-handlers.ts)
-- **React Hook Optimization**: Wrapped callbacks in `useCallback` to prevent unnecessary re-renders
-- Shared visualization constants ensure consistent appearance across all scan modes
+- **Platform Type Consistency**: Detection engine now explicitly sets `platformType` on all enriched entities (observables, OpenCTI entities, CVEs, OpenAEV entities), eliminating reliance on fallback defaults throughout the codebase
 
 ## [0.0.11] - 2025-12-19
 
@@ -173,8 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Context menu rename**: "Search in OpenCTI" context menu item renamed to "Search across platforms" to accurately reflect its federated search functionality across all configured platforms
-- **Shared ActionButton component**: Extracted `ActionButton` and `ActionButtonsGrid` components to `src/shared/components/` for reuse between popup and panel, eliminating code duplication
-- **Centralized version constant**: `EXTENSION_VERSION` in `src/shared/constants.ts` is now the single source of truth for version numbers used in User-Agent headers, popup, options page, and popover
 
 ### Fixed
 - **Clear highlights now clears scan results**: Clicking "Clear highlights" now also resets the panel's scan results view, returning it to the empty state instead of showing stale data
@@ -187,8 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scroll-to-highlight with alias matching**: Fixed "Scroll to highlight" not working when the entity's display name differs from the text on the page. For example, MITRE technique "TA0007" might be highlighted as "discovery" on the page - scroll now tries both the entity name AND all matched strings to locate the highlight
 
 ### Removed
-- Deleted unused `src/popup/components/ActionButton.tsx` re-export file (components now import directly from shared)
-- Deleted unused `src/shared/types/ui.ts` type definitions file (interfaces were never imported)
+- Deleted unused component and type files
 
 ## [0.0.7] - 2025-12-18
 
@@ -206,39 +166,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty scan results with AI access**: When a page scan returns no results, the panel now shows the full layout with search filters and AI discovery button, allowing users to immediately trigger AI-based entity discovery
 
 ### Changed
-- Extracted cache management to dedicated service (`services/cache-manager.ts`) for better code organization
-- Reorganized panel types: consolidated `types.ts` and `types/` directory structure
 - OpenCTI STIX types now have both `OCTI*` prefixed names and GraphQL API-matching aliases
-- Reduced `background/index.ts` from 3238 lines to ~2850 lines through service extraction
-- **Type organization**: Complete reorganization of type files:
-  - Created dedicated `types/openaev.ts` for OpenAEV types (entities, scenarios, atomic testing)
-  - Created dedicated `types/opencti.ts` for OpenCTI types (STIX, entities, containers)
-  - Created `types/messages.ts` for extension communication types
-  - Consolidated common types (config, AI, observables) in `types/index.ts`
-  - Removed redundant type files (`config.ts`, `ai.ts`, `platform.ts`)
-  - Removed all barrel `index.ts` re-export files for direct imports
-  - Created `api/openaev/types.ts` for REST API types (Filter, FilterGroup, SearchBody, builder params)
-  - Created `api/opencti/types.ts` for GraphQL query result types
-  - `PayloadCreateInput` now imports shared `PayloadType` from API types for consistency
-- **Naming convention standardization**: Replaced generic terms with platform-specific naming throughout codebase:
-  - `CachedEntity` → `CachedOCTIEntity`
-  - `DetectedSDO` → `DetectedOCTIEntity` (removed alias)
-  - `DetectedPlatformEntity` → `DetectedOAEVEntity`
-  - `detectSDOsFromCache` → `detectOCTIEntitiesFromCache`
-  - `detectPlatformEntitiesFromCache` → `detectOAEVEntitiesFromCache`
-  - `getAllCachedEntityNamesForMatching` → `getAllCachedOCTIEntityNamesForMatching`
-  - Removed `_` prefix from platform properties: `_platformId` → `platformId`, `_platformType` → `platformType`, `_isNonDefaultPlatform` → `isNonDefaultPlatform`
-- **Platform color standardization**: Updated platform colors to avoid confusion with status indicators:
-  - OCTI (OpenCTI): Changed from orange (#ff9800) to indigo (#5c6bc0) - distinct from green (found) and amber (new)
-  - OAEV (OpenAEV): Changed from cyan (#00bcd4) to pink (#e91e63) - distinct from primary blue
-  - Multi-type indicator: Now uses primary theme color (adapts to light/dark theme) instead of purple
 - **Entity overview containers limited to 5**: "Latest Containers" section now fetches only 5 containers via GraphQL query for efficiency
 - **Description truncation**: Entity descriptions in both OpenCTI and OpenAEV overviews are now truncated to 500 characters for better readability
 
 ### Improved
 - Enhanced PDF extraction for Shadow DOM-heavy sites like Notion
 - Content extractor now traverses Shadow DOM for better article content extraction
-- Code structure: cleaner separation between services and handlers in background script
 - Entity state management: added `entityDetailsLoading` state for better UX feedback
 - Entity navigation now always fetches fresh data to prevent stale/empty overviews
 - **AI relationship resolution accuracy**: Completely rewritten prompts with exhaustive list of valid STIX 2.1 and OpenCTI relationship types with entity compatibility rules to prevent hallucination. Consolidated duplicate relationship definitions into single authoritative source.
@@ -277,11 +211,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recursive shadow root traversal for deeply nested Web Components
 
 ### Changed
-- AI client refactored: extracted prompts to separate module (`ai/prompts.ts`) for better maintainability
-- Consolidated duplicate AI handler files into single `message-ai-handlers.ts`
 - Harmonized all back navigation buttons across the app with consistent "Back to X" design pattern
 - Back buttons now use text buttons with descriptive labels instead of icon-only buttons
-- Removed legacy "Extracted from App.tsx" comments from all refactored hooks and handlers
 - Detection settings now use "disabled types" approach instead of "enabled types" - all entity types are enabled by default
 - Detection settings refactored with clearer naming: `disabledObservableTypes`, `disabledOpenCTITypes`, `disabledOpenAEVTypes`
 - Content extraction now only falls back to Shadow DOM when innerText is insufficient (<500 chars)
@@ -291,12 +222,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Critical**: Detection filtering was excluding all entities on fresh installs or when settings were not configured (empty enabled array filtered everything)
 - **Critical**: Scanning and highlighting not working on Shadow DOM-heavy sites like VirusTotal
 - Email pattern detection now validates TLDs to reduce false positives (e.g., `example@domain.svg` no longer detected as email)
-- Fixed undefined `log.error` reference in investigation actions hook
 - Container form, container type, platform selection, and add selection views now have properly aligned back buttons
-- Firefox: Removed unused sidebar panel that was showing empty "No entity selected" content
 
 ### Removed
-- Deleted unused `handlers/types.ts` duplicate type definitions file
 - Removed Firefox `sidebar_action` from manifest (extension uses injected floating panel instead)
 
 ## [0.0.5] - 2025-12-17
@@ -323,10 +251,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Version updated to 0.0.5 across all manifests and user-agent strings
 - Consolidated `autoScan` and `scanOnLoad` settings into single `autoScan` setting
-- Removed unused `isAIGenerated` field from scenario payload interfaces
-- Removed deprecated OpenGRC placeholder code
-- Code cleanup: removed legacy comments and unused code
-- OpenAEV entity view now uses Markdown rendering for descriptions (consistent with OpenCTI)
 
 ## [0.0.4] - 2025-12-15
 
@@ -334,13 +258,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAEV scenario generation with AI assistance
 - Atomic testing integration for OpenAEV platform
 - PDF generation for threat reports
-- Multi-platform support (OpenCTI, OpenAEV, OpenGRC)
+- Multi-platform support (OpenCTI, OpenAEV)
 - Enterprise Edition features for AI-powered analysis
 
 ### Fixed
 - Duplicate scan results handling
 - Defanged indicator detection for OpenAEV
-- SDO naming and comments consistency
 
 ### Changed
 - Improved entity type icons in scenario configuration
@@ -384,7 +307,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
-[Unreleased]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...HEAD
 [0.0.12]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...v0.0.10

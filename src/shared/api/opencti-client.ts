@@ -829,7 +829,13 @@ export class OpenCTIClient {
 
   async addObjectsToContainer(containerId: string, objectIds: string[]): Promise<void> {
     if (objectIds.length === 0) return;
-    await this.query(ADD_OBJECTS_TO_CONTAINER_MUTATION, { id: containerId, toIds: objectIds });
+    // Add each object using relationAdd with relationship_type "object"
+    for (const objectId of objectIds) {
+      await this.query(ADD_OBJECTS_TO_CONTAINER_MUTATION, {
+        id: containerId,
+        input: { toId: objectId, relationship_type: 'object' },
+      });
+    }
   }
 
   async createStixCoreRelationship(input: { fromId: string; toId: string; relationship_type: string; description?: string; confidence?: number; objectMarking?: string[] }): Promise<{ id: string; standard_id: string }> {

@@ -35,12 +35,3 @@ export function getContractLabel(contract: {
   return contract.injector_contract_labels?.en || contract.injector_name || 'Unknown';
 }
 
-/**
- * Get platforms from contract object
- */
-export function getContractPlatforms(contract: {
-  injector_contract_platforms?: string[];
-}): string[] {
-  return contract.injector_contract_platforms || [];
-}
-

@@ -37,7 +37,7 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import { formatDate } from '../../shared/utils/formatters';
-import { getCvssChipStyle, getSeverityColor } from '../utils/cvss-helpers';
+import { getCvssChipStyle, getSeverityColor, formatEpssScore, formatEpssPercentile } from '../utils/cvss-helpers';
 import { getMarkingColor } from '../utils/marking-helpers';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
 import { usePlatformNavigation, useBackNavigation } from '../hooks/usePlatformNavigation';
@@ -420,11 +420,11 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {(epssScore * 100).toFixed(2)}%
+              {formatEpssScore(epssScore)}
             </Typography>
             {epssPercentile != null && (
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                (Percentile: {(epssPercentile * 100).toFixed(0)}%)
+                (Percentile: {formatEpssPercentile(epssPercentile)})
               </Typography>
             )}
           </Box>

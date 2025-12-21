@@ -387,16 +387,32 @@ xtm-browser-extension/
 │           └── storage.ts           # Chrome storage wrapper
 │
 ├── tests/
-│   ├── unit/                    # Unit tests
-│   │   ├── ai-client.test.ts
-│   │   ├── defang.test.ts
-│   │   ├── detection.test.ts
-│   │   ├── handler-types.test.ts
-│   │   ├── logger.test.ts
-│   │   ├── message-dispatcher.test.ts
-│   │   ├── messages.test.ts
-│   │   ├── patterns.test.ts
-│   │   └── pdf-scanner-utils.test.ts
+│   ├── unit/                    # Unit tests (25+ test files)
+│   │   ├── ai-client.test.ts        # AI client tests
+│   │   ├── cache-manager.test.ts    # Cache tests
+│   │   ├── client-manager.test.ts   # Client manager tests
+│   │   ├── client-registry.test.ts  # Client registry tests
+│   │   ├── constants.test.ts        # Constants tests
+│   │   ├── defang.test.ts           # Defanging tests
+│   │   ├── detection.test.ts        # Detection tests
+│   │   ├── detector.test.ts         # Detector tests
+│   │   ├── entity-handlers.test.ts  # Entity handlers tests
+│   │   ├── entity-utils.test.ts     # Entity utils tests
+│   │   ├── formatters.test.ts       # Formatters tests
+│   │   ├── handler-types.test.ts    # Handler types tests
+│   │   ├── logger.test.ts           # Logger tests
+│   │   ├── matching.test.ts         # Matching tests
+│   │   ├── message-dispatcher.test.ts # Dispatcher tests
+│   │   ├── messages.test.ts         # Messages tests
+│   │   ├── misc-handlers.test.ts    # Misc handlers tests
+│   │   ├── openaev-client.test.ts   # OpenAEV client tests
+│   │   ├── opencti-client.test.ts   # OpenCTI client tests
+│   │   ├── panel-utils.test.ts      # Panel utils tests
+│   │   ├── patterns.test.ts         # Pattern tests
+│   │   ├── pdf-scanner-utils.test.ts # PDF scanner tests
+│   │   ├── refang.test.ts           # Refanging tests
+│   │   ├── scan-handlers.test.ts    # Scan handlers tests
+│   │   └── storage.test.ts          # Storage tests
 │   └── integration/             # Integration tests
 │       ├── opencti/
 │       └── openaev/

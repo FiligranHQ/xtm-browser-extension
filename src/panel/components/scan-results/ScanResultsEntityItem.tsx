@@ -23,9 +23,8 @@ import {
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
 import type { ScanResultEntity } from '../../../shared/types/scan';
-import { getCanonicalTypeName } from '../../../shared/platform/registry';
 import { sendToContentScript } from '../../utils/content-messaging';
-import { isFoundInOpenCTI, getUniqueTypesFromMatches } from '../../utils/scan-results-helpers';
+import { isFoundInOpenCTI, getUniqueTypesFromMatches, formatTypeName } from '../../utils/scan-results-helpers';
 
 interface ScanResultsEntityItemProps {
   entity: ScanResultEntity;
@@ -37,11 +36,6 @@ interface ScanResultsEntityItemProps {
   onEntityClick: (entity: ScanResultEntity) => void;
   onToggleSelection: (entityValue: string) => void;
 }
-
-// Format type name for display
-const formatTypeName = (type: string): string => {
-  return getCanonicalTypeName(type);
-};
 
 export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
   entity,

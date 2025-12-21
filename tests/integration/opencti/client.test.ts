@@ -20,6 +20,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createServiceGuard, assertEntityList } from '../test-helpers';
 
 // OpenCTI client types and helpers
 interface OpenCTIConfig {
@@ -475,11 +476,19 @@ class TestOpenCTIClient {
 
   async addObjectsToContainer(containerId: string, objectIds: string[]) {
     const mutation = `
-      mutation ContainerEditObjectsAdd($id: ID!, $toIds: [String]!) {
-        containerEdit(id: $id) { objectsAdd(toIds: $toIds) { id } }
+      mutation ContainerEditRelationAdd($id: ID!, $input: StixRefRelationshipAddInput!) {
+        containerEdit(id: $id) { relationAdd(input: $input) { id } }
       }
     `;
-    return this.query<{ containerEdit: any }>(mutation, { id: containerId, toIds: objectIds });
+    // Add each object using relationAdd with relationship_type "object"
+    let result: { containerEdit: any } = { containerEdit: null };
+    for (const objectId of objectIds) {
+      result = await this.query<{ containerEdit: any }>(mutation, {
+        id: containerId,
+        input: { toId: objectId, relationship_type: 'object' },
+      });
+    }
+    return result;
   }
 
   async fetchContainersForEntity(entityId: string, limit = 5) {
@@ -658,6 +667,13 @@ async function checkOpenCTIConnection(): Promise<boolean> {
   }
 }
 
+// Create a service guard for skipping tests when OpenCTI is unavailable
+const skipIfUnavailable = createServiceGuard(
+  () => isOpenCTIAvailable,
+  'OpenCTI',
+  () => connectionError || undefined
+);
+
 // Integration tests that require OpenCTI to be running
 describe('OpenCTI Client Integration Tests', () => {
   let client: TestOpenCTIClient;
@@ -685,11 +701,7 @@ describe('OpenCTI Client Integration Tests', () => {
 
   describe('Connection', () => {
     it('should connect to OpenCTI and get version', async (context) => {
-      if (!isOpenCTIAvailable) {
-        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const result = await client.testConnection();
       expect(result.version).toBeDefined();
@@ -699,16 +711,12 @@ describe('OpenCTI Client Integration Tests', () => {
 
   describe('Search', () => {
     it('should search for entities', async (context) => {
-      if (!isOpenCTIAvailable) {
-        console.log(`Skipping: OpenCTI not available - ${connectionError}`);
-        context.skip();
-        return;
-      }
+      if (skipIfUnavailable(context)) return;
       
       const result = await client.searchEntities('test', undefined, 5);
       expect(result.stixCoreObjects).toBeDefined();
       expect(result.stixCoreObjects.edges).toBeDefined();
-      expect(Array.isArray(result.stixCoreObjects.edges)).toBe(true);
+      assertEntityList(result.stixCoreObjects.edges);
     });
 
     it('should search with type filter', async (context) => {
@@ -1572,6 +1580,7 @@ describe('Container Operations Tests', () => {
     );
     
     expect(result.containerEdit).toBeDefined();
+    expect(result.containerEdit.relationAdd).toBeDefined();
   });
 
   it('should fetch containers for an entity', async (context) => {

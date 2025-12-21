@@ -5,13 +5,12 @@
  * Communicates with the side panel for scan results display (same behavior as page scanning).
  */
 
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
-import themeDark from '../shared/theme/theme-dark';
-import themeLight from '../shared/theme/theme-light';
+import { useTheme } from '../shared/hooks/useTheme';
 import type { ScanResultPayload } from '../shared/types/messages';
 import { inferPlatformTypeFromEntityType } from '../shared/platform/registry';
 
@@ -48,10 +47,12 @@ export default function App() {
   const [scanResults, setScanResults] = useState<ScanResultPayload | null>(null);
   const [pdfDocument, setPdfDocument] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageTexts, setPageTexts] = useState<string[]>([]);
-  const [mode, setMode] = useState<'dark' | 'light'>('dark');
   const [selectedEntities, setSelectedEntities] = useState<Set<string>>(new Set());
   const [hoveredEntity, setHoveredEntity] = useState<HoveredEntityState | null>(null);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
+  
+  // Theme - uses shared hook to reduce duplication
+  const { mode, setMode, theme } = useTheme();
   
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,12 +69,6 @@ export default function App() {
   useEffect(() => {
     pdfUrlRef.current = pdfUrl || '';
   }, [pdfUrl]);
-
-  // Theme
-  const theme = useMemo(() => {
-    const themeOptions = mode === 'dark' ? themeDark() : themeLight();
-    return createTheme(themeOptions);
-  }, [mode]);
 
   // Panel manager hook
   const {

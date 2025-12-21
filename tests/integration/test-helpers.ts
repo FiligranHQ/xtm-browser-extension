@@ -288,3 +288,136 @@ export function logTestSummary(
   );
 }
 
+// ============================================================================
+// Test Suite Setup Utilities
+// ============================================================================
+
+/**
+ * Context object for test availability checking
+ */
+export interface TestContext {
+  skip: () => void;
+}
+
+/**
+ * State for a platform connection
+ */
+export interface PlatformConnectionState {
+  isAvailable: boolean;
+  connectionError: string | null;
+}
+
+/**
+ * Create a unified skip check function for tests.
+ * This is a simplified version that reduces the boilerplate:
+ * 
+ * @example
+ * ```typescript
+ * const { isAvailable, connectionError, skipIfUnavailable } = createPlatformTestState('OpenAEV');
+ * 
+ * it('should do something', async (context) => {
+ *   if (skipIfUnavailable(context)) return;
+ *   // ... test logic
+ * });
+ * ```
+ */
+export function createPlatformTestState(platformName: string): {
+  state: PlatformConnectionState;
+  skipIfUnavailable: (context: TestContext) => boolean;
+  setAvailable: (available: boolean) => void;
+  setConnectionError: (error: string | null) => void;
+} {
+  const state: PlatformConnectionState = {
+    isAvailable: false,
+    connectionError: null,
+  };
+
+  const skipIfUnavailable = (context: TestContext): boolean => {
+    if (!state.isAvailable) {
+      const errorMsg = state.connectionError || 'Not available';
+      console.log(`Skipping: ${platformName} not available - ${errorMsg}`);
+      context.skip();
+      return true;
+    }
+    return false;
+  };
+
+  return {
+    state,
+    skipIfUnavailable,
+    setAvailable: (available: boolean) => { state.isAvailable = available; },
+    setConnectionError: (error: string | null) => { state.connectionError = error; },
+  };
+}
+
+/**
+ * Common assertions for entity list results
+ */
+export function assertEntityList<T>(
+  results: T[],
+  options: {
+    minLength?: number;
+    requireArrayResult?: boolean;
+  } = {}
+): void {
+  const { minLength = 0, requireArrayResult = true } = options;
+  
+  if (requireArrayResult) {
+    expect(Array.isArray(results)).toBe(true);
+  }
+  
+  if (minLength > 0) {
+    expect(results.length).toBeGreaterThanOrEqual(minLength);
+  }
+}
+
+/**
+ * Common assertions for search results
+ */
+export function assertSearchResults<T extends { name?: string }>(
+  results: T[],
+  searchTerm: string,
+  options: {
+    checkNameMatch?: boolean;
+  } = {}
+): void {
+  expect(Array.isArray(results)).toBe(true);
+  
+  if (options.checkNameMatch && searchTerm && results.length > 0) {
+    // At least one result should contain the search term (case-insensitive)
+    const searchLower = searchTerm.toLowerCase();
+    const hasMatch = results.some(r => 
+      r.name?.toLowerCase().includes(searchLower)
+    );
+    expect(hasMatch).toBe(true);
+  }
+}
+
+/**
+ * Create a cleanup tracker for created entities
+ */
+export function createCleanupTracker<TClient>(
+  deleteMethod: (client: TClient, id: string) => Promise<void>
+): {
+  createdIds: string[];
+  trackId: (id: string) => void;
+  cleanup: (client: TClient) => Promise<void>;
+} {
+  const createdIds: string[] = [];
+  
+  return {
+    createdIds,
+    trackId: (id: string) => { createdIds.push(id); },
+    cleanup: async (client: TClient) => {
+      for (const id of createdIds) {
+        try {
+          await deleteMethod(client, id);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+      createdIds.length = 0;
+    },
+  };
+}
+

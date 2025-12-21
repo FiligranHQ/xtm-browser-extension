@@ -30,6 +30,32 @@ import {
 
 const log = loggers.content;
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Sync highlight selection state for investigation entities
+ * Extracted to reduce duplication between INVESTIGATION_SYNC_SELECTION and INVESTIGATION_SYNC_ALL
+ * 
+ * @param entityIds - Array of entity IDs to update
+ * @param selected - Whether to select (true) or deselect (false) the entities
+ */
+function syncHighlightSelection(entityIds: string[], selected: boolean): void {
+  for (const entityId of entityIds) {
+    const highlight = document.querySelector(
+      `.xtm-highlight.xtm-investigation[data-entity-id="${entityId}"]`
+    );
+    if (highlight) {
+      highlight.classList.toggle('xtm-selected', selected);
+    }
+  }
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
 /**
  * Context object containing mutable state and scan functions
  */
@@ -119,14 +145,7 @@ export function handleMessage(
       const payload = message.payload as { entityId?: string; selected?: boolean } | undefined;
       const { entityId, selected } = payload || {};
       if (entityId) {
-        const highlight = document.querySelector(`.xtm-highlight.xtm-investigation[data-entity-id="${entityId}"]`);
-        if (highlight) {
-          if (selected) {
-            highlight.classList.add('xtm-selected');
-          } else {
-            highlight.classList.remove('xtm-selected');
-          }
-        }
+        syncHighlightSelection([entityId], !!selected);
       }
       sendResponse({ success: true });
       return false;
@@ -136,16 +155,7 @@ export function handleMessage(
       const payload = message.payload as { entityIds?: string[]; selected?: boolean } | undefined;
       const { entityIds, selected } = payload || {};
       if (entityIds && Array.isArray(entityIds)) {
-        for (const entityId of entityIds) {
-          const highlight = document.querySelector(`.xtm-highlight.xtm-investigation[data-entity-id="${entityId}"]`);
-          if (highlight) {
-            if (selected) {
-              highlight.classList.add('xtm-selected');
-            } else {
-              highlight.classList.remove('xtm-selected');
-            }
-          }
-        }
+        syncHighlightSelection(entityIds, !!selected);
       }
       sendResponse({ success: true });
       return false;

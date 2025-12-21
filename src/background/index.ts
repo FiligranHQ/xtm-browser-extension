@@ -58,7 +58,7 @@ import {
   CONTAINER_FETCH_TIMEOUT_MS,
 } from '../shared/constants';
 import { successResponse, errorResponse } from '../shared/types/common';
-import { searchAcrossPlatforms } from './handlers/platform-utils';
+import { searchAcrossPlatforms, testPlatformConnection } from './handlers/platform-utils';
 import {
   startOCTICacheRefresh,
   startOAEVCacheRefresh,
@@ -653,7 +653,7 @@ async function handleMessage(
       case 'TEST_PLATFORM_CONNECTION': {
         // Unified platform connection test handler
         // Supports both saved platforms (by platformId) and temporary connections (url + apiToken)
-        // To add a new platform: add a case in the switch below
+        // Uses shared testPlatformConnection utility to reduce duplication
         const { platformId, platformType, url, apiToken, temporary } = message.payload as { 
           platformId?: string; 
           platformType: PlatformType;
@@ -662,88 +662,43 @@ async function handleMessage(
           temporary?: boolean;
         };
         
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout')), CONNECTION_TIMEOUT_MS)
-        );
-        
-        try {
-          // Platform-specific connection test
-          switch (platformType) {
-            case 'opencti': {
-              if (temporary && url && apiToken) {
-                // Test with temporary credentials
-                const tempClient = new OpenCTIClient({ url, apiToken });
-                const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-                sendResponse(successResponse(info));
-              } else if (platformId) {
-                // Test saved platform
-                const currentSettings = await getSettings();
-                let client = openCTIClients.get(platformId);
-                if (!client) {
-                  const platformConfig = currentSettings.openctiPlatforms?.find(p => p.id === platformId);
-                  if (platformConfig?.url && platformConfig?.apiToken) {
-                    client = new OpenCTIClient({
-                      url: platformConfig.url,
-                      apiToken: platformConfig.apiToken,
-                    });
-                    openCTIClients.set(platformId, client);
-                  }
-                }
-                if (!client) {
-                  sendResponse(errorResponse('Platform not configured'));
-                  break;
-                }
-                const info = await Promise.race([client.testConnection(), timeoutPromise]);
-                sendResponse(successResponse(info));
-              } else {
-                sendResponse(errorResponse('Missing platformId or temporary credentials'));
-              }
-              break;
-            }
-            
-            case 'openaev': {
-              if (temporary && url && apiToken) {
-                // Test with temporary credentials
-                const tempClient = new OpenAEVClient({ 
-                  id: 'temp', 
-                  name: 'temp', 
-                  url, 
-                  apiToken,
-                  enabled: true,
-                });
-                const info = await Promise.race([tempClient.testConnection(), timeoutPromise]);
-                sendResponse(successResponse(info));
-              } else if (platformId) {
-                // Test saved platform
-                const currentSettings = await getSettings();
-                let client = openAEVClients.get(platformId);
-                if (!client) {
-                  const platformConfig = currentSettings.openaevPlatforms?.find(p => p.id === platformId);
-                  if (platformConfig?.url && platformConfig?.apiToken) {
-                    client = new OpenAEVClient(platformConfig);
-                    openAEVClients.set(platformId, client);
-                  }
-                }
-                if (!client) {
-                  sendResponse(errorResponse('Platform not configured'));
-                  break;
-                }
-                const info = await Promise.race([client.testConnection(), timeoutPromise]);
-                sendResponse(successResponse(info));
-              } else {
-                sendResponse(errorResponse('Missing platformId or temporary credentials'));
-              }
-              break;
-            }
-            
-            default:
-              sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
-          }
-        } catch (error) {
-          sendResponse({
-            success: false,
-            error: error instanceof Error ? error.message : 'Connection failed',
-          });
+        // Platform-specific connection test using shared utility
+        switch (platformType) {
+          case 'opencti':
+            await testPlatformConnection(
+              { platformId, url, apiToken, temporary },
+              {
+                getSettings,
+                clients: openCTIClients,
+                createClient: (config) => new OpenCTIClient({
+                  url: config.url,
+                  apiToken: config.apiToken,
+                  id: config.id,
+                  name: config.name,
+                }),
+                settingsKey: 'openctiPlatforms',
+                timeoutMs: CONNECTION_TIMEOUT_MS,
+              },
+              sendResponse
+            );
+            break;
+          
+          case 'openaev':
+            await testPlatformConnection(
+              { platformId, url, apiToken, temporary },
+              {
+                getSettings,
+                clients: openAEVClients,
+                createClient: (config) => new OpenAEVClient(config),
+                settingsKey: 'openaevPlatforms',
+                timeoutMs: CONNECTION_TIMEOUT_MS,
+              },
+              sendResponse
+            );
+            break;
+          
+          default:
+            sendResponse({ success: false, error: `Unsupported platform type: ${platformType}` });
         }
         break;
       }

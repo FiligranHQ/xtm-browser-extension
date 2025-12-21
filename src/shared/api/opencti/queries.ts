@@ -486,8 +486,8 @@ export const CREATE_WORKBENCH_MUTATION = `
 `;
 
 export const ADD_OBJECTS_TO_CONTAINER_MUTATION = `
-  mutation ContainerEditObjectsAdd($id: ID!, $toIds: [String]!) {
-    containerEdit(id: $id) { objectsAdd(toIds: $toIds) { id } }
+  mutation ContainerEditRelationAdd($id: ID!, $input: StixRefRelationshipAddInput!) {
+    containerEdit(id: $id) { relationAdd(input: $input) { id } }
   }
 `;
 

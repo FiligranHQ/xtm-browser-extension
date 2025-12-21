@@ -19,6 +19,42 @@ export const getCvssColor = (score: number | undefined): string => {
 };
 
 /**
+ * Get severity label from CVSS score
+ */
+export const getSeverityFromScore = (score: number | undefined): string => {
+  if (score === undefined || score === null) return 'Unknown';
+  if (score === 0) return 'None';
+  if (score <= 3.9) return 'Low';
+  if (score <= 6.9) return 'Medium';
+  if (score <= 8.9) return 'High';
+  return 'Critical';
+};
+
+/**
+ * Format CVSS score for display
+ */
+export const formatCvssScore = (score: number | undefined): string => {
+  if (score === undefined || score === null) return 'N/A';
+  return score.toFixed(1);
+};
+
+/**
+ * Format EPSS score as percentage
+ */
+export const formatEpssScore = (score: number | undefined): string => {
+  if (score === undefined || score === null) return 'N/A';
+  return `${(score * 100).toFixed(2)}%`;
+};
+
+/**
+ * Format EPSS percentile as percentage
+ */
+export const formatEpssPercentile = (percentile: number | undefined): string => {
+  if (percentile === undefined || percentile === null) return 'N/A';
+  return `${(percentile * 100).toFixed(1)}%`;
+};
+
+/**
  * Get CVSS chip style for high visibility
  */
 export const getCvssChipStyle = (score: number | undefined): SxProps => {
@@ -50,41 +86,5 @@ export const getSeverityColor = (severity: string | undefined): { bgcolor: strin
     default:
       return { bgcolor: '#607d8b', color: '#ffffff' };
   }
-};
-
-/**
- * Get severity label from CVSS score
- */
-export const getSeverityFromScore = (score: number | undefined): string => {
-  if (score === undefined || score === null) return 'Unknown';
-  if (score === 0) return 'None';
-  if (score <= 3.9) return 'Low';
-  if (score <= 6.9) return 'Medium';
-  if (score <= 8.9) return 'High';
-  return 'Critical';
-};
-
-/**
- * Format CVSS score for display
- */
-export const formatCvssScore = (score: number | undefined): string => {
-  if (score === undefined || score === null) return 'N/A';
-  return score.toFixed(1);
-};
-
-/**
- * Format EPSS score as percentage
- */
-export const formatEpssScore = (score: number | undefined): string => {
-  if (score === undefined || score === null) return 'N/A';
-  return `${(score * 100).toFixed(2)}%`;
-};
-
-/**
- * Format EPSS percentile
- */
-export const formatEpssPercentile = (percentile: number | undefined): string => {
-  if (percentile === undefined || percentile === null) return 'N/A';
-  return `${(percentile * 100).toFixed(1)}%`;
 };
 

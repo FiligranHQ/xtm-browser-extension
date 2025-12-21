@@ -43,6 +43,7 @@ import remarkGfm from 'remark-gfm';
 
 import { hexToRGB } from '../../shared/theme/colors';
 import { formatDateTime } from '../../shared/utils/formatters';
+import { getCvssChipStyle } from '../utils/cvss-helpers';
 import {
   getOAEVEntityName,
   getOAEVEntityId,
@@ -608,17 +609,8 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
                 CVSS v3.1 Score
               </Typography>
               <Chip 
-                label={entityData.vulnerability_cvss_v31.toFixed(1)} 
-                size="small" 
-                sx={{ 
-                  bgcolor: entityData.vulnerability_cvss_v31 >= 9 ? '#d32f2f' :
-                           entityData.vulnerability_cvss_v31 >= 7 ? '#f57c00' :
-                           entityData.vulnerability_cvss_v31 >= 4 ? '#fbc02d' : '#388e3c',
-                  color: '#fff',
-                  fontWeight: 700,
-                  borderRadius: 1,
-                  fontSize: '0.875rem',
-                }} 
+                label={`CVSS ${entityData.vulnerability_cvss_v31.toFixed(1)}`} 
+                sx={getCvssChipStyle(entityData.vulnerability_cvss_v31)} 
               />
             </Box>
           )}

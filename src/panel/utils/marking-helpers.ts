@@ -36,17 +36,12 @@ export const getMarkingColor = (definition: string | undefined, mode: 'dark' | '
 };
 
 /**
- * Get marking definition background color for chips
+ * Get marking chip style for consistent display
  */
-export const getMarkingChipStyle = (definition: string | undefined, mode: 'dark' | 'light' = 'dark') => {
-  const color = getMarkingColor(definition, mode);
-  const isClear = definition === 'TLP:CLEAR' || definition === 'TLP:WHITE' || definition === 'PAP:CLEAR';
-  
-  return {
-    bgcolor: color,
-    color: isClear ? (mode === 'dark' ? '#000000' : '#ffffff') : '#ffffff',
-    fontWeight: 600,
-    fontSize: '0.75rem',
-  };
+export const getMarkingChipStyle = (definition: string | undefined, mode: 'dark' | 'light' = 'dark'): { bgcolor: string; color: string; fontWeight: number } => {
+  const bgcolor = getMarkingColor(definition, mode);
+  const isClearMarking = definition === 'TLP:CLEAR' || definition === 'TLP:WHITE' || definition === 'PAP:CLEAR';
+  const color = isClearMarking ? (mode === 'dark' ? '#000000' : '#ffffff') : '#ffffff';
+  return { bgcolor, color, fontWeight: 600 };
 };
 

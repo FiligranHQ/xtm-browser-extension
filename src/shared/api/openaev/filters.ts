@@ -76,10 +76,11 @@ export function buildTeamSearchFilter(searchTerm: string): FilterGroup {
 // ============================================================================
 
 export function buildDnsResolutionPayloadFilter(hostname: string): FilterGroup {
+  // Note: payload_type is not a filterable field in OpenAEV API
+  // Only dns_resolution_hostname is filterable, which uniquely identifies DnsResolution payloads
   return {
     mode: 'and',
     filters: [
-      { key: 'payload_type', mode: 'or', operator: 'eq', values: ['DnsResolution'] },
       { key: 'dns_resolution_hostname', mode: 'or', operator: 'eq', values: [hostname] },
     ],
   };

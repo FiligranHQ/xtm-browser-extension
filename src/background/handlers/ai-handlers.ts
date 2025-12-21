@@ -3,6 +3,9 @@
  *
  * Handles AI-related messages from the extension.
  * Uses the AIClient for generation and parseAIJsonResponse for parsing.
+ * 
+ * Note: Simple handlers use executeSimpleAIRequest from ai-utils.ts to reduce duplication.
+ * Complex handlers with custom validation/logging still use inline logic.
  */
 
 import { getSettings } from '../../shared/utils/storage';
@@ -20,6 +23,7 @@ import type {
 } from '../../shared/api/ai/types';
 import { parseAIJsonResponse } from '../../shared/api/ai/json-parser';
 import type { MessageHandler } from './types';
+import { executeSimpleAIRequest } from './ai-utils';
 
 const log = loggers.background;
 
@@ -128,31 +132,23 @@ export async function handleAITestAndFetchModels(
 
 /**
  * AI_GENERATE_DESCRIPTION handler
+ * Uses executeSimpleAIRequest utility to reduce duplication.
  */
 export async function handleAIGenerateDescription(
   payload: ContainerDescriptionRequest,
   sendResponse: SendResponse
 ): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    const response = await aiClient.generateContainerDescription(payload);
-    sendResponse({ success: response.success, data: response.content, error: response.error });
-  } catch (error) {
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI generation failed' 
-    });
-  }
+  await executeSimpleAIRequest(
+    'AI_GENERATE_DESCRIPTION',
+    payload,
+    (client, req) => client.generateContainerDescription(req),
+    sendResponse
+  );
 }
 
 /**
  * AI_GENERATE_SCENARIO handler
+ * Note: Uses inline logic due to custom JSON parsing requirements.
  */
 export async function handleAIGenerateScenario(
   payload: ScenarioGenerationRequest,

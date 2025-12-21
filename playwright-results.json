@@ -74,7 +74,7 @@
         {
           "title": "Content Script on Test Pages",
           "file": "content-script.spec.ts",
-          "line": 50,
+          "line": 57,
           "column": 6,
           "specs": [
             {
@@ -93,12 +93,16 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1184,
+                      "duration": 1287,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for threat-report-load (content)\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:39:53.627Z",
+                      "startTime": "2025-12-21T13:32:48.912Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -108,7 +112,7 @@
               ],
               "id": "3f95a070af23571749f5-e70a199c4b484ce50b1d",
               "file": "content-script.spec.ts",
-              "line": 65,
+              "line": 73,
               "column": 3
             },
             {
@@ -127,12 +131,16 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1141,
+                      "duration": 1247,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for empty-page-load (content)\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:39:57.464Z",
+                      "startTime": "2025-12-21T13:32:52.953Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -142,7 +150,7 @@
               ],
               "id": "3f95a070af23571749f5-4d42976b8ea701cc9b1c",
               "file": "content-script.spec.ts",
-              "line": 84,
+              "line": 92,
               "column": 3
             },
             {
@@ -161,12 +169,19 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1146,
+                      "duration": 1257,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for defanged-iocs-load (content)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for content-script-tests\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:39:58.615Z",
+                      "startTime": "2025-12-21T13:32:54.207Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -176,7 +191,7 @@
               ],
               "id": "3f95a070af23571749f5-23deac2ed604b820adba",
               "file": "content-script.spec.ts",
-              "line": 114,
+              "line": 122,
               "column": 3
             }
           ]
@@ -184,7 +199,7 @@
         {
           "title": "Extension Panel Integration",
           "file": "content-script.spec.ts",
-          "line": 131,
+          "line": 139,
           "column": 6,
           "specs": [
             {
@@ -203,12 +218,22 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1273,
+                      "duration": 2078,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for panel-with-content (content)\n"
+                        },
+                        {
+                          "text": "✓ Coverage collected for panel-with-content (panel)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for panel-integration\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:00.214Z",
+                      "startTime": "2025-12-21T13:32:56.544Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -218,7 +243,7 @@
               ],
               "id": "3f95a070af23571749f5-e9e8d2de28b4d76d249b",
               "file": "content-script.spec.ts",
-              "line": 145,
+              "line": 154,
               "column": 3
             }
           ]
@@ -226,7 +251,7 @@
         {
           "title": "Navigation and State",
           "file": "content-script.spec.ts",
-          "line": 170,
+          "line": 183,
           "column": 6,
           "specs": [
             {
@@ -245,12 +270,22 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 211,
+                      "duration": 304,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for navigation-page1 (content)\n"
+                        },
+                        {
+                          "text": "⚠ No coverage data found for navigation-page2 (content)\n"
+                        },
+                        {
+                          "text": "⚠ No coverage data found for navigation-final (content)\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:04.334Z",
+                      "startTime": "2025-12-21T13:33:02.183Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -260,7 +295,7 @@
               ],
               "id": "3f95a070af23571749f5-1b43158a250413b67d10",
               "file": "content-script.spec.ts",
-              "line": 184,
+              "line": 198,
               "column": 3
             },
             {
@@ -279,12 +314,22 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 321,
+                      "duration": 532,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "⚠ No coverage data found for multiple-tabs (content-tab1)\n"
+                        },
+                        {
+                          "text": "⚠ No coverage data found for multiple-tabs (content-tab2)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for navigation-state\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:07.166Z",
+                      "startTime": "2025-12-21T13:33:04.966Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -294,7 +339,7 @@
               ],
               "id": "3f95a070af23571749f5-bcc7ae81b7b00b2851bd",
               "file": "content-script.spec.ts",
-              "line": 206,
+              "line": 222,
               "column": 3
             }
           ]
@@ -311,45 +356,11 @@
         {
           "title": "Extension Loading",
           "file": "extension.spec.ts",
-          "line": 52,
+          "line": 59,
           "column": 6,
           "specs": [
             {
               "title": "extension should load successfully",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 60000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "chromium-extension",
-                  "projectName": "chromium-extension",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 3,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2025-12-21T11:40:07.872Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "da119938d3268322a91b-74b1c352f09af0074a88",
-              "file": "extension.spec.ts",
-              "line": 65,
-              "column": 3
-            },
-            {
-              "title": "service worker should be running",
               "ok": true,
               "tags": [],
               "tests": [
@@ -369,7 +380,45 @@
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:08.355Z",
+                      "startTime": "2025-12-21T13:33:06.508Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "da119938d3268322a91b-74b1c352f09af0074a88",
+              "file": "extension.spec.ts",
+              "line": 74,
+              "column": 3
+            },
+            {
+              "title": "service worker should be running",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium-extension",
+                  "projectName": "chromium-extension",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Background coverage collected for extension-loading\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-21T13:33:07.070Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -379,7 +428,7 @@
               ],
               "id": "da119938d3268322a91b-b12f1eda8bc2aabad4ef",
               "file": "extension.spec.ts",
-              "line": 70,
+              "line": 79,
               "column": 3
             }
           ]
@@ -387,7 +436,7 @@
         {
           "title": "Popup Page",
           "file": "extension.spec.ts",
-          "line": 81,
+          "line": 90,
           "column": 6,
           "specs": [
             {
@@ -406,12 +455,16 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1700,
+                      "duration": 1823,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for popup-render (popup)\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:08.836Z",
+                      "startTime": "2025-12-21T13:33:08.360Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -421,7 +474,7 @@
               ],
               "id": "da119938d3268322a91b-e2467a7337d2b8ccd8e3",
               "file": "extension.spec.ts",
-              "line": 94,
+              "line": 104,
               "column": 3
             },
             {
@@ -440,12 +493,19 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1651,
+                      "duration": 1786,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for popup-setup-wizard (popup)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for popup-page\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:11.187Z",
+                      "startTime": "2025-12-21T13:33:10.722Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -455,7 +515,7 @@
               ],
               "id": "da119938d3268322a91b-3075830b0678254ce844",
               "file": "extension.spec.ts",
-              "line": 125,
+              "line": 135,
               "column": 3
             }
           ]
@@ -463,7 +523,7 @@
         {
           "title": "Options Page",
           "file": "extension.spec.ts",
-          "line": 144,
+          "line": 154,
           "column": 6,
           "specs": [
             {
@@ -482,12 +542,19 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1790,
+                      "duration": 2148,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for options-render (options)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for options-page\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:13.222Z",
+                      "startTime": "2025-12-21T13:33:13.395Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -497,7 +564,7 @@
               ],
               "id": "da119938d3268322a91b-e3e7854bc5323dc12423",
               "file": "extension.spec.ts",
-              "line": 157,
+              "line": 168,
               "column": 3
             }
           ]
@@ -505,7 +572,7 @@
         {
           "title": "Panel Page",
           "file": "extension.spec.ts",
-          "line": 173,
+          "line": 184,
           "column": 6,
           "specs": [
             {
@@ -524,12 +591,16 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1816,
+                      "duration": 2486,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for panel-render (panel)\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:16.001Z",
+                      "startTime": "2025-12-21T13:33:16.857Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -539,7 +610,7 @@
               ],
               "id": "da119938d3268322a91b-d48c53ba5e518e748d23",
               "file": "extension.spec.ts",
-              "line": 186,
+              "line": 198,
               "column": 3
             },
             {
@@ -558,12 +629,19 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1660,
+                      "duration": 2336,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for panel-scan-interface (panel)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for panel-page\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:18.345Z",
+                      "startTime": "2025-12-21T13:33:19.792Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -573,7 +651,7 @@
               ],
               "id": "da119938d3268322a91b-83f6d6f6d1a95ce932aa",
               "file": "extension.spec.ts",
-              "line": 208,
+              "line": 220,
               "column": 3
             }
           ]
@@ -581,7 +659,7 @@
         {
           "title": "PDF Scanner Page",
           "file": "extension.spec.ts",
-          "line": 227,
+          "line": 239,
           "column": 6,
           "specs": [
             {
@@ -600,12 +678,19 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1753,
+                      "duration": 1937,
                       "errors": [],
-                      "stdout": [],
+                      "stdout": [
+                        {
+                          "text": "✓ Coverage collected for pdf-scanner-render (pdf-scanner)\n"
+                        },
+                        {
+                          "text": "✓ Background coverage collected for pdf-scanner\n"
+                        }
+                      ],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2025-12-21T11:40:20.468Z",
+                      "startTime": "2025-12-21T13:33:22.963Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -615,7 +700,7 @@
               ],
               "id": "da119938d3268322a91b-097f663d1a0a5182247c",
               "file": "extension.spec.ts",
-              "line": 240,
+              "line": 253,
               "column": 3
             }
           ]
@@ -625,8 +710,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2025-12-21T11:39:52.894Z",
-    "duration": 30199.748,
+    "startTime": "2025-12-21T13:32:48.176Z",
+    "duration": 38389.859,
     "expected": 14,
     "skipped": 0,
     "unexpected": 0,

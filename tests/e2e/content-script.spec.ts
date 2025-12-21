@@ -4,9 +4,10 @@
  * Tests the content script injection and page scanning functionality.
  */
 
-import { test, expect, type BrowserContext, chromium } from '@playwright/test';
+import { test, expect, type BrowserContext, chromium, type Page } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { collectPageCoverage, collectBackgroundCoverage } from './coverage-utils';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,12 @@ async function getExtensionId(context: BrowserContext): Promise<string> {
   return match[1];
 }
 
+// Helper to collect coverage from a page before closing
+async function collectAndClosePage(page: Page, testName: string, pageType: string) {
+  await collectPageCoverage(page, testName, pageType);
+  await page.close();
+}
+
 test.describe('Content Script on Test Pages', () => {
   let context: BrowserContext;
   let extensionId: string;
@@ -59,6 +66,7 @@ test.describe('Content Script on Test Pages', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'content-script-tests', extensionId);
     await context.close();
   });
 
@@ -78,7 +86,7 @@ test.describe('Content Script on Test Pages', () => {
     expect(bodyText).toContain('APT29');
     expect(bodyText).toContain('192.168.1.100');
     
-    await page.close();
+    await collectAndClosePage(page, 'threat-report-load', 'content');
   });
 
   test('should load on empty page without errors', async () => {
@@ -108,7 +116,7 @@ test.describe('Content Script on Test Pages', () => {
     // Some errors might be expected from the extension's functionality
     // but there shouldn't be crashes
     
-    await page.close();
+    await collectAndClosePage(page, 'empty-page-load', 'content');
   });
 
   test('should handle defanged IOCs page', async () => {
@@ -124,7 +132,7 @@ test.describe('Content Script on Test Pages', () => {
     expect(bodyText).toContain('evil[.]example[.]com');
     expect(bodyText).toContain('hxxp://');
     
-    await page.close();
+    await collectAndClosePage(page, 'defanged-iocs-load', 'content');
   });
 });
 
@@ -139,6 +147,7 @@ test.describe('Extension Panel Integration', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'panel-integration', extensionId);
     await context.close();
   });
 
@@ -162,6 +171,10 @@ test.describe('Extension Panel Integration', () => {
     const panelText = await panelPage.textContent('body');
     expect(panelText).toBeTruthy();
     
+    // Collect coverage from both pages
+    await collectPageCoverage(contentPage, 'panel-with-content', 'content');
+    await collectPageCoverage(panelPage, 'panel-with-content', 'panel');
+    
     await contentPage.close();
     await panelPage.close();
   });
@@ -178,6 +191,7 @@ test.describe('Navigation and State', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'navigation-state', extensionId);
     await context.close();
   });
 
@@ -187,10 +201,12 @@ test.describe('Navigation and State', () => {
     // Navigate to first page
     await page.goto(getFixtureUrl('threat-report.html'));
     await page.waitForLoadState('domcontentloaded');
+    await collectPageCoverage(page, 'navigation-page1', 'content');
     
     // Navigate to empty page
     await page.goto(getFixtureUrl('empty-page.html'));
     await page.waitForLoadState('domcontentloaded');
+    await collectPageCoverage(page, 'navigation-page2', 'content');
     
     // Navigate back to threat report
     await page.goto(getFixtureUrl('threat-report.html'));
@@ -200,7 +216,7 @@ test.describe('Navigation and State', () => {
     const bodyText = await page.textContent('body');
     expect(bodyText).toContain('APT29');
     
-    await page.close();
+    await collectAndClosePage(page, 'navigation-final', 'content');
   });
 
   test('should handle multiple tabs', async () => {
@@ -221,8 +237,11 @@ test.describe('Navigation and State', () => {
     expect(text1).toContain('APT29');
     expect(text2).toContain('Defanged');
     
+    // Collect coverage from both pages
+    await collectPageCoverage(page1, 'multiple-tabs', 'content-tab1');
+    await collectPageCoverage(page2, 'multiple-tabs', 'content-tab2');
+    
     await page1.close();
     await page2.close();
   });
 });
-

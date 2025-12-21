@@ -8,9 +8,10 @@
  * - Panel page functionality
  */
 
-import { test, expect, type BrowserContext, chromium } from '@playwright/test';
+import { test, expect, type BrowserContext, chromium, type Page } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { collectPageCoverage, collectBackgroundCoverage } from './coverage-utils';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +50,12 @@ async function getExtensionId(context: BrowserContext): Promise<string> {
   return match[1];
 }
 
+// Helper to collect coverage from a page before closing
+async function collectAndClosePage(page: Page, testName: string, pageType: string) {
+  await collectPageCoverage(page, testName, pageType);
+  await page.close();
+}
+
 test.describe('Extension Loading', () => {
   let context: BrowserContext;
   let extensionId: string;
@@ -59,6 +66,8 @@ test.describe('Extension Loading', () => {
   });
 
   test.afterAll(async () => {
+    // Collect background coverage before closing
+    await collectBackgroundCoverage(context, 'extension-loading', extensionId);
     await context.close();
   });
 
@@ -88,6 +97,7 @@ test.describe('Popup Page', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'popup-page', extensionId);
     await context.close();
   });
 
@@ -119,7 +129,7 @@ test.describe('Popup Page', () => {
     const bodyText = await page.textContent('body');
     expect(bodyText).toBeTruthy();
     
-    await page.close();
+    await collectAndClosePage(page, 'popup-render', 'popup');
   });
 
   test('popup should show setup wizard when not configured', async () => {
@@ -137,7 +147,7 @@ test.describe('Popup Page', () => {
     
     expect(hasSetupUI).toBe(true);
     
-    await page.close();
+    await collectAndClosePage(page, 'popup-setup-wizard', 'popup');
   });
 });
 
@@ -151,6 +161,7 @@ test.describe('Options Page', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'options-page', extensionId);
     await context.close();
   });
 
@@ -166,7 +177,7 @@ test.describe('Options Page', () => {
     const title = await page.title();
     expect(title).toBeTruthy();
     
-    await page.close();
+    await collectAndClosePage(page, 'options-render', 'options');
   });
 });
 
@@ -180,6 +191,7 @@ test.describe('Panel Page', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'panel-page', extensionId);
     await context.close();
   });
 
@@ -202,7 +214,7 @@ test.describe('Panel Page', () => {
     const bodyText = await page.textContent('body');
     expect(bodyText).toBeTruthy();
     
-    await page.close();
+    await collectAndClosePage(page, 'panel-render', 'panel');
   });
 
   test('panel should show scan interface', async () => {
@@ -220,7 +232,7 @@ test.describe('Panel Page', () => {
     
     expect(hasUI).toBe(true);
     
-    await page.close();
+    await collectAndClosePage(page, 'panel-scan-interface', 'panel');
   });
 });
 
@@ -234,6 +246,7 @@ test.describe('PDF Scanner Page', () => {
   });
 
   test.afterAll(async () => {
+    await collectBackgroundCoverage(context, 'pdf-scanner', extensionId);
     await context.close();
   });
 
@@ -249,7 +262,6 @@ test.describe('PDF Scanner Page', () => {
     const bodyText = await page.textContent('body');
     expect(bodyText).toBeTruthy();
     
-    await page.close();
+    await collectAndClosePage(page, 'pdf-scanner-render', 'pdf-scanner');
   });
 });
-

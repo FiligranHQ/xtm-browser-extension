@@ -711,9 +711,9 @@ jobs:
           docker stop openaev || true
           docker rm openaev || true
 
-  # E2E tests with Playwright
+  # E2E tests with Playwright (with coverage collection)
   e2e-tests:
-    name: E2E Tests (Playwright)
+    name: E2E Tests (Playwright + Coverage)
     runs-on: ubuntu-latest
     needs: lint
     timeout-minutes: 20
@@ -734,8 +734,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Build extension
-        run: npm run build:chrome
+      - name: Build extension with coverage instrumentation
+        run: npm run build:coverage
 
       - name: Run Playwright E2E tests
         run: npm run test:e2e
@@ -756,9 +756,17 @@ jobs:
           path: playwright-results.json
           retention-days: 7
 
+      - name: Upload E2E coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-e2e
+          path: coverage/e2e/
+          retention-days: 1
+
   # Upload combined coverage to Codecov
   coverage:
-    name: Upload Coverage
+    name: Merge & Upload Coverage
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, integration-opencti, integration-openaev, e2e-tests]
     if: always()
@@ -766,6 +774,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download unit test coverage
         uses: actions/download-artifact@v4
@@ -788,17 +805,28 @@ jobs:
           path: coverage/openaev
         continue-on-error: true
 
+      - name: Download E2E coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-e2e
+          path: coverage/e2e
+        continue-on-error: true
+
       - name: List coverage files
         run: |
           echo "Coverage files downloaded:"
           find coverage -name "*.json" -type f 2>/dev/null || echo "No coverage files found"
 
+      - name: Merge coverage reports
+        run: npm run coverage:merge
+        continue-on-error: true
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/unit/coverage-final.json,coverage/opencti/coverage-final.json,coverage/openaev/coverage-final.json
-          flags: unittests,integration-opencti,integration-openaev
+          directory: coverage/
+          flags: unittests,integration-opencti,integration-openaev,e2e
           fail_ci_if_error: false
           verbose: true
 

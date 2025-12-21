@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Defanged IOCs Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .ioc {
+      background: #fff3cd;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    code {
+      background: #f8f9fa;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Defanged Indicators Test Page</h1>
+  <p>This page contains defanged (obfuscated) indicators that the extension should detect and refang.</p>
+
+  <h2>Defanged IP Addresses</h2>
+  <ul>
+    <li>Using brackets: <span class="ioc">192[.]168[.]1[.]1</span></li>
+    <li>Using hxxp prefix: <span class="ioc">hxxp://10[.]0[.]0[.]1/payload</span></li>
+    <li>Mixed defanging: <span class="ioc">8.8[.]8.8</span></li>
+  </ul>
+
+  <h2>Defanged Domains</h2>
+  <ul>
+    <li>Full brackets: <span class="ioc">evil[.]example[.]com</span></li>
+    <li>Partial brackets: <span class="ioc">malware.evil[.]net</span></li>
+    <li>With protocol: <span class="ioc">hxxps://phishing[.]site[.]org/login</span></li>
+  </ul>
+
+  <h2>Defanged URLs</h2>
+  <ul>
+    <li><span class="ioc">hxxp://malware[.]com/dropper.exe</span></li>
+    <li><span class="ioc">hxxps://c2-server[.]net:8443/beacon</span></li>
+    <li><span class="ioc">hxxp[:]//encoded[.]url[.]com/path</span></li>
+  </ul>
+
+  <h2>Defanged Email Addresses</h2>
+  <ul>
+    <li><span class="ioc">attacker[@]evil[.]com</span></li>
+    <li><span class="ioc">phisher[at]malicious[.]org</span></li>
+  </ul>
+
+  <p>The extension should correctly identify and refang all these indicators.</p>
+</body>
+</html>
+

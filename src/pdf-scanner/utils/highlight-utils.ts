@@ -494,27 +494,29 @@ export async function renderHighlightsOnCanvas(
           if (matchIndex === -1) break;
           
           // Check word boundaries
-          // Only whitespace and sentence punctuation are valid boundaries
-          // NOT: . - _ [ ] (these appear in identifiers/domains or defanged URLs)
-          // e.g., "Software" should NOT match in "dl[.]software-update.org"
-          //       "Linux" should NOT match in "oaev-test-linux-01"
+          // Character BEFORE: '.', '-', '_', '[', ']' indicate we're INSIDE an identifier = reject
+          // Character AFTER: only reject if alphanumeric (word continues), allow punctuation
+          // 
+          // e.g., "Software" should NOT match in "dl.software-update.org" (. before = reject)
+          //       "Linux" should NOT match in "oaev-test-linux-01" (- before = reject)
+          //       "Ransomware.Live" SHOULD match in "Ransomware.Live." (. after = just punctuation)
           const matchEndPos = matchIndex + searchValueLower.length;
           const charBefore = matchIndex > 0 ? textLower[matchIndex - 1] : undefined;
           const charAfter = matchEndPos < textLower.length 
             ? textLower[matchEndPos] 
             : undefined;
           
-          // Valid boundary: undefined (start/end), whitespace, or sentence punctuation
-          // NOT valid: alphanumeric, '.', '-', '_', '[', ']' (identifiers and defanged URLs)
-          const isValidBoundaryChar = (char: string | undefined) => {
-            if (!char) return true; // start/end of text
-            return /[\s,;:!?()"'<>/\\@#$%^&*+=|`~\n\r\t{}]/.test(char);
-          };
+          // Check if character BEFORE indicates we're inside an identifier
+          const isInsideIdentifier = charBefore && /[.\-_[\]]/.test(charBefore);
           
-          const isWordBoundaryBefore = isValidBoundaryChar(charBefore);
-          const isWordBoundaryAfter = isValidBoundaryChar(charAfter);
+          // Check if character AFTER continues the word (alphanumeric)
+          const wordContinuesAfter = charAfter && /[a-zA-Z0-9]/.test(charAfter);
           
-          if (isWordBoundaryBefore && isWordBoundaryAfter) {
+          // Check if character BEFORE continues the word (alphanumeric)
+          const wordContinuesBefore = charBefore && /[a-zA-Z0-9]/.test(charBefore);
+          
+          // Valid match: not inside identifier, word doesn't continue before/after
+          if (!isInsideIdentifier && !wordContinuesBefore && !wordContinuesAfter) {
             // Collect this match for later drawing
             pendingHighlights.push({
               entity,

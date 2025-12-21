@@ -766,7 +766,7 @@ export class DetectionEngine {
     const startTime = performance.now();
 
     // Detect all observables
-    const observables = this.detectObservables(text);
+    let observables = this.detectObservables(text);
     
     // Detect CVEs - only if vulnerability detection is enabled for at least one platform
     const vulnEnabled = vulnSettings.enabledForOpenCTI || vulnSettings.enabledForOpenAEV;
@@ -781,29 +781,52 @@ export class DetectionEngine {
     // Detect OpenAEV entities from cache
     const rawOpenaevEntities = await this.detectOAEVEntitiesFromCache(text);
     
-    // Filter out entity matches that fall within observable ranges
-    // This prevents false positives like "Software" matching inside "dl[.]software-update[.]org"
-    const observableRanges = observables.map(o => ({ start: o.startIndex, end: o.endIndex }));
-    const openaevEntities = rawOpenaevEntities.filter(entity => {
-      // Check if this entity's range overlaps with any observable
-      const isInsideObservable = observableRanges.some(range => 
-        entity.startIndex >= range.start && entity.endIndex <= range.end
+    // IMPORTANT: Cached entities take precedence over observables
+    // If an entity name exactly matches an observable value (same text range),
+    // remove the observable and keep the entity (e.g., "terport.com.py" as Organization)
+    const allCachedEntityRanges = [
+      ...cachedOCTIEntities.map(e => ({ start: e.startIndex, end: e.endIndex, name: e.name })),
+      ...rawOpenaevEntities.map(e => ({ start: e.startIndex, end: e.endIndex, name: e.name })),
+    ];
+    
+    // Remove observables that exactly match cached entity ranges
+    observables = observables.filter(obs => {
+      const exactEntityMatch = allCachedEntityRanges.find(entity => 
+        entity.start === obs.startIndex && entity.end === obs.endIndex
       );
-      if (isInsideObservable) {
+      if (exactEntityMatch) {
+        log.debug(`[Detection] Observable "${obs.value}" superseded by cached entity "${exactEntityMatch.name}"`);
+        return false;
+      }
+      return true;
+    });
+    
+    // Now filter out entity matches that fall STRICTLY INSIDE observable ranges
+    // This prevents false positives like "Software" matching inside "dl[.]software-update[.]org"
+    // But NOT when entity exactly matches observable (that case is already handled above)
+    const observableRanges = observables.map(o => ({ start: o.startIndex, end: o.endIndex, value: o.value }));
+    const openaevEntities = rawOpenaevEntities.filter(entity => {
+      // Check if this entity is STRICTLY INSIDE an observable (smaller range)
+      const isStrictlyInsideObservable = observableRanges.some(range => 
+        entity.startIndex >= range.start && entity.endIndex <= range.end &&
+        !(entity.startIndex === range.start && entity.endIndex === range.end) // NOT exact match
+      );
+      if (isStrictlyInsideObservable) {
         log.debug(`[OpenAEV] Filtering out "${entity.name}" - detected inside observable range`);
       }
-      return !isInsideObservable;
+      return !isStrictlyInsideObservable;
     });
     
     // Also filter OpenCTI entities the same way
     const filteredCachedOCTIEntities = cachedOCTIEntities.filter(entity => {
-      const isInsideObservable = observableRanges.some(range => 
-        entity.startIndex >= range.start && entity.endIndex <= range.end
+      const isStrictlyInsideObservable = observableRanges.some(range => 
+        entity.startIndex >= range.start && entity.endIndex <= range.end &&
+        !(entity.startIndex === range.start && entity.endIndex === range.end) // NOT exact match
       );
-      if (isInsideObservable) {
+      if (isStrictlyInsideObservable) {
         log.debug(`[OpenCTI] Filtering out "${entity.name}" - detected inside observable range`);
       }
-      return !isInsideObservable;
+      return !isStrictlyInsideObservable;
     });
     
     // Also detect from provided entity names (fallback/additional)

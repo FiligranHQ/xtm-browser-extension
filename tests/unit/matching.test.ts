@@ -151,6 +151,54 @@ describe('hasValidBoundaries', () => {
   it('should handle match spanning entire text', () => {
     expect(hasValidBoundaries('APT29', 0, 5)).toBe(true);
   });
+
+  // Critical tests for domain/URL word boundary handling
+  it('should return false for words inside domain names with dots', () => {
+    // "software" in "dl.software-update.org" should NOT match
+    // Position: dl.software-update.org
+    //           0123456789...
+    // "software" starts at index 3, ends at index 11
+    expect(hasValidBoundaries('dl.software-update.org', 3, 11)).toBe(false);
+  });
+
+  it('should return false for words inside defanged URLs', () => {
+    // "software" in "dl[.]software-update[.]org" should NOT match
+    // Position: dl[.]software-update[.]org
+    //           012345678901234567890123456
+    // "software" starts at index 5, ends at index 13
+    expect(hasValidBoundaries('dl[.]software-update[.]org', 5, 13)).toBe(false);
+  });
+
+  it('should return false for words inside hyphenated identifiers', () => {
+    // "linux" in "oaev-test-linux-01" should NOT match
+    // Position: oaev-test-linux-01
+    //           012345678901234567
+    // "linux" starts at index 10, ends at index 15
+    expect(hasValidBoundaries('oaev-test-linux-01', 10, 15)).toBe(false);
+  });
+
+  it('should return true for standalone words', () => {
+    // "Software" as a standalone word should match
+    expect(hasValidBoundaries('The Software is installed', 4, 12)).toBe(true);
+    expect(hasValidBoundaries('Software update available', 0, 8)).toBe(true);
+  });
+
+  // Tests for entity names with dots (like "Ransomware.Live")
+  it('should return true for entity names followed by punctuation', () => {
+    // "Ransomware.Live" followed by "." should match (the trailing . is punctuation)
+    // Position: Visit Ransomware.Live.
+    //           0123456789012345678901234
+    // "Ransomware.Live" starts at 6, ends at 21
+    expect(hasValidBoundaries('Visit Ransomware.Live.', 6, 21)).toBe(true);
+    expect(hasValidBoundaries('Check Ransomware.Live,', 6, 21)).toBe(true);
+    expect(hasValidBoundaries('(Ransomware.Live)', 1, 16)).toBe(true);
+  });
+
+  it('should return true for entity names at end of sentence', () => {
+    // Entity at end with various punctuation
+    expect(hasValidBoundaries('I saw Ransomware.Live', 6, 21)).toBe(true);
+    expect(hasValidBoundaries('Ransomware.Live is up', 0, 15)).toBe(true);
+  });
 });
 
 // ============================================================================
@@ -453,6 +501,101 @@ describe('createMatchingRegex', () => {
   it('should handle names with underscores', () => {
     const regex = createMatchingRegex('some_name');
     expect('some_name matches'.match(regex)).toBeTruthy();
+  });
+
+  // Integration tests: Full detection flow (regex match + boundary validation)
+  describe('Entity detection in domains/URLs (integration)', () => {
+    /**
+     * Helper to simulate the detection logic:
+     * 1. Use createMatchingRegex to find potential matches
+     * 2. Use needsManualBoundaryCheck to determine if boundary validation needed
+     * 3. Use hasValidBoundaries to validate the match
+     */
+    function detectEntityInText(entityName: string, text: string): boolean {
+      const nameLower = entityName.toLowerCase();
+      const regex = createMatchingRegex(nameLower);
+      
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const matchedText = match[0];
+        if (matchedText.toLowerCase() !== nameLower) continue;
+        
+        const startIndex = match.index;
+        const endIndex = startIndex + matchedText.length;
+        
+        // Apply boundary check for names that need it
+        if (needsManualBoundaryCheck(nameLower)) {
+          if (!hasValidBoundaries(text, startIndex, endIndex)) {
+            continue; // Invalid boundary, skip this match
+          }
+        }
+        
+        return true; // Valid match found
+      }
+      return false; // No valid match
+    }
+
+    it('should NOT detect "Software" in "dl.software-update.org"', () => {
+      expect(detectEntityInText('Software', 'dl.software-update.org')).toBe(false);
+    });
+
+    it('should NOT detect "Software" in defanged "dl[.]software-update[.]org"', () => {
+      expect(detectEntityInText('Software', 'dl[.]software-update[.]org')).toBe(false);
+    });
+
+    it('should NOT detect "Linux" in "oaev-test-linux-01"', () => {
+      expect(detectEntityInText('Linux', 'oaev-test-linux-01')).toBe(false);
+    });
+
+    it('should NOT detect "test" in "oaev-test-linux-01"', () => {
+      expect(detectEntityInText('test', 'oaev-test-linux-01')).toBe(false);
+    });
+
+    it('should detect "Software" as a standalone word', () => {
+      expect(detectEntityInText('Software', 'The Software is installed')).toBe(true);
+    });
+
+    it('should detect "Linux" as a standalone word', () => {
+      expect(detectEntityInText('Linux', 'Linux is an operating system')).toBe(true);
+    });
+
+    it('should detect "APT29" with punctuation boundaries', () => {
+      expect(detectEntityInText('APT29', '(APT29) is a threat actor')).toBe(true);
+    });
+
+    it('should NOT detect "Software" in code string "dl.software-update.org"', () => {
+      expect(detectEntityInText('Software', '"dl.software-update.org"')).toBe(false);
+    });
+
+    it('should NOT detect "software" in URLs within surrounding text', () => {
+      const text = 'The malware connects to c2_servers[] = {"update.cdn-services.net", "honey.scanme.sh", "dl.software-update.org"};';
+      expect(detectEntityInText('Software', text)).toBe(false);
+    });
+
+    // Tests for entity names containing dots (like "Ransomware.Live")
+    it('should detect "Ransomware.Live" followed by period (sentence punctuation)', () => {
+      expect(detectEntityInText('Ransomware.Live', 'Visit Ransomware.Live.')).toBe(true);
+    });
+
+    it('should detect "Ransomware.Live" followed by comma', () => {
+      expect(detectEntityInText('Ransomware.Live', 'Check Ransomware.Live, it is useful.')).toBe(true);
+    });
+
+    it('should detect "Ransomware.Live" in parentheses', () => {
+      expect(detectEntityInText('Ransomware.Live', '(Ransomware.Live) tracks threats')).toBe(true);
+    });
+
+    it('should detect "Ransomware.Live" at start of text', () => {
+      expect(detectEntityInText('Ransomware.Live', 'Ransomware.Live is a website')).toBe(true);
+    });
+
+    it('should detect "Ransomware.Live" at end of text', () => {
+      expect(detectEntityInText('Ransomware.Live', 'Check out Ransomware.Live')).toBe(true);
+    });
+
+    it('should detect "Ransomware.Live" surrounded by spaces', () => {
+      expect(detectEntityInText('Ransomware.Live', 'I use Ransomware.Live daily')).toBe(true);
+    });
   });
 });
 

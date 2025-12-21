@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APT29 Threat Intelligence Report - Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 { color: #1a1a2e; }
+    h2 { color: #16213e; margin-top: 30px; }
+    .indicator { 
+      background: #f5f5f5; 
+      padding: 2px 6px; 
+      border-radius: 3px; 
+      font-family: monospace;
+    }
+    .section { margin-bottom: 30px; }
+    table { 
+      border-collapse: collapse; 
+      width: 100%;
+      margin: 15px 0;
+    }
+    th, td { 
+      border: 1px solid #ddd; 
+      padding: 10px; 
+      text-align: left;
+    }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>APT29 Cozy Bear - Threat Intelligence Report</h1>
+  <p><strong>Report ID:</strong> TIR-2024-001</p>
+  <p><strong>Classification:</strong> TLP:AMBER</p>
+  <p><strong>Date:</strong> December 2024</p>
+
+  <div class="section">
+    <h2>Executive Summary</h2>
+    <p>
+      This report details recent activities attributed to <strong>APT29</strong> (also known as 
+      <strong>Cozy Bear</strong>, <strong>The Dukes</strong>, and <strong>IRON HEMLOCK</strong>). 
+      The threat group is associated with the Russian Foreign Intelligence Service (SVR) and has 
+      been active since at least 2008.
+    </p>
+    <p>
+      Recent campaigns have targeted government organizations using sophisticated malware including 
+      <strong>Cobalt Strike</strong> and custom backdoors. The group exploited vulnerabilities 
+      including <strong>CVE-2021-44228</strong> (Log4Shell) and <strong>CVE-2023-23397</strong>.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Network Indicators (IOCs)</h2>
+    <p>The following network indicators have been associated with this campaign:</p>
+    
+    <h3>IP Addresses</h3>
+    <table>
+      <tr><th>IP Address</th><th>Type</th><th>Notes</th></tr>
+      <tr><td><span class="indicator">192.168.1.100</span></td><td>C2 Server</td><td>Primary command and control</td></tr>
+      <tr><td><span class="indicator">10.0.0.50</span></td><td>Staging</td><td>Payload staging server</td></tr>
+      <tr><td><span class="indicator">203.0.113.42</span></td><td>Exfiltration</td><td>Data exfiltration endpoint</td></tr>
+      <tr><td><span class="indicator">2001:db8::1</span></td><td>IPv6 C2</td><td>Alternative C2 over IPv6</td></tr>
+    </table>
+
+    <h3>Domains</h3>
+    <table>
+      <tr><th>Domain</th><th>Purpose</th></tr>
+      <tr><td><span class="indicator">evil-domain.com</span></td><td>Phishing infrastructure</td></tr>
+      <tr><td><span class="indicator">malware-c2.net</span></td><td>Command and control</td></tr>
+      <tr><td><span class="indicator">update.legit-software[.]org</span></td><td>Typosquatting for updates</td></tr>
+      <tr><td><span class="indicator">hxxps://phishing[.]example[.]com/login</span></td><td>Credential harvesting</td></tr>
+    </table>
+
+    <h3>Email Addresses</h3>
+    <p>Phishing emails originated from:</p>
+    <ul>
+      <li><span class="indicator">attacker@evil-domain.com</span></li>
+      <li><span class="indicator">support@legit-software.org</span></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>File Indicators</h2>
+    <p>The following file hashes were identified:</p>
+    
+    <table>
+      <tr><th>Hash Type</th><th>Hash Value</th><th>Filename</th></tr>
+      <tr>
+        <td>MD5</td>
+        <td><span class="indicator">d41d8cd98f00b204e9800998ecf8427e</span></td>
+        <td>malware.exe</td>
+      </tr>
+      <tr>
+        <td>SHA-1</td>
+        <td><span class="indicator">da39a3ee5e6b4b0d3255bfef95601890afd80709</span></td>
+        <td>dropper.dll</td>
+      </tr>
+      <tr>
+        <td>SHA-256</td>
+        <td><span class="indicator">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span></td>
+        <td>payload.bin</td>
+      </tr>
+    </table>
+
+    <h3>Malicious Files</h3>
+    <ul>
+      <li><span class="indicator">invoice_2024.docx</span> - Initial phishing attachment</li>
+      <li><span class="indicator">update.ps1</span> - PowerShell downloader</li>
+      <li><span class="indicator">backdoor.exe</span> - Main implant</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>MITRE ATT&CK Techniques</h2>
+    <p>The following techniques were observed:</p>
+    <ul>
+      <li><strong>T1566</strong> - Phishing (Initial Access)</li>
+      <li><strong>T1059.001</strong> - PowerShell (Execution)</li>
+      <li><strong>T1071.001</strong> - Web Protocols (C2)</li>
+      <li><strong>T1005</strong> - Data from Local System (Collection)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Related Threat Actors</h2>
+    <p>
+      APT29 has been linked to the <strong>GRU</strong> (Russian military intelligence) and works 
+      in coordination with <strong>APT28</strong> (Fancy Bear). The group has also deployed 
+      <strong>Emotet</strong> in some campaigns for initial access.
+    </p>
+    <p>
+      Tools commonly used include <strong>Mimikatz</strong> for credential theft and 
+      <strong>Cobalt Strike</strong> for post-exploitation.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Cryptocurrency Wallets</h2>
+    <p>Ransomware payments were directed to:</p>
+    <ul>
+      <li>Bitcoin: <span class="indicator">1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2</span></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Additional Indicators</h2>
+    <ul>
+      <li>MAC Address observed: <span class="indicator">00:1A:2B:3C:4D:5E</span></li>
+      <li>ASN used for hosting: <span class="indicator">AS12345</span></li>
+      <li>User-Agent string: <span class="indicator">Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36</span></li>
+    </ul>
+  </div>
+
+  <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; color: #666;">
+    <p>This is a test page for the XTM Browser Extension E2E tests.</p>
+  </footer>
+</body>
+</html>
+

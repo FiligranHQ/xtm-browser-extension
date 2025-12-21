@@ -6,7 +6,7 @@
  */
 
 /**
- * Check if a character is a valid word boundary
+ * Check if a character is a valid word boundary (general check)
  * Returns true for undefined/null, empty string, whitespace, or sentence punctuation
  * 
  * IMPORTANT: Does NOT include '.', '-', '_', '[', ']' as boundaries because:
@@ -22,11 +22,27 @@ export function isValidBoundary(char: string | undefined | null): boolean {
 }
 
 /**
+ * Check if a character BEFORE indicates we're inside an identifier
+ * These characters when appearing BEFORE a match suggest the match is part
+ * of a larger identifier/domain/URL.
+ * 
+ * Note: This is stricter than general boundary check because these characters
+ * appearing BEFORE clearly indicate an identifier context.
+ */
+function isInsideIdentifier(charBefore: string | undefined | null): boolean {
+  if (!charBefore) return false;
+  return /[.\-_[\]]/.test(charBefore);
+}
+
+/**
  * Check if a match at given position has valid word boundaries
  * Useful for names with special characters that can't use \b regex
  * 
- * A valid boundary is whitespace, sentence punctuation, or start/end of text.
- * Characters like '.', '-', '_' are NOT valid boundaries (they appear in identifiers).
+ * Rules:
+ * - Character BEFORE: '.', '-', '_', '[', ']' = inside identifier = REJECT
+ *   (e.g., "dl.software" - the dot before "software" means it's part of a domain)
+ * - Character AFTER: only reject if alphanumeric (word continues)
+ *   (e.g., "Ransomware.Live." - the dot after is just punctuation = ALLOW)
  */
 export function hasValidBoundaries(
   text: string,
@@ -36,15 +52,20 @@ export function hasValidBoundaries(
   const charBefore = startIndex > 0 ? text[startIndex - 1] : undefined;
   const charAfter = endIndex < text.length ? text[endIndex] : undefined;
   
-  // Check if charBefore is a valid boundary
-  // Must be: undefined (start of text), whitespace, or sentence punctuation
-  // NOT valid: alphanumeric, '.', '-', '_' (these indicate the match is inside an identifier)
-  if (!isValidBoundary(charBefore)) {
+  // Check if we're inside an identifier (character BEFORE indicates this)
+  // e.g., "dl.software" - the dot before "software" means reject
+  if (isInsideIdentifier(charBefore)) {
     return false;
   }
   
-  // Check if charAfter is a valid boundary
-  if (!isValidBoundary(charAfter)) {
+  // Check if word continues before (alphanumeric)
+  if (charBefore && /[a-zA-Z0-9]/.test(charBefore)) {
+    return false;
+  }
+  
+  // Check if word continues after (alphanumeric)
+  // Note: '.', '-', etc. AFTER are allowed (could be punctuation like "Ransomware.Live.")
+  if (charAfter && /[a-zA-Z0-9]/.test(charAfter)) {
     return false;
   }
   

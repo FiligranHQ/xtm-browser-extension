@@ -262,15 +262,34 @@ function isValidCharBoundary(char: string | undefined): boolean {
 }
 
 /**
+ * Check if a character BEFORE a match indicates we're inside an identifier
+ * These characters (when appearing before) suggest the match is part of a larger
+ * identifier/domain/URL and should be rejected.
+ * 
+ * Only checks character BEFORE because:
+ * - "dl.software" → `.` before "software" = inside domain = reject
+ * - "Ransomware.Live." → `.` after is just punctuation = allow
+ */
+function isInsideIdentifier(charBefore: string | undefined): boolean {
+  if (!charBefore) return false;
+  // Character BEFORE the match indicates we're inside an identifier
+  // e.g., "dl.software" - the dot before "software" means it's part of a domain
+  return /[.\-_[\]]/.test(charBefore);
+}
+
+/**
  * Smart word boundary checker that considers text node boundaries as valid
  * This prevents false positives like "Tech" in "Technique" while allowing
  * "Germany" after "DE" in separate spans (which becomes "DEGermany" in fullText)
  * 
  * A character is considered a valid boundary if:
  * 1. It's whitespace, sentence punctuation, or start/end of text
- * 2. The position is at a DOM text node boundary (allows multi-node matches)
+ * 2. The position is at a DOM text node boundary AND the character is alphanumeric
+ *    (allows multi-node matches like "DEGermany" but NOT "dl.software")
  * 
- * NOT valid: '.', '-', '_' (these appear in domains/identifiers)
+ * Special handling:
+ * - Character BEFORE: '.', '-', '_', '[', ']' = inside identifier = reject
+ * - Character AFTER: these are allowed (could be punctuation like "Ransomware.Live.")
  */
 function isWordBoundaryWithNodeAwareness(
   charBefore: string | undefined,
@@ -280,8 +299,15 @@ function isWordBoundaryWithNodeAwareness(
   matchEnd: number,
   nodeMap: NodeMapEntry[]
 ): boolean {
-  // Check if position is at a node boundary - always valid (allows multi-node matches)
-  // OR if the character is a valid punctuation/whitespace boundary
+  // Check if we're inside an identifier (character BEFORE indicates this)
+  // e.g., "dl.software" - the dot before "software" means reject
+  // But "Ransomware.Live." - the dot after is just punctuation, allow it
+  if (isInsideIdentifier(charBefore)) {
+    return false;
+  }
+  
+  // THEN: Check if the character is a valid punctuation/whitespace boundary
+  // OR if it's at a DOM node boundary (for multi-node text like "DE" + "Germany")
   const isValidBefore = isValidCharBoundary(charBefore) || isAtNodeBoundary(matchStart, nodeMap);
   const isValidAfter = isValidCharBoundary(charAfter) || isAtNodeBoundary(matchEnd, nodeMap);
   
@@ -428,20 +454,52 @@ export function highlightResults(
   // Build platform entities map
   const valueToPlatformEntities = buildPlatformEntitiesMap(results);
   
-  const findPlatformMatches = (valueLower: string) => {
+  /**
+   * Find platform matches for OBSERVABLES (exact match only)
+   * Observables like domain names should NOT match entity names that happen to be substrings
+   * e.g., "dl.software-update.org" should NOT match entity "Software"
+   */
+  const findPlatformMatchesForObservable = (valueLower: string) => {
+    const matches: Array<{ platformType: string; type: string; found: boolean; data: unknown }> = [];
+    // Only exact matches for observables
+    const exactMatches = valueToPlatformEntities.get(valueLower);
+    if (exactMatches) {
+      matches.push(...exactMatches.filter(p => p.platformType !== 'opencti' && p.found));
+    }
+    return matches;
+  };
+  
+  /**
+   * Find platform matches for ENTITIES (includes alias/substring matching)
+   * Entities can match if the name is contained in another entity's aliases
+   * e.g., "APT29" should match if another platform has "APT29_group"
+   */
+  const findPlatformMatchesForEntity = (valueLower: string) => {
     const matches: Array<{ platformType: string; type: string; found: boolean; data: unknown }> = [];
     const exactMatches = valueToPlatformEntities.get(valueLower);
     if (exactMatches) {
       matches.push(...exactMatches.filter(p => p.platformType !== 'opencti' && p.found));
     }
+    // Check if an entity name contains this value (e.g., "APT29_group" contains "apt29")
     for (const [key, entities] of valueToPlatformEntities) {
       if (key !== valueLower && key.includes(valueLower)) {
         matches.push(...entities.filter(p => p.platformType !== 'opencti' && p.found));
       }
     }
+    // Check if this value contains an entity name (e.g., alias matching)
+    // Only if the contained name appears at a word boundary, not inside identifiers
     for (const [key, entities] of valueToPlatformEntities) {
       if (key !== valueLower && valueLower.includes(key) && key.length >= 4) {
-        matches.push(...entities.filter(p => p.platformType !== 'opencti' && p.found));
+        // Check word boundaries to prevent "software" in "dl.software-update.org"
+        const keyIndex = valueLower.indexOf(key);
+        const charBefore = keyIndex > 0 ? valueLower[keyIndex - 1] : '';
+        const charAfter = keyIndex + key.length < valueLower.length ? valueLower[keyIndex + key.length] : '';
+        // Only match if at word boundaries (space or start/end)
+        const isWordBoundary = (charBefore === '' || /\s/.test(charBefore)) && 
+                              (charAfter === '' || /\s/.test(charAfter));
+        if (isWordBoundary) {
+          matches.push(...entities.filter(p => p.platformType !== 'opencti' && p.found));
+        }
       }
     }
     return matches;
@@ -458,7 +516,7 @@ export function highlightResults(
   
   for (const obs of results.observables) {
     const valueLower = obs.value.toLowerCase();
-    const otherPlatformMatches = findPlatformMatches(valueLower);
+    const otherPlatformMatches = findPlatformMatchesForObservable(valueLower);
     const meta: HighlightMeta = {
       type: obs.type,
       found: obs.found,
@@ -498,7 +556,7 @@ export function highlightResults(
     
     for (const octiEntity of results.openctiEntities) {
       const valueLower = octiEntity.name.toLowerCase();
-      const otherPlatformMatches = findPlatformMatches(valueLower);
+      const otherPlatformMatches = findPlatformMatchesForEntity(valueLower);
       const meta: HighlightMeta = {
         type: octiEntity.type,
         found: octiEntity.found,

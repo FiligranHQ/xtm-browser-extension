@@ -833,4 +833,148 @@ describe('OBSERVABLE_PATTERNS validation functions', () => {
       expect(creditCardPattern.validate?.('4111111111111112')).toBe(false);
     });
   });
+
+  describe('File name validation', () => {
+    const filePattern = OBSERVABLE_PATTERNS.find(p => p.type === 'StixFile' && !p.hashType)!;
+    
+    it('should validate file names with valid extensions', () => {
+      expect(filePattern.validate?.('malware.exe')).toBe(true);
+      expect(filePattern.validate?.('document.pdf')).toBe(true);
+      expect(filePattern.validate?.('script.ps1')).toBe(true);
+    });
+
+    it('should reject file names without extension', () => {
+      expect(filePattern.validate?.('noextension')).toBe(false);
+    });
+
+    it('should reject file names with invalid extension', () => {
+      expect(filePattern.validate?.('file.invalidext')).toBe(false);
+    });
+
+    it('should reject file names that are just extensions', () => {
+      expect(filePattern.validate?.('.exe')).toBe(false);
+    });
+
+    it('should reject version numbers', () => {
+      expect(filePattern.validate?.('1.2.3.exe')).toBe(false);
+      expect(filePattern.validate?.('v1.2.exe')).toBe(false);
+    });
+  });
+});
+
+// ============================================================================
+// generateDefangedVariants Tests
+// ============================================================================
+
+import { generateDefangedVariants } from '../../src/shared/detection/patterns';
+
+describe('generateDefangedVariants', () => {
+  describe('Domain defanging', () => {
+    it('should generate bracket-defanged variant', () => {
+      const variants = generateDefangedVariants('example.com');
+      expect(variants).toContain('example[.]com');
+    });
+
+    it('should generate paren-defanged variant', () => {
+      const variants = generateDefangedVariants('example.com');
+      expect(variants).toContain('example(.)com');
+    });
+
+    it('should generate curly-defanged variant', () => {
+      const variants = generateDefangedVariants('example.com');
+      expect(variants).toContain('example{.}com');
+    });
+
+    it('should generate last-dot-only variants', () => {
+      const variants = generateDefangedVariants('sub.example.com');
+      expect(variants).toContain('sub.example[.]com');
+      expect(variants).toContain('sub.example(.)com');
+    });
+
+    it('should handle multi-level subdomains', () => {
+      const variants = generateDefangedVariants('a.b.c.com');
+      expect(variants).toContain('a[.]b[.]c[.]com');
+      expect(variants).toContain('a.b.c[.]com');
+    });
+  });
+
+  describe('IP address defanging', () => {
+    it('should generate bracket-defanged IP', () => {
+      const variants = generateDefangedVariants('192.168.1.1');
+      expect(variants).toContain('192[.]168[.]1[.]1');
+    });
+
+    it('should generate paren-defanged IP', () => {
+      const variants = generateDefangedVariants('192.168.1.1');
+      expect(variants).toContain('192(.)168(.)1(.)1');
+    });
+
+    it('should generate last-dot-only IP variant', () => {
+      const variants = generateDefangedVariants('192.168.1.1');
+      expect(variants).toContain('192.168.1[.]1');
+    });
+  });
+
+  describe('Email defanging', () => {
+    it('should generate bracket @ variant', () => {
+      const variants = generateDefangedVariants('user@example.com');
+      expect(variants).toContain('user[@]example.com');
+    });
+
+    it('should generate paren @ variant', () => {
+      const variants = generateDefangedVariants('user@example.com');
+      expect(variants).toContain('user(@)example.com');
+    });
+
+    it('should generate combined @ and dot variant', () => {
+      const variants = generateDefangedVariants('user@example.com');
+      expect(variants).toContain('user[@]example[.]com');
+    });
+  });
+
+  describe('URL defanging', () => {
+    it('should generate hxxp variant', () => {
+      const variants = generateDefangedVariants('http://example.com');
+      expect(variants).toContain('hxxp://example.com');
+    });
+
+    it('should generate hxxps variant', () => {
+      const variants = generateDefangedVariants('https://example.com');
+      expect(variants).toContain('hxxps://example.com');
+    });
+
+    it('should generate hXXp variant', () => {
+      const variants = generateDefangedVariants('http://example.com');
+      expect(variants).toContain('hXXp://example.com');
+    });
+
+    it('should generate hXXps variant', () => {
+      const variants = generateDefangedVariants('https://example.com');
+      expect(variants).toContain('hXXps://example.com');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should return empty array for empty string', () => {
+      const variants = generateDefangedVariants('');
+      expect(variants).toEqual([]);
+    });
+
+    it('should not duplicate variants', () => {
+      const variants = generateDefangedVariants('example.com');
+      const uniqueVariants = [...new Set(variants)];
+      expect(variants.length).toBe(uniqueVariants.length);
+    });
+
+    it('should handle value without dots', () => {
+      const variants = generateDefangedVariants('localhost');
+      // No dots = no defang variants based on dots
+      expect(variants.every(v => !v.includes('[.]'))).toBe(true);
+    });
+
+    it('should handle single character before last dot', () => {
+      const variants = generateDefangedVariants('a.com');
+      expect(variants).toContain('a[.]com');
+    });
+  });
 });

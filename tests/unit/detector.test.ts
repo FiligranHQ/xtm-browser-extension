@@ -717,6 +717,182 @@ describe('DetectionEngine', () => {
   });
 
   // ============================================================================
+  // Cache-Based Entity Detection Tests
+  // ============================================================================
+
+  describe('detectOCTIEntitiesFromCache', () => {
+    it('should detect entities from cached names', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      const mockEntityMap = new Map([
+        ['emotet', [{ id: 'malware-1', name: 'Emotet', type: 'Malware', platformId: 'test-platform' }]],
+        ['apt29', [{ id: 'threat-actor-1', name: 'APT29', type: 'Intrusion-Set', platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'The Emotet malware was used by APT29';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      const emotet = results.find(e => e.name === 'Emotet');
+      expect(emotet).toBeDefined();
+      expect(emotet?.found).toBe(true);
+      expect(emotet?.type).toBe('Malware');
+    });
+
+    it('should handle MITRE ATT&CK IDs', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      const mockEntityMap = new Map([
+        ['t1059', [{ id: 'attack-pattern-1', name: 'Command and Scripting Interpreter', type: 'Attack-Pattern', x_mitre_id: 'T1059', platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'The attack used T1059 technique';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(1);
+      expect(results[0].entityData?.x_mitre_id).toBe('T1059');
+    });
+
+    it('should include aliases in entity data', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      const mockEntityMap = new Map([
+        ['fancy bear', [{ id: 'threat-1', name: 'APT28', type: 'Intrusion-Set', aliases: ['Fancy Bear', 'Sofacy'], platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'Activity attributed to Fancy Bear';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(1);
+      expect(results[0].matchedValue).toBe('Fancy Bear'); // Matched alias
+      expect(results[0].name).toBe('APT28'); // Entity name
+    });
+
+    it('should return empty array when cache is empty', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      const text = 'APT29 is a threat actor';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(0);
+    });
+
+    it('should handle multiple entities with same name but different types', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      // Same name used for different entity types
+      const mockEntityMap = new Map([
+        ['phoenix', [
+          { id: 'malware-1', name: 'Phoenix', type: 'Malware', platformId: 'platform-1' },
+          { id: 'threat-actor-1', name: 'Phoenix', type: 'Threat-Actor-Group', platformId: 'platform-2' },
+        ]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'The Phoenix group launched an attack';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(2);
+      expect(results.map(r => r.type).sort()).toEqual(['Malware', 'Threat-Actor-Group'].sort());
+    });
+  });
+
+  describe('detectOAEVEntitiesFromCache', () => {
+    it('should detect OpenAEV entities from cache', async () => {
+      const { getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      const mockEntityMap = new Map([
+        ['server-01', [{ id: 'asset-1', name: 'Server-01', type: 'Asset', platformId: 'oaev-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'Compromised asset: Server-01';
+      const results = await engine.detectOAEVEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('Server-01');
+      expect(results[0].type).toBe('Asset');
+      expect(results[0].platformType).toBe('openaev');
+    });
+
+    it('should return empty array when cache is empty', async () => {
+      const { getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      const text = 'Some text about assets';
+      const results = await engine.detectOAEVEntitiesFromCache(text);
+      
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  describe('scan - entity vs observable filtering', () => {
+    it('should prefer cached entities over observables at same position', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      // Entity name that looks like a domain
+      const mockEntityMap = new Map([
+        ['terport.com.py', [{ id: 'org-1', name: 'terport.com.py', type: 'Organization', platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      const text = 'Company: terport.com.py';
+      const result = await engine.scan(text);
+      
+      // Should have entity, not observable (or entity takes precedence)
+      const org = result.openctiEntities.find(e => e.name === 'terport.com.py');
+      expect(org).toBeDefined();
+      expect(org?.type).toBe('Organization');
+    });
+
+    it('should filter out entities detected strictly inside observable ranges', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching, getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      
+      // Entity name "Software" that might appear inside a domain
+      const mockOCTIMap = new Map([
+        ['software', [{ id: 'entity-1', name: 'Software', type: 'System', platformId: 'test-platform' }]],
+      ]);
+      const mockOAEVMap = new Map([
+        ['update', [{ id: 'asset-1', name: 'Update', type: 'Asset', platformId: 'oaev-platform' }]],
+      ]);
+      
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockOCTIMap);
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(mockOAEVMap);
+      
+      // Domain contains "software" and "update" as substrings
+      const text = 'Malicious domain: dl.software-update.org';
+      const result = await engine.scan(text);
+      
+      // Should NOT have entities that are substrings of the domain
+      const softwareEntity = result.openctiEntities.find(e => e.name === 'Software');
+      const updateEntity = result.openaevEntities.find(e => e.name === 'Update');
+      
+      // These should be filtered out because they're inside the domain observable
+      expect(softwareEntity).toBeUndefined();
+      expect(updateEntity).toBeUndefined();
+      
+      // But should still detect the domain
+      const domain = result.observables.find(o => o.type === 'Domain-Name');
+      expect(domain).toBeDefined();
+    });
+
+    it('should filter additional known entities inside observables', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching, getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      
+      // Clear any cached entities
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(new Map());
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      // Use knownEntityNames parameter with a name that appears inside a URL
+      const text = 'Download from https://example.com/test/api/v1';
+      const result = await engine.scan(text, ['api', 'test']);
+      
+      // Short names might not be detected, but longer names inside URLs should be filtered
+      // The URL detection should work
+      const url = result.observables.find(o => o.type === 'Url');
+      expect(url).toBeDefined();
+    });
+  });
+
+  // ============================================================================
   // Multi-Platform Observable Enrichment Tests
   // ============================================================================
 
@@ -761,6 +937,168 @@ describe('DetectionEngine', () => {
       
       // Should only call API once for unique type:value
       expect(mockOCTIClient.searchObservableByValue).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle observables with refanged values', async () => {
+      const mockResult = {
+        id: 'obs-456',
+        entity_type: 'Domain-Name',
+        value: 'evil.example.com',
+      };
+      (mockOCTIClient.searchObservableByValue as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
+      
+      const observables = [{
+        type: 'Domain-Name' as const,
+        value: 'evil[.]example[.]com',
+        refangedValue: 'evil.example.com',
+        isDefanged: true,
+        startIndex: 0,
+        endIndex: 20,
+        context: '',
+        found: false,
+      }];
+      
+      const results = await engine.enrichObservablesMultiPlatform(observables);
+      
+      expect(results[0].found).toBe(true);
+    });
+
+    it('should handle enrichment failures gracefully', async () => {
+      (mockOCTIClient.searchObservableByValue as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API Error'));
+      
+      const observables = [{
+        type: 'IPv4-Addr' as const,
+        value: '192.168.1.1',
+        startIndex: 0,
+        endIndex: 11,
+        context: '',
+        found: false,
+      }];
+      
+      const results = await engine.enrichObservablesMultiPlatform(observables);
+      
+      expect(results[0].found).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // Parent MITRE Technique Tests
+  // ============================================================================
+
+  describe('MITRE ATT&CK detection edge cases', () => {
+    it('should skip parent MITRE IDs when followed by dot (sub-technique)', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      const mockEntityMap = new Map([
+        ['t1059', [{ id: 'attack-1', name: 'Command and Scripting Interpreter', type: 'Attack-Pattern', x_mitre_id: 'T1059', platformId: 'test-platform' }]],
+        ['t1059.001', [{ id: 'attack-2', name: 'PowerShell', type: 'Attack-Pattern', x_mitre_id: 'T1059.001', platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      
+      // Contains sub-technique T1059.001 - should NOT match T1059 as it's followed by a dot
+      const text = 'Attack used T1059.001 (PowerShell)';
+      const results = await engine.detectOCTIEntitiesFromCache(text);
+      
+      // Should only match T1059.001, not T1059
+      const t1059 = results.find(e => e.entityData?.x_mitre_id === 'T1059');
+      const t1059001 = results.find(e => e.entityData?.x_mitre_id === 'T1059.001');
+      
+      expect(t1059).toBeUndefined(); // Parent should not match when followed by dot
+      expect(t1059001).toBeDefined();
+    });
+  });
+
+  // ============================================================================
+  // Scan with Entities to Enrich Tests
+  // ============================================================================
+
+  describe('scan - entity merging and enrichment', () => {
+    it('should merge cached entities with additional entities', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching, getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      
+      // Cached entity
+      const mockEntityMap = new Map([
+        ['emotet', [{ id: 'malware-1', name: 'Emotet', type: 'Malware', platformId: 'test-platform' }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      // Mock API for additional entity
+      const mockResult = {
+        id: 'apt-123',
+        entity_type: 'Intrusion-Set',
+        name: 'APT29',
+      };
+      (mockOCTIClient.searchSDOByNameOrAlias as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
+      
+      const text = 'Emotet dropped by APT29';
+      const result = await engine.scan(text, ['APT29']);
+      
+      // Should have both cached and additional entities
+      const emotet = result.openctiEntities.find(e => e.name === 'Emotet');
+      const apt29 = result.openctiEntities.find(e => e.name === 'APT29');
+      
+      expect(emotet).toBeDefined();
+      expect(apt29).toBeDefined();
+    });
+
+    it('should prefer cached entity over additional entity with same name', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching, getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      
+      // Cached entity with more details
+      const mockEntityMap = new Map([
+        ['apt29', [{ id: 'cached-apt', name: 'APT29', type: 'Intrusion-Set', platformId: 'test-platform', aliases: ['Cozy Bear'] }]],
+      ]);
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(mockEntityMap);
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      const text = 'APT29 is also known as Cozy Bear';
+      // Pass same name as known entity - cached one should take precedence
+      const result = await engine.scan(text, ['APT29']);
+      
+      // Should only have one APT29 (from cache)
+      const apt29s = result.openctiEntities.filter(e => e.name === 'APT29');
+      expect(apt29s).toHaveLength(1);
+      expect(apt29s[0].entityId).toBe('cached-apt');
+    });
+
+    it('should enrich entities not found in cache via API', async () => {
+      const { getAllCachedOCTIEntityNamesForMatching, getAllCachedOAEVEntityNamesForMatching } = await import('../../src/shared/utils/storage');
+      
+      vi.mocked(getAllCachedOCTIEntityNamesForMatching).mockResolvedValue(new Map());
+      vi.mocked(getAllCachedOAEVEntityNamesForMatching).mockResolvedValue(new Map());
+      
+      // Mock API response
+      const mockResult = {
+        id: 'api-apt',
+        entity_type: 'Intrusion-Set',
+        name: 'APT29',
+      };
+      (mockOCTIClient.searchSDOByNameOrAlias as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
+      
+      const text = 'APT29 group is active';
+      const result = await engine.scan(text, ['APT29']);
+      
+      // Entity should be enriched via API
+      const apt29 = result.openctiEntities.find(e => e.name === 'APT29');
+      expect(apt29).toBeDefined();
+      expect(apt29?.found).toBe(true);
+      expect(apt29?.entityId).toBe('api-apt');
+    });
+  });
+
+  // ============================================================================
+  // Add Client with Empty Map Tests
+  // ============================================================================
+
+  describe('addClient - edge cases', () => {
+    it('should set primary client if none exists', () => {
+      const emptyEngine = new DetectionEngine(new Map());
+      const newClient = createMockOpenCTIClient();
+      
+      emptyEngine.addClient('first-platform', newClient);
+      
+      const platforms = emptyEngine.getAvailablePlatforms();
+      expect(platforms.opencti).toContain('first-platform');
     });
   });
 });

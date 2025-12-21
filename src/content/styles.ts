@@ -112,12 +112,13 @@ export const HIGHLIGHT_STYLES = `
     padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for check icon */
   }
   
-  /* Checkbox on LEFT for found - vertically centered on first line */
+  /* Checkbox on LEFT for found - positioned at top with offset to align with text baseline */
   .xtm-highlight.xtm-found::before {
     content: '' !important;
     position: absolute !important;
     left: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px checkbox on first line (0.5em - half height) */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     border: 1.5px solid #4caf50 !important;
@@ -135,12 +136,13 @@ export const HIGHLIGHT_STYLES = `
     background-position: center !important;
   }
   
-  /* Check icon on RIGHT for found - vertically centered on first line */
+  /* Check icon on RIGHT for found - vertically centered within highlight */
   .xtm-highlight.xtm-found::after {
     content: '' !important;
     position: absolute !important;
     right: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px icon on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
@@ -168,12 +170,13 @@ export const HIGHLIGHT_STYLES = `
     padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for info icon */
   }
   
-  /* Checkbox on LEFT for not found - vertically centered on first line */
+  /* Checkbox on LEFT for not found - vertically centered within highlight */
   .xtm-highlight.xtm-not-found::before {
     content: '' !important;
     position: absolute !important;
     left: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px checkbox on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     border: 1.5px solid #ffa726 !important;
@@ -191,12 +194,13 @@ export const HIGHLIGHT_STYLES = `
     background-position: center !important;
   }
   
-  /* Info icon on RIGHT - vertically centered on first line */
+  /* Info icon on RIGHT - vertically centered within highlight */
   .xtm-highlight.xtm-not-found::after {
     content: '' !important;
     position: absolute !important;
     right: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px icon on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffa726'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/%3E%3C/svg%3E") !important;
@@ -233,12 +237,13 @@ export const HIGHLIGHT_STYLES = `
     content: none !important;
   }
   
-  /* Info icon on RIGHT for entity not addable - vertically centered on first line */
+  /* Info icon on RIGHT for entity not addable - vertically centered within highlight */
   .xtm-highlight.xtm-entity-not-addable::after {
     content: '' !important;
     position: absolute !important;
     right: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px icon on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239e9e9e'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/%3E%3C/svg%3E") !important;
@@ -261,12 +266,13 @@ export const HIGHLIGHT_STYLES = `
     cursor: pointer !important;
   }
   
-  /* Checkbox on LEFT for mixed state - vertically centered on first line */
+  /* Checkbox on LEFT for mixed state - vertically centered within highlight */
   .xtm-highlight.xtm-mixed-state::before {
     content: '' !important;
     position: absolute !important;
     left: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px checkbox on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     border: 1.5px solid #ffa726 !important;
@@ -284,22 +290,18 @@ export const HIGHLIGHT_STYLES = `
     background-position: center !important;
   }
   
-  /* Green checkmark badge on RIGHT for mixed state */
-  /* Green checkmark badge on RIGHT for mixed state - vertically centered on first line */
+  /* Green checkmark on RIGHT for mixed state - same style as found checkmark */
   .xtm-highlight.xtm-mixed-state::after {
     content: '' !important;
     position: absolute !important;
     right: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px icon on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
-    background: #00c853 !important;
-    border-radius: 50% !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
-    background-size: 6px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300c853'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E") !important;
+    background-size: contain !important;
     background-repeat: no-repeat !important;
-    background-position: center !important;
-    cursor: pointer !important;
   }
   
   .xtm-highlight.xtm-mixed-state:hover {
@@ -321,12 +323,13 @@ export const HIGHLIGHT_STYLES = `
     padding: 1px 16px 1px 16px !important;  /* Space on left for checkbox, right for AI icon */
   }
   
-  /* Checkbox on LEFT for AI discovered - vertically centered on first line */
+  /* Checkbox on LEFT for AI discovered - vertically centered within highlight */
   .xtm-highlight.xtm-ai-discovered::before {
     content: '' !important;
     position: absolute !important;
     left: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px checkbox on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     border: 1.5px solid #9575cd !important;
@@ -349,7 +352,8 @@ export const HIGHLIGHT_STYLES = `
     content: '' !important;
     position: absolute !important;
     right: 2px !important;
-    top: calc(0.5em - 4px) !important;  /* Center 10px icon on first line */
+    top: 50% !important;
+    transform: translateY(-50%) !important;  /* Center vertically within the highlight */
     width: 10px !important;
     height: 10px !important;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239575cd'%3E%3Cpath d='M19,8L20.5,11.5L24,13L20.5,14.5L19,18L17.5,14.5L14,13L17.5,11.5L19,8M11.1,5L13.6,10.4L19,12.9L13.6,15.4L11.1,20.8L8.6,15.4L3.2,12.9L8.6,10.4L11.1,5Z'/%3E%3C/svg%3E") !important;

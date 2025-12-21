@@ -1,492 +1,782 @@
 /**
- * Unit Tests for AI Client
- * 
- * Tests the AI client functionality including:
- * - Client instantiation
- * - Helper functions
- * - JSON parsing
- * - Request building
+ * AI Client Tests
+ *
+ * Tests for the unified AI provider interface (OpenAI, Anthropic, Gemini, Custom).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-  AIClient, 
-  isAIAvailable, 
-  type AIGenerationRequest,
-  type ContainerDescriptionRequest,
-  type ScenarioGenerationRequest,
-  type AtomicTestRequest,
-} from '../../src/shared/api/ai-client';
-import { parseAIJsonResponse } from '../../src/shared/api/ai/json-parser';
-import type { AISettings } from '../../src/shared/types';
+import { AIClient, isAIAvailable } from '../../src/shared/api/ai-client';
+import type { AISettings } from '../../src/shared/types/ai';
+
+// Mock fetch globally
+const mockFetch = vi.fn();
+globalThis.fetch = mockFetch;
 
 describe('AIClient', () => {
-  describe('Constructor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  // ============================================================================
+  // Constructor Tests
+  // ============================================================================
+
+  describe('constructor', () => {
     it('should create client with valid OpenAI settings', () => {
       const settings: AISettings = {
         provider: 'openai',
-        apiKey: 'sk-test-key-12345',
+        apiKey: 'sk-test-key',
+        model: 'gpt-4',
       };
-      
+
       const client = new AIClient(settings);
-      expect(client).toBeDefined();
+      expect(client).toBeInstanceOf(AIClient);
     });
 
     it('should create client with valid Anthropic settings', () => {
       const settings: AISettings = {
         provider: 'anthropic',
-        apiKey: 'sk-ant-test-key-12345',
+        apiKey: 'sk-ant-test-key',
+        model: 'claude-3-opus-20240229',
       };
-      
+
       const client = new AIClient(settings);
-      expect(client).toBeDefined();
+      expect(client).toBeInstanceOf(AIClient);
     });
 
     it('should create client with valid Gemini settings', () => {
       const settings: AISettings = {
         provider: 'gemini',
-        apiKey: 'test-gemini-key-12345',
+        apiKey: 'gemini-api-key',
+        model: 'gemini-pro',
       };
-      
+
       const client = new AIClient(settings);
-      expect(client).toBeDefined();
+      expect(client).toBeInstanceOf(AIClient);
+    });
+
+    it('should create client with valid custom settings', () => {
+      const settings: AISettings = {
+        provider: 'custom',
+        apiKey: 'custom-api-key',
+        model: 'custom-model',
+        customBaseUrl: 'https://my-api.example.com/v1',
+      };
+
+      const client = new AIClient(settings);
+      expect(client).toBeInstanceOf(AIClient);
     });
 
     it('should throw error when provider is missing', () => {
       const settings = {
-        apiKey: 'sk-test-key-12345',
+        apiKey: 'test-key',
       } as AISettings;
-      
+
       expect(() => new AIClient(settings)).toThrow('AI provider and API key are required');
     });
 
-    it('should throw error when API key is missing', () => {
+    it('should throw error when apiKey is missing', () => {
       const settings = {
         provider: 'openai',
       } as AISettings;
-      
+
       expect(() => new AIClient(settings)).toThrow('AI provider and API key are required');
     });
 
-    it('should throw error when XTM One is selected (not yet available)', () => {
+    it('should throw error for xtm-one provider', () => {
       const settings: AISettings = {
         provider: 'xtm-one',
         apiKey: 'test-key',
       };
-      
+
       expect(() => new AIClient(settings)).toThrow('XTM One is not yet available');
     });
-  });
-});
 
-describe('isAIAvailable', () => {
-  it('should return true when AI is fully configured', () => {
-    const settings: AISettings = {
-      provider: 'openai',
-      apiKey: 'sk-test-key',
-      model: 'gpt-4',
-    };
-    
-    expect(isAIAvailable(settings)).toBe(true);
-  });
-
-  it('should return false when model is missing', () => {
-    const settings: AISettings = {
-      provider: 'openai',
-      apiKey: 'sk-test-key',
-    };
-    
-    expect(isAIAvailable(settings)).toBe(false);
-  });
-
-  it('should return false when provider is missing', () => {
-    const settings = {
-      apiKey: 'sk-test-key',
-    } as AISettings;
-    
-    expect(isAIAvailable(settings)).toBe(false);
-  });
-
-  it('should return false when API key is missing', () => {
-    const settings = {
-      provider: 'openai',
-    } as AISettings;
-    
-    expect(isAIAvailable(settings)).toBe(false);
-  });
-
-  it('should return false when settings are undefined', () => {
-    expect(isAIAvailable(undefined)).toBe(false);
-  });
-
-  it('should return false when API key is empty string', () => {
-    const settings: AISettings = {
-      provider: 'openai',
-      apiKey: '',
-    };
-    
-    expect(isAIAvailable(settings)).toBe(false);
-  });
-});
-
-describe('parseAIJsonResponse', () => {
-  it('should parse valid JSON directly', () => {
-    const json = '{"name": "Test", "value": 123}';
-    const result = parseAIJsonResponse<{ name: string; value: number }>(json);
-    
-    expect(result).toEqual({ name: 'Test', value: 123 });
-  });
-
-  it('should parse JSON from markdown code block', () => {
-    const markdown = `Here's the response:
-\`\`\`json
-{
-  "name": "Test Scenario",
-  "description": "A test description"
-}
-\`\`\`
-That's the result.`;
-    
-    const result = parseAIJsonResponse<{ name: string; description: string }>(markdown);
-    
-    expect(result).toEqual({
-      name: 'Test Scenario',
-      description: 'A test description',
-    });
-  });
-
-  it('should parse JSON from code block without language tag', () => {
-    const markdown = `\`\`\`
-{"key": "value"}
-\`\`\``;
-    
-    const result = parseAIJsonResponse<{ key: string }>(markdown);
-    
-    expect(result).toEqual({ key: 'value' });
-  });
-
-  it('should return null for invalid JSON', () => {
-    const invalid = 'This is not JSON at all';
-    const result = parseAIJsonResponse(invalid);
-    
-    expect(result).toBeNull();
-  });
-
-  it('should return null for malformed JSON in code block', () => {
-    const markdown = `\`\`\`json
-{invalid json here}
-\`\`\``;
-    
-    const result = parseAIJsonResponse(markdown);
-    
-    expect(result).toBeNull();
-  });
-
-  it('should handle complex nested JSON', () => {
-    const json = JSON.stringify({
-      scenario: {
-        name: 'Attack Scenario',
-        injects: [
-          { title: 'Step 1', type: 'email' },
-          { title: 'Step 2', type: 'command' },
-        ],
-      },
-    });
-    
-    const result = parseAIJsonResponse<{ scenario: { name: string; injects: Array<{ title: string; type: string }> } }>(json);
-    
-    expect(result?.scenario.name).toBe('Attack Scenario');
-    expect(result?.scenario.injects).toHaveLength(2);
-  });
-
-  it('should handle JSON arrays', () => {
-    const json = '[1, 2, 3, "test"]';
-    const result = parseAIJsonResponse<(number | string)[]>(json);
-    
-    expect(result).toEqual([1, 2, 3, 'test']);
-  });
-});
-
-describe('AIClient Request Building', () => {
-  let client: AIClient;
-  let mockFetch: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    client = new AIClient({
-      provider: 'openai',
-      apiKey: 'sk-test-key',
-    });
-    
-    mockFetch = vi.fn();
-    global.fetch = mockFetch;
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  describe('generateContainerDescription', () => {
-    it('should build correct request structure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Generated description' } }],
-        }),
-      });
-
-      const request: ContainerDescriptionRequest = {
-        pageTitle: 'Test Article',
-        pageUrl: 'https://example.com/article',
-        pageContent: 'This is the page content about APT29...',
-        containerType: 'Report',
-        containerName: 'Test Report',
-        detectedEntities: ['APT29', 'Cozy Bear'],
-        detectedObservables: ['192.168.1.1', 'evil.com'],
+    it('should throw error for custom provider without customBaseUrl', () => {
+      const settings: AISettings = {
+        provider: 'custom',
+        apiKey: 'test-key',
+        model: 'custom-model',
       };
 
-      await client.generateContainerDescription(request);
+      expect(() => new AIClient(settings)).toThrow('Custom endpoint URL is required for custom provider');
+    });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('openai.com');
-      
-      const body = JSON.parse(options.body);
-      expect(body.messages).toBeDefined();
-      expect(body.messages.length).toBeGreaterThanOrEqual(1);
+    it('should throw error for custom provider without model', () => {
+      const settings: AISettings = {
+        provider: 'custom',
+        apiKey: 'test-key',
+        customBaseUrl: 'https://my-api.example.com/v1',
+      };
+
+      expect(() => new AIClient(settings)).toThrow('Model name is required for custom provider');
     });
   });
 
-  describe('generateScenario', () => {
-    it('should build correct request structure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: '{"name": "test"}' } }],
-        }),
+  // ============================================================================
+  // Model Discovery Tests
+  // ============================================================================
+
+  describe('testConnectionAndFetchModels', () => {
+    describe('OpenAI', () => {
+      it('should fetch OpenAI models successfully', async () => {
+        const settings: AISettings = {
+          provider: 'openai',
+          apiKey: 'sk-test-key',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: 'gpt-4', created: 1000, owned_by: 'openai' },
+              { id: 'gpt-3.5-turbo', created: 900, owned_by: 'openai' },
+            ],
+          }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(true);
+        expect(result.models).toHaveLength(2);
+        expect(result.models?.[0].id).toBe('gpt-4');
       });
 
-      const request: ScenarioGenerationRequest = {
-        pageTitle: 'Phishing Campaign Analysis',
-        pageUrl: 'https://example.com/analysis',
-        pageContent: 'Analysis of recent phishing campaigns...',
-        scenarioName: 'Phishing Simulation',
-        typeAffinity: 'attack-scenario',
-        platformAffinity: ['Windows', 'macOS'],
-        detectedAttackPatterns: [
-          { name: 'Phishing', id: 'T1566' },
-          { name: 'User Execution', id: 'T1204' },
-        ],
-        detectedDomains: ['malicious.com'],
-        detectedEmails: ['attacker@evil.com'],
-      };
+      it('should handle OpenAI 401 error', async () => {
+        const settings: AISettings = {
+          provider: 'openai',
+          apiKey: 'invalid-key',
+        };
+        const client = new AIClient(settings);
 
-      await client.generateScenario(request);
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => 'Unauthorized',
+        });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('openai.com');
-      
-      const body = JSON.parse(options.body);
-      expect(body.max_tokens).toBe(2500);
-      expect(body.temperature).toBe(0.7);
-    });
-  });
+        const result = await client.testConnectionAndFetchModels();
 
-  describe('generateAtomicTest', () => {
-    it('should build correct request structure for Windows', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: '{"name": "test", "executor": "powershell"}' } }],
-        }),
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Invalid API key');
       });
 
-      const request: AtomicTestRequest = {
-        attackPattern: {
-          name: 'Command and Scripting Interpreter',
-          id: 'T1059',
-          description: 'Adversaries may abuse command and script interpreters...',
-          mitrePlatforms: ['Windows', 'Linux', 'macOS'],
-        },
-        targetPlatform: 'windows',
-        context: 'Testing in lab environment',
-      };
+      it('should handle OpenAI generic error', async () => {
+        const settings: AISettings = {
+          provider: 'openai',
+          apiKey: 'sk-test-key',
+        };
+        const client = new AIClient(settings);
 
-      await client.generateAtomicTest(request);
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => 'Internal Server Error',
+        });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [, options] = mockFetch.mock.calls[0];
-      
-      const body = JSON.parse(options.body);
-      expect(body.max_tokens).toBe(1000);
-      expect(body.temperature).toBe(0.5);
-    });
+        const result = await client.testConnectionAndFetchModels();
 
-    it('should build correct request structure for Linux', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: '{"name": "test", "executor": "bash"}' } }],
-        }),
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('OpenAI API error');
       });
-
-      const request: AtomicTestRequest = {
-        attackPattern: {
-          name: 'Unix Shell',
-          id: 'T1059.004',
-        },
-        targetPlatform: 'linux',
-      };
-
-      await client.generateAtomicTest(request);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle API errors gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: { message: 'Invalid API key' } }),
-      });
-
-      const result = await client.generate({
-        prompt: 'Test prompt',
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid API key');
     });
 
-    it('should handle network errors gracefully', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    describe('Anthropic', () => {
+      it('should fetch Anthropic models successfully', async () => {
+        const settings: AISettings = {
+          provider: 'anthropic',
+          apiKey: 'sk-ant-test-key',
+        };
+        const client = new AIClient(settings);
 
-      const result = await client.generate({
-        prompt: 'Test prompt',
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: 'claude-3-opus', display_name: 'Claude 3 Opus', created_at: '2024-01-01T00:00:00Z' },
+            ],
+          }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(true);
+        expect(result.models?.[0].name).toBe('Claude 3 Opus');
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Network error');
+      it('should handle Anthropic 401 error', async () => {
+        const settings: AISettings = {
+          provider: 'anthropic',
+          apiKey: 'invalid-key',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => 'Unauthorized',
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Invalid API key');
+      });
+    });
+
+    describe('Gemini', () => {
+      it('should fetch Gemini models successfully', async () => {
+        const settings: AISettings = {
+          provider: 'gemini',
+          apiKey: 'gemini-api-key',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            models: [
+              { name: 'models/gemini-pro', displayName: 'Gemini Pro', description: 'Advanced model' },
+            ],
+          }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(true);
+        expect(result.models?.[0].id).toBe('gemini-pro');
+        expect(result.models?.[0].name).toBe('Gemini Pro');
+      });
+
+      it('should handle Gemini 401 error', async () => {
+        const settings: AISettings = {
+          provider: 'gemini',
+          apiKey: 'invalid-key',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => 'Unauthorized',
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Invalid API key');
+      });
+    });
+
+    describe('Custom', () => {
+      it('should test custom endpoint with models support', async () => {
+        const settings: AISettings = {
+          provider: 'custom',
+          apiKey: 'custom-key',
+          model: 'custom-model',
+          customBaseUrl: 'https://my-api.example.com/v1',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [{ id: 'custom-model', owned_by: 'custom' }],
+          }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(true);
+        expect(result.models?.[0].id).toBe('custom-model');
+      });
+
+      it('should fallback to chat completion test when models endpoint fails', async () => {
+        const settings: AISettings = {
+          provider: 'custom',
+          apiKey: 'custom-key',
+          model: 'custom-model',
+          customBaseUrl: 'https://my-api.example.com/v1',
+        };
+        const client = new AIClient(settings);
+
+        // First call fails (models endpoint not supported)
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        });
+
+        // Second call succeeds (chat completion test)
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'Hello' } }],
+          }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(true);
+        expect(result.models).toContainEqual({ id: 'custom-model', name: 'custom-model' });
+      });
+
+      it('should handle custom endpoint 401 error', async () => {
+        const settings: AISettings = {
+          provider: 'custom',
+          apiKey: 'invalid-key',
+          model: 'custom-model',
+          customBaseUrl: 'https://my-api.example.com/v1',
+        };
+        const client = new AIClient(settings);
+
+        // Models endpoint fails
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        });
+
+        // Chat completion returns 401
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ error: { message: 'Invalid token' } }),
+        });
+
+        const result = await client.testConnectionAndFetchModels();
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Invalid API key or token');
+      });
+
+      it('should normalize custom URL with trailing slash', async () => {
+        const settings: AISettings = {
+          provider: 'custom',
+          apiKey: 'custom-key',
+          model: 'custom-model',
+          customBaseUrl: 'https://my-api.example.com/v1/',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        });
+
+        await client.testConnectionAndFetchModels();
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'https://my-api.example.com/v1/models',
+          expect.any(Object)
+        );
+      });
     });
 
     it('should handle unknown provider', async () => {
-      // Force a client with an invalid provider (bypassing constructor check)
-      const badClient = new AIClient({
-        provider: 'openai', // valid for construction
+      const settings = {
+        provider: 'unknown' as 'openai',
         apiKey: 'test-key',
-      });
-      
-      // Manually set to invalid provider
-      (badClient as any).provider = 'unknown';
+      };
+      const client = new AIClient(settings);
 
-      const result = await badClient.generate({
-        prompt: 'Test prompt',
-      });
+      const result = await client.testConnectionAndFetchModels();
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Unknown AI provider');
     });
+
+    it('should handle network errors', async () => {
+      const settings: AISettings = {
+        provider: 'openai',
+        apiKey: 'sk-test-key',
+      };
+      const client = new AIClient(settings);
+
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await client.testConnectionAndFetchModels();
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network error');
+    });
+  });
+
+  // ============================================================================
+  // Generation Tests
+  // ============================================================================
+
+  describe('generate', () => {
+    describe('OpenAI', () => {
+      it('should generate content successfully', async () => {
+        const settings: AISettings = {
+          provider: 'openai',
+          apiKey: 'sk-test-key',
+          model: 'gpt-4',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'Generated content' } }],
+          }),
+        });
+
+        const result = await client.generate({
+          prompt: 'Test prompt',
+          systemPrompt: 'You are a helpful assistant',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Generated content');
+      });
+
+      it('should handle OpenAI generation error', async () => {
+        const settings: AISettings = {
+          provider: 'openai',
+          apiKey: 'sk-test-key',
+          model: 'gpt-4',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: { message: 'Rate limit exceeded' } }),
+        });
+
+        const result = await client.generate({ prompt: 'Test' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('Rate limit exceeded');
+      });
+    });
+
+    describe('Anthropic', () => {
+      it('should generate content successfully', async () => {
+        const settings: AISettings = {
+          provider: 'anthropic',
+          apiKey: 'sk-ant-test-key',
+          model: 'claude-3-opus-20240229',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            content: [{ text: 'Generated by Claude' }],
+          }),
+        });
+
+        const result = await client.generate({
+          prompt: 'Test prompt',
+          systemPrompt: 'You are a helpful assistant',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Generated by Claude');
+      });
+    });
+
+    describe('Gemini', () => {
+      it('should generate content successfully', async () => {
+        const settings: AISettings = {
+          provider: 'gemini',
+          apiKey: 'gemini-api-key',
+          model: 'gemini-pro',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Generated by Gemini' }] } }],
+          }),
+        });
+
+        const result = await client.generate({
+          prompt: 'Test prompt',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Generated by Gemini');
+      });
+    });
+
+    describe('Custom', () => {
+      it('should generate content successfully', async () => {
+        const settings: AISettings = {
+          provider: 'custom',
+          apiKey: 'custom-key',
+          model: 'custom-model',
+          customBaseUrl: 'https://my-api.example.com/v1',
+        };
+        const client = new AIClient(settings);
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'Custom generated content' } }],
+          }),
+        });
+
+        const result = await client.generate({
+          prompt: 'Test prompt',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Custom generated content');
+      });
+    });
+
+    it('should handle unknown provider', async () => {
+      const settings = {
+        provider: 'unknown' as 'openai',
+        apiKey: 'test-key',
+      };
+      const client = new AIClient(settings);
+
+      const result = await client.generate({ prompt: 'Test' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Unknown AI provider');
+    });
+
+    it('should handle network exceptions', async () => {
+      const settings: AISettings = {
+        provider: 'openai',
+        apiKey: 'sk-test-key',
+        model: 'gpt-4',
+      };
+      const client = new AIClient(settings);
+
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const result = await client.generate({ prompt: 'Test' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Connection refused');
+    });
+  });
+
+  // ============================================================================
+  // Feature-Specific Generation Methods Tests
+  // ============================================================================
+
+  describe('feature-specific generation methods', () => {
+    let client: AIClient;
+
+    beforeEach(() => {
+      client = new AIClient({
+        provider: 'openai',
+        apiKey: 'sk-test-key',
+        model: 'gpt-4',
+      });
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Generated response' } }],
+        }),
+      });
+    });
+
+    it('should generate container description', async () => {
+      const result = await client.generateContainerDescription({
+        containerTitle: 'Test Report',
+        containerContent: 'Analysis of APT29',
+        pageContent: 'APT29 analysis page content for threat intelligence report.',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should generate scenario', async () => {
+      const result = await client.generateScenario({
+        scenarioName: 'Phishing Attack',
+        scenarioDescription: 'Test scenario',
+        pageContent: 'A phishing attack scenario involving malicious email attachments.',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should generate full scenario', async () => {
+      const result = await client.generateFullScenario({
+        scenarioName: 'Advanced Persistent Threat',
+        includeInjects: true,
+        pageContent: 'APT group targeting financial institutions with spear-phishing.',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should generate atomic test', async () => {
+      const result = await client.generateAtomicTest({
+        attackPattern: {
+          id: 'attack-pattern-123',
+          name: 'Command and Scripting Interpreter',
+          description: 'Test description for command execution',
+          external_id: 'T1059',
+        },
+        platformType: 'windows',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should generate emails', async () => {
+      const result = await client.generateEmails({
+        scenarioName: 'Phishing Campaign',
+        scenarioDescription: 'Test phishing scenario',
+        language: 'en',
+        pageContent: 'Threat intelligence report about phishing attacks targeting employees.',
+        attackPatterns: [
+          { name: 'Phishing', externalId: 'T1566' },
+          { name: 'Spearphishing Attachment', externalId: 'T1566.001' },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should discover entities', async () => {
+      const result = await client.discoverEntities({
+        pageContent: 'APT29 used Emotet malware to target financial institutions',
+        existingEntities: [],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve relationships', async () => {
+      const result = await client.resolveRelationships({
+        contextText: 'APT29 deployed Emotet against banks',
+        entities: [
+          { type: 'Intrusion-Set', name: 'APT29' },
+          { type: 'Malware', name: 'Emotet' },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ============================================================================
+  // Default Model Selection Tests
+  // ============================================================================
+
+  describe('default model selection', () => {
+    it('should use default OpenAI model when not specified', async () => {
+      const client = new AIClient({
+        provider: 'openai',
+        apiKey: 'sk-test-key',
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }],
+        }),
+      });
+
+      await client.generate({ prompt: 'Test' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('gpt-5.2'),
+        })
+      );
+    });
+
+    it('should use specified model over default', async () => {
+      const client = new AIClient({
+        provider: 'openai',
+        apiKey: 'sk-test-key',
+        model: 'gpt-4-turbo',
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }],
+        }),
+      });
+
+      await client.generate({ prompt: 'Test' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('gpt-4-turbo'),
+        })
+      );
+    });
   });
 });
 
-describe('Provider-specific API Calls', () => {
-  let mockFetch: ReturnType<typeof vi.fn>;
+// ============================================================================
+// isAIAvailable Tests
+// ============================================================================
 
-  beforeEach(() => {
-    mockFetch = vi.fn();
-    global.fetch = mockFetch;
+describe('isAIAvailable', () => {
+  it('should return false when settings are undefined', () => {
+    expect(isAIAvailable(undefined)).toBe(false);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it('should return false when provider is missing', () => {
+    expect(isAIAvailable({ apiKey: 'key', model: 'model' } as AISettings)).toBe(false);
   });
 
-  it('should call OpenAI API with correct format', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        choices: [{ message: { content: 'OpenAI response' } }],
-      }),
-    });
+  it('should return false when apiKey is missing', () => {
+    expect(isAIAvailable({ provider: 'openai', model: 'model' } as AISettings)).toBe(false);
+  });
 
-    const client = new AIClient({
+  it('should return false when model is missing', () => {
+    expect(isAIAvailable({ provider: 'openai', apiKey: 'key' } as AISettings)).toBe(false);
+  });
+
+  it('should return true for valid OpenAI settings', () => {
+    expect(isAIAvailable({
       provider: 'openai',
-      apiKey: 'sk-openai-key',
-    });
-
-    const result = await client.generate({
-      prompt: 'Test prompt',
-      systemPrompt: 'You are a helpful assistant',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('OpenAI response');
-
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://api.openai.com/v1/chat/completions');
-    expect(options.headers['Authorization']).toBe('Bearer sk-openai-key');
-    
-    const body = JSON.parse(options.body);
-    expect(body.model).toBe('gpt-5.2');
-    expect(body.messages[0].role).toBe('system');
-    expect(body.messages[1].role).toBe('user');
+      apiKey: 'sk-test-key',
+      model: 'gpt-4',
+    })).toBe(true);
   });
 
-  it('should call Anthropic API with correct format', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        content: [{ text: 'Anthropic response' }],
-      }),
-    });
-
-    const client = new AIClient({
+  it('should return true for valid Anthropic settings', () => {
+    expect(isAIAvailable({
       provider: 'anthropic',
-      apiKey: 'sk-anthropic-key',
-    });
-
-    const result = await client.generate({
-      prompt: 'Test prompt',
-      systemPrompt: 'You are a helpful assistant',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('Anthropic response');
-
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://api.anthropic.com/v1/messages');
-    expect(options.headers['x-api-key']).toBe('sk-anthropic-key');
-    expect(options.headers['anthropic-version']).toBe('2023-06-01');
-    
-    const body = JSON.parse(options.body);
-    expect(body.model).toBe('claude-sonnet-4-5');
-    expect(body.system).toBe('You are a helpful assistant');
+      apiKey: 'sk-ant-test-key',
+      model: 'claude-3-opus',
+    })).toBe(true);
   });
 
-  it('should call Gemini API with correct format', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        candidates: [{ content: { parts: [{ text: 'Gemini response' }] } }],
-      }),
-    });
+  it('should return false for custom provider without customBaseUrl', () => {
+    expect(isAIAvailable({
+      provider: 'custom',
+      apiKey: 'custom-key',
+      model: 'custom-model',
+    })).toBe(false);
+  });
 
-    const client = new AIClient({
-      provider: 'gemini',
-      apiKey: 'gemini-api-key',
-    });
-
-    const result = await client.generate({
-      prompt: 'Test prompt',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('Gemini response');
-
-    const [url] = mockFetch.mock.calls[0];
-    expect(url).toContain('generativelanguage.googleapis.com');
-    expect(url).toContain('key=gemini-api-key');
+  it('should return true for valid custom provider settings', () => {
+    expect(isAIAvailable({
+      provider: 'custom',
+      apiKey: 'custom-key',
+      model: 'custom-model',
+      customBaseUrl: 'https://api.example.com/v1',
+    })).toBe(true);
   });
 });

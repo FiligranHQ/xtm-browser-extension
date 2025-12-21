@@ -294,3 +294,351 @@ describe('Edge Cases', () => {
   });
 });
 
+// ============================================================================
+// executeAIRequest Tests
+// ============================================================================
+
+import { getSettings } from '../../src/shared/utils/storage';
+import { executeAIRequest, executeSimpleAIRequest, getAIClientOrError } from '../../src/background/handlers/ai-utils';
+
+// Mock AI client module using hoisted mock
+const MockAIClientClass = vi.hoisted(() => {
+  return class MockAIClient {
+    constructor(_config: any) {}
+    generateAtomicTest = vi.fn();
+    generateDescription = vi.fn();
+  };
+});
+
+vi.mock('../../src/shared/api/ai-client', () => ({
+  AIClient: MockAIClientClass,
+  isAIAvailable: vi.fn(),
+}));
+
+// Mock JSON parser
+vi.mock('../../src/shared/api/ai/json-parser', () => ({
+  parseAIJsonResponse: vi.fn(),
+}));
+
+import { isAIAvailable } from '../../src/shared/api/ai-client';
+import { parseAIJsonResponse } from '../../src/shared/api/ai/json-parser';
+
+const mockGetSettings = vi.mocked(getSettings);
+const mockIsAIAvailable = vi.mocked(isAIAvailable);
+const mockParseAIJsonResponse = vi.mocked(parseAIJsonResponse);
+
+describe('executeAIRequest', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return error when AI is not configured', async () => {
+    mockGetSettings.mockResolvedValue({ ai: undefined } as any);
+    mockIsAIAvailable.mockReturnValue(false);
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: vi.fn(),
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'AI not configured',
+    }));
+  });
+
+  it('should execute request and parse successful JSON response', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    mockParseAIJsonResponse.mockReturnValue({ result: 'success' });
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: '{"result": "success"}',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+    }, sendResponse);
+    
+    expect(mockExecuteRequest).toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: { result: 'success' },
+    }));
+  });
+
+  it('should handle AI request failure', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: false,
+      error: 'AI failed',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'AI failed',
+    }));
+  });
+
+  it('should handle JSON parsing failure', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    mockParseAIJsonResponse.mockReturnValue(null);
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: 'invalid json',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+    }));
+    expect(sendResponse.mock.calls[0][0].error).toContain('AI response parsing failed');
+  });
+
+  it('should call validateResponse and handle validation failure', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    mockParseAIJsonResponse.mockReturnValue({ incomplete: true });
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: '{"incomplete": true}',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+      validateResponse: (parsed: any) => parsed.result ? null : 'Missing result field',
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'Missing result field',
+    }));
+  });
+
+  it('should apply transformResponse when provided', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    mockParseAIJsonResponse.mockReturnValue({ original: 'data' });
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: '{"original": "data"}',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+      transformResponse: (parsed: any) => ({ transformed: parsed.original }),
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: { transformed: 'data' },
+    }));
+  });
+
+  it('should truncate content field when specified', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    mockParseAIJsonResponse.mockReturnValue({ result: 'ok' });
+    
+    const longContent = 'X'.repeat(10000);
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: '{"result": "ok"}',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test', pageContent: longContent },
+      maxContentLength: 1000,
+      truncateField: 'pageContent',
+      executeRequest: mockExecuteRequest,
+    }, sendResponse);
+    
+    // Verify the request was called with truncated content
+    const calledRequest = mockExecuteRequest.mock.calls[0][1];
+    expect(calledRequest.pageContent.length).toBeLessThan(longContent.length);
+    expect(calledRequest.pageContent).toContain('[Content truncated');
+  });
+
+  it('should handle exceptions during execution', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const mockExecuteRequest = vi.fn().mockRejectedValue(new Error('Network error'));
+    
+    const sendResponse = vi.fn();
+    await executeAIRequest({
+      handlerName: 'TEST',
+      request: { text: 'test' },
+      executeRequest: mockExecuteRequest,
+    }, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'Network error',
+    }));
+  });
+});
+
+// ============================================================================
+// executeSimpleAIRequest Tests
+// ============================================================================
+
+describe('executeSimpleAIRequest', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return error when AI is not configured', async () => {
+    mockGetSettings.mockResolvedValue({ ai: undefined } as any);
+    mockIsAIAvailable.mockReturnValue(false);
+    
+    const sendResponse = vi.fn();
+    await executeSimpleAIRequest('TEST', { text: 'test' }, vi.fn(), sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'AI not configured',
+    }));
+  });
+
+  it('should execute request and return raw content', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: true,
+      content: 'Generated description text',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeSimpleAIRequest('TEST', { text: 'test' }, mockExecuteRequest, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: 'Generated description text',
+    }));
+  });
+
+  it('should handle AI request failure', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const mockExecuteRequest = vi.fn().mockResolvedValue({
+      success: false,
+      error: 'AI generation failed',
+    });
+    
+    const sendResponse = vi.fn();
+    await executeSimpleAIRequest('TEST', { text: 'test' }, mockExecuteRequest, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'AI generation failed',
+    }));
+  });
+
+  it('should handle exceptions during execution', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const mockExecuteRequest = vi.fn().mockRejectedValue(new Error('Connection timeout'));
+    
+    const sendResponse = vi.fn();
+    await executeSimpleAIRequest('TEST', { text: 'test' }, mockExecuteRequest, sendResponse);
+    
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'Connection timeout',
+    }));
+  });
+});
+
+// ============================================================================
+// getAIClientOrError Tests
+// ============================================================================
+
+describe('getAIClientOrError', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return null and send error when AI is not configured', async () => {
+    mockGetSettings.mockResolvedValue({ ai: undefined } as any);
+    mockIsAIAvailable.mockReturnValue(false);
+    
+    const sendResponse = vi.fn();
+    const result = await getAIClientOrError(sendResponse);
+    
+    expect(result).toBeNull();
+    expect(sendResponse).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: 'AI not configured',
+    }));
+  });
+
+  it('should return AIClient when AI is configured', async () => {
+    mockGetSettings.mockResolvedValue({ 
+      ai: { provider: 'test', apiKey: 'key' } 
+    } as any);
+    mockIsAIAvailable.mockReturnValue(true);
+    
+    const sendResponse = vi.fn();
+    const result = await getAIClientOrError(sendResponse);
+    
+    expect(result).not.toBeNull();
+    expect(sendResponse).not.toHaveBeenCalled();
+  });
+});

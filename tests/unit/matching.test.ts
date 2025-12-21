@@ -43,22 +43,34 @@ describe('isValidBoundary', () => {
     expect(isValidBoundary('\r')).toBe(true);
   });
 
-  it('should return true for punctuation', () => {
+  it('should return true for sentence punctuation', () => {
     expect(isValidBoundary(',')).toBe(true);
     expect(isValidBoundary(';')).toBe(true);
     expect(isValidBoundary(':')).toBe(true);
     expect(isValidBoundary('!')).toBe(true);
     expect(isValidBoundary('?')).toBe(true);
-    expect(isValidBoundary('.')).toBe(true);
   });
 
-  it('should return true for brackets', () => {
+  it('should return false for identifier characters (dot, hyphen, underscore)', () => {
+    // These are NOT valid boundaries because they appear in identifiers
+    // e.g., "software" in "dl.software-update.org" should NOT match
+    expect(isValidBoundary('.')).toBe(false);
+    expect(isValidBoundary('-')).toBe(false);
+    expect(isValidBoundary('_')).toBe(false);
+  });
+
+  it('should return true for parentheses and curly braces', () => {
     expect(isValidBoundary('(')).toBe(true);
     expect(isValidBoundary(')')).toBe(true);
-    expect(isValidBoundary('[')).toBe(true);
-    expect(isValidBoundary(']')).toBe(true);
     expect(isValidBoundary('{')).toBe(true);
     expect(isValidBoundary('}')).toBe(true);
+  });
+
+  it('should return false for square brackets (used in defanging)', () => {
+    // [ and ] are NOT valid boundaries because they're used for defanging URLs
+    // e.g., "software" in "dl[.]software-update[.]org" should NOT match
+    expect(isValidBoundary('[')).toBe(false);
+    expect(isValidBoundary(']')).toBe(false);
   });
 
   it('should return true for quotes', () => {
@@ -66,7 +78,7 @@ describe('isValidBoundary', () => {
     expect(isValidBoundary("'")).toBe(true);
   });
 
-  it('should return true for special characters', () => {
+  it('should return true for special characters (not in identifiers)', () => {
     expect(isValidBoundary('<')).toBe(true);
     expect(isValidBoundary('>')).toBe(true);
     expect(isValidBoundary('/')).toBe(true);
@@ -83,8 +95,7 @@ describe('isValidBoundary', () => {
     expect(isValidBoundary('|')).toBe(true);
     expect(isValidBoundary('`')).toBe(true);
     expect(isValidBoundary('~')).toBe(true);
-    expect(isValidBoundary('_')).toBe(true);
-    expect(isValidBoundary('-')).toBe(true);
+    // Note: '_' and '-' are NOT valid boundaries (used in identifiers)
   });
 
   it('should return false for alphanumeric characters', () => {
@@ -114,8 +125,13 @@ describe('hasValidBoundaries', () => {
 
   it('should return true when surrounded by punctuation', () => {
     expect(hasValidBoundaries('(APT29)', 1, 6)).toBe(true);
-    expect(hasValidBoundaries('[APT29]', 1, 6)).toBe(true);
     expect(hasValidBoundaries('"APT29"', 1, 6)).toBe(true);
+  });
+
+  it('should return false when surrounded by brackets (used in defanging)', () => {
+    // [ and ] are NOT valid boundaries because they're used for defanging URLs
+    // e.g., "software" in "dl[.]software-update[.]org" should NOT match
+    expect(hasValidBoundaries('[APT29]', 1, 6)).toBe(false);
   });
 
   it('should return false when preceded by alphanumeric', () => {
@@ -479,10 +495,14 @@ describe('needsManualBoundaryCheck', () => {
     expect(needsManualBoundaryCheck('ta0001')).toBe(false);
   });
 
-  it('should return false for plain names without special chars', () => {
-    expect(needsManualBoundaryCheck('apt29')).toBe(false);
-    expect(needsManualBoundaryCheck('emotet')).toBe(false);
-    expect(needsManualBoundaryCheck('lazarus')).toBe(false);
+  it('should return true for plain names (always validate boundaries)', () => {
+    // All entity names need boundary validation because \b regex treats
+    // '.', '-', '_' as boundaries, which causes false positives
+    expect(needsManualBoundaryCheck('apt29')).toBe(true);
+    expect(needsManualBoundaryCheck('emotet')).toBe(true);
+    expect(needsManualBoundaryCheck('lazarus')).toBe(true);
+    expect(needsManualBoundaryCheck('software')).toBe(true);
+    expect(needsManualBoundaryCheck('linux')).toBe(true);
   });
 });
 

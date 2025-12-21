@@ -192,6 +192,9 @@ function createTooltip(): HTMLElement | null {
     .xtm-tooltip-status.not-found {
       color: #ffa726;
     }
+    .xtm-tooltip-status-found {
+      color: #00c853;
+    }
   `;
   tooltipShadowRoot.appendChild(style);
   
@@ -527,6 +530,7 @@ function handleHighlightHover(event: MouseEvent): void {
   
     // Determine status text based on entity state
     let statusText: string;
+    let mixedStateFoundText: string | null = null; // For mixed state: the "found in X" part to show in green
     
     if (isMixedState) {
       try {
@@ -540,7 +544,8 @@ function handleHighlightHover(event: MouseEvent): void {
         }).filter((n: string, i: number, arr: string[]) => arr.indexOf(n) === i);
         
         const foundPlatformText = platformNames.length > 0 ? platformNames.join(', ') : 'other platform';
-        statusText = `Not in ${platformName}, but found in ${foundPlatformText}`;
+        statusText = `Not in ${platformName}, but `;
+        mixedStateFoundText = `found in ${foundPlatformText}`;
       } catch {
         statusText = 'Not in platform';
       }
@@ -592,7 +597,17 @@ function handleHighlightHover(event: MouseEvent): void {
     statusDiv.className = `xtm-tooltip-status ${found ? 'found' : 'not-found'}`;
     // Use text symbols instead of SVG for Edge compatibility
     const statusSymbol = found ? '✓ ' : '⚠ ';
-    statusDiv.textContent = statusSymbol + statusText;
+    
+    // Handle mixed state: "Not in X, but found in Y" - the "found in Y" part should be green
+    if (mixedStateFoundText) {
+      statusDiv.textContent = statusSymbol + statusText;
+      const foundSpan = document.createElement('span');
+      foundSpan.className = 'xtm-tooltip-status-found';
+      foundSpan.textContent = mixedStateFoundText;
+      statusDiv.appendChild(foundSpan);
+    } else {
+      statusDiv.textContent = statusSymbol + statusText;
+    }
     
     tooltip.appendChild(header);
     tooltip.appendChild(valueDiv);

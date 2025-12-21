@@ -55,6 +55,10 @@ const OPENCTI_TYPES_SET = new Set([
 // Search Value Generation (uses shared defanging utilities)
 // ============================================================================
 
+// Minimum length for entity names to highlight - prevents false positives
+// like "IT" matching inside "MITRE" or "United"
+const MIN_HIGHLIGHT_LENGTH = 4;
+
 /**
  * Get all text values to search for from an observable
  * Uses the shared generateDefangedVariants utility for consistency
@@ -90,27 +94,36 @@ function getSearchValuesForObservable(obs: { value: string; refangedValue?: stri
 }
 
 /**
+ * Check if a string is long enough to highlight safely
+ * Short strings cause false positives (e.g., "IT" in "MITRE", "de" in "embedded")
+ */
+function isLongEnoughToHighlight(text: string): boolean {
+  return text.length >= MIN_HIGHLIGHT_LENGTH;
+}
+
+/**
  * Get all text variants to highlight for an OpenCTI entity
  * For attack patterns, this includes name, aliases, and x_mitre_id
+ * Filters out short strings to prevent false positives
  */
 function getEntityTextVariants(entity: DetectedOCTIEntity): string[] {
   const variants: string[] = [];
   
   // Primary: matched text or name
   const primary = (entity as { matchedValue?: string }).matchedValue || entity.name;
-  if (primary) {
+  if (primary && isLongEnoughToHighlight(primary)) {
     variants.push(primary);
   }
   
   // Add name if different from matched value
-  if (entity.name && !variants.includes(entity.name)) {
+  if (entity.name && isLongEnoughToHighlight(entity.name) && !variants.includes(entity.name)) {
     variants.push(entity.name);
   }
   
   // Add aliases (which may include x_mitre_id for attack patterns)
   if (entity.aliases) {
     for (const alias of entity.aliases) {
-      if (alias && !variants.includes(alias)) {
+      if (alias && isLongEnoughToHighlight(alias) && !variants.includes(alias)) {
         variants.push(alias);
       }
     }
@@ -118,7 +131,7 @@ function getEntityTextVariants(entity: DetectedOCTIEntity): string[] {
   
   // Check entityData for x_mitre_id (for attack patterns from cache)
   const entityData = entity.entityData as { x_mitre_id?: string } | undefined;
-  if (entityData?.x_mitre_id && !variants.includes(entityData.x_mitre_id)) {
+  if (entityData?.x_mitre_id && isLongEnoughToHighlight(entityData.x_mitre_id) && !variants.includes(entityData.x_mitre_id)) {
     variants.push(entityData.x_mitre_id);
   }
   
@@ -128,6 +141,7 @@ function getEntityTextVariants(entity: DetectedOCTIEntity): string[] {
 /**
  * Get all text variants to highlight for an OpenAEV entity
  * For attack patterns, this includes name, value, external_id, and aliases
+ * Filters out short strings to prevent false positives
  */
 function getOpenAEVEntityTextVariants(entity: {
   name: string;
@@ -139,12 +153,12 @@ function getOpenAEVEntityTextVariants(entity: {
   
   // Primary: value or name
   const primary = entity.value || entity.name;
-  if (primary) {
+  if (primary && isLongEnoughToHighlight(primary)) {
     variants.push(primary);
   }
   
   // Add name if different from value
-  if (entity.name && !variants.includes(entity.name)) {
+  if (entity.name && isLongEnoughToHighlight(entity.name) && !variants.includes(entity.name)) {
     variants.push(entity.name);
   }
   
@@ -152,7 +166,7 @@ function getOpenAEVEntityTextVariants(entity: {
   const entityData = entity.entityData;
   if (entityData?.aliases && Array.isArray(entityData.aliases)) {
     for (const alias of entityData.aliases) {
-      if (alias && typeof alias === 'string' && !variants.includes(alias)) {
+      if (alias && typeof alias === 'string' && isLongEnoughToHighlight(alias) && !variants.includes(alias)) {
         variants.push(alias);
       }
     }
@@ -161,7 +175,7 @@ function getOpenAEVEntityTextVariants(entity: {
   // For AttackPattern entities, also check attack_pattern_external_id directly
   if (entity.type === 'AttackPattern' || entity.type === 'oaev-AttackPattern') {
     const externalId = entityData?.attack_pattern_external_id as string | undefined;
-    if (externalId && !variants.includes(externalId)) {
+    if (externalId && isLongEnoughToHighlight(externalId) && !variants.includes(externalId)) {
       variants.push(externalId);
     }
   }
@@ -220,19 +234,82 @@ export function buildNodeMap(textNodes: Text[]): { nodeMap: NodeMapEntry[]; full
 // ============================================================================
 
 /**
+ * Check if a position is at a text node boundary
+ * Node boundaries act as word boundaries since they represent DOM element separation
+ */
+function isAtNodeBoundary(pos: number, nodeMap: NodeMapEntry[]): boolean {
+  for (const { start, end } of nodeMap) {
+    if (pos === start || pos === end) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if a character is a valid word boundary for highlighting
+ * Only whitespace, sentence punctuation, or undefined (start/end) are valid.
+ * 
+ * IMPORTANT: Does NOT include '.', '-', '_', '[', ']' as boundaries because:
+ * - '.', '-', '_' appear in identifiers (domains, hostnames)
+ * - '[', ']' are used for defanging URLs (e.g., dl[.]software-update.org)
+ * e.g., "Software" should NOT match in "dl[.]software-update.org"
+ *       "Linux" should NOT match in "oaev-test-linux-01"
+ */
+function isValidCharBoundary(char: string | undefined): boolean {
+  if (!char) return true; // undefined = start/end of text
+  // Only whitespace and sentence-ending punctuation are valid boundaries
+  // NOT: . - _ [ ] (these appear in identifiers/domains or defanged URLs)
+  return /[\s,;:!?()"'<>/\\@#$%^&*+=|`~\n\r\t{}]/.test(char);
+}
+
+/**
+ * Smart word boundary checker that considers text node boundaries as valid
+ * This prevents false positives like "Tech" in "Technique" while allowing
+ * "Germany" after "DE" in separate spans (which becomes "DEGermany" in fullText)
+ * 
+ * A character is considered a valid boundary if:
+ * 1. It's whitespace, sentence punctuation, or start/end of text
+ * 2. The position is at a DOM text node boundary (allows multi-node matches)
+ * 
+ * NOT valid: '.', '-', '_' (these appear in domains/identifiers)
+ */
+function isWordBoundaryWithNodeAwareness(
+  charBefore: string | undefined,
+  charAfter: string | undefined,
+  _fullText: string,
+  matchStart: number,
+  matchEnd: number,
+  nodeMap: NodeMapEntry[]
+): boolean {
+  // Check if position is at a node boundary - always valid (allows multi-node matches)
+  // OR if the character is a valid punctuation/whitespace boundary
+  const isValidBefore = isValidCharBoundary(charBefore) || isAtNodeBoundary(matchStart, nodeMap);
+  const isValidAfter = isValidCharBoundary(charAfter) || isAtNodeBoundary(matchEnd, nodeMap);
+  
+  return isValidBefore && isValidAfter;
+}
+
+/**
  * Collect text matches using string search (case-insensitive)
- * Delegates to the shared utility function
+ * Delegates to the shared utility function with smart boundary checking
+ * 
+ * Uses node-aware boundary checking: text node boundaries are considered
+ * valid word boundaries. This allows "Germany" after "DE" in separate spans
+ * while preventing "Tech" from matching inside "Technique" in the same node.
  */
 function collectStringMatches(
   fullText: string,
   searchValue: string,
-  nodeMap: NodeMapEntry[],
-  options: { checkBoundaries?: boolean } = {}
+  nodeMap: NodeMapEntry[]
 ): ExtendedMatchInfo[] {
+  // Always enable boundary checking with our node-aware checker
   return findMatchPositionsWithBoundaries(fullText, searchValue, nodeMap, {
     caseSensitive: false,
     skipHighlighted: true,
-    checkBoundaries: options.checkBoundaries ?? false,
+    checkBoundaries: true,
+    boundaryChecker: (charBefore, charAfter, text, matchEnd) => {
+      const matchStart = matchEnd !== undefined ? matchEnd - searchValue.length : 0;
+      return isWordBoundaryWithNodeAwareness(charBefore, charAfter, text || fullText, matchStart, matchEnd || 0, nodeMap);
+    },
   });
 }
 
@@ -669,7 +746,7 @@ export function highlightForAtomicTesting(
   nodeMap: NodeMapEntry[],
   target: { type: string; value: string; name: string; entityId?: string; platformId?: string; data: unknown }
 ): void {
-  const matches = collectStringMatches(fullText, searchValue, nodeMap, { checkBoundaries: true });
+  const matches = collectStringMatches(fullText, searchValue, nodeMap);
   
   applyHighlightsInReverse(matches, () => {
     const typeClass = target.type === 'attack-pattern' ? 'xtm-atomic-attack-pattern' : 'xtm-atomic-domain';
@@ -709,7 +786,7 @@ function highlightInTextForScenario(
   nodeMap: NodeMapEntry[],
   attackPattern: { id: string; name: string }
 ): void {
-  const matches = collectStringMatches(fullText, searchValue, nodeMap, { checkBoundaries: true });
+  const matches = collectStringMatches(fullText, searchValue, nodeMap);
   
   applyHighlightsInReverse(matches, () => ({
     className: 'xtm-highlight xtm-scenario',

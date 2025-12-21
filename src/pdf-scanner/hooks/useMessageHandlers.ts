@@ -181,7 +181,7 @@ export function useMessageHandlers({
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, [pageTextsRef, pdfUrlRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, setMode, setSplitScreenMode]);
+  }, [pageTextsRef, pdfUrlRef, pdfMetadataTitle, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, setMode, setSplitScreenMode]);
 
   // Listen for postMessage from the panel iframe
   useEffect(() => {
@@ -283,7 +283,7 @@ export function useMessageHandlers({
 
     window.addEventListener('message', handlePostMessage);
     return () => window.removeEventListener('message', handlePostMessage);
-  }, [pdfUrl, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, setSelectedEntities]);
+  }, [pdfUrl, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity]);
   
   // Re-notify panel that it's in PDF view mode when tab becomes visible
   // This handles the case where user switches away from PDF tab and comes back

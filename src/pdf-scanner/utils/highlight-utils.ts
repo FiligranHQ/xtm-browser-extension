@@ -494,13 +494,25 @@ export async function renderHighlightsOnCanvas(
           if (matchIndex === -1) break;
           
           // Check word boundaries
-          const charBefore = matchIndex > 0 ? textLower[matchIndex - 1] : ' ';
-          const charAfter = matchIndex + searchValueLower.length < textLower.length 
-            ? textLower[matchIndex + searchValueLower.length] 
-            : ' ';
+          // Only whitespace and sentence punctuation are valid boundaries
+          // NOT: . - _ [ ] (these appear in identifiers/domains or defanged URLs)
+          // e.g., "Software" should NOT match in "dl[.]software-update.org"
+          //       "Linux" should NOT match in "oaev-test-linux-01"
+          const matchEndPos = matchIndex + searchValueLower.length;
+          const charBefore = matchIndex > 0 ? textLower[matchIndex - 1] : undefined;
+          const charAfter = matchEndPos < textLower.length 
+            ? textLower[matchEndPos] 
+            : undefined;
           
-          const isWordBoundaryBefore = !/[a-z0-9]/.test(charBefore);
-          const isWordBoundaryAfter = !/[a-z0-9]/.test(charAfter);
+          // Valid boundary: undefined (start/end), whitespace, or sentence punctuation
+          // NOT valid: alphanumeric, '.', '-', '_', '[', ']' (identifiers and defanged URLs)
+          const isValidBoundaryChar = (char: string | undefined) => {
+            if (!char) return true; // start/end of text
+            return /[\s,;:!?()"'<>/\\@#$%^&*+=|`~\n\r\t{}]/.test(char);
+          };
+          
+          const isWordBoundaryBefore = isValidBoundaryChar(charBefore);
+          const isWordBoundaryAfter = isValidBoundaryChar(charAfter);
           
           if (isWordBoundaryBefore && isWordBoundaryAfter) {
             // Collect this match for later drawing

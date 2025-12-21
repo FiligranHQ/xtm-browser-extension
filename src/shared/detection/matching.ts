@@ -7,31 +7,44 @@
 
 /**
  * Check if a character is a valid word boundary
- * Returns true for undefined/null, empty string, whitespace, or punctuation
+ * Returns true for undefined/null, empty string, whitespace, or sentence punctuation
+ * 
+ * IMPORTANT: Does NOT include '.', '-', '_', '[', ']' as boundaries because:
+ * - '.', '-', '_' appear in identifiers (domains, hostnames)
+ * - '[', ']' are used for defanging URLs (e.g., dl[.]software-update.org)
+ * e.g., "Software" should NOT match in "dl[.]software-update.org"
  */
 export function isValidBoundary(char: string | undefined | null): boolean {
   if (!char) return true; // undefined, null, or empty string
-  return /[\s,;:!?()[\]"'<>/\\@#$%^&*+=|`~\n\r\t.,{}'"_-]/.test(char);
+  // Only whitespace and sentence-ending punctuation are valid boundaries
+  // NOT: . - _ [ ] (these appear in identifiers/domains or defanged URLs)
+  return /[\s,;:!?()"'<>/\\@#$%^&*+=|`~\n\r\t{}]/.test(char);
 }
 
 /**
  * Check if a match at given position has valid word boundaries
  * Useful for names with special characters that can't use \b regex
+ * 
+ * A valid boundary is whitespace, sentence punctuation, or start/end of text.
+ * Characters like '.', '-', '_' are NOT valid boundaries (they appear in identifiers).
  */
 export function hasValidBoundaries(
   text: string,
   startIndex: number,
   endIndex: number
 ): boolean {
-  const charBefore = startIndex > 0 ? text[startIndex - 1] : ' ';
-  const charAfter = endIndex < text.length ? text[endIndex] : ' ';
+  const charBefore = startIndex > 0 ? text[startIndex - 1] : undefined;
+  const charAfter = endIndex < text.length ? text[endIndex] : undefined;
   
-  // Invalid if preceded by alphanumeric and not a boundary
-  if (!isValidBoundary(charBefore) && /[a-zA-Z0-9]/.test(charBefore)) {
+  // Check if charBefore is a valid boundary
+  // Must be: undefined (start of text), whitespace, or sentence punctuation
+  // NOT valid: alphanumeric, '.', '-', '_' (these indicate the match is inside an identifier)
+  if (!isValidBoundary(charBefore)) {
     return false;
   }
-  // Invalid if followed by alphanumeric and not a boundary
-  if (!isValidBoundary(charAfter) && /[a-zA-Z0-9]/.test(charAfter)) {
+  
+  // Check if charAfter is a valid boundary
+  if (!isValidBoundary(charAfter)) {
     return false;
   }
   
@@ -126,9 +139,17 @@ export function createMatchingRegex(nameLower: string): RegExp {
 
 /**
  * Determine if manual boundary validation is needed for a name
+ * 
+ * ALWAYS returns true for entity names because the \b regex boundary
+ * treats '.', '-', '_' as boundaries, which causes false positives like
+ * "Software" matching in "dl.software-update.org" or "Linux" in "test-linux-01"
+ * 
+ * Exceptions: IP addresses, MAC addresses, and MITRE IDs have their own
+ * specialized regex patterns that handle boundaries correctly.
  */
 export function needsManualBoundaryCheck(nameLower: string): boolean {
-  const hasSpecialChars = /[.\-_@]/.test(nameLower);
-  return hasSpecialChars && !isIpAddress(nameLower) && !isMacAddress(nameLower) && !isMitreId(nameLower);
+  // Always validate boundaries manually except for special patterns
+  // that have their own boundary handling
+  return !isIpAddress(nameLower) && !isMacAddress(nameLower) && !isMitreId(nameLower);
 }
 

@@ -303,13 +303,46 @@ export function applyHighlightsWithConfig<T extends ExtendedMatchInfo>(
 }
 
 /**
+ * Check if a character is a valid word boundary for highlighting
+ * Only whitespace, sentence punctuation, or undefined (start/end of text) are valid.
+ * 
+ * IMPORTANT: Does NOT include '.', '-', '_', '[', ']' as boundaries because:
+ * - '.', '-', '_' appear in identifiers (domains, hostnames)
+ * - '[', ']' are used for defanging URLs (e.g., dl[.]software-update.org)
+ * e.g., "Software" should NOT match in "dl[.]software-update.org"
+ *       "Linux" should NOT match in "oaev-test-linux-01"
+ */
+function isValidHighlightBoundary(char: string | undefined): boolean {
+  if (!char) return true; // undefined = start/end of text
+  // Only whitespace and sentence-ending punctuation are valid boundaries
+  // NOT: . - _ [ ] (these appear in identifiers/domains or defanged URLs)
+  return /[\s,;:!?()"'<>/\\@#$%^&*+=|`~\n\r\t{}]/.test(char);
+}
+
+/**
+ * Default word boundary checker - returns true if both sides are valid word boundaries
+ * A valid word boundary is whitespace, sentence punctuation, or start/end of string.
+ * 
+ * Note: '.' '-' '_' are NOT considered valid boundaries to prevent false positives
+ * in domains (dl.software-update.org) and identifiers (oaev-test-linux-01).
+ */
+export function isWordBoundary(
+  charBefore: string | undefined, 
+  charAfter: string | undefined,
+  _fullText?: string,
+  _matchEndPos?: number
+): boolean {
+  return isValidHighlightBoundary(charBefore) && isValidHighlightBoundary(charAfter);
+}
+
+/**
  * Options for finding match positions with boundary checking
  */
 export interface FindMatchOptions {
   caseSensitive?: boolean;
   skipHighlighted?: boolean;
   checkBoundaries?: boolean;
-  boundaryChecker?: (charBefore: string | undefined, charAfter: string | undefined) => boolean;
+  boundaryChecker?: (charBefore: string | undefined, charAfter: string | undefined, fullText?: string, matchEndPos?: number) => boolean;
 }
 
 /**
@@ -326,7 +359,7 @@ export function findMatchPositionsWithBoundaries(
     caseSensitive = false, 
     skipHighlighted = true,
     checkBoundaries = false,
-    boundaryChecker,
+    boundaryChecker = isWordBoundary, // Use default word boundary checker
   } = options;
   
   if (!searchValue || searchValue.length < 2) return [];
@@ -340,11 +373,12 @@ export function findMatchPositionsWithBoundaries(
   while ((pos = textToSearch.indexOf(searchText, pos)) !== -1) {
     const endPos = pos + searchValue.length;
     
-    // Check word boundaries if required
-    if (checkBoundaries && boundaryChecker) {
+    // Check word boundaries if required (now uses default boundary checker)
+    // Pass fullText and endPos for MITRE sub-technique detection
+    if (checkBoundaries) {
       const charBefore = pos > 0 ? fullText[pos - 1] : undefined;
       const charAfter = endPos < fullText.length ? fullText[endPos] : undefined;
-      if (!boundaryChecker(charBefore, charAfter)) {
+      if (!boundaryChecker(charBefore, charAfter, fullText, endPos)) {
         pos++;
         continue;
       }

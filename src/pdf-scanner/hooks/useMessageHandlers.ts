@@ -83,6 +83,24 @@ export function useMessageHandlers({
           }
           if (response.data.splitScreenMode !== undefined) {
             setSplitScreenMode(response.data.splitScreenMode);
+            
+            // In split screen mode, immediately notify the native side panel that we're in PDF view mode
+            // This handles the initial load case - the panel needs to know it's on a PDF scanner tab
+            // to disable non-applicable buttons and bind scan to rescan
+            if (response.data.splitScreenMode) {
+              chrome.runtime.sendMessage({
+                type: 'FORWARD_TO_PANEL',
+                payload: { type: 'SET_PDF_VIEW_MODE', payload: true },
+              }).catch(() => {}); // Ignore errors if panel not ready yet
+              
+              // Send again after a short delay to handle race condition with panel initialization
+              setTimeout(() => {
+                chrome.runtime.sendMessage({
+                  type: 'FORWARD_TO_PANEL',
+                  payload: { type: 'SET_PDF_VIEW_MODE', payload: true },
+                }).catch(() => {});
+              }, 500);
+            }
           }
         }
       });

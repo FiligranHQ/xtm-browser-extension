@@ -5,6 +5,16 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.13] - 2025-12-21
+
+### Changed
+- **Code Quality**: Comprehensive codebase cleanup and maintenance release
+- **Documentation**: Updated project structure documentation in README
+- **Dependencies**: Updated all dependencies to latest versions
+
+### Fixed
+- **E2E Tests on CI**: Fixed Playwright e2e tests failing on GitHub Actions due to missing X server. Added `xvfb-run` to provide a virtual display for headed Chrome (required for browser extension testing)
+
 ## [0.0.12] - 2025-12-20
 
 ### Added
@@ -307,6 +317,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.13]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.9...v0.0.10

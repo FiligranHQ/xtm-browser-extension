@@ -90,6 +90,21 @@ export function usePanelManager({ splitScreenMode }: UsePanelManagerOptions): Us
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
           if (tab?.windowId) {
             await chrome.sidePanel.open({ windowId: tab.windowId });
+            
+            // Notify panel that it's in PDF view mode after opening
+            // Send multiple times with delays to handle panel initialization timing
+            const sendPdfViewMode = () => {
+              chrome.runtime.sendMessage({
+                type: 'FORWARD_TO_PANEL',
+                payload: { type: 'SET_PDF_VIEW_MODE', payload: true },
+              }).catch(() => {});
+            };
+            
+            // Send immediately and with delays to ensure panel receives it
+            sendPdfViewMode();
+            setTimeout(sendPdfViewMode, 100);
+            setTimeout(sendPdfViewMode, 300);
+            setTimeout(sendPdfViewMode, 600);
           }
         } catch {
           // Silently ignore - side panel may not be available

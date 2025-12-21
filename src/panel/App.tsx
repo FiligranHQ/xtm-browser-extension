@@ -480,21 +480,33 @@ const App: React.FC = () => {
         return true;
       }
       
-      // Check if on a raw PDF page
-      const isPdfPage = url.endsWith('.pdf') || 
-        url.includes('.pdf?') || 
-        url.includes('.pdf#') ||
-        url.includes('/pdf/') ||
+      // Check if on a raw PDF page (including Chrome's built-in PDF viewer)
+      // Chrome's PDF viewer uses extension ID: mhjfbmdgcfjbbpaeojofohoefgiehjai
+      const lowerUrl = url.toLowerCase();
+      const isPdfPage = lowerUrl.endsWith('.pdf') || 
+        lowerUrl.includes('.pdf?') || 
+        lowerUrl.includes('.pdf#') ||
+        lowerUrl.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai') || // Chrome's built-in PDF viewer
         url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
       
       if (isPdfPage) {
         // Open PDF scanner for this URL
+        // For Chrome's PDF viewer, extract the actual PDF URL
+        let pdfUrl = url;
+        if (url.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai')) {
+          // Chrome PDF viewer URL format: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/index.html?<actual_pdf_url>
+          const match = url.match(/[?&]([^&]+\.pdf[^&]*)/i);
+          if (match) {
+            pdfUrl = decodeURIComponent(match[1]);
+          }
+        }
+        
         const response = await chrome.runtime.sendMessage({
           type: 'OPEN_PDF_SCANNER',
-          payload: { url },
+          payload: { pdfUrl },
         });
         if (response?.success) {
-          log.debug('PDF scanner opened for:', url);
+          log.debug('PDF scanner opened for:', pdfUrl);
         }
         return true;
       }
@@ -550,6 +562,14 @@ const App: React.FC = () => {
       log.debug('PDF view detected via state, triggering rescan via postMessage');
       window.parent.postMessage({ type: 'XTM_PDF_SCANNER_RESCAN' }, '*');
       return;
+    }
+    
+    // In split screen mode with PDF view detected, open PDF scanner for the current tab
+    // This handles the case when user is on a native PDF page with the sidebar open
+    if (isPdfView && isSplitScreenMode) {
+      log.debug('PDF view in split screen mode, checking for PDF page');
+      const isPdf = await checkAndHandlePdfPage();
+      if (isPdf) return;
     }
     
     // Check if on PDF page first (fallback for other cases)
@@ -738,13 +758,17 @@ const App: React.FC = () => {
           const isPdfScannerPage = url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
                                    url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
           
-          // Check if on native PDF page
-          const isNativePdf = url.endsWith('.pdf') || 
-                              url.includes('.pdf?') || 
-                              url.includes('.pdf#') ||
+          // Check if on native PDF page (including Chrome's built-in PDF viewer)
+          // Chrome's PDF viewer uses extension ID: mhjfbmdgcfjbbpaeojofohoefgiehjai
+          const lowerUrl = url.toLowerCase();
+          const isNativePdf = lowerUrl.endsWith('.pdf') || 
+                              lowerUrl.includes('.pdf?') || 
+                              lowerUrl.includes('.pdf#') ||
+                              lowerUrl.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai') || // Chrome's built-in PDF viewer
                               url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
           
           setIsPdfView(isPdfScannerPage || isNativePdf);
+          log.debug('checkPdfView result:', { isPdfScannerPage, isNativePdf, url: url.substring(0, 100) });
         }
       } catch (e) {
         // Ignore - may not have tab access
@@ -753,10 +777,35 @@ const App: React.FC = () => {
     
     checkPdfView();
     
+    // In split screen mode, also check after a delay to handle initial load timing issues
+    // The PDF scanner tab might not be fully ready when the panel first loads
+    if (isSplitScreenMode) {
+      const delayedChecks = [100, 300, 600, 1000];
+      delayedChecks.forEach(delay => {
+        setTimeout(() => checkPdfView(), delay);
+      });
+    }
+    
     // Re-check when tab changes (listen for tab activation)
     const handleTabActivated = () => checkPdfView();
     if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
       chrome.tabs.onActivated.addListener(handleTabActivated);
+    }
+    
+    // Re-check when the current tab's URL changes (e.g., navigating to a PDF)
+    const handleTabUpdated = (tabId: number, changeInfo: { url?: string; status?: string }) => {
+      // Only check if URL changed and tab is in the current window
+      if (changeInfo.url || changeInfo.status === 'complete') {
+        // Check if this is the active tab in the current window
+        chrome.tabs.query({ active: true, currentWindow: true }).then(([activeTab]) => {
+          if (activeTab?.id === tabId) {
+            checkPdfView();
+          }
+        }).catch(() => {});
+      }
+    };
+    if (typeof chrome !== 'undefined' && chrome.tabs?.onUpdated) {
+      chrome.tabs.onUpdated.addListener(handleTabUpdated);
     }
     
     // Re-check when page visibility changes (tab becomes active)
@@ -770,6 +819,9 @@ const App: React.FC = () => {
     return () => {
       if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
         chrome.tabs.onActivated.removeListener(handleTabActivated);
+      }
+      if (typeof chrome !== 'undefined' && chrome.tabs?.onUpdated) {
+        chrome.tabs.onUpdated.removeListener(handleTabUpdated);
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

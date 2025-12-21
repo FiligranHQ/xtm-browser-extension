@@ -731,14 +731,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+      - name: Install Playwright browsers and xvfb
+        run: |
+          # Install xvfb for virtual display (required for headed Chrome with extensions)
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          # Install Playwright with Chromium and dependencies
+          npx playwright install chromium --with-deps
 
       - name: Build extension with coverage instrumentation
         run: npm run build:coverage
 
       - name: Run Playwright E2E tests
-        run: npm run test:e2e
+        # Use xvfb-run to provide a virtual display for headed Chrome (required for extensions)
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm run test:e2e
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

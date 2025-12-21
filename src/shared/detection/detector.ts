@@ -625,9 +625,9 @@ export class DetectionEngine {
    */
   private detectEntitiesFromCacheGeneric<T>(
     text: string,
-    entityMap: Map<string, Array<{ id: string; name: string; type: string; platformId?: string; aliases?: string[] }>>,
+    entityMap: Map<string, Array<{ id: string; name: string; type: string; platformId?: string; aliases?: string[]; x_mitre_id?: string }>>,
     minLength: number,
-    createEntity: (entity: { id: string; name: string; type: string; platformId?: string; aliases?: string[] }, matchedText: string, startIndex: number, endIndex: number) => T,
+    createEntity: (entity: { id: string; name: string; type: string; platformId?: string; aliases?: string[]; x_mitre_id?: string }, matchedText: string, startIndex: number, endIndex: number) => T,
     logPrefix: string
   ): T[] {
     const detected: T[] = [];
@@ -699,23 +699,29 @@ export class DetectionEngine {
       text,
       entityMap,
       3, // minLength for OpenCTI
-      (entity, matchedText, startIndex, endIndex) => ({
-        type: entity.type as DetectedOCTIEntity['type'],
-        name: entity.name,
-        matchedValue: matchedText !== entity.name ? matchedText : undefined,
-        startIndex,
-        endIndex,
-        found: true,
-        entityId: entity.id,
-        platformId: entity.platformId,
-        platformType: 'opencti' as const,
-        entityData: {
-          id: entity.id,
-          entity_type: entity.type,
+      (entity, matchedText, startIndex, endIndex) => {
+        // Cast entity to include x_mitre_id for attack patterns
+        const entityWithMitreId = entity as typeof entity & { x_mitre_id?: string };
+        return {
+          type: entity.type as DetectedOCTIEntity['type'],
           name: entity.name,
-          aliases: entity.aliases,
-        } as unknown as OCTIStixDomainObject,
-      }),
+          matchedValue: matchedText !== entity.name ? matchedText : undefined,
+          aliases: entity.aliases, // Include aliases for highlighting (may contain x_mitre_id)
+          startIndex,
+          endIndex,
+          found: true,
+          entityId: entity.id,
+          platformId: entity.platformId,
+          platformType: 'opencti' as const,
+          entityData: {
+            id: entity.id,
+            entity_type: entity.type,
+            name: entity.name,
+            aliases: entity.aliases,
+            x_mitre_id: entityWithMitreId.x_mitre_id, // Include x_mitre_id for attack pattern highlighting
+          } as unknown as OCTIStixDomainObject,
+        };
+      },
       '[OpenCTI]'
     );
   }
@@ -773,17 +779,49 @@ export class DetectionEngine {
     const cachedOCTIEntities = await this.detectOCTIEntitiesFromCache(text);
     
     // Detect OpenAEV entities from cache
-    const openaevEntities = await this.detectOAEVEntitiesFromCache(text);
+    const rawOpenaevEntities = await this.detectOAEVEntitiesFromCache(text);
+    
+    // Filter out entity matches that fall within observable ranges
+    // This prevents false positives like "Software" matching inside "dl[.]software-update[.]org"
+    const observableRanges = observables.map(o => ({ start: o.startIndex, end: o.endIndex }));
+    const openaevEntities = rawOpenaevEntities.filter(entity => {
+      // Check if this entity's range overlaps with any observable
+      const isInsideObservable = observableRanges.some(range => 
+        entity.startIndex >= range.start && entity.endIndex <= range.end
+      );
+      if (isInsideObservable) {
+        log.debug(`[OpenAEV] Filtering out "${entity.name}" - detected inside observable range`);
+      }
+      return !isInsideObservable;
+    });
+    
+    // Also filter OpenCTI entities the same way
+    const filteredCachedOCTIEntities = cachedOCTIEntities.filter(entity => {
+      const isInsideObservable = observableRanges.some(range => 
+        entity.startIndex >= range.start && entity.endIndex <= range.end
+      );
+      if (isInsideObservable) {
+        log.debug(`[OpenCTI] Filtering out "${entity.name}" - detected inside observable range`);
+      }
+      return !isInsideObservable;
+    });
     
     // Also detect from provided entity names (fallback/additional)
     let additionalOCTIEntities: DetectedOCTIEntity[] = [];
     if (knownEntityNames.length > 0) {
-      additionalOCTIEntities = await this.detectOCTIEntitiesFromNames(text, knownEntityNames);
+      const rawAdditionalEntities = await this.detectOCTIEntitiesFromNames(text, knownEntityNames);
+      // Filter out entities detected inside observables
+      additionalOCTIEntities = rawAdditionalEntities.filter(entity => {
+        const isInsideObservable = observableRanges.some(range => 
+          entity.startIndex >= range.start && entity.endIndex <= range.end
+        );
+        return !isInsideObservable;
+      });
     }
     
     // Merge OCTI entities, preferring cached ones
-    const allOCTIEntities = [...cachedOCTIEntities];
-    const seenNames = new Set(cachedOCTIEntities.map(e => e.name.toLowerCase()));
+    const allOCTIEntities = [...filteredCachedOCTIEntities];
+    const seenNames = new Set(filteredCachedOCTIEntities.map(e => e.name.toLowerCase()));
     for (const entity of additionalOCTIEntities) {
       if (!seenNames.has(entity.name.toLowerCase())) {
         allOCTIEntities.push(entity);

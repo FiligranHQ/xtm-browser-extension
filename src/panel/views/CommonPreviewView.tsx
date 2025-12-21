@@ -240,14 +240,15 @@ export const CommonPreviewView: React.FC<PreviewViewProps> = ({
 
   const handleImportWithoutContainer = () => {
     // For import without container, check platform selection flow
-    const result = getPlatformSelectionFlow(openctiPlatforms, 'platform-select');
+    // Pass 'add' as target mode - if single platform, we skip selection and go directly to import
+    const result = getPlatformSelectionFlow(openctiPlatforms, 'add');
     
     if (result.panelMode === 'platform-select') {
       // Multiple platforms - need selection first
       setContainerWorkflowOrigin('import');
       setPanelMode('platform-select');
     } else if (result.selectedPlatform) {
-      // Single platform - auto-select and import
+      // Single platform - auto-select and import directly
       setSelectedPlatformId(result.selectedPlatform.id);
       setPlatformUrl(result.selectedPlatform.url);
       handleAddEntities();

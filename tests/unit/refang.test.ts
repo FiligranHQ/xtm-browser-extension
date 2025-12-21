@@ -233,6 +233,29 @@ describe('detectObservableType', () => {
     });
   });
 
+  describe('File name detection', () => {
+    it('should detect executable file names', () => {
+      expect(detectObservableType('malware.exe')).toBe('StixFile');
+      expect(detectObservableType('trojan.dll')).toBe('StixFile');
+    });
+
+    it('should detect document file names', () => {
+      expect(detectObservableType('document.pdf')).toBe('StixFile');
+      expect(detectObservableType('invoice.docx')).toBe('StixFile');
+    });
+
+    it('should detect script file names', () => {
+      expect(detectObservableType('script.ps1')).toBe('StixFile');
+      expect(detectObservableType('exploit.py')).toBe('StixFile');
+    });
+
+    it('should NOT detect domain-like extensions as files', () => {
+      // .com, .net, .org are TLDs, not file extensions
+      expect(detectObservableType('example.com')).toBe('Domain-Name');
+      expect(detectObservableType('test.org')).toBe('Domain-Name');
+    });
+  });
+
   describe('IP address detection', () => {
     it('should detect IPv4 addresses', () => {
       expect(detectObservableType('192.168.1.1')).toBe('IPv4-Addr');

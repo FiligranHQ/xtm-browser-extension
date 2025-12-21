@@ -80,5 +80,6 @@ export interface ImportResults {
   created: Array<{ id: string; type: string; value: string }>;
   failed: Array<{ type: string; value: string; error?: string }>;
   platformName: string;
+  platformUrl: string;
 }
 

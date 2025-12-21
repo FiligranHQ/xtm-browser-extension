@@ -114,9 +114,26 @@ export async function handleCreateContainer(
       log.info(`Created ${createdRelationships.length} of ${payload.relationshipsToCreate.length} relationships`);
     }
     
-    // Step 2: Create external reference if page URL is provided
+    // Step 2: Create external reference
+    // For PDF sources: use external_id (the filename) instead of URL
+    // For web pages: use URL as before
     let externalReferenceId: string | undefined;
-    if (payload.pageUrl) {
+    if (payload.isPdfSource && payload.pdfFileName) {
+      // PDF source: create external reference with filename as external_id
+      try {
+        const extRef = await client.createExternalReference({
+          source_name: 'PDF Document',
+          description: payload.pageTitle || 'Source PDF document',
+          external_id: payload.pdfFileName,
+        });
+        externalReferenceId = extRef.id;
+        log.debug(`Created external reference with external_id: ${payload.pdfFileName}`);
+      } catch (extRefError) {
+        log.warn('Failed to create external reference:', extRefError);
+        // Continue without external reference
+      }
+    } else if (payload.pageUrl) {
+      // Web page: create external reference with URL
       try {
         const extRef = await client.createExternalReference({
           source_name: 'Web Article',

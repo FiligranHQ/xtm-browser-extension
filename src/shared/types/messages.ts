@@ -176,6 +176,10 @@ export interface CreateContainerPayload {
   pageUrl?: string;
   /** Source page title */
   pageTitle?: string;
+  /** PDF filename (when source is PDF scanner) */
+  pdfFileName?: string;
+  /** Whether the source is a PDF scanner (affects external reference creation) */
+  isPdfSource?: boolean;
   // Type-specific fields (Report, Case-Incident, etc.)
   report_types?: string[];
   context?: string;

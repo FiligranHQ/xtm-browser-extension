@@ -21,6 +21,7 @@ import {
   type ExtendedMatchInfo,
 } from './utils/highlight';
 import { escapeRegex } from '../shared/detection/matching';
+import { generateDefangedVariants } from '../shared/detection/patterns';
 
 // ============================================================================
 // Types
@@ -50,6 +51,123 @@ const OPENCTI_TYPES_SET = new Set([
   'Grouping', 'Case-Incident', 'Case-Rfi', 'Case-Rft', 'Feedback',
 ]);
 
+// ============================================================================
+// Search Value Generation (uses shared defanging utilities)
+// ============================================================================
+
+/**
+ * Get all text values to search for from an observable
+ * Uses the shared generateDefangedVariants utility for consistency
+ */
+function getSearchValuesForObservable(obs: { value: string; refangedValue?: string; isDefanged?: boolean }): string[] {
+  const values: string[] = [];
+  
+  // Primary: Use value field (text as found in document)
+  if (obs.value) {
+    values.push(obs.value);
+  }
+  
+  // Also try refangedValue if different (for cross-referencing)
+  if (obs.refangedValue && obs.refangedValue !== obs.value) {
+    values.push(obs.refangedValue);
+  }
+  
+  // CRITICAL: If the observable value is NOT defanged (clean form),
+  // also generate and search for defanged patterns.
+  // This handles the case where detection deduplication chose the clean version
+  // but the page has defanged text that we need to highlight.
+  const valueToDefang = obs.value || obs.refangedValue;
+  if (valueToDefang && !obs.isDefanged) {
+    const defangedPatterns = generateDefangedVariants(valueToDefang);
+    for (const pattern of defangedPatterns) {
+      if (!values.includes(pattern)) {
+        values.push(pattern);
+      }
+    }
+  }
+  
+  return values;
+}
+
+/**
+ * Get all text variants to highlight for an OpenCTI entity
+ * For attack patterns, this includes name, aliases, and x_mitre_id
+ */
+function getEntityTextVariants(entity: DetectedOCTIEntity): string[] {
+  const variants: string[] = [];
+  
+  // Primary: matched text or name
+  const primary = (entity as { matchedValue?: string }).matchedValue || entity.name;
+  if (primary) {
+    variants.push(primary);
+  }
+  
+  // Add name if different from matched value
+  if (entity.name && !variants.includes(entity.name)) {
+    variants.push(entity.name);
+  }
+  
+  // Add aliases (which may include x_mitre_id for attack patterns)
+  if (entity.aliases) {
+    for (const alias of entity.aliases) {
+      if (alias && !variants.includes(alias)) {
+        variants.push(alias);
+      }
+    }
+  }
+  
+  // Check entityData for x_mitre_id (for attack patterns from cache)
+  const entityData = entity.entityData as { x_mitre_id?: string } | undefined;
+  if (entityData?.x_mitre_id && !variants.includes(entityData.x_mitre_id)) {
+    variants.push(entityData.x_mitre_id);
+  }
+  
+  return variants;
+}
+
+/**
+ * Get all text variants to highlight for an OpenAEV entity
+ * For attack patterns, this includes name, value, external_id, and aliases
+ */
+function getOpenAEVEntityTextVariants(entity: {
+  name: string;
+  value?: string;
+  type: string;
+  entityData?: Record<string, unknown>;
+}): string[] {
+  const variants: string[] = [];
+  
+  // Primary: value or name
+  const primary = entity.value || entity.name;
+  if (primary) {
+    variants.push(primary);
+  }
+  
+  // Add name if different from value
+  if (entity.name && !variants.includes(entity.name)) {
+    variants.push(entity.name);
+  }
+  
+  // Add aliases from entityData (which includes external IDs for attack patterns)
+  const entityData = entity.entityData;
+  if (entityData?.aliases && Array.isArray(entityData.aliases)) {
+    for (const alias of entityData.aliases) {
+      if (alias && typeof alias === 'string' && !variants.includes(alias)) {
+        variants.push(alias);
+      }
+    }
+  }
+  
+  // For AttackPattern entities, also check attack_pattern_external_id directly
+  if (entity.type === 'AttackPattern' || entity.type === 'oaev-AttackPattern') {
+    const externalId = entityData?.attack_pattern_external_id as string | undefined;
+    if (externalId && !variants.includes(externalId)) {
+      variants.push(externalId);
+    }
+  }
+  
+  return variants;
+}
 
 // ============================================================================
 // State
@@ -253,6 +371,14 @@ export function highlightResults(
   };
   
   // Highlight observables
+  // IMPORTANT: Collect ALL matches first, then apply highlights
+  // This prevents nodeMap from becoming stale when searching for multiple patterns
+  const observableMatches: Array<{
+    matches: ExtendedMatchInfo[];
+    meta: HighlightMeta;
+    searchValue: string;
+  }> = [];
+  
   for (const obs of results.observables) {
     const valueLower = obs.value.toLowerCase();
     const otherPlatformMatches = findPlatformMatches(valueLower);
@@ -263,25 +389,63 @@ export function highlightResults(
       foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
     };
     
-    const matches = collectStringMatches(fullText, obs.value, nodeMap);
-    applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, obs.value, handlers));
+    // Search for all possible forms of the observable (clean + defanged patterns)
+    // This handles cases where deduplication chose clean version but page has defanged text
+    const searchValues = getSearchValuesForObservable(obs);
+    for (const searchValue of searchValues) {
+      const matches = collectStringMatches(fullText, searchValue, nodeMap);
+      if (matches.length > 0) {
+        observableMatches.push({ matches, meta, searchValue });
+      }
+    }
   }
   
-  // Highlight OpenCTI entities
-  for (const octiEntity of results.openctiEntities) {
-    const textToHighlight = (octiEntity as { matchedValue?: string }).matchedValue || octiEntity.name;
-    const valueLower = octiEntity.name.toLowerCase();
-    const otherPlatformMatches = findPlatformMatches(valueLower);
-    const meta: HighlightMeta = {
-      type: octiEntity.type,
-      found: octiEntity.found,
-      data: octiEntity,
-      isOpenCTIEntity: true,
-      foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
-    };
+  // Now apply all highlights (in reverse to preserve positions)
+  for (const { matches, meta, searchValue } of observableMatches) {
+    applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, searchValue, handlers));
+  }
+  
+  // Highlight OpenCTI entities - rebuild nodeMap after observable highlights
+  // IMPORTANT: Observable highlights modify the DOM, so we need fresh text nodes
+  if (results.openctiEntities.length > 0) {
+    textNodes = getTextNodes(document.body);
+    ({ nodeMap, fullText } = buildNodeMap(textNodes));
     
-    const matches = collectStringMatches(fullText, textToHighlight, nodeMap);
-    applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, textToHighlight, handlers));
+    // IMPORTANT: Collect ALL OpenCTI entity matches first, then apply highlights
+    // This prevents nodeMap from becoming stale when highlighting multiple entities
+    const octiMatches: Array<{
+      matches: ExtendedMatchInfo[];
+      meta: HighlightMeta;
+      entityName: string;
+    }> = [];
+    
+    for (const octiEntity of results.openctiEntities) {
+      const valueLower = octiEntity.name.toLowerCase();
+      const otherPlatformMatches = findPlatformMatches(valueLower);
+      const meta: HighlightMeta = {
+        type: octiEntity.type,
+        found: octiEntity.found,
+        data: octiEntity,
+        isOpenCTIEntity: true,
+        foundInPlatforms: otherPlatformMatches.length > 0 ? otherPlatformMatches : undefined,
+      };
+      
+      // Collect all text variants to highlight for this entity
+      // This ensures both name and external ID (x_mitre_id) are highlighted for attack patterns
+      const textsToHighlight = getEntityTextVariants(octiEntity);
+      const allMatches: ExtendedMatchInfo[] = [];
+      for (const text of textsToHighlight) {
+        allMatches.push(...collectStringMatches(fullText, text, nodeMap));
+      }
+      if (allMatches.length > 0) {
+        octiMatches.push({ matches: allMatches, meta, entityName: octiEntity.name });
+      }
+    }
+    
+    // Now apply all OpenCTI entity highlights
+    for (const { matches, meta, entityName } of octiMatches) {
+      applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, entityName, handlers));
+    }
   }
   
   // Highlight CVEs - rebuild nodeMap after previous highlights
@@ -322,18 +486,37 @@ export function highlightResults(
     textNodes = getTextNodes(document.body);
     ({ nodeMap, fullText } = buildNodeMap(textNodes));
     
+    // IMPORTANT: Collect ALL OpenAEV entity matches first, then apply highlights
+    const oaevMatches: Array<{
+      matches: ExtendedMatchInfo[];
+      meta: HighlightMeta;
+      entityName: string;
+    }> = [];
+    
     for (const entity of results.openaevEntities) {
       const entityPlatformType = (entity.platformType || 'openaev') as PlatformType;
       const prefixedType = createPrefixedType(entity.type, entityPlatformType);
-      const textToHighlight = entity.value || entity.name;
       const meta: HighlightMeta = {
         type: prefixedType,
         found: entity.found,
         data: entity as unknown as DetectedOCTIEntity,
       };
       
-      const matches = collectStringMatches(fullText, textToHighlight, nodeMap);
-      applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, textToHighlight, handlers));
+      // Collect all text variants to highlight for this entity
+      // This ensures both name and external ID are highlighted for attack patterns
+      const textsToHighlight = getOpenAEVEntityTextVariants(entity);
+      const allMatches: ExtendedMatchInfo[] = [];
+      for (const text of textsToHighlight) {
+        allMatches.push(...collectStringMatches(fullText, text, nodeMap));
+      }
+      if (allMatches.length > 0) {
+        oaevMatches.push({ matches: allMatches, meta, entityName: entity.name });
+      }
+    }
+    
+    // Now apply all OpenAEV entity highlights
+    for (const { matches, meta, entityName } of oaevMatches) {
+      applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, entityName, handlers));
     }
   }
 }
@@ -427,10 +610,29 @@ export function highlightResultsForInvestigation(
   const { nodeMap, fullText } = buildNodeMap(textNodes);
   
   // Highlight observables
+  // IMPORTANT: Collect ALL matches first, then apply highlights
+  // This prevents nodeMap from becoming stale when searching for multiple patterns
+  const observableMatches: Array<{
+    matches: ExtendedMatchInfo[];
+    obs: typeof results.observables[0];
+    searchValue: string;
+  }> = [];
+  
   for (const obs of results.observables) {
-    const matches = collectStringMatches(fullText, obs.value, nodeMap);
+    // Search for all possible forms of the observable (clean + defanged patterns)
+    const searchValues = getSearchValuesForObservable(obs);
+    for (const searchValue of searchValues) {
+      const matches = collectStringMatches(fullText, searchValue, nodeMap);
+      if (matches.length > 0) {
+        observableMatches.push({ matches, obs, searchValue });
+      }
+    }
+  }
+  
+  // Now apply all highlights
+  for (const { matches, obs, searchValue } of observableMatches) {
     applyHighlightsInReverse(matches, () => 
-      createInvestigationHighlightConfig(obs.type, obs.value, obs.entityId, obs.platformId || (obs as { platformId?: string }).platformId, onHighlightClick)
+      createInvestigationHighlightConfig(obs.type, searchValue, obs.entityId, obs.platformId || (obs as { platformId?: string }).platformId, onHighlightClick)
     );
   }
   

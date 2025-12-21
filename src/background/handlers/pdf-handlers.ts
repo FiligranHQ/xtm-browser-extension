@@ -102,6 +102,9 @@ export const handleOpenPdfScannerPanel: MessageHandler = async (
 
 /**
  * Trigger a rescan on PDF scanner tab
+ * 
+ * Note: Side panel opening is handled by the popup based on splitScreenMode setting.
+ * This handler only sends the rescan trigger to the PDF scanner page.
  */
 export const handlePdfScannerRescan: MessageHandler = async (
   payload: unknown,
@@ -130,15 +133,9 @@ export const handlePdfScannerRescan: MessageHandler = async (
     }
     
     if (targetTabId) {
-      // Open side panel first (might fail if not from user gesture, that's okay)
-      if (chrome.sidePanel) {
-        try {
-          await chrome.sidePanel.open({ tabId: targetTabId });
-          log.debug('Side panel opened for PDF scanner rescan');
-        } catch (e) {
-          log.debug('Side panel may already be open or user gesture required:', e);
-        }
-      }
+      // Note: We don't open the side panel here - the popup handles that based on
+      // splitScreenMode setting. In iframe mode, the PDF scanner opens its embedded
+      // iframe panel; in split screen mode, the popup opens the native side panel.
       
       // Send rescan trigger to the PDF scanner page
       await chrome.tabs.sendMessage(targetTabId, { type: 'PDF_SCANNER_RESCAN_TRIGGER' });

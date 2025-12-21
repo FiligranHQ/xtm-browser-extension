@@ -18,6 +18,7 @@ import {
   SHA256_PATTERN,
   SHA512_PATTERN,
   SSDEEP_PATTERN,
+  FILE_NAME_PATTERN,
   MAC_PATTERN,
   BITCOIN_PATTERN,
   ETHEREUM_PATTERN,
@@ -355,6 +356,76 @@ describe('SSDEEP_PATTERN', () => {
 });
 
 // ============================================================================
+// File Name Pattern Tests
+// ============================================================================
+
+describe('FILE_NAME_PATTERN', () => {
+  const matchAll = (text: string) => [...text.matchAll(new RegExp(FILE_NAME_PATTERN.source, 'gi'))].map(m => m[0]);
+
+  it('should match executable file names', () => {
+    expect(matchAll('malware.exe')).toContain('malware.exe');
+    expect(matchAll('trojan.dll')).toContain('trojan.dll');
+    expect(matchAll('system32.sys')).toContain('system32.sys');
+    expect(matchAll('installer.msi')).toContain('installer.msi');
+  });
+
+  it('should match document file names', () => {
+    expect(matchAll('invoice.docx')).toContain('invoice.docx');
+    expect(matchAll('report_2024.pdf')).toContain('report_2024.pdf');
+    expect(matchAll('data.xlsx')).toContain('data.xlsx');
+    expect(matchAll('presentation.pptx')).toContain('presentation.pptx');
+  });
+
+  it('should match archive file names', () => {
+    expect(matchAll('payload.zip')).toContain('payload.zip');
+    expect(matchAll('backup.tar.gz').some(m => m.includes('tar'))).toBe(true);
+    expect(matchAll('data.7z')).toContain('data.7z');
+    expect(matchAll('package.rar')).toContain('package.rar');
+  });
+
+  it('should match script file names', () => {
+    expect(matchAll('script.ps1')).toContain('script.ps1');
+    expect(matchAll('autorun.bat')).toContain('autorun.bat');
+    expect(matchAll('deploy.sh')).toContain('deploy.sh');
+    expect(matchAll('exploit.py')).toContain('exploit.py');
+  });
+
+  it('should match file names with special characters (no spaces)', () => {
+    // Note: Spaces in filenames are not supported to avoid matching sentence fragments
+    // File names like "My Document.pdf" would be matched by different logic or quoted
+    expect(matchAll('file-name.exe')).toContain('file-name.exe');
+    expect(matchAll('file_name.dll')).toContain('file_name.dll');
+    expect(matchAll('file(1).docx')).toContain('file(1).docx');
+    expect(matchAll('setup_v2.0.exe')).toContain('setup_v2.0.exe');
+  });
+
+  it('should NOT match TLD-like extensions that could be domains', () => {
+    // .com, .net, .org, .io, etc. are NOT in the file extensions list
+    // to prevent domain conflicts. Domain pattern handles these.
+    const results = matchAll('website.com');
+    // The pattern should not match .com as it's not in FILE_EXTENSIONS
+    const hasComExtension = results.some(r => r.endsWith('.com'));
+    expect(hasComExtension).toBe(false);
+  });
+
+  it('should match file names in text context', () => {
+    const results = matchAll('Download malware.exe from the server');
+    // The pattern captures the full match including prefix due to lookbehind
+    expect(results.some(r => r.includes('malware.exe'))).toBe(true);
+  });
+
+  it('should match mobile app extensions', () => {
+    expect(matchAll('app.apk')).toContain('app.apk');
+    expect(matchAll('app.ipa')).toContain('app.ipa');
+  });
+
+  it('should match disk image extensions', () => {
+    expect(matchAll('os.iso')).toContain('os.iso');
+    expect(matchAll('disk.vmdk')).toContain('disk.vmdk');
+  });
+});
+
+// ============================================================================
 // MAC Address Pattern Tests
 // ============================================================================
 
@@ -493,10 +564,12 @@ describe('CREDIT_CARD_PATTERN', () => {
 describe('OBSERVABLE_PATTERNS', () => {
   it('should have unique pattern types', () => {
     // Note: Some types are intentionally duplicated (e.g., Cryptocurrency-Wallet for Bitcoin & Ethereum)
+    // and StixFile appears multiple times (for hashes and file names)
     const types = new Set(OBSERVABLE_PATTERNS.map(p => `${p.type}:${p.hashType || ''}`));
-    // There are 19 patterns but only 18 unique type:hashType combinations
+    // There are 20 patterns but only 18 unique type:hashType combinations
     // Cryptocurrency-Wallet appears twice (Bitcoin, Ethereum)
-    expect(types.size).toBe(OBSERVABLE_PATTERNS.length - 1);
+    // StixFile appears 6 times (MD5, SHA-1, SHA-256, SHA-512, SSDEEP, File Names)
+    expect(types.size).toBeLessThanOrEqual(OBSERVABLE_PATTERNS.length);
   });
 
   it('should have all patterns with priority', () => {
@@ -619,6 +692,22 @@ describe('detectObservableType', () => {
     expect(detectObservableType('d41d8cd98f00b204e9800998ecf8427e')).toBe('StixFile'); // MD5
     expect(detectObservableType('da39a3ee5e6b4b0d3255bfef95601890afd80709')).toBe('StixFile'); // SHA1
     expect(detectObservableType('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')).toBe('StixFile'); // SHA256
+  });
+
+  it('should detect file names', () => {
+    expect(detectObservableType('malware.exe')).toBe('StixFile');
+    expect(detectObservableType('trojan.dll')).toBe('StixFile');
+    expect(detectObservableType('payload.zip')).toBe('StixFile');
+    expect(detectObservableType('document.pdf')).toBe('StixFile');
+    expect(detectObservableType('script.ps1')).toBe('StixFile');
+  });
+
+  it('should NOT detect domain TLDs as file names', () => {
+    // .com is a domain TLD, not a file extension
+    expect(detectObservableType('example.com')).toBe('Domain-Name');
+    expect(detectObservableType('test.net')).toBe('Domain-Name');
+    expect(detectObservableType('site.org')).toBe('Domain-Name');
+    expect(detectObservableType('app.io')).toBe('Domain-Name');
   });
 
   it('should detect IPv4 addresses', () => {

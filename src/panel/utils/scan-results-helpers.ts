@@ -49,15 +49,18 @@ export const formatTypeName = (type: string): string => {
 
 /**
  * Get page content from either PDF scanner or regular web page
+ * For PDF scanner, also returns the PDF filename for container naming and external reference
  */
 export const getPageContent = async (
   scanPageContent: string | undefined,
   currentPageTitle: string,
   currentPageUrl: string,
-): Promise<{ content: string; title: string; url: string }> => {
+): Promise<{ content: string; title: string; url: string; pdfFileName?: string; isPdfSource?: boolean }> => {
   let pageContent = scanPageContent || '';
   let pageTitle = currentPageTitle || '';
   let pageUrl = currentPageUrl || '';
+  let pdfFileName: string | undefined;
+  let isPdfSource = false;
 
   if (!pageContent && typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
     try {
@@ -68,29 +71,52 @@ export const getPageContent = async (
                                 tab.url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
         
         if (isPdfScannerPage) {
-          // For PDF scanner, request content via postMessage
-          try {
-            const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string } }>((resolve) => {
-              const timeout = setTimeout(() => resolve({ success: false }), 3000);
-              
-              const handleResponse = (event: MessageEvent) => {
-                if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
-                  clearTimeout(timeout);
-                  window.removeEventListener('message', handleResponse);
-                  resolve(event.data.payload || { success: false });
-                }
-              };
-              window.addEventListener('message', handleResponse);
-              
-              window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
-            });
-            if (pdfContentResponse?.success) {
-              pageContent = pdfContentResponse.data?.content || '';
-              pageTitle = pdfContentResponse.data?.title || pageTitle;
-              pageUrl = pdfContentResponse.data?.url || pageUrl;
+          isPdfSource = true;
+          // Check if we're in iframe mode (panel embedded in PDF scanner) or native side panel mode
+          const isIframeMode = window !== window.parent;
+          
+          if (isIframeMode) {
+            // For iframe mode: request content via postMessage to parent (PDF scanner)
+            try {
+              const pdfContentResponse = await new Promise<{ success: boolean; data?: { content: string; title: string; url: string; filename?: string } }>((resolve) => {
+                const timeout = setTimeout(() => resolve({ success: false }), 10000); // 10 second timeout for large PDFs
+                
+                const handleResponse = (event: MessageEvent) => {
+                  if (event.data?.type === 'XTM_PDF_CONTENT_RESPONSE') {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handleResponse);
+                    resolve(event.data.payload || { success: false });
+                  }
+                };
+                window.addEventListener('message', handleResponse);
+                
+                window.parent.postMessage({ type: 'XTM_GET_PDF_CONTENT' }, '*');
+              });
+              if (pdfContentResponse?.success) {
+                pageContent = pdfContentResponse.data?.content || '';
+                pageTitle = pdfContentResponse.data?.title || pageTitle;
+                pageUrl = pdfContentResponse.data?.url || pageUrl;
+                pdfFileName = pdfContentResponse.data?.filename;
+              }
+            } catch {
+              // PDF scanner might not respond
             }
-          } catch {
-            // PDF scanner might not respond
+          } else {
+            // For native side panel mode: use chrome.runtime.sendMessage to background
+            // which will forward to PDF scanner via chrome.tabs.sendMessage
+            try {
+              const pdfContentResponse = await chrome.runtime.sendMessage({ 
+                type: 'GET_PDF_CONTENT_FROM_PDF_SCANNER' 
+              });
+              if (pdfContentResponse?.success) {
+                pageContent = pdfContentResponse.data?.content || '';
+                pageTitle = pdfContentResponse.data?.title || pageTitle;
+                pageUrl = pdfContentResponse.data?.url || pageUrl;
+                pdfFileName = pdfContentResponse.data?.filename;
+              }
+            } catch {
+              // PDF scanner might not respond
+            }
           }
         } else {
           const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
@@ -106,7 +132,7 @@ export const getPageContent = async (
     }
   }
 
-  return { content: pageContent, title: pageTitle, url: pageUrl };
+  return { content: pageContent, title: pageTitle, url: pageUrl, pdfFileName, isPdfSource };
 };
 
 /**

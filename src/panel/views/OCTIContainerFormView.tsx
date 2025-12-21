@@ -87,6 +87,8 @@ export interface ContainerFormViewProps {
   handleCreateContainer: () => void;
   submitting: boolean;
   generatingPdf: boolean;
+  /** Whether source is PDF scanner (changes attachment label) */
+  isPdfSource?: boolean;
 }
 
 export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
@@ -125,6 +127,7 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
   handleCreateContainer,
   submitting,
   generatingPdf,
+  isPdfSource = false,
 }) => {
   // Label search state
   const [labelOptions, setLabelOptions] = useState<LabelOption[]>(availableLabels);
@@ -1047,7 +1050,7 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <PictureAsPdfOutlined fontSize="small" sx={{ color: attachPdf ? 'primary.main' : 'text.secondary' }} />
               <Typography variant="body2">
-                Attach PDF snapshot of this page
+                {isPdfSource ? 'Upload the PDF' : 'Attach PDF snapshot of this page'}
               </Typography>
             </Box>
           }

@@ -3,6 +3,8 @@
  * Defines all styles for highlighting, tooltips, toasts, and the side panel.
  */
 
+import { PANEL_WIDTH_PX } from '../shared/constants';
+
 export const HIGHLIGHT_STYLES = `
   /* ========================================
      BASE HIGHLIGHT STYLES - ABOVE DOM APPROACH
@@ -540,9 +542,9 @@ export const HIGHLIGHT_STYLES = `
     top: 0 !important;
     right: 0 !important;
     left: auto !important;
-    width: 560px !important;
-    min-width: 560px !important;
-    max-width: 560px !important;
+    width: ${PANEL_WIDTH_PX}px !important;
+    min-width: ${PANEL_WIDTH_PX}px !important;
+    max-width: ${PANEL_WIDTH_PX}px !important;
     height: 100vh !important;
     height: 100dvh !important;
     min-height: 100vh !important;
@@ -580,7 +582,7 @@ export const HIGHLIGHT_STYLES = `
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
-    right: 560px !important;
+    right: ${PANEL_WIDTH_PX}px !important;
     bottom: 0 !important;
     width: auto !important;
     height: auto !important;

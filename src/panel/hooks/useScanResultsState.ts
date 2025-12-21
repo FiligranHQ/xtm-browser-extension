@@ -34,6 +34,12 @@ export interface ScanResultsStateReturn {
   currentPageTitle: string;
   setCurrentPageTitle: (title: string) => void;
   
+  // PDF source info (when scanning from PDF scanner)
+  currentPdfFileName: string;
+  setCurrentPdfFileName: (name: string) => void;
+  isPdfSource: boolean;
+  setIsPdfSource: (isPdf: boolean) => void;
+  
   // Navigation tracking
   entityFromScanResults: boolean;
   setEntityFromScanResults: (from: boolean) => void;
@@ -66,6 +72,10 @@ export function useScanResultsState(): ScanResultsStateReturn {
   // Page info
   const [currentPageUrl, setCurrentPageUrl] = useState<string>('');
   const [currentPageTitle, setCurrentPageTitle] = useState<string>('');
+  
+  // PDF source info (when scanning from PDF scanner)
+  const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
+  const [isPdfSource, setIsPdfSource] = useState<boolean>(false);
   
   // Navigation tracking
   const [entityFromScanResults, setEntityFromScanResults] = useState<boolean>(false);
@@ -118,6 +128,8 @@ export function useScanResultsState(): ScanResultsStateReturn {
     setSelectedScanItems(new Set());
     setScanPageContent('');
     setEntityFromScanResults(false);
+    setCurrentPdfFileName('');
+    setIsPdfSource(false);
   }, []);
   
   return {
@@ -136,6 +148,10 @@ export function useScanResultsState(): ScanResultsStateReturn {
     setCurrentPageUrl,
     currentPageTitle,
     setCurrentPageTitle,
+    currentPdfFileName,
+    setCurrentPdfFileName,
+    isPdfSource,
+    setIsPdfSource,
     entityFromScanResults,
     setEntityFromScanResults,
     checkSelectable,

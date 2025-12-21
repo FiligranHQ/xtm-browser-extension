@@ -6,49 +6,12 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  getEntityKey,
   groupTextItemsIntoLines,
   buildLineTextAndCharMap,
   extractAllEntities,
 } from '../../src/pdf-scanner/utils/highlight-utils';
 import type { TextLine } from '../../src/pdf-scanner/types';
 import type { ScanResultPayload } from '../../src/shared/types/messages';
-
-// ============================================================================
-// Entity Key Tests
-// ============================================================================
-
-describe('getEntityKey', () => {
-  it('should generate key from entity with value', () => {
-    const entity = { type: 'IPv4-Addr', value: '192.168.1.1', found: true };
-    const key = getEntityKey(entity);
-    expect(key).toBe('ipv4-addr-192.168.1.1');
-  });
-
-  it('should generate key from entity with name', () => {
-    const entity = { type: 'Threat-Actor', name: 'APT29', found: true };
-    const key = getEntityKey(entity);
-    expect(key).toBe('threat-actor-apt29');
-  });
-
-  it('should prefer value over name', () => {
-    const entity = { type: 'Domain-Name', value: 'example.com', name: 'Example Domain', found: true };
-    const key = getEntityKey(entity);
-    expect(key).toBe('domain-name-example.com');
-  });
-
-  it('should handle entities with no value or name', () => {
-    const entity = { type: 'Unknown', found: false };
-    const key = getEntityKey(entity);
-    expect(key).toBe('unknown-');
-  });
-
-  it('should lowercase the key', () => {
-    const entity = { type: 'Malware', value: 'EMOTET', found: true };
-    const key = getEntityKey(entity);
-    expect(key).toBe('malware-emotet');
-  });
-});
 
 // ============================================================================
 // Text Line Grouping Tests

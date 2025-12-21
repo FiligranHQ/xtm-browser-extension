@@ -6,6 +6,7 @@
 
 import { useCallback, useRef } from 'react';
 import type { ScanResultPayload } from '../../shared/types/messages';
+import { PANEL_WIDTH_PX } from '../../shared/constants';
 
 interface UsePanelManagerOptions {
   splitScreenMode: boolean;
@@ -51,7 +52,7 @@ export function usePanelManager({ splitScreenMode }: UsePanelManagerOptions): Us
         position: fixed;
         top: 0;
         right: 0;
-        width: 420px;
+        width: ${PANEL_WIDTH_PX}px;
         height: 100vh;
         border: none;
         z-index: 2147483647;
@@ -100,6 +101,12 @@ export function usePanelManager({ splitScreenMode }: UsePanelManagerOptions): Us
       const iframe = ensurePanelIframe();
       if (iframe) {
         iframe.style.transform = 'translateX(0)';
+        // Notify panel that it's in PDF view mode after a small delay to ensure it's loaded
+        setTimeout(() => {
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'SET_PDF_VIEW_MODE', payload: true }, '*');
+          }
+        }, 200);
       }
     }
   }, [splitScreenMode, ensurePanelIframe]);
@@ -119,6 +126,9 @@ export function usePanelManager({ splitScreenMode }: UsePanelManagerOptions): Us
         type: message.type,
         payload: message.payload,
       }, '*');
+      // Also notify panel that it's in PDF view mode
+      // This ensures buttons are disabled even if tab detection has timing issues
+      iframe.contentWindow.postMessage({ type: 'SET_PDF_VIEW_MODE', payload: true }, '*');
     }
   }, []);
 

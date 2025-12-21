@@ -39,6 +39,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
 export default function App() {
   // State
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfMetadataTitle, setPdfMetadataTitle] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -87,6 +88,7 @@ export default function App() {
     scanAndShowPanelRef,
     panelIframeRef,
     pdfUrl,
+    pdfMetadataTitle,
     setScanResults,
     setSelectedEntities,
     setHoveredEntity,
@@ -158,6 +160,14 @@ export default function App() {
         } else {
           next.add(entityKey);
         }
+        // Notify panel about selection change to sync the scan results list
+        sendToPanel({
+          type: 'SELECTION_UPDATED',
+          payload: {
+            selectedCount: next.size,
+            selectedItems: Array.from(next),
+          },
+        });
         return next;
       });
       return;
@@ -268,6 +278,18 @@ export default function App() {
         
         setPdfDocument(pdf);
         setNumPages(pdf.numPages);
+        
+        // Extract PDF metadata title if available
+        try {
+          const metadata = await pdf.getMetadata();
+          const info = metadata?.info as Record<string, unknown> | undefined;
+          const title = info?.Title as string | undefined;
+          if (title && title.trim()) {
+            setPdfMetadataTitle(title.trim());
+          }
+        } catch {
+          // Metadata extraction is optional, continue without it
+        }
         
         // Extract text from all pages using line-based grouping
         const texts: string[] = [];

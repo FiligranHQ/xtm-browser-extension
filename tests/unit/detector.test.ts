@@ -227,6 +227,75 @@ describe('DetectionEngine', () => {
       expect(hashes).toHaveLength(1);
     });
 
+    it('should detect file names with executable extensions', () => {
+      const text = 'The malware sample malware.exe was detected';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile' && r.value === 'malware.exe');
+      expect(files).toHaveLength(1);
+    });
+
+    it('should detect file names with document extensions', () => {
+      const text = 'Phishing attachment: invoice_2024.docx';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile' && r.value === 'invoice_2024.docx');
+      expect(files).toHaveLength(1);
+    });
+
+    it('should detect file names with archive extensions', () => {
+      const text = 'Downloaded payload.zip from the server';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile' && r.value === 'payload.zip');
+      expect(files).toHaveLength(1);
+    });
+
+    it('should detect file names with script extensions', () => {
+      const text = 'Executed malicious script dropper.ps1';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile' && r.value === 'dropper.ps1');
+      expect(files).toHaveLength(1);
+    });
+
+    it('should NOT detect file names that look like domains (.com, .net, etc.)', () => {
+      const text = 'Visit example.com for more info';
+      const results = engine.detectObservables(text);
+      
+      // Should detect as domain, not as file
+      const files = results.filter(r => r.type === 'StixFile');
+      expect(files).toHaveLength(0);
+      
+      const domains = results.filter(r => r.type === 'Domain-Name');
+      expect(domains).toHaveLength(1);
+    });
+
+    it('should NOT detect version numbers as file names', () => {
+      const text = 'Version 2.0.1.exe';
+      const results = engine.detectObservables(text);
+      
+      // The "2.0.1.exe" should not be detected as version numbers look like partial filenames
+      const files = results.filter(r => r.type === 'StixFile' && r.value === '2.0.1.exe');
+      expect(files).toHaveLength(0);
+    });
+
+    it('should detect multiple file names in text', () => {
+      const text = 'Files: trojan.dll, backdoor.exe, and config.ini';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile');
+      expect(files.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should detect file names with hyphens and underscores', () => {
+      const text = 'File my-document_final.pdf was infected';
+      const results = engine.detectObservables(text);
+      
+      const files = results.filter(r => r.type === 'StixFile' && r.value?.includes('document'));
+      expect(files).toHaveLength(1);
+    });
+
     it('should detect MAC addresses', () => {
       const text = 'Device MAC: 00:1A:2B:3C:4D:5E';
       const results = engine.detectObservables(text);

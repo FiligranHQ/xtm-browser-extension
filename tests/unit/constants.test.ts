@@ -33,6 +33,11 @@ import {
   HIGHLIGHT_NOT_FOUND,
   HIGHLIGHT_SELECTED,
   HIGHLIGHT_AI_DISCOVERED,
+  CVSS_COLORS,
+  SEVERITY_COLORS,
+  MARKING_COLORS,
+  MARKING_CLEAR_COLORS,
+  TEXT_COLORS,
 } from '../../src/shared/constants';
 
 // ============================================================================
@@ -130,7 +135,7 @@ describe('UI Configuration', () => {
   it('should have reasonable PANEL_WIDTH_PX', () => {
     expect(PANEL_WIDTH_PX).toBeGreaterThan(200);
     expect(PANEL_WIDTH_PX).toBeLessThanOrEqual(600);
-    expect(PANEL_WIDTH_PX).toBe(400);
+    expect(PANEL_WIDTH_PX).toBe(560);
   });
 
   it('should have high z-index values for overlays', () => {
@@ -220,6 +225,122 @@ describe('Highlight Colors', () => {
     expect(HIGHLIGHT_FOUND.outline).not.toBe(HIGHLIGHT_NOT_FOUND.outline);
     expect(HIGHLIGHT_FOUND.outline).not.toBe(HIGHLIGHT_AI_DISCOVERED.outline);
     expect(HIGHLIGHT_NOT_FOUND.outline).not.toBe(HIGHLIGHT_SELECTED.outline);
+  });
+});
+
+// ============================================================================
+// CVSS Color Constants Tests
+// ============================================================================
+
+describe('CVSS Colors', () => {
+  const validateHexColor = (color: string) => {
+    expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+  };
+
+  it('should have valid CVSS_COLORS', () => {
+    validateHexColor(CVSS_COLORS.unknown);
+    validateHexColor(CVSS_COLORS.low);
+    validateHexColor(CVSS_COLORS.medium);
+    validateHexColor(CVSS_COLORS.high);
+    validateHexColor(CVSS_COLORS.critical);
+  });
+
+  it('should have distinct colors for each severity level', () => {
+    const colors = [
+      CVSS_COLORS.unknown,
+      CVSS_COLORS.low,
+      CVSS_COLORS.medium,
+      CVSS_COLORS.high,
+      CVSS_COLORS.critical,
+    ];
+    const uniqueColors = new Set(colors);
+    expect(uniqueColors.size).toBe(colors.length);
+  });
+
+  it('should have valid SEVERITY_COLORS with bgcolor and color properties', () => {
+    const severities = ['low', 'medium', 'high', 'critical', 'unknown'] as const;
+    for (const severity of severities) {
+      expect(SEVERITY_COLORS[severity]).toHaveProperty('bgcolor');
+      expect(SEVERITY_COLORS[severity]).toHaveProperty('color');
+      validateHexColor(SEVERITY_COLORS[severity].bgcolor);
+      validateHexColor(SEVERITY_COLORS[severity].color);
+    }
+  });
+});
+
+// ============================================================================
+// Marking Color Constants Tests
+// ============================================================================
+
+describe('Marking Colors', () => {
+  const validateHexColor = (color: string) => {
+    expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+  };
+
+  it('should have valid MARKING_COLORS', () => {
+    validateHexColor(MARKING_COLORS.red);
+    validateHexColor(MARKING_COLORS.amber);
+    validateHexColor(MARKING_COLORS.green);
+    validateHexColor(MARKING_COLORS.blue);
+    validateHexColor(MARKING_COLORS.default);
+  });
+
+  it('should have distinct colors for different TLP levels', () => {
+    expect(MARKING_COLORS.red).not.toBe(MARKING_COLORS.amber);
+    expect(MARKING_COLORS.amber).not.toBe(MARKING_COLORS.green);
+    expect(MARKING_COLORS.green).not.toBe(MARKING_COLORS.blue);
+  });
+
+  it('should have valid MARKING_CLEAR_COLORS for both modes', () => {
+    expect(MARKING_CLEAR_COLORS.dark).toHaveProperty('bgcolor');
+    expect(MARKING_CLEAR_COLORS.dark).toHaveProperty('color');
+    expect(MARKING_CLEAR_COLORS.light).toHaveProperty('bgcolor');
+    expect(MARKING_CLEAR_COLORS.light).toHaveProperty('color');
+    
+    validateHexColor(MARKING_CLEAR_COLORS.dark.bgcolor);
+    validateHexColor(MARKING_CLEAR_COLORS.dark.color);
+    validateHexColor(MARKING_CLEAR_COLORS.light.bgcolor);
+    validateHexColor(MARKING_CLEAR_COLORS.light.color);
+  });
+
+  it('should have opposite colors for dark and light modes', () => {
+    // White bgcolor in dark mode, dark text
+    expect(MARKING_CLEAR_COLORS.dark.bgcolor).toBe('#ffffff');
+    expect(MARKING_CLEAR_COLORS.dark.color).toBe('#000000');
+    // Dark bgcolor in light mode, white text
+    expect(MARKING_CLEAR_COLORS.light.bgcolor).not.toBe('#ffffff');
+    expect(MARKING_CLEAR_COLORS.light.color).toBe('#ffffff');
+  });
+});
+
+// ============================================================================
+// Text Color Constants Tests
+// ============================================================================
+
+describe('Text Colors', () => {
+  const validateHexColor = (color: string) => {
+    expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+  };
+
+  it('should have valid TEXT_COLORS', () => {
+    validateHexColor(TEXT_COLORS.onDark);
+    validateHexColor(TEXT_COLORS.onLight);
+    validateHexColor(TEXT_COLORS.primaryDark);
+    validateHexColor(TEXT_COLORS.primaryLight);
+  });
+
+  it('should have contrasting colors for dark and light contexts', () => {
+    // White text for dark backgrounds
+    expect(TEXT_COLORS.onDark).toBe('#ffffff');
+    // Black text for light backgrounds
+    expect(TEXT_COLORS.onLight).toBe('#000000');
+  });
+
+  it('should have appropriate primary text colors by mode', () => {
+    // Primary dark mode should be light colored (white)
+    expect(TEXT_COLORS.primaryDark).toBe('#ffffff');
+    // Primary light mode should be dark colored
+    expect(TEXT_COLORS.primaryLight).not.toBe('#ffffff');
   });
 });
 

@@ -53,6 +53,94 @@ export function isDefanged(value: string): boolean {
     return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]/i.test(value);
 }
 
+/**
+ * Generate common defanged variants of a clean value for highlighting
+ * This is the reverse of refangIndicator - given a clean value, generate
+ * all common defanged forms that might appear in documents
+ * 
+ * Common defanging patterns (reverse of refangIndicator):
+ * - . → [.] or (.) or {.}
+ * - @ → [@] or (@)
+ * - http:// → hxxp:// or hXXp://
+ * - https:// → hxxps:// or hXXps://
+ * 
+ * For IPs like 192.168.1.1, common defanging includes:
+ * - Last dot only: 192.168.1[.]1 (most common)
+ * - All dots: 192[.]168[.]1[.]1
+ * - Mixed: various combinations
+ */
+export function generateDefangedVariants(cleanValue: string): string[] {
+    if (!cleanValue) return [];
+    
+    const variants: string[] = [];
+    
+    // Handle URLs with http/https
+    if (cleanValue.match(/^https?:\/\//i)) {
+        // hxxp/hxxps variants
+        variants.push(cleanValue.replace(/^http:/i, 'hxxp:'));
+        variants.push(cleanValue.replace(/^https:/i, 'hxxps:'));
+        variants.push(cleanValue.replace(/^http:/i, 'hXXp:'));
+        variants.push(cleanValue.replace(/^https:/i, 'hXXps:'));
+    }
+    
+    // Handle dots - most important for IPs and domains
+    if (cleanValue.includes('.')) {
+        // Bracket defanging [.] - most common
+        const bracketDefanged = cleanValue.replace(/\./g, '[.]');
+        if (!variants.includes(bracketDefanged)) {
+            variants.push(bracketDefanged);
+        }
+        
+        // Paren defanging (.) - also common
+        const parenDefanged = cleanValue.replace(/\./g, '(.)');
+        if (!variants.includes(parenDefanged)) {
+            variants.push(parenDefanged);
+        }
+        
+        // For IPs and domains, also try last-dot-only defanging (very common in reports)
+        // e.g., 192.168.1[.]1 instead of 192[.]168[.]1[.]1
+        const lastDotIndex = cleanValue.lastIndexOf('.');
+        if (lastDotIndex > 0 && lastDotIndex < cleanValue.length - 1) {
+            const lastDotBracket = cleanValue.slice(0, lastDotIndex) + '[.]' + cleanValue.slice(lastDotIndex + 1);
+            if (!variants.includes(lastDotBracket)) {
+                variants.push(lastDotBracket);
+            }
+            const lastDotParen = cleanValue.slice(0, lastDotIndex) + '(.)' + cleanValue.slice(lastDotIndex + 1);
+            if (!variants.includes(lastDotParen)) {
+                variants.push(lastDotParen);
+            }
+        }
+        
+        // Curly brace defanging {.} - less common but seen
+        const curlyDefanged = cleanValue.replace(/\./g, '{.}');
+        if (!variants.includes(curlyDefanged)) {
+            variants.push(curlyDefanged);
+        }
+    }
+    
+    // Handle @ for emails
+    if (cleanValue.includes('@')) {
+        const bracketAt = cleanValue.replace(/@/g, '[@]');
+        if (!variants.includes(bracketAt)) {
+            variants.push(bracketAt);
+        }
+        const parenAt = cleanValue.replace(/@/g, '(@)');
+        if (!variants.includes(parenAt)) {
+            variants.push(parenAt);
+        }
+        
+        // Combination: both @ and . defanged
+        if (cleanValue.includes('.')) {
+            const bothDefanged = cleanValue.replace(/@/g, '[@]').replace(/\./g, '[.]');
+            if (!variants.includes(bothDefanged)) {
+                variants.push(bothDefanged);
+            }
+        }
+    }
+    
+    return variants;
+}
+
 // ============================================================================
 // IP Address Patterns
 // ============================================================================
@@ -121,6 +209,63 @@ export const SHA512_PATTERN = /(?<![a-fA-F0-9])[a-fA-F0-9]{128}(?![a-fA-F0-9])/g
 // Requires: block size (1-6 digits), two hash parts with at least 6 characters each
 // This prevents matching time formats like 8:50:23
 export const SSDEEP_PATTERN = /(?<![:\d])\d{1,6}:[a-zA-Z0-9/+]{6,}:[a-zA-Z0-9/+]{6,}(?![:\da-zA-Z])/g;
+
+// ============================================================================
+// File Name Pattern
+// ============================================================================
+
+// Safe file extensions that don't conflict with domain TLDs
+// EXCLUDES extensions that could be TLDs: .com, .net, .org, .io, .ai, .co, .me, .tv, .fm, .am, .so, .is, .it, .to, .be, .de, .fr, .uk, .us, .eu, .ca, .au, .ru, .cn, .in, .jp, .br, .pl, .nl, .ch, .at, .dk, .fi, .no, .se, .cz, .hu, .ro, .pt, .gr, .tr, .mx, .ar, .cl, .za, .nz, .sg, .hk, .tw, .kr, .my, .th, .id, .ph, .vn, etc.
+// INCLUDES common executable, document, archive, script, and malware-related extensions
+const FILE_EXTENSIONS = [
+  // Executables & Libraries (Windows)
+  'exe', 'dll', 'sys', 'drv', 'ocx', 'cpl', 'scr', 'msi', 'msp', 'msu', 'cab', 'efi',
+  // Executables (Mac/Linux)
+  'dmg', 'pkg', 'deb', 'rpm', 'appimage', 'snap', 'flatpak', 'run', 'bin', 'elf', 'dylib',
+  // Scripts (potentially malicious)
+  'bat', 'cmd', 'ps1', 'psm1', 'psd1', 'vbs', 'vbe', 'wsf', 'wsh', 'hta', 'js', 'jse', 
+  'sh', 'bash', 'zsh', 'csh', 'ksh', 'py', 'pyc', 'pyw', 'rb', 'php', 'pl', 'pm',
+  // Documents (common targets for malware)
+  'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
+  'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm', 'xlsb', 'xlam',
+  'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm', 'ppam', 'pps', 'ppsx', 'ppsm',
+  'pdf', 'rtf', 'odt', 'ods', 'odp', 'odg',
+  // Archives
+  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'lz', 'lzma', 'lzo',
+  'tgz', 'tbz2', 'txz', 'tlz', 'arj', 'ace', 'cab', 'lzh', 'uue', 'z',
+  // Disk Images
+  'iso', 'img', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'qcow', 'qcow2',
+  // Java
+  'jar', 'war', 'ear', 'class', 'jnlp',
+  // Mobile
+  'apk', 'aab', 'ipa', 'xap', 'appx', 'msix',
+  // Shortcuts & Links
+  'lnk', 'url', 'desktop', 'webloc',
+  // Configuration & Data (often targeted)
+  'reg', 'inf', 'ini', 'cfg', 'conf', 'config', 'yml', 'yaml', 'toml', 'json', 'xml',
+  // Database
+  'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf',
+  // Fonts (can contain malware)
+  'ttf', 'otf', 'woff', 'woff2', 'eot', 'fon',
+  // Other potentially dangerous (excluding .com which is a TLD)
+  'chm', 'hlp', 'cnt', 'swf', 'fla', 'as', 'pif',
+].join('|');
+
+// File name pattern: matches filename.extension
+// Requirements:
+// - File name: 1-200 characters, alphanumeric, hyphens, underscores, dots (for multi-ext like .tar.gz)
+// - Extension: one of the safe extensions listed above
+// - NOT preceded by @ (would be email), / or \ (would be path context we might want to skip)
+// - Word boundaries to avoid partial matches
+// NOTE: Spaces are NOT allowed in base filename to prevent matching sentence fragments
+//       File names like "My Document.pdf" will be caught by the validate function or quoted variants
+export const FILE_NAME_PATTERN = new RegExp(
+  `(?<![/@\\\\])\\b([a-zA-Z0-9][a-zA-Z0-9_.()-]{0,199})\\.(${FILE_EXTENSIONS})\\b`,
+  'gi'
+);
+
+// List of extensions for validation
+export const VALID_FILE_EXTENSIONS = new Set(FILE_EXTENSIONS.split('|'));
 
 // ============================================================================
 // MAC Address Pattern
@@ -323,6 +468,28 @@ export const OBSERVABLE_PATTERNS: PatternConfig[] = [
         hashType: 'SSDEEP',
         priority: 86,
     },
+    
+    // File names with common extensions
+    {
+        pattern: FILE_NAME_PATTERN,
+        type: 'StixFile',
+        priority: 85,
+        validate: (match) => {
+            // Extract the extension from the match
+            const lastDotIndex = match.lastIndexOf('.');
+            if (lastDotIndex === -1) return false;
+            const ext = match.substring(lastDotIndex + 1).toLowerCase();
+            // Validate it's a known safe extension
+            if (!VALID_FILE_EXTENSIONS.has(ext)) return false;
+            // File name must be at least 2 characters (not just ".exe")
+            const fileName = match.substring(0, lastDotIndex);
+            if (fileName.length < 1) return false;
+            // Exclude patterns that look like version numbers (e.g., "2.0.exe" or "v1.2.3.dll")
+            // But allow things like "file2.exe" or "app_v2.exe"
+            if (/^v?\d+(\.\d+)+$/i.test(fileName)) return false;
+            return true;
+        },
+    },
 
     // IP addresses
     {
@@ -494,6 +661,34 @@ const EXACT_SHA512 = /^[a-fA-F0-9]{128}$/;
 const EXACT_MITRE = /^T\d{4}(?:\.\d{3})?$/;
 const EXACT_MAC = /^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^(?:[0-9A-Fa-f]{4}\.){2}[0-9A-Fa-f]{4}$/;
 const EXACT_BITCOIN = /^(?:[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})$/;
+
+// Common TLDs that should NOT be treated as file extensions
+// to avoid conflicts with domain detection
+const TLD_EXCLUSIONS = new Set([
+  'com', 'net', 'org', 'edu', 'gov', 'mil', 'int', 'io', 'ai', 'co', 'me', 'tv', 'fm', 
+  'am', 'so', 'is', 'it', 'to', 'be', 'de', 'fr', 'uk', 'us', 'eu', 'ca', 'au', 'ru', 
+  'cn', 'in', 'jp', 'br', 'pl', 'nl', 'ch', 'at', 'dk', 'fi', 'no', 'se', 'cz', 'hu', 
+  'ro', 'pt', 'gr', 'tr', 'mx', 'ar', 'cl', 'za', 'nz', 'sg', 'hk', 'tw', 'kr', 'my', 
+  'th', 'id', 'ph', 'vn', 'info', 'biz', 'xyz', 'app', 'dev', 'cloud', 'tech'
+]);
+
+/** Check if a string looks like a file name with valid extension */
+function isValidFileName(text: string): boolean {
+  const lastDotIndex = text.lastIndexOf('.');
+  if (lastDotIndex <= 0) return false; // No extension or starts with dot
+  const ext = text.substring(lastDotIndex + 1).toLowerCase();
+  // Exclude extensions that could be domain TLDs
+  if (TLD_EXCLUSIONS.has(ext)) return false;
+  if (!VALID_FILE_EXTENSIONS.has(ext)) return false;
+  const fileName = text.substring(0, lastDotIndex);
+  // File name must have at least 1 character before extension
+  if (fileName.length < 1) return false;
+  // Must not be just a version number
+  if (/^v?\d+(\.\d+)+$/i.test(fileName)) return false;
+  // Must match valid filename characters
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.\-() ]*$/i.test(fileName)) return false;
+  return true;
+}
 const EXACT_ETHEREUM = /^0x[a-fA-F0-9]{40}$/;
 const EXACT_ASN = /^AS[N]?\d{1,10}$/i;
 
@@ -526,6 +721,9 @@ export function detectObservableType(text: string): string {
     if (EXACT_SHA256.test(trimmed)) return 'StixFile';
     if (EXACT_SHA1.test(trimmed)) return 'StixFile';
     if (EXACT_MD5.test(trimmed)) return 'StixFile';
+    
+    // File names with valid extensions
+    if (isValidFileName(trimmed)) return 'StixFile';
     
     // IP addresses
     if (EXACT_IPV6.test(trimmed)) return 'IPv6-Addr';

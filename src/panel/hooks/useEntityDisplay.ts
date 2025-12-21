@@ -10,6 +10,7 @@ import {
   isVulnerabilityType,
   getOAEVEntityColor,
 } from '../../shared/utils/entity';
+import { TEXT_COLORS } from '../../shared/constants';
 import type { PlatformType } from '../../shared/platform/registry';
 
 export interface EntityDisplayInfo {
@@ -81,7 +82,7 @@ export const sectionTitleStyle = {
  */
 export function useContentTextStyle(mode: 'dark' | 'light') {
   return useMemo(() => ({
-    color: mode === 'dark' ? '#ffffff' : 'text.primary',
+    color: mode === 'dark' ? TEXT_COLORS.primaryDark : 'text.primary',
     lineHeight: 1.6,
   }), [mode]);
 }

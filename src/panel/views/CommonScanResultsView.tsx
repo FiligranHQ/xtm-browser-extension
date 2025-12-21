@@ -62,6 +62,10 @@ interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showT
   setCurrentPageUrl: (url: string) => void;
   /** Set current page title */
   setCurrentPageTitle: (title: string) => void;
+  /** Set current PDF file name */
+  setCurrentPdfFileName: (name: string) => void;
+  /** Set isPdfSource flag */
+  setIsPdfSource: (isPdf: boolean) => void;
   /** Logo suffix based on theme */
   logoSuffix: string;
   /** Loading entity details state */
@@ -112,6 +116,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   currentPageUrl,
   setCurrentPageUrl,
   setCurrentPageTitle,
+  setCurrentPdfFileName,
+  setIsPdfSource,
   scanPageContent,
   setEntityDetailsLoading,
   fetchEntityContainers,
@@ -750,43 +756,27 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
       } as EntityData;
     });
 
-    // Get page content for container form
-    let pageTitle = currentPageTitle || document.title;
-    let pageUrl = currentPageUrl || '';
-    let pageContent = '';
-    let pageHtmlContent = '';
-
-    if (typeof chrome !== 'undefined' && chrome.tabs?.query && chrome.tabs?.sendMessage) {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
-          const contentResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_CONTENT' });
-          if (contentResponse?.success) {
-            pageContent = contentResponse.data?.content || '';
-            pageHtmlContent = contentResponse.data?.htmlContent || pageContent;
-            pageTitle = contentResponse.data?.title || pageTitle;
-            pageUrl = contentResponse.data?.url || pageUrl;
-          }
-        }
-      } catch {
-        // Silently handle page content retrieval errors
-      }
-    }
+    // Get page content for container form (handles PDF scanner or regular web page)
+    const { content: pageContent, title: pageTitle, url: pageUrl, pdfFileName, isPdfSource } = 
+      await getPageContent(scanPageContent, currentPageTitle || document.title, currentPageUrl || '');
 
     // Generate description from page content
     const description = pageContent ? generateDescription(pageContent) : '';
 
     // Set container form with page info
+    // For PDF source, pageTitle is already the PDF title (not "Filigran XTM - PDF scanner")
     setContainerForm({
       name: pageTitle,
       description: description,
-      content: pageHtmlContent ? cleanHtmlContent(pageHtmlContent) : '',
+      content: cleanHtmlContent(pageContent),
     });
 
-    // Set entities and go to preview view
+    // Set entities and PDF info
     setEntitiesToAdd(entitiesToImport);
     setCurrentPageUrl(pageUrl);
     setCurrentPageTitle(pageTitle);
+    setCurrentPdfFileName(pdfFileName || '');
+    setIsPdfSource(isPdfSource || false);
     setPanelMode('preview');
   };
 

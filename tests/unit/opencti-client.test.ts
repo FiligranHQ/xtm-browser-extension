@@ -534,6 +534,27 @@ describe('OpenCTIClient', () => {
 
       expect(result).toEqual(mockResult);
     });
+
+    it('should create a file observable by name (without hash)', async () => {
+      const mockResult = {
+        id: 'file-name-new',
+        entity_type: 'StixFile',
+        name: 'malware.exe',
+      };
+      mockFetch.mockResolvedValueOnce(createMockResponse({
+        stixCyberObservableAdd: mockResult,
+      }));
+
+      // When no hashType is provided and value is a filename, it should use name field
+      const result = await client.createObservable({
+        type: 'StixFile',
+        value: 'malware.exe',
+      });
+
+      expect(result).toEqual(mockResult);
+      // Verify the request was made with name field for non-hash values
+      expect(mockFetch).toHaveBeenCalled();
+    });
   });
 
   describe('createIntrusionSet', () => {

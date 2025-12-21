@@ -131,8 +131,9 @@ export const usePopupActions = ({
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        // Open side panel for the PDF scanner tab
-        if (chrome.sidePanel) {
+        // Only open side panel if in split screen mode (native sidebar)
+        // In iframe mode, the PDF scanner will open its embedded iframe panel
+        if (splitScreenMode && chrome.sidePanel) {
           try {
             await chrome.sidePanel.open({ tabId: tab.id });
             log.debug('Side panel opened for PDF scanner');
@@ -154,7 +155,7 @@ export const usePopupActions = ({
     } catch (error) {
       log.error('Error triggering PDF scanner rescan:', error);
     }
-  }, []);
+  }, [splitScreenMode]);
 
   // Unified scan across ALL platforms (or open PDF scanner if on a PDF page)
   const handleUnifiedScan = useCallback(async () => {

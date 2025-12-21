@@ -1,7 +1,7 @@
 /**
  * Unit Tests for Entity Utilities
  * 
- * Tests entity helper functions for OpenCTI and OpenAEV platforms.
+ * Tests helper functions for working with entities across different platforms.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -27,134 +27,139 @@ import {
 } from '../../src/shared/utils/entity';
 
 // ============================================================================
-// Constants Tests
+// Constant Arrays Tests
 // ============================================================================
 
 describe('OBSERVABLE_TYPES', () => {
-  it('should contain common observable types', () => {
+  it('should include all expected observable types', () => {
     expect(OBSERVABLE_TYPES).toContain('IPv4-Addr');
     expect(OBSERVABLE_TYPES).toContain('IPv6-Addr');
     expect(OBSERVABLE_TYPES).toContain('Domain-Name');
     expect(OBSERVABLE_TYPES).toContain('Url');
     expect(OBSERVABLE_TYPES).toContain('Email-Addr');
-    expect(OBSERVABLE_TYPES).toContain('Mac-Addr');
     expect(OBSERVABLE_TYPES).toContain('StixFile');
+    expect(OBSERVABLE_TYPES).toContain('Cryptocurrency-Wallet');
   });
 
-  it('should be a readonly array', () => {
-    expect(Array.isArray(OBSERVABLE_TYPES)).toBe(true);
+  it('should have correct length', () => {
+    expect(OBSERVABLE_TYPES.length).toBe(13);
   });
 });
 
 describe('OPENCTI_ENTITY_TYPES', () => {
-  it('should contain common entity types', () => {
-    expect(OPENCTI_ENTITY_TYPES).toContain('Attack-Pattern');
-    expect(OPENCTI_ENTITY_TYPES).toContain('Campaign');
+  it('should include threat intelligence types', () => {
+    expect(OPENCTI_ENTITY_TYPES).toContain('Intrusion-Set');
     expect(OPENCTI_ENTITY_TYPES).toContain('Malware');
     expect(OPENCTI_ENTITY_TYPES).toContain('Threat-Actor-Group');
-    expect(OPENCTI_ENTITY_TYPES).toContain('Intrusion-Set');
+    expect(OPENCTI_ENTITY_TYPES).toContain('Campaign');
+    expect(OPENCTI_ENTITY_TYPES).toContain('Attack-Pattern');
     expect(OPENCTI_ENTITY_TYPES).toContain('Vulnerability');
   });
 
-  it('should contain location types', () => {
-    expect(OPENCTI_ENTITY_TYPES).toContain('Country');
+  it('should include location types', () => {
+    expect(OPENCTI_ENTITY_TYPES).toContain('Location');
     expect(OPENCTI_ENTITY_TYPES).toContain('City');
+    expect(OPENCTI_ENTITY_TYPES).toContain('Country');
     expect(OPENCTI_ENTITY_TYPES).toContain('Region');
   });
 
-  it('should contain identity types', () => {
-    expect(OPENCTI_ENTITY_TYPES).toContain('Organization');
+  it('should include identity types', () => {
+    expect(OPENCTI_ENTITY_TYPES).toContain('Identity');
     expect(OPENCTI_ENTITY_TYPES).toContain('Individual');
+    expect(OPENCTI_ENTITY_TYPES).toContain('Organization');
     expect(OPENCTI_ENTITY_TYPES).toContain('Sector');
   });
 });
 
 describe('CONTAINER_TYPES', () => {
-  it('should contain container types', () => {
+  it('should include report types', () => {
     expect(CONTAINER_TYPES).toContain('Report');
     expect(CONTAINER_TYPES).toContain('Grouping');
+  });
+
+  it('should include case types', () => {
     expect(CONTAINER_TYPES).toContain('Case-Incident');
     expect(CONTAINER_TYPES).toContain('Case-Rfi');
     expect(CONTAINER_TYPES).toContain('Case-Rft');
+  });
+
+  it('should include feedback and task', () => {
+    expect(CONTAINER_TYPES).toContain('Feedback');
+    expect(CONTAINER_TYPES).toContain('Task');
     expect(CONTAINER_TYPES).toContain('Note');
+    expect(CONTAINER_TYPES).toContain('Opinion');
   });
 });
 
 // ============================================================================
-// isObservableType Tests
+// Type Check Functions Tests
 // ============================================================================
 
 describe('isObservableType', () => {
-  it('should return true for standard observable types', () => {
+  it('should return true for known observable types', () => {
     expect(isObservableType('IPv4-Addr')).toBe(true);
     expect(isObservableType('IPv6-Addr')).toBe(true);
     expect(isObservableType('Domain-Name')).toBe(true);
-    expect(isObservableType('Url')).toBe(true);
     expect(isObservableType('Email-Addr')).toBe(true);
-    expect(isObservableType('Mac-Addr')).toBe(true);
+    expect(isObservableType('Url')).toBe(true);
     expect(isObservableType('StixFile')).toBe(true);
   });
 
-  it('should return true for types with "Addr" suffix', () => {
+  it('should return true for types containing Addr', () => {
     expect(isObservableType('SomeAddr')).toBe(true);
-    expect(isObservableType('CustomAddr')).toBe(true);
+    expect(isObservableType('TestAddr')).toBe(true);
   });
 
-  it('should return true for types with "Observable" in name', () => {
-    expect(isObservableType('CustomObservable')).toBe(true);
-    expect(isObservableType('NetworkObservable')).toBe(true);
+  it('should return true for types containing Observable', () => {
+    expect(isObservableType('SomeObservable')).toBe(true);
+    expect(isObservableType('TestObservable')).toBe(true);
   });
 
   it('should be case insensitive', () => {
-    expect(isObservableType('ipv4-addr')).toBe(true);
-    expect(isObservableType('IPV4-ADDR')).toBe(true);
-    expect(isObservableType('IPv4Addr')).toBe(true);
+    expect(isObservableType('ipv4addr')).toBe(true);
+    expect(isObservableType('IPV4ADDR')).toBe(true);
+    expect(isObservableType('Ipv4Addr')).toBe(true);
   });
 
   it('should return false for non-observable types', () => {
     expect(isObservableType('Malware')).toBe(false);
-    expect(isObservableType('Threat-Actor')).toBe(false);
     expect(isObservableType('Campaign')).toBe(false);
+    expect(isObservableType('Intrusion-Set')).toBe(false);
+    expect(isObservableType('Report')).toBe(false);
   });
 });
 
-// ============================================================================
-// isOpenCTIEntityType Tests
-// ============================================================================
-
 describe('isOpenCTIEntityType', () => {
-  it('should return true for standard entity types', () => {
-    expect(isOpenCTIEntityType('Attack-Pattern')).toBe(true);
-    expect(isOpenCTIEntityType('Campaign')).toBe(true);
-    expect(isOpenCTIEntityType('Malware')).toBe(true);
-    expect(isOpenCTIEntityType('Threat-Actor-Group')).toBe(true);
+  it('should return true for valid OpenCTI entity types', () => {
     expect(isOpenCTIEntityType('Intrusion-Set')).toBe(true);
+    expect(isOpenCTIEntityType('Malware')).toBe(true);
+    expect(isOpenCTIEntityType('Campaign')).toBe(true);
+    expect(isOpenCTIEntityType('Attack-Pattern')).toBe(true);
     expect(isOpenCTIEntityType('Vulnerability')).toBe(true);
+    expect(isOpenCTIEntityType('Tool')).toBe(true);
   });
 
   it('should be case insensitive', () => {
-    expect(isOpenCTIEntityType('attack-pattern')).toBe(true);
-    expect(isOpenCTIEntityType('ATTACK-PATTERN')).toBe(true);
-    expect(isOpenCTIEntityType('malware')).toBe(true);
+    expect(isOpenCTIEntityType('intrusion-set')).toBe(true);
+    expect(isOpenCTIEntityType('MALWARE')).toBe(true);
+    expect(isOpenCTIEntityType('CaMpAiGn')).toBe(true);
   });
 
   it('should return false for observable types', () => {
     expect(isOpenCTIEntityType('IPv4-Addr')).toBe(false);
     expect(isOpenCTIEntityType('Domain-Name')).toBe(false);
+    expect(isOpenCTIEntityType('StixFile')).toBe(false);
   });
 
   it('should return false for unknown types', () => {
-    expect(isOpenCTIEntityType('Unknown-Type')).toBe(false);
-    expect(isOpenCTIEntityType('Custom')).toBe(false);
+    expect(isOpenCTIEntityType('UnknownType')).toBe(false);
+    expect(isOpenCTIEntityType('')).toBe(false);
+    expect(isOpenCTIEntityType('RandomString')).toBe(false);
   });
 });
 
-// ============================================================================
-// isIndicatorType Tests
-// ============================================================================
-
 describe('isIndicatorType', () => {
-  it('should return true for indicator type', () => {
+  it('should return true for indicator', () => {
     expect(isIndicatorType('indicator')).toBe(true);
     expect(isIndicatorType('Indicator')).toBe(true);
     expect(isIndicatorType('INDICATOR')).toBe(true);
@@ -162,17 +167,13 @@ describe('isIndicatorType', () => {
 
   it('should return false for non-indicator types', () => {
     expect(isIndicatorType('Malware')).toBe(false);
+    expect(isIndicatorType('Campaign')).toBe(false);
     expect(isIndicatorType('IPv4-Addr')).toBe(false);
-    expect(isIndicatorType('indicators')).toBe(false);
   });
 });
 
-// ============================================================================
-// isVulnerabilityType Tests
-// ============================================================================
-
 describe('isVulnerabilityType', () => {
-  it('should return true for vulnerability type', () => {
+  it('should return true for vulnerability', () => {
     expect(isVulnerabilityType('vulnerability')).toBe(true);
     expect(isVulnerabilityType('Vulnerability')).toBe(true);
     expect(isVulnerabilityType('VULNERABILITY')).toBe(true);
@@ -180,14 +181,10 @@ describe('isVulnerabilityType', () => {
 
   it('should return false for non-vulnerability types', () => {
     expect(isVulnerabilityType('Malware')).toBe(false);
-    expect(isVulnerabilityType('CVE')).toBe(false);
-    expect(isVulnerabilityType('vulnerabilities')).toBe(false);
+    expect(isVulnerabilityType('Campaign')).toBe(false);
+    expect(isVulnerabilityType('CVE-2021-44228')).toBe(false);
   });
 });
-
-// ============================================================================
-// isOCTIContainerType Tests
-// ============================================================================
 
 describe('isOCTIContainerType', () => {
   it('should return true for container types', () => {
@@ -195,13 +192,17 @@ describe('isOCTIContainerType', () => {
     expect(isOCTIContainerType('Grouping')).toBe(true);
     expect(isOCTIContainerType('Case-Incident')).toBe(true);
     expect(isOCTIContainerType('Case-Rfi')).toBe(true);
+    expect(isOCTIContainerType('Case-Rft')).toBe(true);
     expect(isOCTIContainerType('Note')).toBe(true);
+    expect(isOCTIContainerType('Opinion')).toBe(true);
+    expect(isOCTIContainerType('Task')).toBe(true);
+    expect(isOCTIContainerType('Feedback')).toBe(true);
   });
 
   it('should be case insensitive', () => {
     expect(isOCTIContainerType('report')).toBe(true);
     expect(isOCTIContainerType('REPORT')).toBe(true);
-    expect(isOCTIContainerType('grouping')).toBe(true);
+    expect(isOCTIContainerType('case-incident')).toBe(true);
   });
 
   it('should return false for non-container types', () => {
@@ -212,513 +213,358 @@ describe('isOCTIContainerType', () => {
 });
 
 // ============================================================================
-// getEntityId Tests
+// Entity Accessor Functions Tests
 // ============================================================================
 
 describe('getEntityId', () => {
-  it('should extract id field', () => {
+  it('should get id from id field', () => {
     expect(getEntityId({ id: 'entity-123' })).toBe('entity-123');
   });
 
-  it('should extract standard_id field', () => {
-    expect(getEntityId({ standard_id: 'standard-456' })).toBe('standard-456');
+  it('should get id from standard_id field', () => {
+    expect(getEntityId({ standard_id: 'standard-123' })).toBe('standard-123');
   });
 
-  it('should extract entityId field', () => {
-    expect(getEntityId({ entityId: 'entity-789' })).toBe('entity-789');
+  it('should get id from entityId field', () => {
+    expect(getEntityId({ entityId: 'entityId-123' })).toBe('entityId-123');
   });
 
-  it('should extract entity_id field', () => {
-    expect(getEntityId({ entity_id: 'entity_101' })).toBe('entity_101');
+  it('should get id from entity_id field', () => {
+    expect(getEntityId({ entity_id: 'entity_id-123' })).toBe('entity_id-123');
   });
 
-  it('should extract _id field', () => {
-    expect(getEntityId({ _id: '_id_202' })).toBe('_id_202');
+  it('should get id from _id field', () => {
+    expect(getEntityId({ _id: '_id-123' })).toBe('_id-123');
   });
 
-  it('should prefer id over other fields', () => {
-    expect(getEntityId({ id: 'id1', standard_id: 'std1', _id: '_1' })).toBe('id1');
+  it('should prioritize id over other fields', () => {
+    expect(getEntityId({ id: 'primary', standard_id: 'secondary' })).toBe('primary');
   });
 
-  it('should return undefined for empty object', () => {
+  it('should return undefined when no id field exists', () => {
+    expect(getEntityId({ name: 'test' })).toBeUndefined();
     expect(getEntityId({})).toBeUndefined();
   });
 });
 
-// ============================================================================
-// getEntityName Tests
-// ============================================================================
-
 describe('getEntityName', () => {
-  it('should extract name field', () => {
+  it('should get name from name field', () => {
     expect(getEntityName({ name: 'Test Entity' })).toBe('Test Entity');
   });
 
-  it('should extract value field for observables', () => {
+  it('should get name from value field', () => {
     expect(getEntityName({ value: '192.168.1.1' })).toBe('192.168.1.1');
   });
 
-  it('should extract representative.main field', () => {
-    expect(getEntityName({ representative: { main: 'Main Rep' } })).toBe('Main Rep');
+  it('should get name from representative.main field', () => {
+    expect(getEntityName({ representative: { main: 'Rep Name' } })).toBe('Rep Name');
   });
 
-  it('should extract entity_name field', () => {
+  it('should get name from entity_name field', () => {
     expect(getEntityName({ entity_name: 'Entity Name' })).toBe('Entity Name');
   });
 
-  it('should prefer name over value', () => {
-    expect(getEntityName({ name: 'Name', value: 'Value' })).toBe('Name');
+  it('should prioritize name over other fields', () => {
+    expect(getEntityName({ name: 'primary', value: 'secondary' })).toBe('primary');
   });
 
-  it('should return Unknown for empty object', () => {
+  it('should return Unknown when no name field exists', () => {
+    expect(getEntityName({ id: 'test' })).toBe('Unknown');
     expect(getEntityName({})).toBe('Unknown');
   });
 });
 
-// ============================================================================
-// getEntityType Tests
-// ============================================================================
-
 describe('getEntityType', () => {
-  it('should extract type field', () => {
+  it('should get type from type field', () => {
     expect(getEntityType({ type: 'Malware' })).toBe('Malware');
   });
 
-  it('should extract entity_type field', () => {
+  it('should get type from entity_type field', () => {
     expect(getEntityType({ entity_type: 'Campaign' })).toBe('Campaign');
   });
 
-  it('should extract entityType field', () => {
-    expect(getEntityType({ entityType: 'Indicator' })).toBe('Indicator');
+  it('should get type from entityType field', () => {
+    expect(getEntityType({ entityType: 'Intrusion-Set' })).toBe('Intrusion-Set');
   });
 
-  it('should extract _type field', () => {
-    expect(getEntityType({ _type: 'Report' })).toBe('Report');
+  it('should get type from _type field', () => {
+    expect(getEntityType({ _type: 'Tool' })).toBe('Tool');
   });
 
-  it('should prefer type over other fields', () => {
-    expect(getEntityType({ type: 'Type1', entity_type: 'Type2' })).toBe('Type1');
+  it('should prioritize type over other fields', () => {
+    expect(getEntityType({ type: 'primary', entity_type: 'secondary' })).toBe('primary');
   });
 
-  it('should return Unknown for empty object', () => {
+  it('should return Unknown when no type field exists', () => {
+    expect(getEntityType({ name: 'test' })).toBe('Unknown');
     expect(getEntityType({})).toBe('Unknown');
   });
 });
 
-// ============================================================================
-// getEntityPlatformId Tests
-// ============================================================================
-
 describe('getEntityPlatformId', () => {
-  it('should extract platformId field', () => {
+  it('should get platformId', () => {
     expect(getEntityPlatformId({ platformId: 'platform-123' })).toBe('platform-123');
   });
 
-  it('should return undefined when not present', () => {
+  it('should return undefined when no platformId', () => {
+    expect(getEntityPlatformId({ id: 'test' })).toBeUndefined();
     expect(getEntityPlatformId({})).toBeUndefined();
-    expect(getEntityPlatformId({ platform_id: 'wrong-field' })).toBeUndefined();
   });
 });
 
-// ============================================================================
-// getEntityPlatformType Tests
-// ============================================================================
-
 describe('getEntityPlatformType', () => {
-  it('should extract platformType field', () => {
+  it('should get platformType', () => {
     expect(getEntityPlatformType({ platformType: 'openaev' })).toBe('openaev');
     expect(getEntityPlatformType({ platformType: 'opencti' })).toBe('opencti');
   });
 
-  it('should default to opencti when not present', () => {
+  it('should default to opencti when no platformType', () => {
+    expect(getEntityPlatformType({ id: 'test' })).toBe('opencti');
     expect(getEntityPlatformType({})).toBe('opencti');
   });
 });
 
 // ============================================================================
-// getOAEVEntityName Tests
+// OpenAEV Entity Functions Tests
 // ============================================================================
 
 describe('getOAEVEntityName', () => {
-  describe('Asset type', () => {
-    it('should extract endpoint_name', () => {
-      expect(getOAEVEntityName({ endpoint_name: 'Server-01' }, 'Asset')).toBe('Server-01');
-    });
-
-    it('should fall back to asset_name', () => {
-      expect(getOAEVEntityName({ asset_name: 'Asset-01' }, 'Asset')).toBe('Asset-01');
-    });
-
-    it('should fall back to name', () => {
-      expect(getOAEVEntityName({ name: 'Generic' }, 'Asset')).toBe('Generic');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Asset')).toBe('Unknown Asset');
-    });
+  it('should get Asset name', () => {
+    expect(getOAEVEntityName({ endpoint_name: 'Server1' }, 'Asset')).toBe('Server1');
+    expect(getOAEVEntityName({ asset_name: 'Server2' }, 'Asset')).toBe('Server2');
+    expect(getOAEVEntityName({ name: 'Server3' }, 'Asset')).toBe('Server3');
+    expect(getOAEVEntityName({}, 'Asset')).toBe('Unknown Asset');
   });
 
-  describe('AssetGroup type', () => {
-    it('should extract asset_group_name', () => {
-      expect(getOAEVEntityName({ asset_group_name: 'Group-01' }, 'AssetGroup')).toBe('Group-01');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'AssetGroup')).toBe('Unknown Asset Group');
-    });
+  it('should get AssetGroup name', () => {
+    expect(getOAEVEntityName({ asset_group_name: 'Group1' }, 'AssetGroup')).toBe('Group1');
+    expect(getOAEVEntityName({ name: 'Group2' }, 'AssetGroup')).toBe('Group2');
+    expect(getOAEVEntityName({}, 'AssetGroup')).toBe('Unknown Asset Group');
   });
 
-  describe('Player/User type', () => {
-    it('should combine first and last name', () => {
-      expect(getOAEVEntityName({ user_firstname: 'John', user_lastname: 'Doe' }, 'Player')).toBe('John Doe');
-      expect(getOAEVEntityName({ user_firstname: 'John', user_lastname: 'Doe' }, 'User')).toBe('John Doe');
-    });
-
-    it('should use first name only if last name missing', () => {
-      expect(getOAEVEntityName({ user_firstname: 'John' }, 'Player')).toBe('John');
-    });
-
-    it('should use last name only if first name missing', () => {
-      expect(getOAEVEntityName({ user_lastname: 'Doe' }, 'Player')).toBe('Doe');
-    });
-
-    it('should fall back to email', () => {
-      expect(getOAEVEntityName({ user_email: 'john@example.com' }, 'Player')).toBe('john@example.com');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Player')).toBe('Unknown Player');
-    });
+  it('should get Player/User name', () => {
+    expect(getOAEVEntityName({ user_firstname: 'John', user_lastname: 'Doe' }, 'Player')).toBe('John Doe');
+    expect(getOAEVEntityName({ user_firstname: 'Jane' }, 'Player')).toBe('Jane');
+    expect(getOAEVEntityName({ user_email: 'user@test.com' }, 'User')).toBe('user@test.com');
+    expect(getOAEVEntityName({}, 'Player')).toBe('Unknown Player');
   });
 
-  describe('Team type', () => {
-    it('should extract team_name', () => {
-      expect(getOAEVEntityName({ team_name: 'Red Team' }, 'Team')).toBe('Red Team');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Team')).toBe('Unknown Team');
-    });
+  it('should get Team name', () => {
+    expect(getOAEVEntityName({ team_name: 'Team Alpha' }, 'Team')).toBe('Team Alpha');
+    expect(getOAEVEntityName({ name: 'Team Beta' }, 'Team')).toBe('Team Beta');
+    expect(getOAEVEntityName({}, 'Team')).toBe('Unknown Team');
   });
 
-  describe('Organization type', () => {
-    it('should extract organization_name', () => {
-      expect(getOAEVEntityName({ organization_name: 'Acme Corp' }, 'Organization')).toBe('Acme Corp');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Organization')).toBe('Unknown Organization');
-    });
+  it('should get Organization name', () => {
+    expect(getOAEVEntityName({ organization_name: 'Org1' }, 'Organization')).toBe('Org1');
+    expect(getOAEVEntityName({}, 'Organization')).toBe('Unknown Organization');
   });
 
-  describe('Scenario type', () => {
-    it('should extract scenario_name', () => {
-      expect(getOAEVEntityName({ scenario_name: 'Test Scenario' }, 'Scenario')).toBe('Test Scenario');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Scenario')).toBe('Unknown Scenario');
-    });
+  it('should get Scenario name', () => {
+    expect(getOAEVEntityName({ scenario_name: 'Scenario1' }, 'Scenario')).toBe('Scenario1');
+    expect(getOAEVEntityName({}, 'Scenario')).toBe('Unknown Scenario');
   });
 
-  describe('Exercise type', () => {
-    it('should extract exercise_name', () => {
-      expect(getOAEVEntityName({ exercise_name: 'Simulation 1' }, 'Exercise')).toBe('Simulation 1');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Exercise')).toBe('Unknown Simulation');
-    });
+  it('should get Exercise name', () => {
+    expect(getOAEVEntityName({ exercise_name: 'Exercise1' }, 'Exercise')).toBe('Exercise1');
+    expect(getOAEVEntityName({}, 'Exercise')).toBe('Unknown Simulation');
   });
 
-  describe('AttackPattern type', () => {
-    it('should extract attack_pattern_name', () => {
-      expect(getOAEVEntityName({ attack_pattern_name: 'Phishing' }, 'AttackPattern')).toBe('Phishing');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'AttackPattern')).toBe('Unknown Attack Pattern');
-    });
+  it('should get AttackPattern name', () => {
+    expect(getOAEVEntityName({ attack_pattern_name: 'Spearphishing' }, 'AttackPattern')).toBe('Spearphishing');
+    expect(getOAEVEntityName({}, 'AttackPattern')).toBe('Unknown Attack Pattern');
   });
 
-  describe('Finding type', () => {
-    it('should extract finding_value', () => {
-      expect(getOAEVEntityName({ finding_value: 'CVE-2021-44228' }, 'Finding')).toBe('CVE-2021-44228');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Finding')).toBe('Unknown Finding');
-    });
+  it('should get Finding name', () => {
+    expect(getOAEVEntityName({ finding_value: 'Critical Finding' }, 'Finding')).toBe('Critical Finding');
+    expect(getOAEVEntityName({}, 'Finding')).toBe('Unknown Finding');
   });
 
-  describe('Vulnerability type', () => {
-    it('should extract vulnerability_external_id', () => {
-      expect(getOAEVEntityName({ vulnerability_external_id: 'CVE-2021-44228' }, 'Vulnerability')).toBe('CVE-2021-44228');
-    });
-
-    it('should fall back to vulnerability_cisa_vulnerability_name', () => {
-      expect(getOAEVEntityName({ vulnerability_cisa_vulnerability_name: 'Log4Shell' }, 'Vulnerability')).toBe('Log4Shell');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Vulnerability')).toBe('Unknown Vulnerability');
-    });
+  it('should get Vulnerability name', () => {
+    expect(getOAEVEntityName({ vulnerability_external_id: 'CVE-2021-44228' }, 'Vulnerability')).toBe('CVE-2021-44228');
+    expect(getOAEVEntityName({ vulnerability_cisa_vulnerability_name: 'Log4j' }, 'Vulnerability')).toBe('Log4j');
+    expect(getOAEVEntityName({}, 'Vulnerability')).toBe('Unknown Vulnerability');
   });
 
-  describe('Unknown type', () => {
-    it('should extract name field', () => {
-      expect(getOAEVEntityName({ name: 'Custom' }, 'Custom')).toBe('Custom');
-    });
-
-    it('should return default for empty', () => {
-      expect(getOAEVEntityName({}, 'Custom')).toBe('Unknown');
-    });
+  it('should handle unknown type with name fallback', () => {
+    expect(getOAEVEntityName({ name: 'Custom' }, 'Unknown')).toBe('Custom');
+    expect(getOAEVEntityName({}, 'Unknown')).toBe('Unknown');
   });
 });
 
-// ============================================================================
-// getOAEVEntityId Tests
-// ============================================================================
-
 describe('getOAEVEntityId', () => {
-  it('should extract Asset ID', () => {
+  it('should get Asset id', () => {
     expect(getOAEVEntityId({ endpoint_id: 'ep-123' }, 'Asset')).toBe('ep-123');
-    expect(getOAEVEntityId({ asset_id: 'asset-456' }, 'Asset')).toBe('asset-456');
+    expect(getOAEVEntityId({ asset_id: 'asset-123' }, 'Asset')).toBe('asset-123');
+    expect(getOAEVEntityId({ id: 'id-123' }, 'Asset')).toBe('id-123');
   });
 
-  it('should extract AssetGroup ID', () => {
+  it('should get AssetGroup id', () => {
     expect(getOAEVEntityId({ asset_group_id: 'ag-123' }, 'AssetGroup')).toBe('ag-123');
+    expect(getOAEVEntityId({ id: 'id-123' }, 'AssetGroup')).toBe('id-123');
   });
 
-  it('should extract Player/User ID', () => {
+  it('should get Player/User id', () => {
     expect(getOAEVEntityId({ user_id: 'user-123' }, 'Player')).toBe('user-123');
     expect(getOAEVEntityId({ user_id: 'user-456' }, 'User')).toBe('user-456');
   });
 
-  it('should extract Team ID', () => {
+  it('should get Team id', () => {
     expect(getOAEVEntityId({ team_id: 'team-123' }, 'Team')).toBe('team-123');
   });
 
-  it('should extract Organization ID', () => {
+  it('should get Organization id', () => {
     expect(getOAEVEntityId({ organization_id: 'org-123' }, 'Organization')).toBe('org-123');
   });
 
-  it('should extract Scenario ID', () => {
-    expect(getOAEVEntityId({ scenario_id: 'scen-123' }, 'Scenario')).toBe('scen-123');
+  it('should get Scenario id', () => {
+    expect(getOAEVEntityId({ scenario_id: 'scenario-123' }, 'Scenario')).toBe('scenario-123');
   });
 
-  it('should extract Exercise ID', () => {
+  it('should get Exercise id', () => {
     expect(getOAEVEntityId({ exercise_id: 'ex-123' }, 'Exercise')).toBe('ex-123');
   });
 
-  it('should extract AttackPattern ID', () => {
+  it('should get AttackPattern id', () => {
     expect(getOAEVEntityId({ attack_pattern_id: 'ap-123' }, 'AttackPattern')).toBe('ap-123');
   });
 
-  it('should extract Finding ID', () => {
+  it('should get Finding id', () => {
     expect(getOAEVEntityId({ finding_id: 'find-123' }, 'Finding')).toBe('find-123');
   });
 
-  it('should extract Vulnerability ID', () => {
+  it('should get Vulnerability id', () => {
     expect(getOAEVEntityId({ vulnerability_id: 'vuln-123' }, 'Vulnerability')).toBe('vuln-123');
   });
 
-  it('should fall back to id or _id', () => {
-    expect(getOAEVEntityId({ id: 'generic-id' }, 'Unknown')).toBe('generic-id');
-    expect(getOAEVEntityId({ _id: '_generic_id' }, 'Unknown')).toBe('_generic_id');
-  });
-
-  it('should return empty string for missing ID', () => {
-    expect(getOAEVEntityId({}, 'Asset')).toBe('');
+  it('should handle default case with _id fallback', () => {
+    expect(getOAEVEntityId({ _id: '_id-123' }, 'Unknown')).toBe('_id-123');
+    expect(getOAEVEntityId({ id: 'id-123' }, 'Unknown')).toBe('id-123');
     expect(getOAEVEntityId({}, 'Unknown')).toBe('');
   });
 });
-
-// ============================================================================
-// getOAEVEntityUrl Tests
-// ============================================================================
 
 describe('getOAEVEntityUrl', () => {
   const baseUrl = 'https://openaev.example.com';
 
   it('should generate Asset URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Asset', 'asset-123')).toBe(
-      'https://openaev.example.com/admin/assets/endpoints/asset-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Asset', 'asset-123')).toBe(`${baseUrl}/admin/assets/endpoints/asset-123`);
   });
 
   it('should generate AssetGroup URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123')).toBe(
-      'https://openaev.example.com/admin/assets/asset_groups/ag-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123')).toBe(`${baseUrl}/admin/assets/asset_groups/ag-123`);
   });
 
-  it('should generate Player URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Player', 'player-123')).toBe(
-      'https://openaev.example.com/admin/teams/players/player-123'
-    );
-    expect(getOAEVEntityUrl(baseUrl, 'User', 'user-123')).toBe(
-      'https://openaev.example.com/admin/teams/players/user-123'
-    );
+  it('should generate Player/User URL', () => {
+    expect(getOAEVEntityUrl(baseUrl, 'Player', 'player-123')).toBe(`${baseUrl}/admin/teams/players/player-123`);
+    expect(getOAEVEntityUrl(baseUrl, 'User', 'user-123')).toBe(`${baseUrl}/admin/teams/players/user-123`);
   });
 
   it('should generate Team URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(
-      'https://openaev.example.com/admin/teams/team-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(`${baseUrl}/admin/teams/team-123`);
   });
 
   it('should generate Organization URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(
-      'https://openaev.example.com/admin/teams/organizations/org-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(`${baseUrl}/admin/teams/organizations/org-123`);
   });
 
   it('should generate Scenario URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Scenario', 'scen-123')).toBe(
-      'https://openaev.example.com/admin/scenarios/scen-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Scenario', 'scenario-123')).toBe(`${baseUrl}/admin/scenarios/scenario-123`);
   });
 
   it('should generate Exercise URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Exercise', 'ex-123')).toBe(
-      'https://openaev.example.com/admin/simulations/ex-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Exercise', 'ex-123')).toBe(`${baseUrl}/admin/simulations/ex-123`);
   });
 
   it('should generate AttackPattern URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(
-      'https://openaev.example.com/admin/attack_patterns/ap-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(`${baseUrl}/admin/attack_patterns/ap-123`);
   });
 
   it('should generate Finding URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Finding', 'find-123')).toBe(
-      'https://openaev.example.com/admin/findings/find-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Finding', 'find-123')).toBe(`${baseUrl}/admin/findings/find-123`);
   });
 
   it('should generate Vulnerability URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123')).toBe(
-      'https://openaev.example.com/admin/vulnerabilities/vuln-123'
-    );
+    expect(getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123')).toBe(`${baseUrl}/admin/vulnerabilities/vuln-123`);
   });
 
   it('should return base URL for unknown type', () => {
     expect(getOAEVEntityUrl(baseUrl, 'Unknown', 'id-123')).toBe(baseUrl);
   });
 
-  it('should strip trailing slash from base URL', () => {
-    expect(getOAEVEntityUrl('https://example.com/', 'Asset', 'id')).toBe(
-      'https://example.com/admin/assets/endpoints/id'
-    );
+  it('should remove trailing slash from base URL', () => {
+    expect(getOAEVEntityUrl('https://openaev.example.com/', 'Asset', 'asset-123'))
+      .toBe('https://openaev.example.com/admin/assets/endpoints/asset-123');
   });
 });
 
-// ============================================================================
-// getOAEVTypeFromClass Tests
-// ============================================================================
-
 describe('getOAEVTypeFromClass', () => {
-  it('should convert Endpoint to Asset', () => {
+  it('should map Endpoint to Asset', () => {
     expect(getOAEVTypeFromClass('Endpoint')).toBe('Asset');
-    expect(getOAEVTypeFromClass('io.openbas.Endpoint')).toBe('Asset');
+    expect(getOAEVTypeFromClass('com.openaev.model.Endpoint')).toBe('Asset');
   });
 
-  it('should keep AssetGroup as is', () => {
+  it('should map AssetGroup correctly', () => {
     expect(getOAEVTypeFromClass('AssetGroup')).toBe('AssetGroup');
   });
 
-  it('should convert User to User', () => {
+  it('should map User correctly', () => {
     expect(getOAEVTypeFromClass('User')).toBe('User');
-  });
-
-  it('should keep Player as is', () => {
     expect(getOAEVTypeFromClass('Player')).toBe('Player');
   });
 
-  it('should keep Team as is', () => {
+  it('should map Team correctly', () => {
     expect(getOAEVTypeFromClass('Team')).toBe('Team');
   });
 
-  it('should keep Organization as is', () => {
+  it('should map Organization correctly', () => {
     expect(getOAEVTypeFromClass('Organization')).toBe('Organization');
   });
 
-  it('should keep AttackPattern as is', () => {
+  it('should map AttackPattern correctly', () => {
     expect(getOAEVTypeFromClass('AttackPattern')).toBe('AttackPattern');
   });
 
-  it('should keep Scenario as is', () => {
+  it('should map Scenario correctly', () => {
     expect(getOAEVTypeFromClass('Scenario')).toBe('Scenario');
   });
 
-  it('should keep Exercise as is', () => {
+  it('should map Exercise correctly', () => {
     expect(getOAEVTypeFromClass('Exercise')).toBe('Exercise');
   });
 
-  it('should keep Finding as is', () => {
+  it('should map Finding correctly', () => {
     expect(getOAEVTypeFromClass('Finding')).toBe('Finding');
   });
 
-  it('should keep Vulnerability as is', () => {
+  it('should map Vulnerability correctly', () => {
     expect(getOAEVTypeFromClass('Vulnerability')).toBe('Vulnerability');
   });
 
-  it('should return the simple name for unknown classes', () => {
-    expect(getOAEVTypeFromClass('io.openbas.CustomClass')).toBe('CustomClass');
-    expect(getOAEVTypeFromClass('Unknown')).toBe('Unknown');
+  it('should return unknown class names as-is', () => {
+    expect(getOAEVTypeFromClass('CustomType')).toBe('CustomType');
+    expect(getOAEVTypeFromClass('com.example.CustomType')).toBe('CustomType');
   });
 });
 
-// ============================================================================
-// getOAEVEntityColor Tests
-// ============================================================================
-
 describe('getOAEVEntityColor', () => {
-  it('should return Teal for Asset', () => {
+  it('should return correct colors for known types', () => {
     expect(getOAEVEntityColor('Asset')).toBe('#009688');
-  });
-
-  it('should return Light Teal for AssetGroup', () => {
     expect(getOAEVEntityColor('AssetGroup')).toBe('#26a69a');
-  });
-
-  it('should return Deep Purple for Player/User', () => {
     expect(getOAEVEntityColor('Player')).toBe('#7e57c2');
     expect(getOAEVEntityColor('User')).toBe('#7e57c2');
-  });
-
-  it('should return Light Green for Team', () => {
     expect(getOAEVEntityColor('Team')).toBe('#66bb6a');
-  });
-
-  it('should return Indigo for Organization', () => {
     expect(getOAEVEntityColor('Organization')).toBe('#3f51b5');
-  });
-
-  it('should return Purple for Scenario', () => {
     expect(getOAEVEntityColor('Scenario')).toBe('#ab47bc');
-  });
-
-  it('should return Deep Orange for Exercise', () => {
     expect(getOAEVEntityColor('Exercise')).toBe('#ff7043');
-  });
-
-  it('should return Yellow-green for AttackPattern', () => {
     expect(getOAEVEntityColor('AttackPattern')).toBe('#d4e157');
-  });
-
-  it('should return Pink for Finding', () => {
     expect(getOAEVEntityColor('Finding')).toBe('#ec407a');
-  });
-
-  it('should return Brown for Vulnerability', () => {
     expect(getOAEVEntityColor('Vulnerability')).toBe('#795548');
   });
 
-  it('should return Pink for unknown types', () => {
+  it('should return default pink for unknown types', () => {
     expect(getOAEVEntityColor('Unknown')).toBe('#e91e63');
+    expect(getOAEVEntityColor('CustomType')).toBe('#e91e63');
+    expect(getOAEVEntityColor('')).toBe('#e91e63');
   });
 });
-

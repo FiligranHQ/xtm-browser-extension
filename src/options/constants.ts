@@ -13,7 +13,7 @@ export const OBSERVABLE_TYPES = [
   { value: 'Cryptocurrency-Wallet', label: 'Cryptocurrency Wallets' },
   { value: 'Domain-Name', label: 'Domain Names' },
   { value: 'Email-Addr', label: 'Email Addresses' },
-  { value: 'StixFile', label: 'File Hashes (MD5, SHA1, SHA256)' },
+  { value: 'StixFile', label: 'Files (hashes, file names)' },
   { value: 'Hostname', label: 'Hostnames' },
   { value: 'IPv4-Addr', label: 'IPv4 Addresses' },
   { value: 'IPv6-Addr', label: 'IPv6 Addresses' },

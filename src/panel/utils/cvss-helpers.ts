@@ -5,17 +5,22 @@
  */
 
 import type { SxProps } from '@mui/material';
+import {
+  CVSS_COLORS,
+  SEVERITY_COLORS,
+  TEXT_COLORS,
+} from '../../shared/constants';
 
 /**
  * Get color for CVSS score - optimized for visibility in both modes
  */
 export const getCvssColor = (score: number | undefined): string => {
-  if (score === undefined || score === null) return '#607d8b';
-  if (score === 0) return '#607d8b';
-  if (score <= 3.9) return '#4caf50'; // Green - Low
-  if (score <= 6.9) return '#ffb74d'; // Amber - Medium (lighter for dark mode)
-  if (score <= 8.9) return '#ff7043'; // Orange - High
-  return '#ef5350'; // Red - Critical
+  if (score === undefined || score === null) return CVSS_COLORS.unknown;
+  if (score === 0) return CVSS_COLORS.unknown;
+  if (score <= 3.9) return CVSS_COLORS.low;
+  if (score <= 6.9) return CVSS_COLORS.medium;
+  if (score <= 8.9) return CVSS_COLORS.high;
+  return CVSS_COLORS.critical;
 };
 
 /**
@@ -64,9 +69,9 @@ export const getCvssChipStyle = (score: number | undefined): SxProps => {
     fontSize: 14,
     height: 34,
     bgcolor: color,
-    color: '#ffffff',
+    color: TEXT_COLORS.onDark,
     border: 'none',
-    '& .MuiChip-icon': { color: '#ffffff' },
+    '& .MuiChip-icon': { color: TEXT_COLORS.onDark },
   };
 };
 
@@ -76,15 +81,14 @@ export const getCvssChipStyle = (score: number | undefined): SxProps => {
 export const getSeverityColor = (severity: string | undefined): { bgcolor: string; color: string } => {
   switch (severity?.toLowerCase()) {
     case 'low':
-      return { bgcolor: '#4caf50', color: '#ffffff' };
+      return SEVERITY_COLORS.low;
     case 'medium':
-      return { bgcolor: '#5c7bf5', color: '#ffffff' };
+      return SEVERITY_COLORS.medium;
     case 'high':
-      return { bgcolor: '#ff9800', color: '#ffffff' };
+      return SEVERITY_COLORS.high;
     case 'critical':
-      return { bgcolor: '#ef5350', color: '#ffffff' };
+      return SEVERITY_COLORS.critical;
     default:
-      return { bgcolor: '#607d8b', color: '#ffffff' };
+      return SEVERITY_COLORS.unknown;
   }
 };
-

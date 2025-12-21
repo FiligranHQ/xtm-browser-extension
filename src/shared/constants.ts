@@ -79,7 +79,7 @@ export const MAX_PAGINATION_PAGES = 100;
 // ============================================================================
 
 /** Width of the side panel in pixels */
-export const PANEL_WIDTH_PX = 400;
+export const PANEL_WIDTH_PX = 560;
 
 /** Z-index for overlays */
 export const OVERLAY_Z_INDEX = 2147483640;
@@ -145,4 +145,71 @@ export const HIGHLIGHT_AI_DISCOVERED = {
   backgroundHover: 'rgba(156, 39, 176, 0.35)',
   outline: '#9c27b0',
   outlineHover: '#7b1fa2',
+};
+
+// ============================================================================
+// CVSS Severity Colors
+// ============================================================================
+
+/** Colors for CVSS severity levels */
+export const CVSS_COLORS = {
+  /** Unknown/None severity - Blue Grey */
+  unknown: '#607d8b',
+  /** Low severity - Green */
+  low: '#4caf50',
+  /** Medium severity - Amber (lighter for dark mode visibility) */
+  medium: '#ffb74d',
+  /** High severity - Orange */
+  high: '#ff7043',
+  /** Critical severity - Red */
+  critical: '#ef5350',
+};
+
+/** Colors for severity text labels */
+export const SEVERITY_COLORS = {
+  low: { bgcolor: '#4caf50', color: '#ffffff' },
+  medium: { bgcolor: '#5c7bf5', color: '#ffffff' },
+  high: { bgcolor: '#ff9800', color: '#ffffff' },
+  critical: { bgcolor: '#ef5350', color: '#ffffff' },
+  unknown: { bgcolor: '#607d8b', color: '#ffffff' },
+};
+
+// ============================================================================
+// TLP/PAP Marking Colors
+// ============================================================================
+
+/** Colors for TLP/PAP markings */
+export const MARKING_COLORS = {
+  /** TLP:RED, PAP:RED, CD, CD-SF, DR, DR-SF */
+  red: '#c62828',
+  /** TLP:AMBER, TLP:AMBER+STRICT, PAP:AMBER */
+  amber: '#d84315',
+  /** TLP:GREEN, PAP:GREEN, NP */
+  green: '#2e7d32',
+  /** SF (Special Forces) */
+  blue: '#283593',
+  /** Default fallback */
+  default: '#ffffff',
+};
+
+/** Clear/White marking colors by mode */
+export const MARKING_CLEAR_COLORS = {
+  dark: { bgcolor: '#ffffff', color: '#000000' },
+  light: { bgcolor: '#2b2b2b', color: '#ffffff' },
+};
+
+// ============================================================================
+// Text Colors
+// ============================================================================
+
+/** Common text colors for chips and UI elements */
+export const TEXT_COLORS = {
+  /** White text (for dark backgrounds) */
+  onDark: '#ffffff',
+  /** Black text (for light backgrounds) */
+  onLight: '#000000',
+  /** Primary text in dark mode */
+  primaryDark: '#ffffff',
+  /** Primary text in light mode */
+  primaryLight: '#2b2b2b',
 };

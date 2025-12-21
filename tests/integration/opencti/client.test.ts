@@ -1138,6 +1138,39 @@ describe('Observable Operations Tests', () => {
     const result = await client.searchObservableByHash('d41d8cd98f00b204e9800998ecf8427e', 'MD5');
     expect(result.stixCyberObservables).toBeDefined();
   });
+
+  it('should create a file observable by name (without hash)', async (context) => {
+    if (!isOpenCTIAvailable) {
+      console.log(`Skipping: OpenCTI not available - ${connectionError}`);
+      context.skip();
+      return;
+    }
+    
+    // Create a file observable using just the file name (no hash)
+    const testFileName = `malware_test_${Date.now()}.exe`;
+    
+    // The TestOpenCTIClient needs a method to create files by name
+    // Use raw mutation for this test since it's a different input structure
+    const mutation = `
+      mutation CreateStixFile($type: String!, $StixFile: StixFileAddInput) {
+        stixCyberObservableAdd(type: $type, StixFile: $StixFile) {
+          id standard_id entity_type observable_value
+          ... on StixFile { name }
+        }
+      }
+    `;
+    
+    const result = await client.query<{ stixCyberObservableAdd: any }>(mutation, {
+      type: 'StixFile',
+      StixFile: { name: testFileName },
+    });
+    
+    expect(result.stixCyberObservableAdd).toBeDefined();
+    expect(result.stixCyberObservableAdd.id).toBeDefined();
+    expect(result.stixCyberObservableAdd.name).toBe(testFileName);
+    
+    createdObservableIds.push(result.stixCyberObservableAdd.id);
+  });
 });
 
 describe('SDO Creation Tests', () => {

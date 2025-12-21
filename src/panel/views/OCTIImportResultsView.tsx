@@ -9,20 +9,26 @@ import {
   Box,
   Typography,
   Button,
+  IconButton,
+  Tooltip,
+  Link,
 } from '@mui/material';
 import {
   CheckCircleOutlined,
   ErrorOutline,
+  OpenInNewOutlined,
+  ChevronLeftOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { ImportResults } from '../../shared/types/scan';
+import type { PanelMode } from '../types/panel-types';
 
 export interface ImportResultsViewProps {
   mode: 'dark' | 'light';
   importResults: ImportResults | null;
   setImportResults: (results: ImportResults | null) => void;
-  handleClose: () => void;
+  setPanelMode: (mode: PanelMode) => void;
   logoSuffix: string;
 }
 
@@ -30,7 +36,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
   mode,
   importResults,
   setImportResults,
-  handleClose,
+  setPanelMode,
   logoSuffix,
 }) => {
   // Group created entities by type for statistics
@@ -62,7 +68,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center',
-          mb: 3,
+          mb: 2,
           p: 3,
           bgcolor: importResults.success ? 'success.main' : 'error.main',
           borderRadius: 2,
@@ -83,6 +89,30 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
             : `Failed to create ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'}`
           }
         </Typography>
+      </Box>
+
+      {/* Back to scan results link */}
+      <Box sx={{ mb: 2 }}>
+        <Link
+          component="button"
+          variant="body2"
+          onClick={() => {
+            setImportResults(null);
+            setPanelMode('scan-results');
+          }}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            color: 'primary.main',
+            textDecoration: 'none',
+            cursor: 'pointer',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          <ChevronLeftOutlined sx={{ fontSize: 18 }} />
+          Back to scan results
+        </Link>
       </Box>
 
       {/* Platform indicator */}
@@ -187,6 +217,17 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           <Box sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
             {importResults.created.map((entity, idx) => {
               const color = itemColor(entity.type, mode === 'dark');
+              // Construct the OpenCTI URL for the entity
+              const entityUrl = importResults.platformUrl 
+                ? `${importResults.platformUrl.replace(/\/$/, '')}/dashboard/id/${entity.id}`
+                : null;
+              
+              const handleOpenEntity = () => {
+                if (entityUrl) {
+                  window.open(entityUrl, '_blank', 'noopener,noreferrer');
+                }
+              };
+              
               return (
                 <Box
                   key={entity.id || idx}
@@ -197,7 +238,12 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
                     p: 1.5,
                     borderBottom: idx < importResults.created.length - 1 ? 1 : 0,
                     borderColor: 'divider',
+                    cursor: entityUrl ? 'pointer' : 'default',
+                    '&:hover': entityUrl ? {
+                      bgcolor: 'action.hover',
+                    } : {},
                   }}
+                  onClick={handleOpenEntity}
                 >
                   <ItemIcon type={entity.type} size="small" color={color} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -217,7 +263,21 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
                       {entity.type.replace(/-/g, ' ')}
                     </Typography>
                   </Box>
-                  <CheckCircleOutlined sx={{ fontSize: 18, color: 'success.main' }} />
+                  <Tooltip title="Open in OpenCTI">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEntity();
+                      }}
+                      sx={{ 
+                        color: 'text.secondary',
+                        '&:hover': { color: 'primary.main' },
+                      }}
+                    >
+                      <OpenInNewOutlined sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
               );
             })}
@@ -268,7 +328,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           variant="contained"
           onClick={() => {
             setImportResults(null);
-            handleClose();
+            setPanelMode('scan-results');
           }}
           fullWidth
           startIcon={<CheckCircleOutlined />}

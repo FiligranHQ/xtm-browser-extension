@@ -53,6 +53,8 @@ export interface ContainerActionsProps {
   // Page info
   currentPageUrl: string;
   currentPageTitle: string;
+  currentPdfFileName: string;
+  isPdfSource: boolean;
   
   // UI
   setSubmitting: (submitting: boolean) => void;
@@ -100,6 +102,8 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     setEntityContainers,
     currentPageUrl,
     currentPageTitle,
+    currentPdfFileName,
+    isPdfSource,
     setSubmitting,
     setPanelMode,
     showToast,
@@ -136,6 +140,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
         })),
         failed: [], 
         platformName: targetPlatform.name,
+        platformUrl: targetPlatform.url,
       });
       setPanelMode('import-results');
       setEntitiesToAdd([]);
@@ -149,7 +154,8 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
           value: e.value || e.name || 'unknown', 
           error: response?.error || 'Failed to create entity' 
         })), 
-        platformName: targetPlatform.name 
+        platformName: targetPlatform.name,
+        platformUrl: targetPlatform.url,
       });
       setPanelMode('import-results');
     }
@@ -198,12 +204,37 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (attachPdf) {
       setGeneratingPdf(true);
       try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
-          const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GENERATE_PDF' });
-          if (pdfResponse?.success && pdfResponse.data) pdfData = pdfResponse.data;
+        if (isPdfSource && currentPageUrl) {
+          // For PDF source: fetch the actual PDF file directly
+          try {
+            const pdfResponse = await fetch(currentPageUrl);
+            if (pdfResponse.ok) {
+              const arrayBuffer = await pdfResponse.arrayBuffer();
+              const base64 = btoa(
+                new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+              );
+              pdfData = { 
+                data: base64, 
+                filename: currentPdfFileName || 'document.pdf' 
+              };
+            }
+          } catch {
+            // Fetch failed, try message approach
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab?.id) {
+              const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PDF_FILE' });
+              if (pdfResponse?.success && pdfResponse.data) pdfData = pdfResponse.data;
+            }
+          }
+        } else {
+          // For regular pages: generate a PDF snapshot
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab?.id) {
+            const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GENERATE_PDF' });
+            if (pdfResponse?.success && pdfResponse.data) pdfData = pdfResponse.data;
+          }
         }
-      } catch { /* PDF generation failed */ }
+      } catch { /* PDF generation/fetch failed */ }
       setGeneratingPdf(false);
     }
     
@@ -241,6 +272,8 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
         pdfAttachment: pdfData,
         pageUrl: currentPageUrl,
         pageTitle: currentPageTitle,
+        pdfFileName: currentPdfFileName || undefined,
+        isPdfSource: isPdfSource || undefined,
         report_types: containerSpecificFields.report_types.length > 0 ? containerSpecificFields.report_types : undefined,
         context: containerSpecificFields.context || undefined,
         severity: containerSpecificFields.severity || undefined,
@@ -299,9 +332,9 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
   }, [
     attachPdf, setGeneratingPdf, entitiesToAdd, resolvedRelationships, containerType, containerForm,
     selectedLabels, selectedMarkings, selectedPlatformId, currentPageUrl, currentPageTitle,
-    containerSpecificFields, createAsDraft, updatingContainerId, updatingContainerDates,
-    availablePlatforms, setPlatformUrl, setSelectedPlatformId, setEntity, setEntityContainers,
-    setPanelMode, showToast, setContainerForm, setEntitiesToAdd, setContainerWorkflowOrigin,
+    currentPdfFileName, isPdfSource, containerSpecificFields, createAsDraft, updatingContainerId,
+    updatingContainerDates, availablePlatforms, setPlatformUrl, setSelectedPlatformId, setEntity,
+    setEntityContainers, setPanelMode, showToast, setContainerForm, setEntitiesToAdd, setContainerWorkflowOrigin,
     setAttachPdf, setCreateAsDraft, setUpdatingContainerId, setUpdatingContainerDates, setSubmitting
   ]);
 

@@ -219,7 +219,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const platformAlt = getPlatformName(currentPlatformType);
 
   return (
-    <Box sx={{ p: 2, overflow: 'auto' }}>
+    <Box sx={{ p: 2, height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
       {/* Back button - always visible for consistent navigation */}
       <Box sx={{ mb: 1.5 }}>
         <Button

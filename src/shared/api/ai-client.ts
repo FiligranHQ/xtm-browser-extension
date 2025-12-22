@@ -9,7 +9,7 @@
  * NOTE: Import types from 'shared/api/ai/types' directly, not from this file.
  */
 
-import type { AIProvider, AISettings } from '../types/ai';
+import { AI_DEFAULTS, type AIProvider, type AISettings } from '../types/ai';
 import type {
   AIGenerationRequest,
   AIGenerationResponse,
@@ -64,6 +64,8 @@ export class AIClient {
   private apiKey: string;
   private model?: string;
   private customBaseUrl?: string;
+  private maxTokens: number;
+  private maxContentLength: number;
 
   constructor(settings: AISettings) {
     if (!settings.provider || !settings.apiKey) {
@@ -82,6 +84,22 @@ export class AIClient {
     this.apiKey = settings.apiKey;
     this.model = settings.model;
     this.customBaseUrl = settings.customBaseUrl;
+    this.maxTokens = settings.maxTokens ?? AI_DEFAULTS.maxTokens;
+    this.maxContentLength = settings.maxContentLength ?? AI_DEFAULTS.maxContentLength;
+  }
+
+  /**
+   * Get the configured max tokens setting
+   */
+  getMaxTokens(): number {
+    return this.maxTokens;
+  }
+
+  /**
+   * Get the configured max content length setting
+   */
+  getMaxContentLength(): number {
+    return this.maxContentLength;
   }
 
   /**
@@ -299,63 +317,63 @@ export class AIClient {
 
   async generateContainerDescription(request: ContainerDescriptionRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildContainerDescriptionPrompt(request),
+      prompt: buildContainerDescriptionPrompt(request, this.maxContentLength),
       systemPrompt: SYSTEM_PROMPTS.containerDescription,
-      maxTokens: 1000,
+      maxTokens: this.maxTokens,
     });
   }
 
   async generateScenario(request: ScenarioGenerationRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildScenarioPrompt(request),
+      prompt: buildScenarioPrompt(request, this.maxContentLength),
       systemPrompt: SYSTEM_PROMPTS.scenarioGeneration,
-      maxTokens: 2500,
+      maxTokens: this.maxTokens,
       temperature: 0.7,
     });
   }
 
   async generateFullScenario(request: FullScenarioGenerationRequest): Promise<AIGenerationResponse> {
-    const { systemPrompt, prompt } = buildFullScenarioPrompt(request);
+    const { systemPrompt, prompt } = buildFullScenarioPrompt(request, this.maxContentLength);
     return this.generate({
       prompt,
       systemPrompt,
-      maxTokens: 4000,
+      maxTokens: this.maxTokens,
       temperature: 0.7,
     });
   }
 
   async generateAtomicTest(request: AtomicTestRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildAtomicTestPrompt(request),
+      prompt: buildAtomicTestPrompt(request, this.maxContentLength),
       systemPrompt: SYSTEM_PROMPTS.atomicTest,
-      maxTokens: 1000,
+      maxTokens: this.maxTokens,
       temperature: 0.5,
     });
   }
 
   async generateEmails(request: EmailGenerationRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildEmailGenerationPrompt(request),
+      prompt: buildEmailGenerationPrompt(request, this.maxContentLength),
       systemPrompt: buildEmailGenerationSystemPrompt(request.language),
-      maxTokens: 2000,
+      maxTokens: this.maxTokens,
       temperature: 0.7,
     });
   }
 
   async discoverEntities(request: EntityDiscoveryRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildEntityDiscoveryPrompt(request),
+      prompt: buildEntityDiscoveryPrompt(request, this.maxContentLength),
       systemPrompt: SYSTEM_PROMPTS.entityDiscovery,
-      maxTokens: 2000,
+      maxTokens: this.maxTokens,
       temperature: 0.3,
     });
   }
 
   async resolveRelationships(request: RelationshipResolutionRequest): Promise<AIGenerationResponse> {
     return this.generate({
-      prompt: buildRelationshipResolutionPrompt(request),
+      prompt: buildRelationshipResolutionPrompt(request, this.maxContentLength),
       systemPrompt: SYSTEM_PROMPTS.relationshipResolution,
-      maxTokens: 4000,
+      maxTokens: this.maxTokens,
       temperature: 0.2,
     });
   }

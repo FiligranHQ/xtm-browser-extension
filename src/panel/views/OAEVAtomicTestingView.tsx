@@ -38,6 +38,7 @@ import { LockPattern, Target } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
+import { AI_DEFAULTS } from '../../shared/types/ai';
 import { AtomicTestingTargetForm } from '../components/atomic-testing/AtomicTestingTargetForm';
 import type { PlatformInfo, PanelMode, PanelAIState } from '../types/panel-types';
 import type { AtomicTestingStateReturn } from '../hooks/useAtomicTestingState';
@@ -241,10 +242,10 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
         }
       }
       
-      const MAX_PAGE_CONTENT = 6000;
+      // Use default max content length (actual enforcement happens in AI handlers with user settings)
       let contextContent = pageContent;
-      if (contextContent.length > MAX_PAGE_CONTENT) {
-        contextContent = contextContent.substring(0, MAX_PAGE_CONTENT) + '\n\n[Page content truncated]';
+      if (contextContent.length > AI_DEFAULTS.maxContentLength) {
+        contextContent = contextContent.substring(0, AI_DEFAULTS.maxContentLength) + '\n\n[Page content truncated]';
       }
       
       const fullContext = contextContent + (atomicTestingAIContext ? `\n\nAdditional context from user: ${atomicTestingAIContext}` : '');

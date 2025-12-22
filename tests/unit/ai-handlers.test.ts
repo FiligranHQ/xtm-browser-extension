@@ -27,6 +27,8 @@ const mockAIClientInstance = {
   discoverEntities: vi.fn(),
   resolveRelationships: vi.fn(),
   generate: vi.fn(),
+  getMaxTokens: vi.fn().mockReturnValue(10000),
+  getMaxContentLength: vi.fn().mockReturnValue(50000),
 };
 
 // Mock dependencies
@@ -46,6 +48,8 @@ vi.mock('../../src/shared/api/ai-client', () => {
     discoverEntities = mockAIClientInstance.discoverEntities;
     resolveRelationships = mockAIClientInstance.resolveRelationships;
     generate = mockAIClientInstance.generate;
+    getMaxTokens = mockAIClientInstance.getMaxTokens;
+    getMaxContentLength = mockAIClientInstance.getMaxContentLength;
   }
   return {
     AIClient: MockAIClient,
@@ -274,7 +278,8 @@ describe('AI Handlers', () => {
       });
       vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Test', injects: [] });
 
-      const largeContent = 'x'.repeat(10000);
+      // Content larger than default maxContentLength (50K)
+      const largeContent = 'x'.repeat(60000);
       await handleAIGenerateFullScenario({ pageContent: largeContent }, mockSendResponse);
 
       // Should have called with truncated content

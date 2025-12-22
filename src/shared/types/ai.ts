@@ -24,5 +24,15 @@ export interface AISettings {
   connectionTested?: boolean;
   /** Custom OpenAI-compatible endpoint URL (only used when provider is 'custom') */
   customBaseUrl?: string;
+  /** Maximum tokens for AI response output (default: 10000) */
+  maxTokens?: number;
+  /** Maximum page content length in characters (default: 50000) */
+  maxContentLength?: number;
 }
+
+// Default AI settings values
+export const AI_DEFAULTS = {
+  maxTokens: 10000,
+  maxContentLength: 50000,
+};
 

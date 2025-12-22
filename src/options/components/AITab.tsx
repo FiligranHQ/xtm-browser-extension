@@ -31,7 +31,7 @@ import {
   LinkOutlined,
 } from '@mui/icons-material';
 import type { ExtensionSettings } from '../../shared/types/settings';
-import type { AIProvider } from '../../shared/types/ai';
+import { AI_DEFAULTS, type AIProvider } from '../../shared/types/ai';
 import type { AITestResult, AvailableModel } from '../constants';
 
 interface AITabProps {
@@ -362,6 +362,51 @@ const AITab: React.FC<AITabProps> = ({
 
               </>
             )}
+          </Paper>
+
+          {/* Advanced Settings */}
+          <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Advanced Settings</Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+              Configure token limits and content processing parameters for AI requests.
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Max Output Tokens"
+                value={settings?.ai?.maxTokens ?? AI_DEFAULTS.maxTokens}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  if (!isNaN(value) && value > 0) {
+                    onUpdateSetting('ai', {
+                      ...settings?.ai,
+                      maxTokens: value,
+                    });
+                  }
+                }}
+                helperText="Maximum tokens for AI response (default: 10,000)"
+                inputProps={{ min: 1000, max: 100000, step: 1000 }}
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Max Content Length"
+                value={settings?.ai?.maxContentLength ?? AI_DEFAULTS.maxContentLength}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  if (!isNaN(value) && value > 0) {
+                    onUpdateSetting('ai', {
+                      ...settings?.ai,
+                      maxContentLength: value,
+                    });
+                  }
+                }}
+                helperText="Maximum page content in characters (default: 50,000)"
+                inputProps={{ min: 1000, max: 200000, step: 1000 }}
+              />
+            </Box>
           </Paper>
 
           {/* Save and Clear buttons */}

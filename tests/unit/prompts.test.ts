@@ -148,7 +148,8 @@ describe('Prompt Builders', () => {
     });
 
     it('should truncate long content', () => {
-      const longContent = 'x'.repeat(5000);
+      // Content larger than default maxContentLength (50K)
+      const longContent = 'x'.repeat(60000);
       const prompt = buildContainerDescriptionPrompt({
         containerType: 'Report',
         containerName: 'Test',
@@ -307,14 +308,16 @@ describe('Prompt Builders', () => {
     });
 
     it('should truncate long context', () => {
-      const longContext = 'x'.repeat(5000);
+      // Context larger than default maxContentLength (50K)
+      const longContext = 'x'.repeat(60000);
       const prompt = buildAtomicTestPrompt({
         attackPattern: { name: 'Test' },
         targetPlatform: 'windows',
         context: longContext,
       });
 
-      expect(prompt).toContain('[truncated]');
+      // Should truncate to maxContentLength (50K by default)
+      expect(prompt.length).toBeLessThan(longContext.length);
     });
   });
 
@@ -435,7 +438,8 @@ describe('Prompt Builders', () => {
     });
 
     it('should truncate long page content', () => {
-      const longContent = 'x'.repeat(10000);
+      // Content larger than default maxContentLength (50K)
+      const longContent = 'x'.repeat(60000);
       const prompt = buildRelationshipResolutionPrompt({
         pageTitle: 'Page',
         pageUrl: 'https://example.com',
@@ -443,7 +447,8 @@ describe('Prompt Builders', () => {
         entities: [],
       });
 
-      expect(prompt).toContain('truncated');
+      // Should truncate to maxContentLength (50K by default)
+      expect(prompt.length).toBeLessThan(longContent.length);
     });
   });
 });

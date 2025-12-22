@@ -14,6 +14,7 @@ import type {
   EntityDiscoveryRequest,
   RelationshipResolutionRequest,
 } from './types';
+import { AI_DEFAULTS } from '../../types/ai';
 
 // ============================================================================
 // System Prompts
@@ -222,7 +223,7 @@ export const TABLE_TOP_THEMES: Record<string, ThemeConfig> = {
 // Prompt Builders
 // ============================================================================
 
-export function buildContainerDescriptionPrompt(request: ContainerDescriptionRequest): string {
+export function buildContainerDescriptionPrompt(request: ContainerDescriptionRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   return `Generate a description for a ${request.containerType} container in a threat intelligence platform.
 
 Container Name: ${request.containerName}
@@ -233,7 +234,7 @@ ${request.detectedEntities?.length ? `Detected Threat Entities: ${request.detect
 ${request.detectedObservables?.length ? `Detected Indicators: ${request.detectedObservables.join(', ')}` : ''}
 
 Page Content Summary:
-${request.pageContent.substring(0, 3000)}
+${request.pageContent.substring(0, maxContentLength)}
 
 Please generate a professional description that:
 1. Summarizes the main topic/threat covered
@@ -242,7 +243,7 @@ Please generate a professional description that:
 4. Uses appropriate threat intelligence terminology`;
 }
 
-export function buildScenarioPrompt(request: ScenarioGenerationRequest): string {
+export function buildScenarioPrompt(request: ScenarioGenerationRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   const attackPatternsInfo = request.detectedAttackPatterns?.map(ap =>
     `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 200)}` : ''}`
   ).join('\n') || 'None detected';
@@ -265,7 +266,7 @@ ${request.detectedHostnames?.length ? `Detected Hostnames: ${request.detectedHos
 ${request.detectedEmails?.length ? `Detected Emails: ${request.detectedEmails.join(', ')}` : ''}
 
 Page Content:
-${request.pageContent.substring(0, 2500)}
+${request.pageContent.substring(0, maxContentLength)}
 
 Generate a JSON response with this structure:
 {
@@ -288,7 +289,7 @@ Generate a JSON response with this structure:
 Create 5-10 realistic injects that simulate the attack chain described, with appropriate timing and dependencies.`;
 }
 
-export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest): {
+export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): {
   systemPrompt: string;
   prompt: string;
 } {
@@ -301,8 +302,8 @@ export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest):
     ? request.detectedAttackPatterns!.map(ap => `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 150)}` : ''}`).join('\n')
     : 'None detected - analyze the page content to identify relevant threats and techniques';
 
-  const truncatedContent = request.pageContent.substring(0, 3000);
-  const truncatedContext = request.additionalContext?.substring(0, 1000) || '';
+  const truncatedContent = request.pageContent.substring(0, maxContentLength);
+  const truncatedContext = request.additionalContext?.substring(0, maxContentLength) || '';
   const emailLanguage = request.emailLanguage || 'english';
 
   const systemPrompt = isTableTop
@@ -460,10 +461,9 @@ IMPORTANT:
   return { systemPrompt, prompt };
 }
 
-export function buildAtomicTestPrompt(request: AtomicTestRequest): string {
-  const MAX_CONTEXT_LENGTH = 4000;
+export function buildAtomicTestPrompt(request: AtomicTestRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   const truncatedContext = request.context
-    ? (request.context.length > MAX_CONTEXT_LENGTH ? request.context.substring(0, MAX_CONTEXT_LENGTH) + '...[truncated]' : request.context)
+    ? (request.context.length > maxContentLength ? request.context.substring(0, maxContentLength) + '...[truncated]' : request.context)
     : '';
 
   const truncatedDescription = request.attackPattern.description
@@ -498,7 +498,7 @@ Important:
 - Return ONLY valid JSON, no markdown code blocks or additional text`;
 }
 
-export function buildEmailGenerationPrompt(request: EmailGenerationRequest): string {
+export function buildEmailGenerationPrompt(request: EmailGenerationRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   const language = request.language || 'english';
   const attackPatternsInfo = request.attackPatterns.map(ap =>
     `- ${ap.name}${ap.externalId ? ` (${ap.externalId})` : ''}${ap.killChainPhases?.length ? ` [${ap.killChainPhases.join(', ')}]` : ''}`
@@ -517,7 +517,7 @@ Attack Patterns to simulate:
 ${attackPatternsInfo}
 
 Context from page:
-${request.pageContent.substring(0, 2000)}
+${request.pageContent.substring(0, maxContentLength)}
 
 For EACH attack pattern listed above, generate an email that:
 1. Has a realistic subject line that would be used in a real attack scenario (in ${language})
@@ -545,7 +545,7 @@ export function buildEmailGenerationSystemPrompt(language: string = 'english'): 
   return `You are a cybersecurity simulation expert creating realistic phishing awareness and incident simulation emails. Generate professional, contextually appropriate email content that simulates real-world security scenarios for training purposes. Output in JSON format. Generate all email content in ${language}.`;
 }
 
-export function buildEntityDiscoveryPrompt(request: EntityDiscoveryRequest): string {
+export function buildEntityDiscoveryPrompt(request: EntityDiscoveryRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   const alreadyDetectedList = request.alreadyDetected || [];
   const alreadyDetectedSummary = alreadyDetectedList.length > 0
     ? alreadyDetectedList.map(e => {
@@ -570,7 +570,7 @@ ALREADY DETECTED (DO NOT INCLUDE THESE OR VARIATIONS):
 ${alreadyDetectedSummary}
 
 CONTENT:
-${request.pageContent.substring(0, 8000)}
+${request.pageContent.substring(0, maxContentLength)}
 
 ENTITY TYPES TO EXTRACT (OpenCTI compatible):
 
@@ -626,19 +626,19 @@ Return JSON in this EXACT format:
 If you cannot find relevant entities, return: {"entities": []}`;
 }
 
-export function buildRelationshipResolutionPrompt(request: RelationshipResolutionRequest): string {
+export function buildRelationshipResolutionPrompt(request: RelationshipResolutionRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
   const entityList = request.entities.map((e, index) =>
     `[${index}] ${e.type}: "${e.value || e.name}"${e.existsInPlatform ? ' (exists in OpenCTI)' : ' (new)'}`
   ).join('\n');
 
   // Truncate content intelligently - prioritize beginning and end for context
-  // 8000 chars is a good balance between context and token limits
-  const maxContentLength = 8000;
   let pageContent = request.pageContent || '';
   if (pageContent.length > maxContentLength) {
-    // Take first 6000 chars (usually contains main info) and last 2000 chars (often has conclusions)
-    const firstPart = pageContent.substring(0, 6000);
-    const lastPart = pageContent.substring(pageContent.length - 2000);
+    // Take first 80% chars (usually contains main info) and last 20% chars (often has conclusions)
+    const firstPartLength = Math.floor(maxContentLength * 0.8);
+    const lastPartLength = maxContentLength - firstPartLength;
+    const firstPart = pageContent.substring(0, firstPartLength);
+    const lastPart = pageContent.substring(pageContent.length - lastPartLength);
     pageContent = `${firstPart}\n\n[... content truncated for brevity ...]\n\n${lastPart}`;
   }
 

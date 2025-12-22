@@ -242,22 +242,20 @@ export class OpenAEVClient {
     version?: string;
     enterprise_edition?: boolean;
   }> {
-    try {
-      const [user, settings] = await Promise.all([
-        this.request<OAEVPlayer>('/api/me'),
-        this.fetchPlatformSettings().catch(() => null),
-      ]);
-      return {
-        success: true,
-        user,
-        platform_name: settings?.platform_name,
-        version: settings?.platform_version,
-        enterprise_edition: settings?.platform_license?.license_is_enterprise ?? false,
-      };
-    } catch (error) {
-      log.error('Connection test failed:', error);
-      return { success: false };
-    }
+    // Note: Do NOT catch errors here - let them propagate to the caller
+    // so that testPlatformConnection() can properly report connection failures.
+    // This is consistent with OpenCTIClient.testConnection() behavior.
+    const [user, settings] = await Promise.all([
+      this.request<OAEVPlayer>('/api/me'),
+      this.fetchPlatformSettings().catch(() => null),
+    ]);
+    return {
+      success: true,
+      user,
+      platform_name: settings?.platform_name,
+      version: settings?.platform_version,
+      enterprise_edition: settings?.platform_license?.license_is_enterprise ?? false,
+    };
   }
 
   async fetchPlatformSettings(): Promise<{

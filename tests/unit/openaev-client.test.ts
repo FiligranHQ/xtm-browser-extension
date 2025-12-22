@@ -107,12 +107,10 @@ describe('OpenAEVClient', () => {
       expect(result.user).toEqual(mockUser);
     });
 
-    it('should return failure on connection error', async () => {
+    it('should throw error on connection failure', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await client.testConnection();
-
-      expect(result.success).toBe(false);
+      await expect(client.testConnection()).rejects.toThrow('Network error');
     });
   });
 

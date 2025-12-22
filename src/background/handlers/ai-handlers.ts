@@ -12,6 +12,7 @@ import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { loggers } from '../../shared/utils/logger';
 import { AIClient, isAIAvailable } from '../../shared/api/ai-client';
+import { AI_DEFAULTS } from '../../shared/types/ai';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -203,11 +204,11 @@ export async function handleAIGenerateFullScenario(
       attackPatterns: request.detectedAttackPatterns?.length || 0,
     });
     
-    // Truncate page content if too large
-    const MAX_CONTENT_LENGTH = 6000;
-    if (request.pageContent && request.pageContent.length > MAX_CONTENT_LENGTH) {
+    // Truncate page content if too large (use settings or default)
+    const maxContentLength = settings.ai?.maxContentLength ?? AI_DEFAULTS.maxContentLength;
+    if (request.pageContent && request.pageContent.length > maxContentLength) {
       log.warn(`[AI_GENERATE_FULL_SCENARIO] Page content too large (${request.pageContent.length} chars), truncating`);
-      request.pageContent = request.pageContent.substring(0, MAX_CONTENT_LENGTH) + '\n\n[Content truncated due to size]';
+      request.pageContent = request.pageContent.substring(0, maxContentLength) + '\n\n[Content truncated due to size]';
     }
     
     const response = await aiClient.generateFullScenario(request);
@@ -284,11 +285,11 @@ export async function handleAIGenerateAtomicTest(
     const contextLength = request.context?.length || 0;
     log.debug('[AI_GENERATE_ATOMIC_TEST] Context length:', contextLength);
     
-    // Safeguard: Truncate very large contexts to prevent AI failures
-    const MAX_CONTEXT_LENGTH = 8000;
-    if (request.context && request.context.length > MAX_CONTEXT_LENGTH) {
-      log.warn(`[AI_GENERATE_ATOMIC_TEST] Context too large (${request.context.length} chars), truncating to ${MAX_CONTEXT_LENGTH}`);
-      request.context = request.context.substring(0, MAX_CONTEXT_LENGTH) + '\n\n[Content truncated due to size]';
+    // Safeguard: Truncate very large contexts to prevent AI failures (use settings or default)
+    const maxContentLength = settings.ai?.maxContentLength ?? AI_DEFAULTS.maxContentLength;
+    if (request.context && request.context.length > maxContentLength) {
+      log.warn(`[AI_GENERATE_ATOMIC_TEST] Context too large (${request.context.length} chars), truncating to ${maxContentLength}`);
+      request.context = request.context.substring(0, maxContentLength) + '\n\n[Content truncated due to size]';
     }
     
     const response = await aiClient.generateAtomicTest(request);
@@ -631,7 +632,7 @@ ${indexingExplanation}
 5. Include relationships between already-detected entities too (using their indices 0 to ${alreadyDetectedList.length - 1})
 
 === PAGE CONTENT ===
-${payload.pageContent.substring(0, 15000)}
+${payload.pageContent.substring(0, aiClient.getMaxContentLength())}
 
 === RESPONSE FORMAT ===
 Return JSON only:
@@ -660,6 +661,8 @@ If the content has no CTI entities, return: {"entities": [], "relationships": []
     const response = await aiClient.generate({
       systemPrompt: 'You are a cyber threat intelligence analyst. Extract entities and their relationships from the provided content. Return valid JSON only.',
       prompt: combinedPrompt,
+      maxTokens: aiClient.getMaxTokens(), // Use configured max tokens
+      temperature: 0.3, // Lower temperature for more consistent JSON output
     });
     
     log.debug('AI scan all response success:', response.success);

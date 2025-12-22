@@ -5,6 +5,17 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.15] - 2025-12-22
+
+### Added
+- **Configurable AI Settings**: New "Advanced Settings" section in Settings → Agentic AI with two configurable parameters:
+  - **Max Output Tokens** (default: 10,000): Controls the maximum tokens for AI responses
+  - **Max Content Length** (default: 50,000): Controls the maximum page content length sent to AI
+
+### Fixed
+- **OpenAEV Connection Test**: Fixed connection test always showing "Connected to OpenAEV" even with invalid URL or API token. The extension now properly reports connection failures
+- **AI Scan All**: Fixed "Use AI to discover both entities and relations at once" option returning no findings while individual buttons worked. Increased token limit and content length for combined analysis
+
 ## [0.0.14] - 2025-12-22
 
 ### Fixed
@@ -322,6 +333,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.15]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...v0.0.12

@@ -5,6 +5,11 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.14] - 2025-12-22
+
+### Fixed
+- **Entity Overview Scrolling**: Fixed vertical scrolling not working in the right panel for entity overviews (both OpenCTI and OpenAEV). The overview content can now be scrolled vertically when it exceeds the panel height, with horizontal scrolling disabled to prevent layout issues
+
 ## [0.0.13] - 2025-12-21
 
 ### Changed
@@ -317,6 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.14]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.10...v0.0.11

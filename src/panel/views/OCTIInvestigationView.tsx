@@ -17,11 +17,17 @@ import {
   MenuItem,
   Chip,
   CircularProgress,
+  TextField,
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import {
   TravelExploreOutlined,
   SearchOutlined,
   ChevronLeftOutlined,
+  CheckBoxOutlined,
+  CheckBoxOutlineBlankOutlined,
+  LayersClearOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -41,6 +47,8 @@ export interface InvestigationViewProps {
   investigationScanning: boolean;
   investigationTypeFilter: string;
   setInvestigationTypeFilter: (filter: string) => void;
+  investigationSearchQuery: string;
+  setInvestigationSearchQuery: (query: string) => void;
   investigationEntityTypes: string[];
   filteredInvestigationEntities: InvestigationEntity[];
   selectedInvestigationCount: number;
@@ -66,6 +74,8 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
   investigationScanning,
   investigationTypeFilter,
   setInvestigationTypeFilter,
+  investigationSearchQuery,
+  setInvestigationSearchQuery,
   investigationEntityTypes,
   filteredInvestigationEntities,
   selectedInvestigationCount,
@@ -196,6 +206,40 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
         <TravelExploreOutlined sx={{ color: 'primary.main' }} />
         <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
+        {investigationEntities.length > 0 && (
+          <Tooltip title="Clear all results and highlights" placement="top">
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LayersClearOutlined sx={{ fontSize: '1rem' }} />}
+              onClick={() => {
+                // Clear highlights
+                chrome.tabs?.query({ active: true, currentWindow: true }).then(([tab]) => {
+                  if (tab?.id) {
+                    chrome.tabs.sendMessage(tab.id, { type: 'CLEAR_HIGHLIGHTS' }).catch(() => {});
+                  }
+                }).catch(() => {});
+                // Clear results
+                setInvestigationEntities([]);
+                setInvestigationTypeFilter('all');
+                setInvestigationSearchQuery('');
+              }}
+              sx={{
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                py: 0.25,
+                px: 1,
+                color: 'text.secondary',
+                borderColor: 'grey.400',
+                '&:hover': { 
+                  bgcolor: 'action.hover',
+                },
+              }}
+            >
+              Clear
+            </Button>
+          </Tooltip>
+        )}
       </Box>
 
       {/* Show selected platform only if multiple OpenCTI platforms */}
@@ -254,20 +298,32 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
         </>
       ) : (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexShrink: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexShrink: 0 }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Found {investigationEntities.length} entities
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button size="small" onClick={selectAllInvestigationEntities}>Select All</Button>
-              <Button size="small" onClick={clearInvestigationSelection}>Clear</Button>
-            </Box>
           </Box>
 
-          {/* Type filter */}
-          {investigationEntityTypes.length > 1 && (
-            <Box sx={{ mb: 2, flexShrink: 0 }}>
-              <FormControl fullWidth size="small">
+          {/* Search and Type filter - 50/50 layout like scan results */}
+          <Box sx={{ display: 'flex', gap: 1.5, mb: 2, alignItems: 'flex-end', flexShrink: 0 }}>
+            {/* Search field */}
+            <TextField
+              size="small"
+              placeholder="Search findings..."
+              value={investigationSearchQuery}
+              onChange={(e) => setInvestigationSearchQuery(e.target.value)}
+              sx={{ flex: 1 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlined sx={{ fontSize: 18, color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            {/* Type filter */}
+            {investigationEntityTypes.length > 1 && (
+              <FormControl size="small" sx={{ flex: 1 }}>
                 <InputLabel id="investigation-type-filter-label">Filter by type</InputLabel>
                 <Select
                   labelId="investigation-type-filter-label"
@@ -291,8 +347,36 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
                   ))}
                 </Select>
               </FormControl>
+            )}
+          </Box>
+
+          {/* Select All / Clear - same styling as scan results */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 1, flexShrink: 0 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }}>
+              {selectedInvestigationCount > 0
+                ? `${selectedInvestigationCount} selected`
+                : `${filteredInvestigationEntities.length} available`
+              }
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, alignItems: 'center' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={filteredInvestigationEntities.length === 0}
+                onClick={selectedInvestigationCount === investigationEntities.length && investigationEntities.length > 0 ? clearInvestigationSelection : selectAllInvestigationEntities}
+                startIcon={selectedInvestigationCount === investigationEntities.length && investigationEntities.length > 0 ? <CheckBoxOutlined /> : <CheckBoxOutlineBlankOutlined />}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.75rem',
+                  py: 0.25,
+                  minWidth: 'auto',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {selectedInvestigationCount === investigationEntities.length && investigationEntities.length > 0 ? 'Deselect all' : 'Select all'}
+              </Button>
             </Box>
-          )}
+          </Box>
 
           <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
             {filteredInvestigationEntities.map((entity) => {

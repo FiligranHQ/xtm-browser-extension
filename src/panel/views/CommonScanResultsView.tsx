@@ -14,7 +14,7 @@ import {
   Tabs,
 } from '@mui/material';
 import {
-  TravelExploreOutlined,
+  CenterFocusStrongOutlined,
   SearchOutlined,
   ChevronLeftOutlined,
   LayersClearOutlined,
@@ -802,7 +802,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
 
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <TravelExploreOutlined sx={{ color: 'primary.main' }} />
+        <CenterFocusStrongOutlined sx={{ color: 'primary.main' }} />
         <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
           Scan Results
         </Typography>

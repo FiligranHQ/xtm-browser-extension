@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Add to OpenCTI Navigation**: Cancel button and new "Back to..." link in the Add to OpenCTI view now correctly navigate back to scan results (if available) or home, instead of always going to home
 - **Investigation Mode Scrolling**: Fixed entity list in Investigation Mode not being scrollable when many entities are found. The list now properly scrolls within the available space
 - **Investigation Mode Deduplication**: Fixed duplicate entities appearing in the investigation entity list when the same entity (e.g., a CVE) appears multiple times on a page
+- **Investigation Mode UI Consistency**: Updated Investigation Mode to match Scan Results styling with 50/50 search field and type filter layout, consistent Select All/Deselect All button styling, and a "Clear" button in the header to clear results and highlights
+- **Scan Results Icon**: Changed Scan Results header icon to match the Scan button icon for visual consistency
 - **OpenAEV Entity URLs**: Fixed "Open in OpenAEV" links for entities that don't have overview pages. Only Asset, Scenario, and Simulation have individual overview pages; all other entity types (Asset Group, Player, Team, Organization, Attack Pattern, Finding, Vulnerability) now correctly redirect to their list pages with appropriate text search filters pre-applied
 - **Add to Scan Results Duplicates**: "Add to scan results" context menu now prevents adding duplicate entities (same type and value)
 - **Unused Code Cleanup**: Removed unused component props and fixed ESLint/TypeScript warnings

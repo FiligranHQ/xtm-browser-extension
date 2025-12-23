@@ -447,45 +447,56 @@ describe('getOAEVEntityId', () => {
 describe('getOAEVEntityUrl', () => {
   const baseUrl = 'https://openaev.example.com';
 
-  it('should generate Asset URL', () => {
+  it('should generate Asset URL (with overview)', () => {
     expect(getOAEVEntityUrl(baseUrl, 'Asset', 'asset-123')).toBe(`${baseUrl}/admin/assets/endpoints/asset-123`);
   });
 
-  it('should generate AssetGroup URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123')).toBe(`${baseUrl}/admin/assets/asset_groups/ag-123`);
+  it('should generate AssetGroup URL (list with filter)', () => {
+    const url = getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123');
+    expect(url).toContain(`${baseUrl}/admin/assets/asset_groups`);
+    expect(url).toContain('?query=');
   });
 
-  it('should generate Player/User URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Player', 'player-123')).toBe(`${baseUrl}/admin/teams/players/player-123`);
-    expect(getOAEVEntityUrl(baseUrl, 'User', 'user-123')).toBe(`${baseUrl}/admin/teams/players/user-123`);
+  it('should generate Player/User URL (list with filter)', () => {
+    const playerUrl = getOAEVEntityUrl(baseUrl, 'Player', 'player-123');
+    expect(playerUrl).toContain(`${baseUrl}/admin/teams/players`);
+    expect(playerUrl).toContain('?query=');
+    
+    const userUrl = getOAEVEntityUrl(baseUrl, 'User', 'user-123');
+    expect(userUrl).toContain(`${baseUrl}/admin/teams/players`);
+    expect(userUrl).toContain('?query=');
   });
 
-  it('should generate Team URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(`${baseUrl}/admin/teams/team-123`);
+  it('should generate Team URL (list page)', () => {
+    expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(`${baseUrl}/admin/teams/teams`);
   });
 
-  it('should generate Organization URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(`${baseUrl}/admin/teams/organizations/org-123`);
+  it('should generate Organization URL (list page)', () => {
+    expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(`${baseUrl}/admin/teams/organizations`);
   });
 
-  it('should generate Scenario URL', () => {
+  it('should generate Scenario URL (with overview)', () => {
     expect(getOAEVEntityUrl(baseUrl, 'Scenario', 'scenario-123')).toBe(`${baseUrl}/admin/scenarios/scenario-123`);
   });
 
-  it('should generate Exercise URL', () => {
+  it('should generate Exercise URL (with overview)', () => {
     expect(getOAEVEntityUrl(baseUrl, 'Exercise', 'ex-123')).toBe(`${baseUrl}/admin/simulations/ex-123`);
   });
 
-  it('should generate AttackPattern URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(`${baseUrl}/admin/attack_patterns/ap-123`);
+  it('should generate AttackPattern URL (list page)', () => {
+    expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(`${baseUrl}/admin/settings/taxonomies/attack_patterns`);
   });
 
-  it('should generate Finding URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Finding', 'find-123')).toBe(`${baseUrl}/admin/findings/find-123`);
+  it('should generate Finding URL (list with filter)', () => {
+    const url = getOAEVEntityUrl(baseUrl, 'Finding', 'find-123');
+    expect(url).toContain(`${baseUrl}/admin/findings`);
+    expect(url).toContain('?query=');
   });
 
-  it('should generate Vulnerability URL', () => {
-    expect(getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123')).toBe(`${baseUrl}/admin/vulnerabilities/vuln-123`);
+  it('should generate Vulnerability URL (list with filter)', () => {
+    const url = getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123');
+    expect(url).toContain(`${baseUrl}/admin/settings/taxonomies/vulnerabilities`);
+    expect(url).toContain('?query=');
   });
 
   it('should return base URL for unknown type', () => {

@@ -186,33 +186,72 @@ export function getOAEVEntityId(entity: Record<string, unknown>, type: string): 
 }
 
 /**
- * Get OpenAEV entity URL for navigating to the platform
+ * Build OpenAEV query parameter for list pages with text search filter.
+ * OpenAEV uses base64-encoded query string for filtering.
+ * Format: ?query=btoa("page=0&size=25&textSearch=<search>&key=<localStorageKey>")
  */
-export function getOAEVEntityUrl(platformUrl: string, type: string, entityId: string): string {
+function buildOAEVListQueryParam(localStorageKey: string, searchText: string): string {
+  // Build query string manually to avoid qs dependency
+  const params = [
+    'page=0',
+    'size=25',
+    `textSearch=${encodeURIComponent(searchText)}`,
+    `key=${encodeURIComponent(localStorageKey)}`,
+  ].join('&');
+  
+  // Base64 encode the query string (using btoa in browser)
+  try {
+    const encoded = btoa(params);
+    return `?query=${encoded}`;
+  } catch {
+    // Fallback if btoa fails (shouldn't happen in browser)
+    return '';
+  }
+}
+
+/**
+ * Get OpenAEV entity URL for navigating to the platform.
+ * 
+ * Only Asset (Endpoint), Scenario, and Exercise (Simulation) have overview pages.
+ * All other entities redirect to their list page with a text search filter.
+ * 
+ * @param platformUrl - Base URL of the OpenAEV platform
+ * @param type - Entity type (e.g., 'Asset', 'Player', 'AttackPattern')
+ * @param entityId - Entity ID (used for entities with overview pages)
+ * @param entityName - Entity name (used for text search on list pages)
+ */
+export function getOAEVEntityUrl(platformUrl: string, type: string, entityId: string, entityName?: string): string {
   const baseUrl = platformUrl.replace(/\/$/, '');
+  const searchText = entityName || entityId;
   
   switch (type) {
+    // Entities WITH individual overview pages
     case 'Asset':
       return `${baseUrl}/admin/assets/endpoints/${entityId}`;
-    case 'AssetGroup':
-      return `${baseUrl}/admin/assets/asset_groups/${entityId}`;
-    case 'Player':
-    case 'User':
-      return `${baseUrl}/admin/teams/players/${entityId}`;
-    case 'Team':
-      return `${baseUrl}/admin/teams/${entityId}`;
-    case 'Organization':
-      return `${baseUrl}/admin/teams/organizations/${entityId}`;
     case 'Scenario':
       return `${baseUrl}/admin/scenarios/${entityId}`;
     case 'Exercise':
       return `${baseUrl}/admin/simulations/${entityId}`;
+    
+    // Entities WITHOUT individual overview pages - redirect to list with filter
+    case 'AssetGroup':
+      return `${baseUrl}/admin/assets/asset_groups${buildOAEVListQueryParam('asset-groups', searchText)}`;
+    case 'Player':
+    case 'User':
+      return `${baseUrl}/admin/teams/players${buildOAEVListQueryParam('players', searchText)}`;
+    case 'Team':
+      // Teams page doesn't use queryable filtering, just redirect to list
+      return `${baseUrl}/admin/teams/teams`;
+    case 'Organization':
+      // Organizations page doesn't use queryable filtering, just redirect to list
+      return `${baseUrl}/admin/teams/organizations`;
     case 'AttackPattern':
-      return `${baseUrl}/admin/attack_patterns/${entityId}`;
+      // Attack patterns page doesn't use queryable filtering, just redirect to list
+      return `${baseUrl}/admin/settings/taxonomies/attack_patterns`;
     case 'Finding':
-      return `${baseUrl}/admin/findings/${entityId}`;
+      return `${baseUrl}/admin/findings${buildOAEVListQueryParam('findings', searchText)}`;
     case 'Vulnerability':
-      return `${baseUrl}/admin/vulnerabilities/${entityId}`;
+      return `${baseUrl}/admin/settings/taxonomies/vulnerabilities${buildOAEVListQueryParam('vulnerability', searchText)}`;
     default:
       return baseUrl;
   }

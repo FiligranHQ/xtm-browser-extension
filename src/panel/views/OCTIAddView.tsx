@@ -22,6 +22,7 @@ export interface AddViewProps {
   submitting: boolean;
   addFromNotFound: boolean;
   setAddFromNotFound: (fromNotFound: boolean) => void;
+  hasScanResults: boolean;
 }
 
 export const OCTIAddView: React.FC<AddViewProps> = ({
@@ -29,34 +30,38 @@ export const OCTIAddView: React.FC<AddViewProps> = ({
   entitiesToAdd,
   handleAddEntities,
   submitting,
-  addFromNotFound,
   setAddFromNotFound,
+  hasScanResults,
 }) => {
-  // Handle back navigation to entity overview
-  const handleBackToEntity = () => {
+  // Handle back/cancel navigation - depends on whether scan results exist
+  const handleBackOrCancel = () => {
     setAddFromNotFound(false);
-    setPanelMode('not-found');
+    if (hasScanResults) {
+      // If we have scan results, go back to scan results
+      setPanelMode('scan-results');
+    } else {
+      // Otherwise go home
+      setPanelMode('empty');
+    }
   };
 
   return (
     <Box sx={{ p: 2 }}>
-      {/* Back to entity overview link */}
-      {addFromNotFound && (
-        <Box sx={{ mb: 1.5 }}>
-          <Button
-            size="small"
-            startIcon={<ChevronLeftOutlined />}
-            onClick={handleBackToEntity}
-            sx={{
-              color: 'text.secondary',
-              textTransform: 'none',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
-          >
-            Back to entity overview
-          </Button>
-        </Box>
-      )}
+      {/* Back link - always show */}
+      <Box sx={{ mb: 1.5 }}>
+        <Button
+          size="small"
+          startIcon={<ChevronLeftOutlined />}
+          onClick={handleBackOrCancel}
+          sx={{
+            color: 'text.secondary',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
+          {hasScanResults ? 'Back to scan results' : 'Back to actions'}
+        </Button>
+      </Box>
 
       <Typography variant="h6" sx={{ mb: 1 }}>Add to OpenCTI</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -100,10 +105,7 @@ export const OCTIAddView: React.FC<AddViewProps> = ({
         >
           {submitting ? 'Creating...' : 'Create Entities'}
         </Button>
-        <Button variant="outlined" onClick={() => {
-          setAddFromNotFound(false);
-          setPanelMode('empty');
-        }}>
+        <Button variant="outlined" onClick={handleBackOrCancel}>
           Cancel
         </Button>
       </Box>

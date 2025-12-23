@@ -394,6 +394,12 @@ function setupContextMenu(): void {
   });
   
   chrome.contextMenus.create({
+    id: 'xtm-add-to-scan-results',
+    title: 'Add to scan results',
+    contexts: ['selection'],
+  });
+  
+  chrome.contextMenus.create({
     id: 'xtm-create-container',
     title: 'Create container from page',
     contexts: ['page'],
@@ -522,6 +528,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       if (info.selectionText) {
         await ensureContentScriptAndSendMessage(tab.id, {
           type: 'ADD_SELECTION',
+          payload: { text: info.selectionText },
+        });
+      }
+      break;
+      
+    case 'xtm-add-to-scan-results':
+      if (info.selectionText) {
+        await ensureContentScriptAndSendMessage(tab.id, {
+          type: 'ADD_TO_SCAN_RESULTS',
           payload: { text: info.selectionText },
         });
       }
@@ -1520,8 +1535,11 @@ async function handleMessage(
             enabledForOpenAEV: !(settings.detection?.disabledOpenAEVTypes || []).includes('Vulnerability'),
           };
           
+          // Check if attack pattern detection is enabled (for regex-based MITRE ID detection)
+          const attackPatternEnabled = !disabledOpenCTITypes.includes('Attack-Pattern');
+          
           // Use the same scan method as SCAN_PAGE
-          const result = await detectionEngine.scan(content, [], vulnSettings);
+          const result = await detectionEngine.scan(content, [], vulnSettings, attackPatternEnabled);
           
           // Filter observables - exclude disabled types
           const filteredObservables = result.observables.filter(obs => 

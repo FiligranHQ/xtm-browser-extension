@@ -558,11 +558,22 @@ export class OpenCTIClient {
     value?: string;
     name?: string;
     description?: string;
+    x_mitre_id?: string;
     objectMarking?: string[];
     objectLabel?: string[];
   }): Promise<{ id: string; standard_id: string; entity_type: string; name?: string; observable_value?: string; aliases?: string[]; x_mitre_id?: string }> {
     const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
     const entityName = input.name || input.value || 'Unknown';
+    
+    // For attack patterns, auto-detect MITRE ID if name looks like one (e.g., T1480, T1547.001)
+    // Also supports tactics (TA0001), software (S0001), and groups (G0001)
+    let mitreId = input.x_mitre_id;
+    if (normalizedType === 'attack-pattern' && !mitreId) {
+      const mitreIdPattern = /^(?:T[Aa]?\d{4}(?:\.\d{3})?|[SG]\d{4})$/;
+      if (mitreIdPattern.test(entityName)) {
+        mitreId = entityName.toUpperCase();
+      }
+    }
 
     const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_opencti_aliases?: string[]; x_mitre_id?: string }>> = {
       'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
@@ -572,7 +583,7 @@ export class OpenCTIClient {
       'tool': () => this.createTool({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'campaign': () => this.createCampaign({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'vulnerability': () => this.createVulnerability({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, x_mitre_id: mitreId, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'country': () => this.createCountry({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
       'narrative': () => this.createNarrative({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),

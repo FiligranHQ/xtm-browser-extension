@@ -19,6 +19,7 @@ import {
   showSearchPanel,
   showUnifiedSearchPanel,
   showAddSelectionPanel,
+  showAddToScanResultsPanel,
   initializeSplitScreenMode,
   refreshSplitScreenMode,
 } from './panel';
@@ -279,6 +280,15 @@ export function handleMessage(
       const payload = message.payload as { text?: string } | undefined;
       if (payload?.text) {
         showAddSelectionPanel(payload.text);
+      }
+      sendResponse({ success: true });
+      return false;
+    }
+    
+    case 'ADD_TO_SCAN_RESULTS': {
+      const payload = message.payload as { text?: string } | undefined;
+      if (payload?.text) {
+        showAddToScanResultsPanel(payload.text);
       }
       sendResponse({ success: true });
       return false;

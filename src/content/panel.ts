@@ -706,3 +706,23 @@ export async function showAddSelectionPanel(selectedText: string): Promise<void>
   }
 }
 
+/**
+ * Show add to scan results panel (context menu)
+ * Allows user to add selected text as an entity to the scan results
+ */
+export async function showAddToScanResultsPanel(selectedText: string): Promise<void> {
+  await checkSplitScreenMode(true); // Always fetch fresh settings
+  
+  const theme = await getCurrentTheme();
+  const messagePayload = { theme, selectedText };
+  
+  if (splitScreenMode) {
+    await sendPanelMessageAndWait('SHOW_ADD_TO_SCAN_RESULTS', messagePayload);
+    await openNativeSidePanel();
+  } else {
+    ensurePanelElements();
+    showPanelElements();
+    sendPanelMessage('SHOW_ADD_TO_SCAN_RESULTS', messagePayload);
+  }
+}
+

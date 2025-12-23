@@ -51,6 +51,24 @@ const OPENCTI_TYPES_SET = new Set([
   'Grouping', 'Case-Incident', 'Case-Rfi', 'Case-Rft', 'Feedback',
 ]);
 
+// OpenCTI Entity Types that CAN be created via the extension when not found
+// These should be marked as "addable" (xtm-not-found) instead of "entity-not-addable"
+const CREATABLE_OPENCTI_TYPES = new Set([
+  'Vulnerability', // CVEs
+  'Attack-Pattern', // MITRE ATT&CK patterns
+  'Intrusion-Set',
+  'Threat-Actor-Group',
+  'Threat-Actor-Individual',
+  'Malware',
+  'Tool',
+  'Campaign',
+  'Country',
+  'Sector',
+  'Narrative',
+  'Channel',
+  'System',
+]);
+
 // ============================================================================
 // Search Value Generation (uses shared defanging utilities)
 // ============================================================================
@@ -397,8 +415,12 @@ function createFlexibleCVEPattern(cveName: string): RegExp {
  */
 function getHighlightStateClass(meta: HighlightMeta): string {
   const isOpenCTIEntity = meta.isOpenCTIEntity || OPENCTI_TYPES_SET.has(meta.type);
+  const isCreatableType = CREATABLE_OPENCTI_TYPES.has(meta.type);
   
   if (meta.found) return 'xtm-found';
+  // If the entity type can be created via the extension, mark as addable
+  if (isCreatableType) return 'xtm-not-found';
+  // Other OpenCTI entity types that can't be created are not addable
   if (isOpenCTIEntity) return 'xtm-entity-not-addable';
   return 'xtm-not-found';
 }

@@ -27,7 +27,8 @@ export type PanelMode =
   | 'scan-results'
   | 'scenario-overview'
   | 'scenario-form'
-  | 'add-selection';
+  | 'add-selection'
+  | 'add-to-scan-results';
 
 // Entity data from platform
 export interface EntityData {

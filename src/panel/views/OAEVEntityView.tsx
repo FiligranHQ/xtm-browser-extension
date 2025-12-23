@@ -182,7 +182,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   // Get entity properties using shared utilities
   const name = getOAEVEntityName(entityData, oaevType);
   const entityId = getOAEVEntityId(entityData, oaevType);
-  const entityUrl = getOAEVEntityUrl(platformUrl, oaevType, entityId);
+  const entityUrl = getOAEVEntityUrl(platformUrl, oaevType, entityId, name);
   const mitreId = entityData.attack_pattern_external_id || '';
   
   // Extract description based on entity type

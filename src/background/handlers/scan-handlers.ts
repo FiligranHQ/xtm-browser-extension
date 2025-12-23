@@ -6,7 +6,7 @@
 
 import { loggers } from '../../shared/utils/logger';
 import { DetectionEngine } from '../../shared/detection/detector';
-import { getSettings, getAllCachedOAEVEntityNamesForMatching, getMultiPlatformOAEVCache } from '../../shared/utils/storage';
+import { getSettings, getAllCachedOAEVEntityNamesForMatching } from '../../shared/utils/storage';
 import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { isValidBoundary } from '../../shared/detection/matching';
 import type { DetectedObservable } from '../../shared/types/observables';
@@ -51,7 +51,12 @@ export async function handleScanPage(
       enabledForOpenAEV: !disabledOpenAEVTypes.includes('Vulnerability'),
     };
     
-    const result = await detectionEngine.scan(payload.content, [], vulnSettings);
+    const result = await detectionEngine.scan(
+      payload.content,
+      [],
+      vulnSettings,
+      !disabledOpenCTITypes.includes('Attack-Pattern')
+    );
     
     // Filter - exclude disabled types (empty = all enabled)
     const filteredObservables = result.observables.filter(obs => 
@@ -88,13 +93,7 @@ export async function handleScanOAEV(
 ): Promise<void> {
   try {
     const oaevEntityMap = await getAllCachedOAEVEntityNamesForMatching();
-    
-    // Debug: Log cache contents
-    const oaevCache = await getMultiPlatformOAEVCache();
-    log.debug('SCAN_OAEV: OpenAEV cache platforms:', Object.keys(oaevCache.platforms));
-    
     const includeAttackPatterns = payload.includeAttackPatterns === true;
-    log.debug(`SCAN_OAEV: Searching for ${oaevEntityMap.size} cached OpenAEV entities (includeAttackPatterns: ${includeAttackPatterns})`);
     
     const openaevEntities = scanForOAEVEntities(
       payload.content,
@@ -185,8 +184,6 @@ export function scanForOAEVEntities(
             // Skip already seen entities
             if (seenEntities.has(entity.id)) continue;
             
-            log.debug(`SCAN_OAEV: Found "${entity.name}" (${entity.type}) at position ${matchIndex}`);
-            
             openaevEntities.push({
               platformType: 'openaev',
               type: entity.type as 'Asset' | 'AssetGroup' | 'Team' | 'Player' | 'AttackPattern',
@@ -266,13 +263,17 @@ export async function handleScanAll(
     // 1. Scan OpenCTI
     if (detectionEngine) {
       try {
-        const octiResult = await detectionEngine.scan(payload.content, [], vulnSettings);
+        const octiResult = await detectionEngine.scan(
+          payload.content,
+          [],
+          vulnSettings,
+          !disabledOpenCTITypes.includes('Attack-Pattern')
+        );
         openctiResult = {
           observables: octiResult.observables || [],
           openctiEntities: octiResult.openctiEntities || [],
           cves: octiResult.cves || [],
         };
-        log.debug(`SCAN_ALL: OpenCTI found ${openctiResult.observables.length} observables, ${openctiResult.openctiEntities.length} OpenCTI entities`);
       } catch (octiError) {
         log.warn('SCAN_ALL: OpenCTI scan failed:', octiError);
       }
@@ -286,7 +287,6 @@ export async function handleScanAll(
       if (oaevEntityMap.size > 0) {
         // Use the existing helper - include all entity types
         openaevEntities = scanForOAEVEntities(payload.content, oaevEntityMap, true);
-        log.debug(`SCAN_ALL: OpenAEV found ${openaevEntities?.length || 0} entities`);
       }
     } catch (oaevError) {
       log.warn('SCAN_ALL: OpenAEV scan failed:', oaevError);

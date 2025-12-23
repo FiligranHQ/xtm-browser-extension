@@ -612,7 +612,7 @@ export const OBSERVABLE_PATTERNS: PatternConfig[] = [
     },
 ];
 
-// CVE is special - it maps to Vulnerability SDO, not SCO
+// CVE is special - it maps to Vulnerability entity, not observable
 export const CVE_CONFIG = {
     pattern: CVE_PATTERN,
     type: 'Vulnerability' as const,
@@ -620,13 +620,24 @@ export const CVE_CONFIG = {
 };
 
 // ============================================================================
-// SDO Name Patterns
+// MITRE ATT&CK Pattern (Attack Patterns)
+// ============================================================================
+
+// MITRE ATT&CK Technique IDs
+// Matches: T1480, T1547.001, TA0001 (tactics), S0001 (software), G0001 (groups)
+// Supports techniques (T####), sub-techniques (T####.###), tactics (TA####),
+// software (S####), and groups (G####)
+// Pattern: T/TA/S/G + 4 digits + optional (. + 3 digits for sub-techniques)
+export const MITRE_ATTACK_PATTERN = /(?<![a-zA-Z0-9])(?:T[Aa]?\d{4}(?:\.\d{3})?|[SG]\d{4})(?![a-zA-Z0-9])/g;
+
+// ============================================================================
+// OpenCTI Entity Name Patterns
 // ============================================================================
 
 /**
- * SDO types that should be searched by name/alias match
+ * OpenCTI entity types that should be searched by name/alias match
  */
-export const SDO_SEARCH_TYPES = [
+export const OPENCTI_ENTITY_SEARCH_TYPES = [
     'Intrusion-Set',
     'Malware',
     'Threat-Actor',

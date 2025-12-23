@@ -1,7 +1,8 @@
 /**
- * Add Selection View Component
+ * Add To Scan Results View Component
  *
- * Allows user to add selected text as an entity to OpenCTI.
+ * Allows user to add selected text as a new entity to the scan results.
+ * This is useful for manually adding entities that were not detected during scanning.
  */
 
 import React from 'react';
@@ -12,18 +13,16 @@ import {
   Button,
   TextField,
   Autocomplete,
-  Alert,
-  CircularProgress,
 } from '@mui/material';
 import {
   ChevronLeftOutlined,
   AddOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
-import type { PanelMode, PlatformInfo } from '../types/panel-types';
+import type { PanelMode } from '../types/panel-types';
 
 // Available entity types for manual selection - includes both Observables and SDOs
-// Sorted alphabetically by label
+// These are the types that can be added to scan results for creating in OpenCTI
 const SELECTABLE_ENTITY_TYPES = [
   // SDOs (STIX Domain Objects) - Threats
   { value: 'Attack-Pattern', label: 'Attack Pattern' },
@@ -51,36 +50,28 @@ const SELECTABLE_ENTITY_TYPES = [
   { value: 'Url', label: 'URL' },
 ];
 
-export interface AddSelectionViewProps {
+export interface AddToScanResultsViewProps {
   setPanelMode: (mode: PanelMode) => void;
-  addSelectionText: string;
-  setAddSelectionText: (text: string) => void;
-  addSelectionEntityType: string;
-  setAddSelectionEntityType: (type: string) => void;
-  addSelectionFromContextMenu: boolean;
-  setAddSelectionFromContextMenu: (fromContext: boolean) => void;
-  addingSelection: boolean;
-  handleAddSelection: () => void;
-  openctiPlatforms: PlatformInfo[];
+  addToScanResultsText: string;
+  setAddToScanResultsText: (text: string) => void;
+  addToScanResultsEntityType: string;
+  setAddToScanResultsEntityType: (type: string) => void;
+  handleAddToScanResults: () => void;
   hasScanResults: boolean;
 }
 
-export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
+export const AddToScanResultsView: React.FC<AddToScanResultsViewProps> = ({
   setPanelMode,
-  addSelectionText,
-  setAddSelectionText,
-  addSelectionEntityType,
-  setAddSelectionEntityType,
-  setAddSelectionFromContextMenu,
-  addingSelection,
-  handleAddSelection,
-  openctiPlatforms,
+  addToScanResultsText,
+  setAddToScanResultsText,
+  addToScanResultsEntityType,
+  setAddToScanResultsEntityType,
+  handleAddToScanResults,
   hasScanResults,
 }) => {
-  const handleCloseAddSelection = () => {
-    setAddSelectionText('');
-    setAddSelectionFromContextMenu(false);
-    // Navigate based on whether scan results exist
+  const handleClose = () => {
+    setAddToScanResultsText('');
+    setAddToScanResultsEntityType('');
     if (hasScanResults) {
       setPanelMode('scan-results');
     } else {
@@ -88,14 +79,20 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
     }
   };
 
+  const handleAdd = () => {
+    handleAddToScanResults();
+    // After adding, go to scan results
+    setPanelMode('scan-results');
+  };
+
   return (
     <Box sx={{ p: 2 }}>
-      {/* Back button - always show */}
+      {/* Back button */}
       <Box sx={{ mb: 1.5 }}>
         <Button
           size="small"
           startIcon={<ChevronLeftOutlined />}
-          onClick={handleCloseAddSelection}
+          onClick={handleClose}
           sx={{ 
             color: 'text.secondary',
             textTransform: 'none',
@@ -108,8 +105,12 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
 
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <Typography variant="h6" sx={{ fontSize: 16 }}>Add to OpenCTI</Typography>
+        <Typography variant="h6" sx={{ fontSize: 16 }}>Add to scan results</Typography>
       </Box>
+
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        Add selected text as a new entity to the scan results. You can then include it when creating a container or adding to OpenCTI.
+      </Typography>
 
       <Paper
         elevation={0}
@@ -126,22 +127,22 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
           Selected Text
         </Typography>
         <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-          {addSelectionText}
+          {addToScanResultsText}
         </Typography>
       </Paper>
 
       <Autocomplete
         options={SELECTABLE_ENTITY_TYPES}
         getOptionLabel={(option) => option.label}
-        value={SELECTABLE_ENTITY_TYPES.find(t => t.value === addSelectionEntityType) || null}
-        onChange={(_, newValue) => setAddSelectionEntityType(newValue?.value || '')}
+        value={SELECTABLE_ENTITY_TYPES.find(t => t.value === addToScanResultsEntityType) || null}
+        onChange={(_, newValue) => setAddToScanResultsEntityType(newValue?.value || '')}
         renderInput={(params) => (
           <TextField
             {...params}
             label="Entity Type"
             size="small"
             required
-            helperText={addSelectionEntityType ? 'Type auto-detected from value' : 'Select the entity type'}
+            helperText="Select the type of entity this text represents"
           />
         )}
         renderOption={(props, option) => (
@@ -153,23 +154,17 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
         sx={{ mb: 2 }}
       />
 
-      {openctiPlatforms.length === 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          No OpenCTI platform configured. Please configure one in settings.
-        </Alert>
-      )}
-
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Button
           variant="contained"
-          onClick={handleAddSelection}
-          disabled={!addSelectionText || !addSelectionEntityType || addingSelection || openctiPlatforms.length === 0}
+          onClick={handleAdd}
+          disabled={!addToScanResultsText || !addToScanResultsEntityType}
           fullWidth
-          startIcon={addingSelection ? <CircularProgress size={16} color="inherit" /> : <AddOutlined />}
+          startIcon={<AddOutlined />}
         >
-          {addingSelection ? 'Adding...' : 'Add to OpenCTI'}
+          Add to scan results
         </Button>
-        <Button variant="outlined" onClick={handleCloseAddSelection}>
+        <Button variant="outlined" onClick={handleClose}>
           Cancel
         </Button>
       </Box>
@@ -177,5 +172,5 @@ export const OCTIAddSelectionView: React.FC<AddSelectionViewProps> = ({
   );
 };
 
-export default OCTIAddSelectionView;
+export default AddToScanResultsView;
 

@@ -176,9 +176,9 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
 
   // Step 2: Show scanning / results view
   return (
-    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Back to actions button */}
-      <Box sx={{ mb: 1.5 }}>
+      <Box sx={{ mb: 1.5, flexShrink: 0 }}>
         <Button
           size="small"
           startIcon={<ChevronLeftOutlined />}
@@ -193,14 +193,14 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
         </Button>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
         <TravelExploreOutlined sx={{ color: 'primary.main' }} />
         <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Investigation Mode</Typography>
       </Box>
 
       {/* Show selected platform only if multiple OpenCTI platforms */}
       {openctiPlatforms.length > 1 && investigationPlatform && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1, flexShrink: 0 }}>
           <img
             src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
               ? chrome.runtime.getURL(`assets/logos/logo_opencti_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`)
@@ -254,7 +254,7 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
         </>
       ) : (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, flexShrink: 0 }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               Found {investigationEntities.length} entities
             </Typography>
@@ -266,7 +266,7 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
 
           {/* Type filter */}
           {investigationEntityTypes.length > 1 && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2, flexShrink: 0 }}>
               <FormControl fullWidth size="small">
                 <InputLabel id="investigation-type-filter-label">Filter by type</InputLabel>
                 <Select
@@ -294,7 +294,7 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
             </Box>
           )}
 
-          <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+          <Box sx={{ flex: 1, overflow: 'auto', mb: 2, minHeight: 0 }}>
             {filteredInvestigationEntities.map((entity) => {
               const entityColor = itemColor(entity.type, mode === 'dark');
               return (
@@ -349,6 +349,7 @@ export const OCTIInvestigationView: React.FC<InvestigationViewProps> = ({
                 bgcolor: 'background.paper',
                 border: 1,
                 borderColor: 'divider',
+                flexShrink: 0,
               }}
             >
               <Typography variant="body2" sx={{ mb: 1.5, fontWeight: 600 }}>

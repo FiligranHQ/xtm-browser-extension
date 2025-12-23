@@ -5,6 +5,24 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.16] - 2025-12-23
+
+### Added
+- **MITRE ATT&CK Regex Detection**: Attack patterns are now also detected via regex matching for MITRE IDs (e.g., T1480, T1547.001, TA0007, S0001, G0001). Attack patterns found via regex that are not already in cache are shown as "Not found in OpenCTI" so users can quickly add them
+- **Attack Pattern Creation**: Creating attack patterns in OpenCTI now automatically sets the `x_mitre_id` field when the name matches a MITRE ATT&CK ID pattern
+- **Add to Scan Results Context Menu**: New right-click context menu option "Add to scan results" allows users to manually add selected text as any entity type to the scan results. A dialog prompts for entity type selection, and the entity is added as "not found" so it can be included in container creation or bulk import to OpenCTI
+
+### Changed
+- **Terminology Cleanup**: Renamed internal types from "SDO" to "OpenCTI entity types" for clarity (e.g., `SDO_SEARCH_TYPES` → `OPENCTI_ENTITY_SEARCH_TYPES`)
+
+### Fixed
+- **PDF Scanner Attack Pattern Detection**: PDF scanner now correctly detects attack patterns via regex matching (same as web page scanning)
+- **Dual Detection (OpenCTI/OpenAEV)**: Fixed entities found in OpenAEV but not OpenCTI not showing dual-color highlighting. OpenAEV entities no longer incorrectly supersede observables, allowing proper mixed-state display
+- **PDF Scanner Dual Detection**: PDF scanner now correctly shows dual-color (amber/green gradient) highlighting for entities not found in OpenCTI but found in OpenAEV, matching the behavior of web page scanning
+- **Add to OpenCTI Navigation**: Cancel button and new "Back to..." link in the Add to OpenCTI view now correctly navigate back to scan results (if available) or home, instead of always going to home
+- **Investigation Mode Scrolling**: Fixed entity list in Investigation Mode not being scrollable when many entities are found. The list now properly scrolls within the available space
+- **OpenAEV Entity URLs**: Fixed "Open in OpenAEV" links for entities that don't have overview pages. Only Asset, Scenario, and Simulation have individual overview pages; all other entity types (Asset Group, Player, Team, Organization, Attack Pattern, Finding, Vulnerability) now correctly redirect to their list pages with appropriate text search filters pre-applied
+
 ## [0.0.15] - 2025-12-22
 
 ### Added
@@ -333,6 +351,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.16]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.12...v0.0.13

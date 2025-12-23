@@ -28,7 +28,7 @@ import {
   CREDIT_CARD_PATTERN,
   OBSERVABLE_PATTERNS,
   CVE_CONFIG,
-  SDO_SEARCH_TYPES,
+  OPENCTI_ENTITY_SEARCH_TYPES,
   createNamePattern,
   detectObservableType,
 } from '../../src/shared/detection/patterns';
@@ -622,14 +622,14 @@ describe('CVE_CONFIG', () => {
 // SDO Search Types Tests
 // ============================================================================
 
-describe('SDO_SEARCH_TYPES', () => {
+describe('OPENCTI_ENTITY_SEARCH_TYPES', () => {
   it('should include common threat types', () => {
-    expect(SDO_SEARCH_TYPES).toContain('Intrusion-Set');
-    expect(SDO_SEARCH_TYPES).toContain('Malware');
-    expect(SDO_SEARCH_TYPES).toContain('Threat-Actor');
-    expect(SDO_SEARCH_TYPES).toContain('Campaign');
-    expect(SDO_SEARCH_TYPES).toContain('Tool');
-    expect(SDO_SEARCH_TYPES).toContain('Attack-Pattern');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Intrusion-Set');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Malware');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Threat-Actor');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Campaign');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Tool');
+    expect(OPENCTI_ENTITY_SEARCH_TYPES).toContain('Attack-Pattern');
   });
 });
 

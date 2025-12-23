@@ -16,7 +16,8 @@ import type { DetectedOAEVEntity } from '../types/openaev';
 import {
   OBSERVABLE_PATTERNS,
   CVE_CONFIG,
-  SDO_SEARCH_TYPES,
+  MITRE_ATTACK_PATTERN,
+  OPENCTI_ENTITY_SEARCH_TYPES,
   createNamePattern,
   refangIndicator,
   isDefanged,
@@ -251,6 +252,45 @@ export class DetectionEngine {
   }
 
   /**
+   * Detect MITRE ATT&CK IDs via regex
+   * Used to find attack patterns not already matched in the scan
+   * Returns patterns like T1480, T1547.001, TA0001, S0001, G0001
+   * 
+   * @param text - Text content to scan
+   * @param alreadyMatchedIds - Set of MITRE IDs already matched (to avoid duplicates)
+   * @returns Array of detected attack patterns (marked as not found in OpenCTI)
+   */
+  detectAttackPatternsViaRegex(text: string, alreadyMatchedIds: Set<string>): DetectedOCTIEntity[] {
+    const detected: DetectedOCTIEntity[] = [];
+    const pattern = new RegExp(MITRE_ATTACK_PATTERN.source, MITRE_ATTACK_PATTERN.flags);
+    const seenIds = new Set<string>();
+    
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      // Normalize to uppercase for consistent matching
+      const normalizedId = match[0].toUpperCase();
+      
+      // Skip if already matched or already detected in this regex scan
+      if (alreadyMatchedIds.has(normalizedId) || seenIds.has(normalizedId)) {
+        continue;
+      }
+      
+      seenIds.add(normalizedId);
+      
+      detected.push({
+        type: 'Attack-Pattern',
+        name: normalizedId, // Use the MITRE ID as the name
+        matchedValue: match[0], // Keep original for highlighting
+        startIndex: match.index,
+        endIndex: match.index + match[0].length,
+        found: false, // Mark as not found so users can create it
+      });
+    }
+
+    return detected;
+  }
+
+  /**
    * Search for known OpenCTI entity names in text
    */
   async detectOCTIEntitiesFromNames(text: string, entityNames: string[]): Promise<DetectedOCTIEntity[]> {
@@ -336,7 +376,7 @@ export class DetectionEngine {
         try {
           const result = await client.searchSDOByNameOrAlias(
             name,
-            SDO_SEARCH_TYPES as unknown as string[]
+            OPENCTI_ENTITY_SEARCH_TYPES as unknown as string[]
           );
           if (result) {
             matches.push({ entity: result, platformId });
@@ -757,11 +797,13 @@ export class DetectionEngine {
    * @param text - Text content to scan
    * @param knownEntityNames - Optional array of known entity names to search for
    * @param vulnSettings - Optional settings for vulnerability/CVE detection
+   * @param attackPatternEnabled - Whether to detect MITRE ATT&CK IDs via regex (default: true)
    */
   async scan(
     text: string,
     knownEntityNames: string[] = [],
-    vulnSettings: VulnerabilityDetectionSettings = { enabledForOpenCTI: true, enabledForOpenAEV: true }
+    vulnSettings: VulnerabilityDetectionSettings = { enabledForOpenCTI: true, enabledForOpenAEV: true },
+    attackPatternEnabled: boolean = true
   ): Promise<DetectionResult> {
     const startTime = performance.now();
 
@@ -781,21 +823,25 @@ export class DetectionEngine {
     // Detect OpenAEV entities from cache
     const rawOpenaevEntities = await this.detectOAEVEntitiesFromCache(text);
     
-    // IMPORTANT: Cached entities take precedence over observables
-    // If an entity name exactly matches an observable value (same text range),
+    // IMPORTANT: Only OpenCTI cached entities take precedence over observables
+    // If an OpenCTI entity name exactly matches an observable value (same text range),
     // remove the observable and keep the entity (e.g., "terport.com.py" as Organization)
-    const allCachedEntityRanges = [
-      ...cachedOCTIEntities.map(e => ({ start: e.startIndex, end: e.endIndex, name: e.name })),
-      ...rawOpenaevEntities.map(e => ({ start: e.startIndex, end: e.endIndex, name: e.name })),
-    ];
+    // NOTE: We do NOT supersede with OpenAEV entities because we want dual detection:
+    // - Observable shows as "not found in OpenCTI" (amber)
+    // - But with green indicator showing "found in OpenAEV"
+    const octiCachedEntityRanges = cachedOCTIEntities.map(e => ({ 
+      start: e.startIndex, 
+      end: e.endIndex, 
+      name: e.name 
+    }));
     
-    // Remove observables that exactly match cached entity ranges
+    // Remove observables that exactly match OpenCTI cached entity ranges
     observables = observables.filter(obs => {
-      const exactEntityMatch = allCachedEntityRanges.find(entity => 
+      const exactEntityMatch = octiCachedEntityRanges.find(entity => 
         entity.start === obs.startIndex && entity.end === obs.endIndex
       );
       if (exactEntityMatch) {
-        log.debug(`[Detection] Observable "${obs.value}" superseded by cached entity "${exactEntityMatch.name}"`);
+        log.debug(`[Detection] Observable "${obs.value}" superseded by OpenCTI cached entity "${exactEntityMatch.name}"`);
         return false;
       }
       return true;
@@ -829,6 +875,42 @@ export class DetectionEngine {
       return !isStrictlyInsideObservable;
     });
     
+    // Detect MITRE ATT&CK IDs via regex - finds IDs not already matched
+    // Only run if Attack-Pattern detection is enabled for OpenCTI
+    let regexDetectedAttackPatterns: DetectedOCTIEntity[] = [];
+    if (attackPatternEnabled) {
+      // Build set of MITRE IDs already matched (to avoid duplicates)
+      const alreadyMatchedMitreIds = new Set<string>();
+      for (const entity of filteredCachedOCTIEntities) {
+        if (entity.type === 'Attack-Pattern') {
+          // Add the matched value (what was found in text)
+          if (entity.matchedValue) {
+            alreadyMatchedMitreIds.add(entity.matchedValue.toUpperCase());
+          }
+          alreadyMatchedMitreIds.add(entity.name.toUpperCase());
+          // Also add x_mitre_id from entityData if available
+          const entityData = entity.entityData as { x_mitre_id?: string } | undefined;
+          if (entityData?.x_mitre_id) {
+            alreadyMatchedMitreIds.add(entityData.x_mitre_id.toUpperCase());
+          }
+          // Check aliases (which include x_mitre_id)
+          if (entity.aliases) {
+            for (const alias of entity.aliases) {
+              alreadyMatchedMitreIds.add(alias.toUpperCase());
+            }
+          }
+        }
+      }
+      
+      // Detect additional attack patterns via regex (not already matched)
+      regexDetectedAttackPatterns = this.detectAttackPatternsViaRegex(text, alreadyMatchedMitreIds);
+      if (regexDetectedAttackPatterns.length > 0) {
+        log.info(`[Detection] Found ${regexDetectedAttackPatterns.length} MITRE ATT&CK IDs via regex (not already matched)`);
+      }
+    } else {
+      log.debug('[Scan] Attack pattern regex detection skipped - disabled in OpenCTI settings');
+    }
+    
     // Also detect from provided entity names (fallback/additional)
     let additionalOCTIEntities: DetectedOCTIEntity[] = [];
     if (knownEntityNames.length > 0) {
@@ -849,6 +931,15 @@ export class DetectionEngine {
       if (!seenNames.has(entity.name.toLowerCase())) {
         allOCTIEntities.push(entity);
         seenNames.add(entity.name.toLowerCase());
+      }
+    }
+    
+    // Add regex-detected attack patterns (these are MITRE IDs not found in cache)
+    // They are marked as "not found" so users can create them in OpenCTI
+    for (const attackPattern of regexDetectedAttackPatterns) {
+      if (!seenNames.has(attackPattern.name.toLowerCase())) {
+        allOCTIEntities.push(attackPattern);
+        seenNames.add(attackPattern.name.toLowerCase());
       }
     }
 

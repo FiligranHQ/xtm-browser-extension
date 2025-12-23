@@ -8,6 +8,10 @@ import type * as pdfjsLib from 'pdfjs-dist';
 import type { ScanResultPayload } from '../../shared/types/messages';
 import { getHighlightColors, getStatusIconColor } from '../../shared/utils/highlight-colors';
 import { generateDefangedVariants } from '../../shared/detection/patterns';
+import {
+  HIGHLIGHT_FOUND,
+  HIGHLIGHT_NOT_FOUND,
+} from '../../shared/constants';
 import type { ScanEntity, HighlightRegion, TextItem, TextLine, CharPosition, PDFViewport } from '../types';
 
 /**
@@ -257,6 +261,48 @@ export function extractAllEntities(scanResults: ScanResultPayload): ScanEntity[]
 }
 
 /**
+ * Build a map of OpenAEV entity values for cross-platform lookup
+ * Used to detect mixed state (not in OpenCTI but found in OpenAEV)
+ */
+function buildOpenAEVEntityMap(scanResults: ScanResultPayload): Set<string> {
+  const openaevValues = new Set<string>();
+  
+  if (scanResults.openaevEntities) {
+    for (const entity of scanResults.openaevEntities) {
+      if (entity.found) {
+        // Add the entity name (lowercase for case-insensitive matching)
+        openaevValues.add(entity.name.toLowerCase());
+        // Also add the value field if present
+        if ('value' in entity && entity.value) {
+          openaevValues.add(String(entity.value).toLowerCase());
+        }
+      }
+    }
+  }
+  
+  return openaevValues;
+}
+
+/**
+ * Check if an entity value exists in OpenAEV (for mixed state detection)
+ */
+function isFoundInOpenAEV(entity: ScanEntity, openaevValues: Set<string>): boolean {
+  // Check the entity value
+  if ('value' in entity && entity.value) {
+    if (openaevValues.has(String(entity.value).toLowerCase())) {
+      return true;
+    }
+  }
+  // Check the entity name
+  if ('name' in entity && entity.name) {
+    if (openaevValues.has(String(entity.name).toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Draw a single highlight with checkbox and status icon
  */
 function drawHighlight(
@@ -267,11 +313,81 @@ function drawHighlight(
   highlightWidth: number,
   highlightHeight: number,
   isSelected: boolean,
-  showCheckbox: boolean
+  showCheckbox: boolean,
+  isMixedState: boolean = false
 ): void {
   const isAIDiscovered = entity.discoveredByAI === true;
   
-  // Get colors using shared utility
+  // Calculate sizes
+  const checkboxSize = Math.min(highlightHeight * 0.5, 10);
+  const iconSize = Math.min(highlightHeight * 0.5, 10);
+  const padding = 2;
+  
+  // For mixed state: draw gradient background (amber -> green)
+  if (isMixedState) {
+    // Draw gradient background: 70% amber, 30% green
+    const gradient = context.createLinearGradient(highlightX, 0, highlightX + highlightWidth, 0);
+    gradient.addColorStop(0, isSelected ? 'rgba(15, 188, 255, 0.2)' : HIGHLIGHT_NOT_FOUND.background);
+    gradient.addColorStop(0.7, isSelected ? 'rgba(15, 188, 255, 0.2)' : HIGHLIGHT_NOT_FOUND.background);
+    gradient.addColorStop(0.7, HIGHLIGHT_FOUND.background);
+    gradient.addColorStop(1, HIGHLIGHT_FOUND.background);
+    
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
+    context.fill();
+    
+    // Draw amber outline
+    context.strokeStyle = isSelected ? '#0fbcff' : HIGHLIGHT_NOT_FOUND.outline;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
+    context.stroke();
+    
+    // Draw checkbox on the left (amber style for mixed state)
+    if (showCheckbox) {
+      const checkboxX = highlightX + padding;
+      const checkboxY = highlightY + (highlightHeight - checkboxSize) / 2;
+      
+      context.strokeStyle = isSelected ? '#0fbcff' : HIGHLIGHT_NOT_FOUND.outline;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
+      context.stroke();
+      
+      if (isSelected) {
+        context.fillStyle = HIGHLIGHT_NOT_FOUND.outline;
+        context.beginPath();
+        context.roundRect(checkboxX, checkboxY, checkboxSize, checkboxSize, 1);
+        context.fill();
+        
+        // Draw checkmark
+        context.strokeStyle = 'white';
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(checkboxX + checkboxSize * 0.2, checkboxY + checkboxSize * 0.5);
+        context.lineTo(checkboxX + checkboxSize * 0.4, checkboxY + checkboxSize * 0.7);
+        context.lineTo(checkboxX + checkboxSize * 0.8, checkboxY + checkboxSize * 0.3);
+        context.stroke();
+      }
+    }
+    
+    // Draw green checkmark on the right (found in OpenAEV)
+    const iconX = highlightX + highlightWidth - iconSize - padding;
+    const iconY = highlightY + (highlightHeight - iconSize) / 2;
+    
+    context.strokeStyle = HIGHLIGHT_FOUND.outline;
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(iconX + iconSize * 0.15, iconY + iconSize * 0.5);
+    context.lineTo(iconX + iconSize * 0.4, iconY + iconSize * 0.75);
+    context.lineTo(iconX + iconSize * 0.85, iconY + iconSize * 0.25);
+    context.stroke();
+    
+    return;
+  }
+  
+  // Get colors using shared utility (for non-mixed state)
   const { background: bgColor, outline: outlineColor } = getHighlightColors({
     found: entity.found,
     discoveredByAI: isAIDiscovered,
@@ -290,11 +406,6 @@ function drawHighlight(
   context.beginPath();
   context.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 2);
   context.stroke();
-  
-  // Calculate sizes
-  const checkboxSize = Math.min(highlightHeight * 0.5, 10);
-  const iconSize = Math.min(highlightHeight * 0.5, 10);
-  const padding = 2;
   
   // Draw checkbox on the left (only for entities that can be imported to OpenCTI)
   if (showCheckbox) {
@@ -404,6 +515,10 @@ export async function renderHighlightsOnCanvas(
   if (!scanResults) return regions;
 
   const textContent = await page.getTextContent();
+  
+  // Build OpenAEV entity map for mixed state detection
+  // (entities not found in OpenCTI but found in OpenAEV)
+  const openaevValues = buildOpenAEVEntityMap(scanResults);
   
   // Build entities array combining all types, but preserving original observable values
   // This mirrors the webpage approach where obs.value is used directly
@@ -584,6 +699,13 @@ export async function renderHighlightsOnCanvas(
     const isOpenAEVOnly = entity.type?.startsWith('oaev-') || false;
     const showCheckbox = !isOpenAEVOnly || !entity.found;
     
+    // Check for mixed state: entity not found in OpenCTI but found in OpenAEV
+    // Only applies to observables and OpenCTI entities that are not found
+    const isMixedState = !entity.found && 
+                         !isOpenAEVOnly && 
+                         !entity.discoveredByAI && 
+                         isFoundInOpenAEV(entity, openaevValues);
+    
     // Calculate padding and dimensions
     const checkboxSize = Math.min(height * 0.7, 10);
     const iconSize = Math.min(height * 0.7, 10);
@@ -608,7 +730,8 @@ export async function renderHighlightsOnCanvas(
       highlightWidth,
       highlightHeight,
       isSelected,
-      showCheckbox
+      showCheckbox,
+      isMixedState
     );
     
     // Store region for click detection

@@ -356,21 +356,28 @@ describe('OpenAEV Entity Functions', () => {
       expect(getOAEVEntityUrl(baseUrl, 'Asset', 'asset-123')).toBe(`${baseUrl}/admin/assets/endpoints/asset-123`);
     });
 
-    it('should build AssetGroup URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123')).toBe(`${baseUrl}/admin/assets/asset_groups/ag-123`);
+    it('should build AssetGroup URL with query filter', () => {
+      const url = getOAEVEntityUrl(baseUrl, 'AssetGroup', 'ag-123');
+      expect(url).toContain(`${baseUrl}/admin/assets/asset_groups`);
+      expect(url).toContain('?query=');
     });
 
-    it('should build Player/User URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'Player', 'player-123')).toBe(`${baseUrl}/admin/teams/players/player-123`);
-      expect(getOAEVEntityUrl(baseUrl, 'User', 'user-123')).toBe(`${baseUrl}/admin/teams/players/user-123`);
+    it('should build Player/User URL with query filter', () => {
+      const playerUrl = getOAEVEntityUrl(baseUrl, 'Player', 'player-123');
+      expect(playerUrl).toContain(`${baseUrl}/admin/teams/players`);
+      expect(playerUrl).toContain('?query=');
+      
+      const userUrl = getOAEVEntityUrl(baseUrl, 'User', 'user-123');
+      expect(userUrl).toContain(`${baseUrl}/admin/teams/players`);
+      expect(userUrl).toContain('?query=');
     });
 
-    it('should build Team URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(`${baseUrl}/admin/teams/team-123`);
+    it('should build Team URL (list page)', () => {
+      expect(getOAEVEntityUrl(baseUrl, 'Team', 'team-123')).toBe(`${baseUrl}/admin/teams/teams`);
     });
 
-    it('should build Organization URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(`${baseUrl}/admin/teams/organizations/org-123`);
+    it('should build Organization URL (list page)', () => {
+      expect(getOAEVEntityUrl(baseUrl, 'Organization', 'org-123')).toBe(`${baseUrl}/admin/teams/organizations`);
     });
 
     it('should build Scenario URL', () => {
@@ -381,16 +388,20 @@ describe('OpenAEV Entity Functions', () => {
       expect(getOAEVEntityUrl(baseUrl, 'Exercise', 'ex-123')).toBe(`${baseUrl}/admin/simulations/ex-123`);
     });
 
-    it('should build AttackPattern URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(`${baseUrl}/admin/attack_patterns/ap-123`);
+    it('should build AttackPattern URL (list page)', () => {
+      expect(getOAEVEntityUrl(baseUrl, 'AttackPattern', 'ap-123')).toBe(`${baseUrl}/admin/settings/taxonomies/attack_patterns`);
     });
 
-    it('should build Finding URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'Finding', 'find-123')).toBe(`${baseUrl}/admin/findings/find-123`);
+    it('should build Finding URL with query filter', () => {
+      const url = getOAEVEntityUrl(baseUrl, 'Finding', 'find-123');
+      expect(url).toContain(`${baseUrl}/admin/findings`);
+      expect(url).toContain('?query=');
     });
 
-    it('should build Vulnerability URL', () => {
-      expect(getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123')).toBe(`${baseUrl}/admin/vulnerabilities/vuln-123`);
+    it('should build Vulnerability URL with query filter', () => {
+      const url = getOAEVEntityUrl(baseUrl, 'Vulnerability', 'vuln-123');
+      expect(url).toContain(`${baseUrl}/admin/settings/taxonomies/vulnerabilities`);
+      expect(url).toContain('?query=');
     });
 
     it('should handle trailing slash in base URL', () => {

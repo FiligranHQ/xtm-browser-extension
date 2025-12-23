@@ -21,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PDF Scanner Dual Detection**: PDF scanner now correctly shows dual-color (amber/green gradient) highlighting for entities not found in OpenCTI but found in OpenAEV, matching the behavior of web page scanning
 - **Add to OpenCTI Navigation**: Cancel button and new "Back to..." link in the Add to OpenCTI view now correctly navigate back to scan results (if available) or home, instead of always going to home
 - **Investigation Mode Scrolling**: Fixed entity list in Investigation Mode not being scrollable when many entities are found. The list now properly scrolls within the available space
+- **Investigation Mode Deduplication**: Fixed duplicate entities appearing in the investigation entity list when the same entity (e.g., a CVE) appears multiple times on a page
 - **OpenAEV Entity URLs**: Fixed "Open in OpenAEV" links for entities that don't have overview pages. Only Asset, Scenario, and Simulation have individual overview pages; all other entity types (Asset Group, Player, Team, Organization, Attack Pattern, Finding, Vulnerability) now correctly redirect to their list pages with appropriate text search filters pre-applied
+- **Add to Scan Results Duplicates**: "Add to scan results" context menu now prevents adding duplicate entities (same type and value)
+- **Unused Code Cleanup**: Removed unused component props and fixed ESLint/TypeScript warnings
 
 ## [0.0.15] - 2025-12-22
 

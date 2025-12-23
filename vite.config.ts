@@ -14,9 +14,59 @@ import {
 // Get browser from environment variable
 const browser = process.env.BROWSER || 'chrome';
 
+// CDN URLs that must be removed for Chrome Web Store compliance (Manifest V3)
+// jspdf library contains these URLs for its pdfobjectnewwindow output type feature
+// which we don't use, but the URL still gets bundled and triggers policy violations
+const CDN_URLS_TO_REMOVE = [
+  'https://cdnjs.cloudflare.com/ajax/libs/pdfobject/2.1.1/pdfobject.min.js',
+  'sha512-4ze/a9/4jqu+tX9dfOqJYSvyYd5M6qum/3HpCLr+/Jqf0whc37VUbkpNGHR7/8pSnCFw47T1fmIpwBV7UySh3g==',
+];
+
+/**
+ * Vite plugin to remove CDN URLs from bundled code
+ * This is necessary for Chrome Web Store compliance with Manifest V3
+ */
+function removeCdnUrls() {
+  return {
+    name: 'remove-cdn-urls',
+    transform(code: string, id: string) {
+      // Only process JS files
+      if (!id.endsWith('.js') && !id.endsWith('.ts') && !id.endsWith('.mjs')) {
+        return null;
+      }
+      
+      let modified = code;
+      for (const url of CDN_URLS_TO_REMOVE) {
+        if (modified.includes(url)) {
+          modified = modified.split(url).join('');
+        }
+      }
+      
+      if (modified !== code) {
+        return { code: modified, map: null };
+      }
+      return null;
+    },
+    renderChunk(code: string) {
+      let modified = code;
+      for (const url of CDN_URLS_TO_REMOVE) {
+        if (modified.includes(url)) {
+          modified = modified.split(url).join('');
+        }
+      }
+      
+      if (modified !== code) {
+        return { code: modified, map: null };
+      }
+      return null;
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    removeCdnUrls(),
     {
       name: 'copy-manifest-and-assets',
       writeBundle() {
@@ -141,6 +191,7 @@ export default defineConfig({
         
         await build({
           configFile: false,
+          plugins: [removeCdnUrls()],
           build: {
             outDir: contentDir,
             emptyDirBeforeWrite: false,

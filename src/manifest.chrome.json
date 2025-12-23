@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Filigran XTM",
-  "short_name": "XTM",
+  "name": "Filigran exTended Threat Management Extension",
+  "short_name": "Filigran XTM",
   "version": "0.0.16",
   "description": "Detect threat indicators and entities on web pages. Create reports and integrate with OpenCTI/OpenAEV.",
   "author": "Filigran",

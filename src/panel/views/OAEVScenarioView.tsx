@@ -159,6 +159,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
     setScenarioAIContext,
     scenarioAIGeneratedScenario,
     setScenarioAIGeneratedScenario,
+    resetScenarioState,
   } = props;
 
   const logoSuffix = mode === 'dark' ? 'dark-theme' : 'light-theme';
@@ -432,9 +433,8 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
         window.open(scenarioUrl, '_blank');
       }
       
-      // Reset and close
-      setScenarioAIMode(false);
-      setScenarioAIGeneratedScenario(null);
+      // Reset all scenario state and redirect to home
+      resetScenarioState();
       handleClose();
       
     } catch (error) {
@@ -550,18 +550,8 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       
       showToast({ type: 'success', message: 'Scenario created successfully' });
       
-      // Reset and close
-      setScenarioForm({
-        name: '',
-        description: '',
-        subtitle: '',
-        category: SCENARIO_DEFAULT_VALUES.category,
-        mainFocus: SCENARIO_DEFAULT_VALUES.mainFocus,
-        severity: SCENARIO_DEFAULT_VALUES.severity,
-      });
-      setSelectedInjects([]);
-      setScenarioOverviewData(null);
-      setScenarioEmails([]);
+      // Reset all scenario state and redirect to home
+      resetScenarioState();
       handleClose();
     } catch (error) {
       log.error(' Scenario creation error:', error);

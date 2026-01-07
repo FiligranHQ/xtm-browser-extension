@@ -1,6 +1,6 @@
 {
   "name": "filigran-xtm-browser-extension",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Filigran XTM Browser Extension - Connect to OpenCTI and OpenAEV for threat intelligence management",
   "type": "module",
   "scripts": {

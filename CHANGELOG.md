@@ -5,6 +5,15 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.18] - 2026-01-07
+
+### Changed
+- **Scenario Creation UX**: After clicking "Generate Scenario with AI", users are now redirected to step 2 (inject selection) instead of being stuck on step 1
+
+### Fixed
+- **Panel Mode Cancel Button**: Fixed "Cancel" button not working in Create Scenario when using panel mode
+- **AI Inject Selection**: Fixed "Select using AI" button in Create Scenario not selecting any injects. The AI prompt now properly includes attack pattern IDs and available inject information for accurate matching
+
 ## [0.0.16] - 2025-12-23
 
 ### Added
@@ -356,6 +365,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.18]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.16...v0.0.18
 [0.0.16]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.13...v0.0.14

@@ -1410,7 +1410,10 @@ const App: React.FC = () => {
   };
 
   // Action handlers
-  const handleClose = () => window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
+  const handleClose = () => {
+    // Always navigate to home (same behavior as "Back to actions")
+    setPanelMode('empty');
+  };
   const handleOpenInPlatform = (entityId: string, draftId?: string) => {
     if (platformUrl && entityId) {
       const url = draftId ? `${platformUrl}/dashboard/data/import/draft/${draftId}` : `${platformUrl}/dashboard/id/${entityId}`;

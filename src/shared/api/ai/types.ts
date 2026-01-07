@@ -45,7 +45,12 @@ export interface ScenarioGenerationRequest {
   scenarioName: string;
   typeAffinity?: string;
   platformAffinity?: string[];
-  detectedAttackPatterns?: Array<{ name: string; id?: string; description?: string }>;
+  detectedAttackPatterns?: Array<{
+    name: string;
+    id?: string; // external ID like T1566
+    description?: string;
+    availableInjects?: Array<{ id: string; label: string }>;
+  }>;
   detectedDomains?: string[];
   detectedHostnames?: string[];
   detectedEmails?: string[];

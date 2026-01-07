@@ -244,11 +244,18 @@ Please generate a professional description that:
 }
 
 export function buildScenarioPrompt(request: ScenarioGenerationRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): string {
-  const attackPatternsInfo = request.detectedAttackPatterns?.map(ap =>
-    `- ${ap.name}${ap.id ? ` (${ap.id})` : ''}${ap.description ? `: ${ap.description.substring(0, 200)}` : ''}`
-  ).join('\n') || 'None detected';
+  // Build attack patterns info with available injects
+  const attackPatternsInfo = request.detectedAttackPatterns?.map(ap => {
+    let info = `- ${ap.name}`;
+    if (ap.id) info += ` [ID: ${ap.id}]`;
+    if (ap.description) info += `\n  Description: ${ap.description.substring(0, 150)}`;
+    if (ap.availableInjects && ap.availableInjects.length > 0) {
+      info += `\n  Available injects: ${ap.availableInjects.map(i => `"${i.label}"`).join(', ')}`;
+    }
+    return info;
+  }).join('\n') || 'None detected';
 
-  return `Generate a security simulation scenario based on the following information:
+  return `Select relevant attack patterns for a security simulation scenario based on page content analysis.
 
 Scenario Name: ${request.scenarioName}
 Type: ${request.typeAffinity || 'attack-scenario'}
@@ -258,7 +265,7 @@ Source Intelligence:
 - Page: ${request.pageTitle}
 - URL: ${request.pageUrl}
 
-Detected Attack Patterns/TTPs:
+Available Attack Patterns to select from:
 ${attackPatternsInfo}
 
 ${request.detectedDomains?.length ? `Detected Domains: ${request.detectedDomains.join(', ')}` : ''}
@@ -268,25 +275,27 @@ ${request.detectedEmails?.length ? `Detected Emails: ${request.detectedEmails.jo
 Page Content:
 ${request.pageContent.substring(0, maxContentLength)}
 
+TASK: Analyze the page content and select the attack patterns that are MOST RELEVANT to what is described on this page.
+Only select attack patterns that are clearly mentioned or directly related to the threat/attack described.
+
 Generate a JSON response with this structure:
 {
-  "name": "scenario name",
-  "description": "detailed scenario description",
-  "subtitle": "short tagline",
-  "category": "attack-scenario|incident-response|detection-validation|red-team|purple-team",
+  "name": "scenario name based on page content",
+  "description": "brief description of the scenario",
   "injects": [
     {
-      "title": "inject title",
-      "description": "what this step does",
-      "type": "email|manual|command",
-      "content": "for command type: the actual command to execute",
-      "delayMinutes": 0,
-      "dependsOn": null or index of previous inject
+      "attackPatternId": "the exact ID from the Available Attack Patterns list (e.g., T1566)",
+      "title": "brief title for this step",
+      "description": "what this attack technique does in this context"
     }
   ]
 }
 
-Create 5-10 realistic injects that simulate the attack chain described, with appropriate timing and dependencies.`;
+IMPORTANT:
+- The "attackPatternId" field MUST contain the exact ID from the Available Attack Patterns list above (the value in [ID: xxx] brackets)
+- Only include attack patterns that are relevant to this specific page content
+- Order injects logically to form a realistic attack chain
+- If no attack patterns are relevant, return an empty injects array`;
 }
 
 export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest, maxContentLength: number = AI_DEFAULTS.maxContentLength): {

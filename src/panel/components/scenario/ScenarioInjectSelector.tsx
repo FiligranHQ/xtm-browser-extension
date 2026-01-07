@@ -177,9 +177,11 @@ export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
         let delayAccumulator = 0;
         
         for (const aiInject of response.data.injects) {
+          // Match by attackPatternId (external ID like T1566) which AI returns
           const ap = playableAps.find(p => 
-            p.name.toLowerCase().includes(aiInject.title?.toLowerCase() || '') ||
-            p.externalId === aiInject.attackPatternId
+            p.externalId === aiInject.attackPatternId ||
+            // Fallback: try matching by name if AI returned a name-based title
+            (aiInject.title && p.name.toLowerCase() === aiInject.title.toLowerCase())
           );
           
           if (ap) {
@@ -201,7 +203,11 @@ export const ScenarioInjectSelector: React.FC<ScenarioInjectSelectorProps> = ({
         
         if (newSelectedInjects.length > 0) {
           setSelectedInjects(newSelectedInjects);
+        } else {
+          log.warn('AI returned injects but none matched available attack patterns');
         }
+      } else if (response?.success && (!response.data?.injects || response.data.injects.length === 0)) {
+        log.info('AI returned no relevant injects for this page content');
       }
     } catch (error) {
       log.error('AI inject selection failed:', error);

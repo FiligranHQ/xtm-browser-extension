@@ -1,6 +1,7 @@
 /**
  * Test for highlighting multiple observables in a list
- * Regression test for: https://github.com/FiligranHQ/xtm-browser-extension/issues/XXX
+ * Regression test for GitHub issue: No highlight (but found) on some observables
+ * https://github.com/FiligranHQ/xtm-browser-extension/issues/XXX (update with issue number)
  * 
  * Issue: When multiple defanged observables appeared in a list (e.g., IOCs section),
  * only some of them were highlighted despite all being detected.
@@ -16,6 +17,11 @@ import {
   collectRegexMatches,
   type NodeMapEntry,
 } from '../../src/content/utils/highlight';
+
+// Constants for TreeWalker (JSDOM compatibility)
+const SHOW_TEXT = 4; // NodeFilter.SHOW_TEXT
+const FILTER_ACCEPT = 1; // NodeFilter.FILTER_ACCEPT  
+const FILTER_REJECT = 2; // NodeFilter.FILTER_REJECT
 
 describe('Highlighting multiple observables in a list', () => {
   let dom: JSDOM;
@@ -52,10 +58,10 @@ describe('Highlighting multiple observables in a list', () => {
     const textNodes: Text[] = [];
     const walker = document.createTreeWalker(
       element,
-      4, // NodeFilter.SHOW_TEXT = 4 (use numeric value for JSDOM compatibility)
+      SHOW_TEXT, // NodeFilter.SHOW_TEXT
       {
         acceptNode: (node) => {
-          return node.textContent?.trim() ? 1 : 2; // FILTER_ACCEPT = 1, FILTER_REJECT = 2
+          return node.textContent?.trim() ? FILTER_ACCEPT : FILTER_REJECT;
         },
       }
     );

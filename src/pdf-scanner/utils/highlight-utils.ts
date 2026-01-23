@@ -648,6 +648,19 @@ export async function renderHighlightsOnCanvas(
     });
   });
 
+  // Sort highlights by position (line Y descending, then match index descending within line)
+  // This ensures consistent ordering when multiple entities match at overlapping positions
+  // and mirrors the webpage highlighting behavior
+  pendingHighlights.sort((a, b) => {
+    // First, sort by line Y position (descending - process from bottom to top)
+    const yDiff = a.line.y - b.line.y; // Lower Y in PDF coords = lower on page
+    if (Math.abs(yDiff) > Y_TOLERANCE) {
+      return yDiff; // Process lower lines first
+    }
+    // Within the same line, sort by match index (descending - process from right to left)
+    return b.matchIndex - a.matchIndex;
+  });
+
   // Second pass: draw all collected highlights (deduplicating by position)
   for (const { entity, line, matchIndex, searchValueLength } of pendingHighlights) {
     // Use value for selection (consistent with panel/webpage)

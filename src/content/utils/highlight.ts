@@ -386,9 +386,10 @@ export function findMatchPositionsWithBoundaries(
     
     for (const { node, start, end } of nodeMap) {
       if (pos >= start && pos < end) {
-        // Skip if already highlighted
+        // Skip if already highlighted - continue to check other nodes instead of breaking
+        // This handles cases where the nodeMap may have stale highlighted nodes
         if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) {
-          break;
+          continue;
         }
         
         const nodeText = node.textContent || '';
@@ -438,7 +439,8 @@ export function collectRegexMatches(
     
     for (const { node, start, end } of nodeMap) {
       if (pos >= start && pos < end) {
-        if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) break;
+        // Skip if already highlighted - continue to check other nodes instead of breaking
+        if (skipHighlighted && node.parentElement?.closest('.xtm-highlight')) continue;
         
         const nodeText = node.textContent || '';
         const localStart = pos - start;

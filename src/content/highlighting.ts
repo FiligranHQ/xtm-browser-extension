@@ -528,10 +528,11 @@ export function highlightResults(
   };
   
   // Highlight observables
-  // IMPORTANT: Collect ALL matches first, then apply highlights
-  // This prevents nodeMap from becoming stale when searching for multiple patterns
-  const observableMatches: Array<{
-    matches: ExtendedMatchInfo[];
+  // IMPORTANT: Collect ALL matches first, flatten them with metadata, sort by position,
+  // and apply in a single reverse pass. This ensures proper highlighting when multiple
+  // observables exist in the same text node (e.g., IOC lists on threat intel blogs).
+  const allObservableMatches: Array<{
+    match: ExtendedMatchInfo;
     meta: HighlightMeta;
     searchValue: string;
   }> = [];
@@ -551,15 +552,19 @@ export function highlightResults(
     const searchValues = getSearchValuesForObservable(obs);
     for (const searchValue of searchValues) {
       const matches = collectStringMatches(fullText, searchValue, nodeMap);
-      if (matches.length > 0) {
-        observableMatches.push({ matches, meta, searchValue });
+      for (const match of matches) {
+        allObservableMatches.push({ match, meta, searchValue });
       }
     }
   }
   
-  // Now apply all highlights (in reverse to preserve positions)
-  for (const { matches, meta, searchValue } of observableMatches) {
-    applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, searchValue, handlers));
+  // Sort all matches by position descending to apply from end to start
+  // This prevents earlier highlights from invalidating later node references
+  allObservableMatches.sort((a, b) => b.match.pos - a.match.pos);
+  
+  // Apply all highlights in a single reverse pass
+  for (const { match, meta, searchValue } of allObservableMatches) {
+    applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, searchValue, handlers));
   }
   
   // Highlight OpenCTI entities - rebuild nodeMap after observable highlights
@@ -568,10 +573,9 @@ export function highlightResults(
     textNodes = getTextNodes(document.body);
     ({ nodeMap, fullText } = buildNodeMap(textNodes));
     
-    // IMPORTANT: Collect ALL OpenCTI entity matches first, then apply highlights
-    // This prevents nodeMap from becoming stale when highlighting multiple entities
-    const octiMatches: Array<{
-      matches: ExtendedMatchInfo[];
+    // Collect ALL OpenCTI entity matches, flatten with metadata, and sort by position
+    const allOctiMatches: Array<{
+      match: ExtendedMatchInfo;
       meta: HighlightMeta;
       entityName: string;
     }> = [];
@@ -590,18 +594,18 @@ export function highlightResults(
       // Collect all text variants to highlight for this entity
       // This ensures both name and external ID (x_mitre_id) are highlighted for attack patterns
       const textsToHighlight = getEntityTextVariants(octiEntity);
-      const allMatches: ExtendedMatchInfo[] = [];
       for (const text of textsToHighlight) {
-        allMatches.push(...collectStringMatches(fullText, text, nodeMap));
-      }
-      if (allMatches.length > 0) {
-        octiMatches.push({ matches: allMatches, meta, entityName: octiEntity.name });
+        const matches = collectStringMatches(fullText, text, nodeMap);
+        for (const match of matches) {
+          allOctiMatches.push({ match, meta, entityName: octiEntity.name });
+        }
       }
     }
     
-    // Now apply all OpenCTI entity highlights
-    for (const { matches, meta, entityName } of octiMatches) {
-      applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, entityName, handlers));
+    // Sort by position descending and apply in a single reverse pass
+    allOctiMatches.sort((a, b) => b.match.pos - a.match.pos);
+    for (const { match, meta, entityName } of allOctiMatches) {
+      applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, entityName, handlers));
     }
   }
   
@@ -643,9 +647,9 @@ export function highlightResults(
     textNodes = getTextNodes(document.body);
     ({ nodeMap, fullText } = buildNodeMap(textNodes));
     
-    // IMPORTANT: Collect ALL OpenAEV entity matches first, then apply highlights
-    const oaevMatches: Array<{
-      matches: ExtendedMatchInfo[];
+    // Collect ALL OpenAEV entity matches, flatten with metadata, and sort by position
+    const allOaevMatches: Array<{
+      match: ExtendedMatchInfo;
       meta: HighlightMeta;
       entityName: string;
     }> = [];
@@ -662,18 +666,18 @@ export function highlightResults(
       // Collect all text variants to highlight for this entity
       // This ensures both name and external ID are highlighted for attack patterns
       const textsToHighlight = getOpenAEVEntityTextVariants(entity);
-      const allMatches: ExtendedMatchInfo[] = [];
       for (const text of textsToHighlight) {
-        allMatches.push(...collectStringMatches(fullText, text, nodeMap));
-      }
-      if (allMatches.length > 0) {
-        oaevMatches.push({ matches: allMatches, meta, entityName: entity.name });
+        const matches = collectStringMatches(fullText, text, nodeMap);
+        for (const match of matches) {
+          allOaevMatches.push({ match, meta, entityName: entity.name });
+        }
       }
     }
     
-    // Now apply all OpenAEV entity highlights
-    for (const { matches, meta, entityName } of oaevMatches) {
-      applyHighlightsInReverse(matches, () => createScanResultHighlightConfig(meta, entityName, handlers));
+    // Sort by position descending and apply in a single reverse pass
+    allOaevMatches.sort((a, b) => b.match.pos - a.match.pos);
+    for (const { match, meta, entityName } of allOaevMatches) {
+      applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, entityName, handlers));
     }
   }
 }
@@ -766,50 +770,70 @@ export function highlightResultsForInvestigation(
   const textNodes = getTextNodes(document.body);
   const { nodeMap, fullText } = buildNodeMap(textNodes);
   
-  // Highlight observables
-  // IMPORTANT: Collect ALL matches first, then apply highlights
-  // This prevents nodeMap from becoming stale when searching for multiple patterns
-  const observableMatches: Array<{
-    matches: ExtendedMatchInfo[];
-    obs: typeof results.observables[0];
-    searchValue: string;
+  // Collect ALL matches (observables + entities + CVEs) with metadata, flatten, sort, and apply
+  // This ensures proper highlighting when multiple items exist in the same text node
+  const allMatches: Array<{
+    match: ExtendedMatchInfo;
+    type: string;
+    value: string;
+    entityId?: string;
+    platformId?: string;
   }> = [];
   
+  // Collect observable matches
   for (const obs of results.observables) {
-    // Search for all possible forms of the observable (clean + defanged patterns)
     const searchValues = getSearchValuesForObservable(obs);
     for (const searchValue of searchValues) {
       const matches = collectStringMatches(fullText, searchValue, nodeMap);
-      if (matches.length > 0) {
-        observableMatches.push({ matches, obs, searchValue });
+      for (const match of matches) {
+        allMatches.push({
+          match,
+          type: obs.type,
+          value: searchValue,
+          entityId: obs.entityId,
+          platformId: obs.platformId || (obs as { platformId?: string }).platformId,
+        });
       }
     }
   }
   
-  // Now apply all highlights
-  for (const { matches, obs, searchValue } of observableMatches) {
-    applyHighlightsInReverse(matches, () => 
-      createInvestigationHighlightConfig(obs.type, searchValue, obs.entityId, obs.platformId || (obs as { platformId?: string }).platformId, onHighlightClick)
-    );
-  }
-  
-  // Highlight OpenCTI entities
+  // Collect OpenCTI entity matches
   for (const entity of results.openctiEntities) {
     const matches = collectStringMatches(fullText, entity.name, nodeMap);
-    applyHighlightsInReverse(matches, () => 
-      createInvestigationHighlightConfig(entity.type, entity.name, entity.entityId, entity.platformId || (entity as { platformId?: string }).platformId, onHighlightClick)
-    );
+    for (const match of matches) {
+      allMatches.push({
+        match,
+        type: entity.type,
+        value: entity.name,
+        entityId: entity.entityId,
+        platformId: entity.platformId || (entity as { platformId?: string }).platformId,
+      });
+    }
   }
   
-  // Highlight CVEs with flexible dash matching
+  // Collect CVE matches
   if (results.cves) {
     for (const cve of results.cves) {
       const cvePattern = createFlexibleCVEPattern(cve.name);
       const matches = collectRegexMatches(fullText, cvePattern, nodeMap);
-      applyHighlightsInReverse(matches, () => 
-        createInvestigationHighlightConfig(cve.type || 'Vulnerability', cve.name, cve.entityId, cve.platformId, onHighlightClick)
-      );
+      for (const match of matches) {
+        allMatches.push({
+          match,
+          type: cve.type || 'Vulnerability',
+          value: cve.name,
+          entityId: cve.entityId,
+          platformId: cve.platformId,
+        });
+      }
     }
+  }
+  
+  // Sort by position descending and apply in a single reverse pass
+  allMatches.sort((a, b) => b.match.pos - a.match.pos);
+  for (const { match, type, value, entityId, platformId } of allMatches) {
+    applyHighlightsInReverse([match], () => 
+      createInvestigationHighlightConfig(type, value, entityId, platformId, onHighlightClick)
+    );
   }
 }
 

@@ -61,7 +61,7 @@ jobs:
         run: npm run test:unit -- --coverage
 
       - name: Upload unit test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-unit
           path: coverage/coverage-final.json
@@ -373,7 +373,7 @@ jobs:
         run: npm run test:opencti -- --coverage
 
       - name: Upload OpenCTI integration test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: coverage-opencti
@@ -698,7 +698,7 @@ jobs:
         run: npm run test:openaev -- --coverage
 
       - name: Upload OpenAEV integration test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: coverage-openaev
@@ -747,7 +747,7 @@ jobs:
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm run test:e2e
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: playwright-report
@@ -755,7 +755,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Playwright results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: playwright-results
@@ -763,7 +763,7 @@ jobs:
           retention-days: 7
 
       - name: Upload E2E coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: coverage-e2e
@@ -791,28 +791,28 @@ jobs:
         run: npm ci
 
       - name: Download unit test coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: coverage-unit
           path: coverage/unit
         continue-on-error: true
 
       - name: Download OpenCTI coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: coverage-opencti
           path: coverage/opencti
         continue-on-error: true
 
       - name: Download OpenAEV coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: coverage-openaev
           path: coverage/openaev
         continue-on-error: true
 
       - name: Download E2E coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: coverage-e2e
           path: coverage/e2e

@@ -5,6 +5,15 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.19] - 2026-01-23
+
+### Added
+- **New TLD Support**: Added `.me` and `.company` TLDs for domain detection, enabling detection of domains like `example[.]me` and `example[.]company` commonly seen in threat intel reports
+
+### Fixed
+- **IOC List Highlighting**: Fixed partial highlighting of defanged observables in IOC lists (e.g., on threat intel blog posts). When multiple observables exist in the same text node, all occurrences are now properly highlighted instead of only the first one. Root cause: matches across different observables were applied separately, causing DOM node invalidation for subsequent highlights
+- **PDF IOC Highlighting**: Applied same highlighting fix to PDF scanner for consistent behavior when multiple entities appear in the same text region
+
 ## [0.0.18] - 2026-01-07
 
 ### Changed
@@ -365,6 +374,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.19]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.16...v0.0.18
 [0.0.16]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.14...v0.0.15

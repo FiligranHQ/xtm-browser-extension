@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New TLD Support**: Added `.me` and `.company` TLDs for domain detection, enabling detection of domains like `example[.]me` and `example[.]company` commonly seen in threat intel reports
 
 ### Fixed
-- **IOC List Highlighting**: Fixed partial highlighting of defanged observables in IOC lists (e.g., on threat intel blog posts). When multiple observables exist in the same text node, all occurrences are now properly highlighted instead of only the first one. Root cause: matches across different observables were applied separately, causing DOM node invalidation for subsequent highlights
+- **IOC List Highlighting**: Fixed partial highlighting of defanged observables in IOC lists (e.g., on threat intel blog posts). When multiple observables exist in the same text node, all occurrences are now properly highlighted. The fix deduplicates matches by position, sorts for proper DOM traversal order, and applies highlights from end to start to prevent node reference invalidation
+- **First IOC Not Highlighted**: Fixed first domain in IOC lists not being highlighted when preceded by a sentence ending with a period (e.g., "Sinkholed by MSTIC." followed by "sopatrasoftware[.]net"). The boundary checker now correctly recognizes DOM text node boundaries, so punctuation from a previous paragraph doesn't incorrectly reject the first item as being "inside an identifier"
 - **PDF IOC Highlighting**: Applied same highlighting fix to PDF scanner for consistent behavior when multiple entities appear in the same text region
+- **URL Path File Detection**: Fixed incorrect detection of filenames at the end of URLs (e.g., `public-index.7162a3fd.js` in `hxxps://account.proton.me/assets/static/public-index.7162a3fd.js`). Files following a `/` in a URL path are no longer detected as separate entities
 
 ## [0.0.18] - 2026-01-07
 

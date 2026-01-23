@@ -287,12 +287,14 @@ function isValidCharBoundary(char: string | undefined): boolean {
  * Only checks character BEFORE because:
  * - "dl.software" → `.` before "software" = inside domain = reject
  * - "Ransomware.Live." → `.` after is just punctuation = allow
+ * - "/public-index.js" → `/` before filename = inside URL path = reject
  */
 function isInsideIdentifier(charBefore: string | undefined): boolean {
   if (!charBefore) return false;
-  // Character BEFORE the match indicates we're inside an identifier
+  // Character BEFORE the match indicates we're inside an identifier or URL path
   // e.g., "dl.software" - the dot before "software" means it's part of a domain
-  return /[.\-_[\]]/.test(charBefore);
+  // e.g., "/public-index.js" - the slash before means it's part of a URL path
+  return /[.\-_[\]/]/.test(charBefore);
 }
 
 /**
@@ -306,7 +308,8 @@ function isInsideIdentifier(charBefore: string | undefined): boolean {
  *    (allows multi-node matches like "DEGermany" but NOT "dl.software")
  * 
  * Special handling:
- * - Character BEFORE: '.', '-', '_', '[', ']' = inside identifier = reject
+ * - Character BEFORE: '.', '-', '_', '[', ']', '/' = inside identifier = reject
+ *   UNLESS we're at a node boundary (the character is from a different text node)
  * - Character AFTER: these are allowed (could be punctuation like "Ransomware.Live.")
  */
 function isWordBoundaryWithNodeAwareness(
@@ -317,16 +320,22 @@ function isWordBoundaryWithNodeAwareness(
   matchEnd: number,
   nodeMap: NodeMapEntry[]
 ): boolean {
+  // Check if we're at a node boundary FIRST
+  // If so, the character before is from a different text node and shouldn't count
+  // as being "inside an identifier". E.g., "MSTIC." in one node and "sopatrasoftware[.]net"
+  // in the next node - the dot is from a different context, not part of an identifier.
+  const atNodeBoundaryBefore = isAtNodeBoundary(matchStart, nodeMap);
+  
   // Check if we're inside an identifier (character BEFORE indicates this)
   // e.g., "dl.software" - the dot before "software" means reject
-  // But "Ransomware.Live." - the dot after is just punctuation, allow it
-  if (isInsideIdentifier(charBefore)) {
+  // But skip this check if we're at a node boundary - the dot is from a different node
+  if (!atNodeBoundaryBefore && isInsideIdentifier(charBefore)) {
     return false;
   }
   
-  // THEN: Check if the character is a valid punctuation/whitespace boundary
+  // Check if the character is a valid punctuation/whitespace boundary
   // OR if it's at a DOM node boundary (for multi-node text like "DE" + "Germany")
-  const isValidBefore = isValidCharBoundary(charBefore) || isAtNodeBoundary(matchStart, nodeMap);
+  const isValidBefore = isValidCharBoundary(charBefore) || atNodeBoundaryBefore;
   const isValidAfter = isValidCharBoundary(charAfter) || isAtNodeBoundary(matchEnd, nodeMap);
   
   return isValidBefore && isValidAfter;
@@ -558,12 +567,23 @@ export function highlightResults(
     }
   }
   
-  // Sort all matches by position descending to apply from end to start
-  // This prevents earlier highlights from invalidating later node references
-  allObservableMatches.sort((a, b) => b.match.pos - a.match.pos);
+  // Deduplicate matches by position - keep only one match per position
+  // This handles cases where both clean and defanged variants find the same text
+  const seenPositions = new Set<number>();
+  const deduplicatedMatches = allObservableMatches.filter(({ match }) => {
+    if (seenPositions.has(match.pos)) {
+      return false;
+    }
+    seenPositions.add(match.pos);
+    return true;
+  });
   
-  // Apply all highlights in a single reverse pass
-  for (const { match, meta, searchValue } of allObservableMatches) {
+  // Sort matches by position DESCENDING to process from end to start
+  // This prevents earlier highlights from invalidating later node references
+  deduplicatedMatches.sort((a, b) => b.match.pos - a.match.pos);
+  
+  // Apply highlights one at a time in sorted order (highest position first)
+  for (const { match, meta, searchValue } of deduplicatedMatches) {
     applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, searchValue, handlers));
   }
   
@@ -602,9 +622,21 @@ export function highlightResults(
       }
     }
     
-    // Sort by position descending and apply in a single reverse pass
-    allOctiMatches.sort((a, b) => b.match.pos - a.match.pos);
-    for (const { match, meta, entityName } of allOctiMatches) {
+    // Deduplicate matches by position
+    const seenOctiPositions = new Set<number>();
+    const deduplicatedOctiMatches = allOctiMatches.filter(({ match }) => {
+      if (seenOctiPositions.has(match.pos)) {
+        return false;
+      }
+      seenOctiPositions.add(match.pos);
+      return true;
+    });
+    
+    // Sort by position DESCENDING to process from end to start
+    deduplicatedOctiMatches.sort((a, b) => b.match.pos - a.match.pos);
+    
+    // Apply highlights one at a time in sorted order
+    for (const { match, meta, entityName } of deduplicatedOctiMatches) {
       applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, entityName, handlers));
     }
   }
@@ -674,9 +706,21 @@ export function highlightResults(
       }
     }
     
-    // Sort by position descending and apply in a single reverse pass
-    allOaevMatches.sort((a, b) => b.match.pos - a.match.pos);
-    for (const { match, meta, entityName } of allOaevMatches) {
+    // Deduplicate matches by position
+    const seenOaevPositions = new Set<number>();
+    const deduplicatedOaevMatches = allOaevMatches.filter(({ match }) => {
+      if (seenOaevPositions.has(match.pos)) {
+        return false;
+      }
+      seenOaevPositions.add(match.pos);
+      return true;
+    });
+    
+    // Sort by position DESCENDING to process from end to start
+    deduplicatedOaevMatches.sort((a, b) => b.match.pos - a.match.pos);
+    
+    // Apply highlights one at a time in sorted order
+    for (const { match, meta, entityName } of deduplicatedOaevMatches) {
       applyHighlightsInReverse([match], () => createScanResultHighlightConfig(meta, entityName, handlers));
     }
   }
@@ -828,9 +872,21 @@ export function highlightResultsForInvestigation(
     }
   }
   
-  // Sort by position descending and apply in a single reverse pass
-  allMatches.sort((a, b) => b.match.pos - a.match.pos);
-  for (const { match, type, value, entityId, platformId } of allMatches) {
+  // Deduplicate matches by position
+  const seenInvestPositions = new Set<number>();
+  const deduplicatedInvestMatches = allMatches.filter(({ match }) => {
+    if (seenInvestPositions.has(match.pos)) {
+      return false;
+    }
+    seenInvestPositions.add(match.pos);
+    return true;
+  });
+  
+  // Sort by position DESCENDING to process from end to start
+  deduplicatedInvestMatches.sort((a, b) => b.match.pos - a.match.pos);
+  
+  // Apply highlights one at a time in sorted order
+  for (const { match, type, value, entityId, platformId } of deduplicatedInvestMatches) {
     applyHighlightsInReverse([match], () => 
       createInvestigationHighlightConfig(type, value, entityId, platformId, onHighlightClick)
     );

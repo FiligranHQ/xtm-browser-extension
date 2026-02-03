@@ -86,7 +86,7 @@ jobs:
           --health-retries 5
 
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.10
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
         env:
           discovery.type: single-node
           xpack.ml.enabled: 'false'
@@ -409,7 +409,7 @@ jobs:
           --health-retries 5
 
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.19.10
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
         env:
           discovery.type: single-node
           xpack.ml.enabled: 'false'

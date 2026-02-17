@@ -737,7 +737,8 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
             value={containerForm.description}
             onChange={(e) => setContainerForm({ ...containerForm, description: e.target.value })}
             multiline
-            rows={4}
+            minRows={4}
+            maxRows={16}
             fullWidth
             size="small"
             placeholder="Enter description..."

@@ -213,3 +213,40 @@ export const TEXT_COLORS = {
   /** Primary text in light mode */
   primaryLight: '#2b2b2b',
 };
+
+// ============================================================================
+// Entity Types for Manual Selection
+// ============================================================================
+
+/**
+ * Available entity types for manual selection - includes both Observables and SDOs.
+ * Used by AddToScanResultsView and inline entity editing in scan results.
+ */
+export const SELECTABLE_ENTITY_TYPES = [
+  // SDOs (STIX Domain Objects) - Threats
+  { value: 'Attack-Pattern', label: 'Attack Pattern' },
+  { value: 'Campaign', label: 'Campaign' },
+  { value: 'Channel', label: 'Channel' },
+  { value: 'Intrusion-Set', label: 'Intrusion Set' },
+  { value: 'Malware', label: 'Malware' },
+  { value: 'Narrative', label: 'Narrative' },
+  { value: 'Threat-Actor-Group', label: 'Threat Actor Group' },
+  { value: 'Threat-Actor-Individual', label: 'Threat Actor Individual' },
+  { value: 'Tool', label: 'Tool' },
+  { value: 'Vulnerability', label: 'Vulnerability' },
+  // SDOs - Identities & Locations
+  { value: 'City', label: 'City' },
+  { value: 'Country', label: 'Country' },
+  { value: 'Organization', label: 'Organization' },
+  { value: 'Region', label: 'Region' },
+  { value: 'Sector', label: 'Sector' },
+  { value: 'System', label: 'System' },
+  // Observables (SCOs - STIX Cyber Observables)
+  { value: 'Domain-Name', label: 'Domain Name' },
+  { value: 'Email-Addr', label: 'Email Address' },
+  { value: 'StixFile', label: 'File Hash' },
+  { value: 'Hostname', label: 'Hostname' },
+  { value: 'IPv4-Addr', label: 'IPv4 Address' },
+  { value: 'IPv6-Addr', label: 'IPv6 Address' },
+  { value: 'Url', label: 'URL' },
+];

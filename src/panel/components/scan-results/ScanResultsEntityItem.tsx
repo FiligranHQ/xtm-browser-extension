@@ -2,9 +2,10 @@
  * Scan Results Entity Item Component
  * 
  * Renders a single entity item in the scan results list with full details.
+ * Supports inline editing of entity name/value and type.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -12,6 +13,9 @@ import {
   Checkbox,
   Chip,
   Tooltip,
+  TextField,
+  Autocomplete,
+  IconButton,
 } from '@mui/material';
 import {
   ChevronRightOutlined,
@@ -19,9 +23,14 @@ import {
   GpsFixedOutlined,
   InfoOutlined,
   AutoAwesomeOutlined,
+  EditOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  RestartAltOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../../shared/theme/colors';
+import { SELECTABLE_ENTITY_TYPES } from '../../../shared/constants';
 import type { ScanResultEntity } from '../../../shared/types/scan';
 import { sendToContentScript } from '../../utils/content-messaging';
 import { isFoundInOpenCTI, getUniqueTypesFromMatches, formatTypeName } from '../../utils/scan-results-helpers';
@@ -35,6 +44,8 @@ interface ScanResultsEntityItemProps {
   isSelectable: boolean;
   onEntityClick: (entity: ScanResultEntity) => void;
   onToggleSelection: (entityValue: string) => void;
+  onEditEntity?: (entityId: string, newName: string, newType: string) => void;
+  onResetEntity?: (entityId: string) => void;
 }
 
 export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
@@ -46,7 +57,13 @@ export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
   isSelectable,
   onEntityClick,
   onToggleSelection,
+  onEditEntity,
+  onResetEntity,
 }) => {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState('');
+
   const entityColor = entity.discoveredByAI ? aiColors.main : itemColor(entity.type, mode === 'dark');
   const { types: uniqueTypes, hasMultipleTypes } = getUniqueTypesFromMatches(entity);
   const primaryType = uniqueTypes[0] || entity.type;
@@ -116,6 +133,116 @@ export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
       payload: { value: allValues } 
     });
   };
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditName(entity.name || entity.value || '');
+    setEditType(entity.type);
+    setEditing(true);
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditing(false);
+  };
+
+  const handleSaveEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (editName.trim() && editType && onEditEntity) {
+      onEditEntity(entity.id, editName.trim(), editType);
+    }
+    setEditing(false);
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onResetEntity) {
+      onResetEntity(entity.id);
+    }
+  };
+
+  const isEdited = entity._originalName !== undefined;
+
+  // Edit mode rendering
+  if (editing) {
+    return (
+      <Paper
+        key={entity.id + '-' + index + '-edit'}
+        elevation={0}
+        onClick={(e) => e.stopPropagation()}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+          p: 1.5,
+          mb: 0.75,
+          bgcolor: hexToRGB('#1976d2', 0.05),
+          border: 2,
+          borderColor: 'primary.main',
+          borderRadius: 1,
+          borderLeftWidth: 3,
+        }}
+      >
+        <TextField
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          size="small"
+          fullWidth
+          label="Entity value"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (editName.trim() && editType && onEditEntity) {
+                onEditEntity(entity.id, editName.trim(), editType);
+              }
+              setEditing(false);
+            } else if (e.key === 'Escape') {
+              setEditing(false);
+            }
+          }}
+          sx={{ '& .MuiInputBase-input': { fontSize: '0.85rem' } }}
+        />
+        <Autocomplete
+          options={SELECTABLE_ENTITY_TYPES}
+          getOptionLabel={(option) => option.label}
+          value={SELECTABLE_ENTITY_TYPES.find(t => t.value === editType) ?? null}
+          onChange={(_, newValue) => { if (newValue) setEditType(newValue.value); }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Entity type"
+              size="small"
+            />
+          )}
+          renderOption={(props, option) => (
+            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ItemIcon type={option.value} size="small" />
+              <Typography variant="body2">{option.label}</Typography>
+            </Box>
+          )}
+          size="small"
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+          <Tooltip title="Cancel" placement="top">
+            <IconButton size="small" onClick={handleCancelEdit}>
+              <CloseOutlined sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Save changes" placement="top">
+            <IconButton 
+              size="small" 
+              onClick={handleSaveEdit}
+              disabled={!editName.trim() || !editType}
+              color="primary"
+            >
+              <CheckOutlined sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Paper>
+    );
+  }
 
   return (
     <Paper
@@ -211,6 +338,22 @@ export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
             </Typography>
           )}
           
+          {/* Show edited indicator */}
+          {isEdited && (
+            <Chip
+              label="Edited"
+              size="small"
+              variant="outlined"
+              sx={{
+                height: 16,
+                fontSize: '0.6rem',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                '& .MuiChip-label': { px: 0.4 },
+              }}
+            />
+          )}
+
           {/* Show AI indicator for AI-discovered entities */}
           {entity.discoveredByAI && (
             <Tooltip title={entity.aiReason || 'Detected by AI analysis'} placement="top">
@@ -266,6 +409,40 @@ export const ScanResultsEntityItem: React.FC<ScanResultsEntityItemProps> = ({
         </Box>
       </Box>
       
+      {/* Edit / Reset buttons */}
+      {onEditEntity && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          {isEdited && onResetEntity && (
+            <Tooltip title={`Reset to original: ${entity._originalName}`} placement="top">
+              <IconButton
+                size="small"
+                onClick={handleReset}
+                sx={{
+                  p: 0.25,
+                  color: 'warning.main',
+                  '&:hover': { color: 'warning.dark', bgcolor: 'action.hover' },
+                }}
+              >
+                <RestartAltOutlined sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="Edit entity value and type" placement="top">
+            <IconButton
+              size="small"
+              onClick={handleStartEdit}
+              sx={{
+                p: 0.25,
+                color: isEdited ? 'primary.main' : 'text.secondary',
+                '&:hover': { color: 'primary.main', bgcolor: 'action.hover' },
+              }}
+            >
+              <EditOutlined sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+
       {/* Status chip with matched strings tooltip */}
       <Tooltip 
         title={matchedStringsTooltip} 

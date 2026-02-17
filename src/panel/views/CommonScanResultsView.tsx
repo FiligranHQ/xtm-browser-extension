@@ -799,6 +799,72 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     setPanelMode('preview');
   };
 
+  // Handle inline editing of an entity's name and type
+  const handleEditEntity = (entityId: string, newName: string, newType: string) => {
+    setScanResultsEntities((prev: ScanResultEntity[]) =>
+      prev.map((e) => {
+        if (e.id !== entityId) return e;
+        const oldValue = e.value || e.name;
+        const newEntity = { ...e, name: newName, type: newType };
+        // Store original values on first edit so user can reset later
+        if (e._originalName === undefined) {
+          newEntity._originalName = e.name;
+          newEntity._originalType = e.type;
+          if (e.value !== undefined) {
+            newEntity._originalValue = e.value;
+          }
+        }
+        // For observables, also update value
+        if (e.value !== undefined) {
+          newEntity.value = newName;
+        }
+        // Update selectedScanItems if the entity value changed
+        const newValue = newEntity.value || newEntity.name;
+        if (oldValue !== newValue && selectedScanItems.has(oldValue)) {
+          const next = new Set(selectedScanItems);
+          next.delete(oldValue);
+          next.add(newValue);
+          setSelectedScanItems(next);
+        }
+        return newEntity;
+      })
+    );
+  };
+
+  // Handle resetting an edited entity back to its original detected values
+  const handleResetEntity = (entityId: string) => {
+    setScanResultsEntities((prev: ScanResultEntity[]) =>
+      prev.map((e) => {
+        if (e.id !== entityId || e._originalName === undefined) return e;
+        const currentValue = e.value || e.name;
+        const restoredName = e._originalName as string;
+        const restoredType = e._originalType as string;
+        const restoredValue = e._originalValue as string | undefined;
+        const newEntity = {
+          ...e,
+          name: restoredName,
+          type: restoredType,
+        };
+        if (restoredValue !== undefined) {
+          newEntity.value = restoredValue;
+        }
+        // Clear stored originals
+        delete newEntity._originalName;
+        delete newEntity._originalType;
+        delete newEntity._originalValue;
+        // Update selectedScanItems if the value changed back
+        const newValue = newEntity.value || newEntity.name;
+        if (currentValue !== newValue && selectedScanItems.has(currentValue)) {
+          const next = new Set(selectedScanItems);
+          next.delete(currentValue);
+          next.add(newValue);
+          setSelectedScanItems(next);
+        }
+        return newEntity;
+      })
+    );
+  };
+
   const aiColors = getAiColor(mode);
 
   return (
@@ -992,6 +1058,8 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                 isSelected={isSelected}
                 isSelectable={isSelectable}
                 onEntityClick={handleScanResultEntityClick}
+                onEditEntity={handleEditEntity}
+                onResetEntity={handleResetEntity}
                 onToggleSelection={(value) => {
                   window.parent.postMessage({ type: 'XTM_TOGGLE_SELECTION', value }, '*');
                   const next = new Set(selectedScanItems);

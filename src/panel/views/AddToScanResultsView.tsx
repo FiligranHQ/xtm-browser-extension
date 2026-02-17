@@ -19,36 +19,8 @@ import {
   AddOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
+import { SELECTABLE_ENTITY_TYPES } from '../../shared/constants';
 import type { PanelMode } from '../types/panel-types';
-
-// Available entity types for manual selection - includes both Observables and SDOs
-// These are the types that can be added to scan results for creating in OpenCTI
-const SELECTABLE_ENTITY_TYPES = [
-  // SDOs (STIX Domain Objects) - Threats
-  { value: 'Attack-Pattern', label: 'Attack Pattern' },
-  { value: 'Campaign', label: 'Campaign' },
-  { value: 'Channel', label: 'Channel' },
-  { value: 'Intrusion-Set', label: 'Intrusion Set' },
-  { value: 'Malware', label: 'Malware' },
-  { value: 'Narrative', label: 'Narrative' },
-  { value: 'Threat-Actor-Group', label: 'Threat Actor Group' },
-  { value: 'Threat-Actor-Individual', label: 'Threat Actor Individual' },
-  { value: 'Tool', label: 'Tool' },
-  { value: 'Vulnerability', label: 'Vulnerability' },
-  // SDOs - Identities & Locations
-  { value: 'Country', label: 'Country' },
-  { value: 'Organization', label: 'Organization' },
-  { value: 'Sector', label: 'Sector' },
-  { value: 'System', label: 'System' },
-  // Observables (SCOs - STIX Cyber Observables)
-  { value: 'Domain-Name', label: 'Domain Name' },
-  { value: 'Email-Addr', label: 'Email Address' },
-  { value: 'StixFile', label: 'File Hash' },
-  { value: 'Hostname', label: 'Hostname' },
-  { value: 'IPv4-Addr', label: 'IPv4 Address' },
-  { value: 'IPv6-Addr', label: 'IPv6 Address' },
-  { value: 'Url', label: 'URL' },
-];
 
 export interface AddToScanResultsViewProps {
   setPanelMode: (mode: PanelMode) => void;
@@ -123,12 +95,17 @@ export const AddToScanResultsView: React.FC<AddToScanResultsViewProps> = ({
           borderColor: 'divider',
         }}
       >
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-          Selected Text
-        </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-          {addToScanResultsText}
-        </Typography>
+        <TextField
+          label="Entity Value"
+          value={addToScanResultsText}
+          onChange={(e) => setAddToScanResultsText(e.target.value)}
+          fullWidth
+          multiline
+          minRows={1}
+          maxRows={4}
+          size="small"
+          helperText="You can edit this text before adding"
+        />
       </Paper>
 
       <Autocomplete

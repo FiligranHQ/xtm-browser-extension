@@ -195,7 +195,13 @@ export class DetectionEngine {
 
         let match;
         while ((match = pattern.exec(text)) !== null) {
-            const value = match[0];
+            let value = match[0];
+
+            // Strip trailing punctuation from URLs and domains that gets
+            // captured from surrounding sentence text (e.g., "visit https://example.com.")
+            if (config.type === 'Url' || config.type === 'Domain-Name') {
+                value = value.replace(/[.,;:!?)]+$/, '');
+            }
 
             // Check if the value is defanged and get the refanged version
             const defanged = isDefanged(value);

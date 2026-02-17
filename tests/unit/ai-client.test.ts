@@ -106,14 +106,17 @@ describe('AIClient', () => {
       expect(() => new AIClient(settings)).toThrow('Custom endpoint URL is required for custom provider');
     });
 
-    it('should throw error for custom provider without model', () => {
+    it('should allow custom provider without model at construction, but fail at generate', async () => {
       const settings: AISettings = {
         provider: 'custom',
         apiKey: 'test-key',
         customBaseUrl: 'https://my-api.example.com/v1',
       };
 
-      expect(() => new AIClient(settings)).toThrow('Model name is required for custom provider');
+      const client = new AIClient(settings);
+      const result = await client.generate({ prompt: 'test' });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Model name is required for custom provider');
     });
   });
 

@@ -498,6 +498,8 @@ jobs:
             -e OPENAEV_ADMIN_EMAIL=admin@openaev.io \
             -e OPENAEV_ADMIN_PASSWORD=admin \
             -e OPENAEV_ADMIN_TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
+            -e OPENAEV_ADMIN_ENCRYPTION_KEY=ChangeMe \
+            -e OPENAEV_ADMIN_ENCRYPTION_SALT=ChangeMeSalt \
             -e OPENAEV_HEALTHCHECK_KEY=healthcheck \
             -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/openaev \
             -e SPRING_DATASOURCE_USERNAME=openaev \

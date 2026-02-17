@@ -11,17 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Inline Entity Editing**: Scan result entities can now be edited directly in the results list. Click the pencil icon to modify the entity name/value and type (e.g., change "Salvador" to "El Salvador" and "City" to "Country"). Includes a "Reset to default" button to revert to the originally detected values
 - **Editable Selected Text**: The "Add to scan results" view now allows editing the selected text before adding it as an entity, instead of displaying it as read-only
 - **Expanded Entity Type Selection**: Added "City" and "Region" to the selectable entity types for manual entity creation and inline editing
-- **URL Auto-Protocol**: Platform URLs without a protocol prefix now automatically get `https://` prepended during normalization, preventing connection failures from missing protocol
+- **URL Auto-Protocol**: Platform URLs without a protocol prefix now automatically get `https://` prepended during normalization, preventing connection failures from missing protocol (#37)
 
 ### Changed
-- **Resizable Description Field**: The container description text area now auto-grows with content (from 4 to 16 rows) instead of being fixed at 4 rows, making it easier to review and modify longer descriptions
-- **OpenAI Model Compatibility**: The AI client now correctly handles different OpenAI model generations — legacy models (GPT-3.5, GPT-4) use `max_tokens`, modern models (GPT-4o, o-series) use `max_completion_tokens`, and reasoning models (o1, o3) skip the unsupported `temperature` parameter
+- **Resizable Description Field**: The container description text area now auto-grows with content (from 4 to 16 rows) instead of being fixed at 4 rows, making it easier to review and modify longer descriptions (#56)
+- **OpenAI Model Compatibility**: The AI client now correctly handles different OpenAI model generations — legacy models (GPT-3.5, GPT-4) use `max_tokens`, modern models (GPT-4o, o-series) use `max_completion_tokens`, and reasoning models (o1, o3) skip the unsupported `temperature` parameter (#32)
 - **Custom AI Provider Setup**: Custom AI provider no longer requires the model name at configuration time; validation is deferred to generation time. Test connection now properly sends the custom base URL and model for accurate endpoint validation
 
 ### Fixed
 - **AI Entity Extraction on PDFs**: Fixed AI-extracted entities from PDFs not displaying or being integrated into the entity list (#31). The panel was gating entity addition on DOM highlighting success, which always fails for PDFs since text is canvas-rendered. AI entities are now directly added to the list and broadcast to the PDF scanner for canvas-based highlighting
-- **URL Trailing Punctuation**: URLs and domain names no longer include trailing full stops, commas, or other sentence punctuation that was incorrectly captured from surrounding text (e.g., `https://example.com.` at the end of a sentence is now correctly detected as `https://example.com`)
-- **URL Normalization**: Consolidated scattered URL normalization logic (trailing slash removal, whitespace trimming) into a shared `normalizeUrl()` utility used across platform clients, options page, setup wizard, and entity URL builder
+- **URL Trailing Punctuation**: URLs and domain names no longer include trailing full stops, commas, or other sentence punctuation that was incorrectly captured from surrounding text (e.g., `https://example.com.` at the end of a sentence is now correctly detected as `https://example.com`) (#56)
+- **URL Normalization**: Consolidated scattered URL normalization logic (trailing slash removal, whitespace trimming) into a shared `normalizeUrl()` utility used across platform clients, options page, setup wizard, and entity URL builder (#37)
 - **Panel Scrolling**: Fixed panel content area not scrolling properly in certain views by changing overflow behavior from `hidden` to `auto`
 
 ### Dependencies

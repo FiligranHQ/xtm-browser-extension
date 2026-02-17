@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { loggers } from '../../shared/utils/logger';
+import { normalizeUrl } from '../../shared/utils/formatters';
 import { getPlatformName } from '../../shared/platform/registry';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
@@ -167,8 +168,7 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
     setSetupSuccess(false);
     
     try {
-      // Normalize URL: remove trailing slashes
-      const normalizedUrl = setupUrl.trim().replace(/\/+$/, '');
+      const normalizedUrl = normalizeUrl(setupUrl);
       
       // Test connection FIRST without saving (using temp test)
       const testResponse = await chrome.runtime.sendMessage({

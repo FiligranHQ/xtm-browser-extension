@@ -80,6 +80,20 @@ export function formatNumberCompact(
 }
 
 /**
+ * Normalize a platform URL for storage and API usage.
+ * - Trims whitespace
+ * - Prepends https:// if no protocol is specified
+ * - Removes trailing slashes
+ */
+export function normalizeUrl(url: string): string {
+  let normalized = url.trim();
+  if (normalized && !/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+  return normalized.replace(/\/+$/, '');
+}
+
+/**
  * Escape HTML special characters for safe display
  */
 export function escapeHtml(text: string): string {

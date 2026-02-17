@@ -5,6 +5,7 @@
  */
 
 import { loggers } from '../utils/logger';
+import { normalizeUrl } from '../utils/formatters';
 import { EXTENSION_VERSION } from '../constants';
 import {
   buildAssetSearchFilter,
@@ -80,7 +81,7 @@ export class OpenAEVClient {
   private attackPatternsCache: Map<string, { name: string; externalId: string }> = new Map();
 
   constructor(config: PlatformConfig) {
-    this.baseUrl = config.url.replace(/\/+$/, '');
+    this.baseUrl = normalizeUrl(config.url);
     this.token = config.apiToken;
     this.platformId = config.id;
     this.platformName = config.name;

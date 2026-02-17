@@ -6,6 +6,8 @@
 // updated with the platform definition.
 // ============================================================================
 
+import { normalizeUrl } from '../utils/formatters';
+
 // ============================================================================
 // Platform Type Definitions
 // ============================================================================
@@ -402,8 +404,7 @@ export function buildEntityUrl(
   // Find the path for this entity type
   const path = entityPaths[cleanEntityType] || entityPaths['_default'] || '';
   
-  // Build URL - handle trailing slashes
-  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const normalizedBase = normalizeUrl(baseUrl);
   return `${normalizedBase}${basePath}${path}/${entityId}`;
 }
 

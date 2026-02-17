@@ -1445,7 +1445,7 @@ async function handleMessage(
         break;
       
       case 'AI_TEST_AND_FETCH_MODELS':
-        await handleAITestAndFetchModels(message.payload as { provider: string; apiKey: string }, sendResponse);
+        await handleAITestAndFetchModels(message.payload as { provider: string; apiKey: string; customBaseUrl?: string; model?: string }, sendResponse);
         break;
       
       case 'AI_GENERATE_DESCRIPTION':

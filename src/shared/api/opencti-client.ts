@@ -5,6 +5,7 @@
  */
 
 import { loggers } from '../utils/logger';
+import { normalizeUrl } from '../utils/formatters';
 import { EXTENSION_VERSION } from '../constants';
 import {
   TEST_CONNECTION_QUERY,
@@ -108,7 +109,7 @@ export class OpenCTIClient {
   private platformName: string;
 
   constructor(config: { url: string; apiToken: string; id?: string; name?: string }) {
-    this.baseUrl = config.url.replace(/\/+$/, '');
+    this.baseUrl = normalizeUrl(config.url);
     this.apiToken = config.apiToken;
     this.platformId = config.id || 'default';
     this.platformName = config.name || 'OpenCTI';

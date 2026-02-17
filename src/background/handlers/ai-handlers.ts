@@ -12,7 +12,7 @@ import { getSettings } from '../../shared/utils/storage';
 import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
 import { loggers } from '../../shared/utils/logger';
 import { AIClient, isAIAvailable } from '../../shared/api/ai-client';
-import { AI_DEFAULTS } from '../../shared/types/ai';
+import { AI_DEFAULTS, type AIProvider } from '../../shared/types/ai';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -102,13 +102,15 @@ export async function handleAICheckStatus(
  * AI_TEST_AND_FETCH_MODELS handler
  */
 export async function handleAITestAndFetchModels(
-  payload: { provider: string; apiKey: string },
+  payload: { provider: string; apiKey: string; customBaseUrl?: string; model?: string },
   sendResponse: SendResponse
 ): Promise<void> {
   try {
     const aiClient = new AIClient({
-      provider: payload.provider as 'openai' | 'anthropic' | 'gemini',
+      provider: payload.provider as AIProvider,
       apiKey: payload.apiKey,
+      ...(payload.customBaseUrl && { customBaseUrl: payload.customBaseUrl }),
+      ...(payload.model && { model: payload.model }),
     });
     
     const result = await aiClient.testConnectionAndFetchModels();

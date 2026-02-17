@@ -77,9 +77,6 @@ export class AIClient {
     if (settings.provider === 'custom' && !settings.customBaseUrl) {
       throw new Error('Custom endpoint URL is required for custom provider');
     }
-    if (settings.provider === 'custom' && !settings.model) {
-      throw new Error('Model name is required for custom provider');
-    }
     this.provider = settings.provider;
     this.apiKey = settings.apiKey;
     this.model = settings.model;
@@ -298,6 +295,9 @@ export class AIClient {
   // ==========================================================================
 
   async generate(request: AIGenerationRequest): Promise<AIGenerationResponse> {
+    if (this.provider === 'custom' && !this.model) {
+      return { success: false, error: 'Model name is required for custom provider' };
+    }
     try {
       switch (this.provider) {
         case 'openai': return await this.generateOpenAI(request);
@@ -382,20 +382,54 @@ export class AIClient {
   // Provider-Specific Implementations
   // ==========================================================================
 
+  /**
+   * Legacy OpenAI models (gpt-3.5, gpt-4 without -o suffix) use the `max_tokens`
+   * parameter. Recent models (gpt-4o, o-series, gpt-5+) use `max_completion_tokens`.
+   */
+  private isLegacyOpenAIModel(model: string): boolean {
+    const m = model.toLowerCase();
+    if (m.startsWith('gpt-3.5') || m.startsWith('gpt-3')) return true;
+    if (m.startsWith('gpt-4') && !m.startsWith('gpt-4o')) return true;
+    return false;
+  }
+
+  /**
+   * OpenAI reasoning models (o1, o3 series) don't support the `temperature` parameter.
+   */
+  private isOpenAIReasoningModel(model: string): boolean {
+    const m = model.toLowerCase();
+    return m.startsWith('o1') || m.startsWith('o3');
+  }
+
   private async generateOpenAI(request: AIGenerationRequest): Promise<AIGenerationResponse> {
     const baseUrl = this.getBaseUrl();
+    const model = this.getModel();
+    const maxTokens = request.maxTokens || 1500;
+    const isLegacy = this.isLegacyOpenAIModel(model);
+    const isReasoning = this.isOpenAIReasoningModel(model);
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
+        { role: 'user', content: request.prompt },
+      ],
+    };
+
+    if (isLegacy) {
+      body.max_tokens = maxTokens;
+    } else {
+      body.max_completion_tokens = maxTokens;
+    }
+
+    if (!isReasoning) {
+      body.temperature = request.temperature || 0.7;
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.getModel(),
-        messages: [
-          ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
-          { role: 'user', content: request.prompt },
-        ],
-        max_tokens: request.maxTokens || 1500,
-        temperature: request.temperature || 0.7,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {

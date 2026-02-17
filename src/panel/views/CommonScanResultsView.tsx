@@ -74,6 +74,8 @@ interface ExtendedScanResultsViewProps extends Omit<ScanResultsViewProps, 'showT
   setEntityDetailsLoading?: (loading: boolean) => void;
   /** Fetch containers for an entity (OpenCTI only) */
   fetchEntityContainers?: (entityId: string, platformId?: string) => Promise<void>;
+  /** Whether the panel is in PDF view mode (PDF scanner active) */
+  isPdfView?: boolean;
   /** AI resolving relationships state */
   aiResolvingRelationships: boolean;
   /** Set AI resolving relationships */
@@ -121,6 +123,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   scanPageContent,
   setEntityDetailsLoading,
   fetchEntityContainers,
+  isPdfView,
 }) => {
   // Local state for search query
   const [searchQuery, setSearchQuery] = useState('');
@@ -379,7 +382,14 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
             }));
 
             if (newEntities.length > 0) {
-              // Try to highlight AI-discovered entities and only add those that can be highlighted
+              if (isPdfView) {
+                // PDF mode: skip DOM highlighting verification (PDF uses canvas rendering)
+                // Add all entities and broadcast to PDF scanner for canvas-based highlighting
+                setScanResultsEntities((prev: ScanResultEntity[]) => [...newEntities, ...prev]);
+                broadcastAIEntities(newEntities);
+                showToast({ type: 'success', message: formatEntityCountMessage(newEntities.length) });
+              } else {
+              // Web page mode: try to highlight AI-discovered entities and only add those that can be highlighted
               (async () => {
                 try {
                   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -439,6 +449,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   showToast({ type: 'success', message: formatEntityCountMessage(newEntities.length) });
                 }
               })();
+              }
             } else {
               showToast({ type: 'info', message: 'AI found no additional entities' });
             }
@@ -641,7 +652,14 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                 aiConfidence: e.confidence as 'high' | 'medium' | 'low' | undefined,
               }));
 
-              // Try to highlight AI-discovered entities
+              if (isPdfView) {
+                // PDF mode: skip DOM highlighting verification (PDF uses canvas rendering)
+                // Add all entities and broadcast to PDF scanner for canvas-based highlighting
+                setScanResultsEntities((prev: ScanResultEntity[]) => [...newEntities, ...prev]);
+                broadcastAIEntities(newEntities);
+                processRelationshipsFromScanAll(newRelationships, newEntities.length);
+              } else {
+              // Web page mode: try to highlight AI-discovered entities
               (async () => {
                 try {
                   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -688,6 +706,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
                   processRelationshipsFromScanAll(newRelationships, newEntities.length);
                 }
               })();
+              }
             } else {
               // No new entities, just process relationships
               processRelationshipsFromScanAll(newRelationships, 0);

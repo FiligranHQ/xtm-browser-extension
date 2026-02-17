@@ -16,6 +16,7 @@ import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
+import { normalizeUrl } from '../shared/utils/formatters';
 import { getDefaultPlatformName, getPlatformSettingsKey, getPlatformName, type PlatformType } from '../shared/platform/registry';
 
 const log = loggers.options;
@@ -206,10 +207,10 @@ const App: React.FC = () => {
   // ============================================================================
 
   /**
-   * Normalize URL by removing trailing slashes for consistent comparison
+   * Normalize URL for consistent comparison (lowercased)
    */
-  const normalizeUrl = (url: string): string => {
-    return url.trim().replace(/\/+$/, '').toLowerCase();
+  const normalizeUrlForComparison = (url: string): string => {
+    return normalizeUrl(url).toLowerCase();
   };
 
   /**
@@ -218,12 +219,12 @@ const App: React.FC = () => {
   const isDuplicateUrl = (type: PlatformType, platformId: string, url: string): boolean => {
     if (!settings || !url) return false;
     
-    const normalizedUrl = normalizeUrl(url);
+    const normalized = normalizeUrlForComparison(url);
     const settingsKey = getPlatformSettingsKey(type);
     const platforms = settings[settingsKey] || [];
     
     return platforms.some(p => 
-      p.id !== platformId && normalizeUrl(p.url) === normalizedUrl
+      p.id !== platformId && normalizeUrlForComparison(p.url) === normalized
     );
   };
 
@@ -467,11 +468,11 @@ const App: React.FC = () => {
       ...settings,
       openctiPlatforms: settings.openctiPlatforms.map(p => ({
         ...p,
-        url: p.url.replace(/\/+$/, ''),
+        url: normalizeUrl(p.url),
       })),
       openaevPlatforms: settings.openaevPlatforms.map(p => ({
         ...p,
-        url: p.url.replace(/\/+$/, ''),
+        url: normalizeUrl(p.url),
       })),
     };
     
@@ -744,6 +745,10 @@ const App: React.FC = () => {
         payload: {
           provider: settings.ai.provider,
           apiKey: settings.ai.apiKey,
+          ...(settings.ai.provider === 'custom' && {
+            customBaseUrl: settings.ai.customBaseUrl,
+            model: settings.ai.model,
+          }),
         },
       });
       

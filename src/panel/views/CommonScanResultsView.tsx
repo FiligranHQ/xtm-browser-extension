@@ -802,16 +802,16 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Handle inline editing of an entity's name and type
   const handleEditEntity = (entityId: string, newName: string, newType: string) => {
     setScanResultsEntities((prev: ScanResultEntity[]) =>
-      prev.map((e) => {
+      prev.map((e): ScanResultEntity => {
         if (e.id !== entityId) return e;
         const oldValue = e.value || e.name;
-        const newEntity = { ...e, name: newName, type: newType };
+        const newEntity: ScanResultEntity = { ...e, name: newName, type: newType };
         // Store original values on first edit so user can reset later
-        if (e._originalName === undefined) {
-          newEntity._originalName = e.name;
-          newEntity._originalType = e.type;
+        if (e['_originalName'] === undefined) {
+          newEntity['_originalName'] = e.name;
+          newEntity['_originalType'] = e.type;
           if (e.value !== undefined) {
-            newEntity._originalValue = e.value;
+            newEntity['_originalValue'] = e.value;
           }
         }
         // For observables, also update value
@@ -834,13 +834,13 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Handle resetting an edited entity back to its original detected values
   const handleResetEntity = (entityId: string) => {
     setScanResultsEntities((prev: ScanResultEntity[]) =>
-      prev.map((e) => {
-        if (e.id !== entityId || e._originalName === undefined) return e;
+      prev.map((e): ScanResultEntity => {
+        if (e.id !== entityId || e['_originalName'] === undefined) return e;
         const currentValue = e.value || e.name;
-        const restoredName = e._originalName as string;
-        const restoredType = e._originalType as string;
-        const restoredValue = e._originalValue as string | undefined;
-        const newEntity = {
+        const restoredName = e['_originalName'] as string;
+        const restoredType = e['_originalType'] as string;
+        const restoredValue = e['_originalValue'] as string | undefined;
+        const newEntity: ScanResultEntity = {
           ...e,
           name: restoredName,
           type: restoredType,
@@ -849,9 +849,9 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
           newEntity.value = restoredValue;
         }
         // Clear stored originals
-        delete newEntity._originalName;
-        delete newEntity._originalType;
-        delete newEntity._originalValue;
+        delete newEntity['_originalName'];
+        delete newEntity['_originalType'];
+        delete newEntity['_originalValue'];
         // Update selectedScanItems if the value changed back
         const newValue = newEntity.value || newEntity.name;
         if (currentValue !== newValue && selectedScanItems.has(currentValue)) {

@@ -40,7 +40,7 @@
     "@mozilla/readability": "^0.6.0",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
-    "jspdf": "^4.1.0",
+    "jspdf": "^4.2.0",
     "mdi-material-ui": "^7.9.4",
     "pdfjs-dist": "^5.4.449",
     "react": "^19.0.0",

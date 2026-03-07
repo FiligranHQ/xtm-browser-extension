@@ -268,10 +268,29 @@ export default function App() {
         setLoading(true);
         setError(null);
 
-        const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
-          rangeChunkSize: 65536,
-        });
+        // For file:// URLs, fetch as ArrayBuffer first since pdfjs-dist's
+        // internal fetch may not have permission to access local files.
+        // Extension pages can fetch file:// URLs when the user has enabled
+        // "Allow access to file URLs" in the extension settings.
+        let loadingTask;
+        if (pdfUrl.startsWith('file://')) {
+          try {
+            const response = await fetch(pdfUrl);
+            const data = await response.arrayBuffer();
+            loadingTask = pdfjsLib.getDocument({ data });
+          } catch (_fetchError) {
+            throw new Error(
+              'Cannot access local file. Please enable "Allow access to file URLs" in your browser\'s extension settings.\n\n' +
+              'Chrome: chrome://extensions → Filigran XTM → Details → Allow access to file URLs\n' +
+              'Edge: edge://extensions → Filigran XTM → Details → Allow access to file URLs'
+            );
+          }
+        } else {
+          loadingTask = pdfjsLib.getDocument({
+            url: pdfUrl,
+            rangeChunkSize: 65536,
+          });
+        }
 
         const pdf = await loadingTask.promise;
         if (cancelled) return;

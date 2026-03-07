@@ -24,6 +24,8 @@ interface UsePlatformStatusReturn {
   isPdfPage: boolean;
   isPdfScannerPage: boolean;
   pdfUrl: string | null;
+  isLocalFile: boolean;
+  fileAccessGranted: boolean;
 }
 
 export const usePlatformStatus = (): UsePlatformStatusReturn => {
@@ -37,6 +39,8 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
   const [isPdfPage, setIsPdfPage] = useState(false);
   const [isPdfScannerPage, setIsPdfScannerPage] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [isLocalFile, setIsLocalFile] = useState(false);
+  const [fileAccessGranted, setFileAccessGranted] = useState(false);
 
   // Check if current tab is a PDF or PDF scanner page
   useEffect(() => {
@@ -71,7 +75,19 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
         if (response.data.isPdf && response.data.url) {
           setPdfUrl(response.data.url);
         }
-        log.debug('PDF detection:', response.data.isPdf, response.data.url);
+        if (response.data.isLocalFile) {
+          setIsLocalFile(true);
+        }
+        log.debug('PDF detection:', response.data.isPdf, response.data.url, 'isLocalFile:', response.data.isLocalFile);
+      }
+    });
+
+    // Check if extension has file:// access permission
+    chrome.runtime.sendMessage({ type: 'CHECK_FILE_ACCESS' }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (response?.success && response.data) {
+        setFileAccessGranted(response.data.isAllowed);
+        log.debug('File access granted:', response.data.isAllowed);
       }
     });
   }, []);
@@ -273,6 +289,8 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
     isPdfPage,
     isPdfScannerPage,
     pdfUrl,
+    isLocalFile,
+    fileAccessGranted,
   };
 };
 

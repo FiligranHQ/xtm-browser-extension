@@ -23,7 +23,8 @@
     "notifications"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "file:///*"
   ],
   "background": {
     "service_worker": "background/index.js",
@@ -48,7 +49,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["<all_urls>", "file:///*"],
       "js": ["content/index.js"],
       "run_at": "document_idle"
     }
@@ -61,7 +62,7 @@
         "shared/*",
         "pdf-scanner/*"
       ],
-      "matches": ["<all_urls>"]
+      "matches": ["<all_urls>", "file:///*"]
     }
   ],
   "content_security_policy": {

@@ -5,6 +5,26 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.21] - 2026-03-07
+
+### Added
+- **Local PDF File Support**: Extension can now scan local PDF files opened via `file://` protocol when "Allow access to file URLs" is enabled in browser extension settings
+
+### Fixed
+- **AI Configuration Detection**: Fixed AI settings always showing as unconfigured in the popup due to reading the wrong property key (`aiSettings` instead of `ai`)
+- **Close Button in Floating Mode**: The panel close button now properly hides the floating panel by sending `XTM_CLOSE_PANEL` to the parent content script
+- **PDF Highlight Click**: Clicking a highlighted entity in the PDF scanner no longer inadvertently closes the panel (added `stopPropagation`)
+- **PDF Background Click Selector**: Fixed incorrect CSS selector in the PDF scanner that prevented proper click-outside-to-close behavior
+- **Theme Default Consistency**: Aligned the default theme between `storage.ts` and `settings.ts` to `'dark'`
+- **Stale PDF URL in Message Handler**: Fixed `XTM_GET_PDF_CONTENT` handler using a potentially stale closure instead of the ref
+- **Missing Error Handling**: Added `.catch()` to `clearHighlights` `sendMessage` call to prevent unhandled promise rejections
+- **Payload Validation**: Added `Array.isArray()` check for `ADD_AI_ENTITIES_TO_PDF` payload to prevent runtime errors on malformed messages
+- **useEffect Dependency**: Fixed `scanAndShowPanelRef` sync effect running on every render instead of only when dependencies change
+
+### Changed
+- **Deduplicated Entity Value Extraction**: Replaced inline entity value extraction patterns across PDF scanner components with the shared `getEntityValue()` helper
+- **Redundant Code Cleanup**: Removed redundant `platformId || platformId` assignments in panel and entity views
+
 ## [0.0.20] - 2026-02-17
 
 ### Added
@@ -407,6 +427,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.21]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.20...v0.0.21
 [0.0.20]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.19...v0.0.20
 [0.0.19]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.16...v0.0.18

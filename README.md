@@ -438,4 +438,4 @@ Apache License 2.0 - See [LICENSE](LICENSE) for details.
 - [GitHub Issues](https://github.com/FiligranHQ/xtm-browser-extension/issues)
 
 ---
-© 2025 Filigran
+© 2026 Filigran

@@ -1496,11 +1496,25 @@ async function handleMessage(
           }
           
           const isPdf = isPdfUrl(tab.url);
-          log.debug(`CHECK_IF_PDF: ${tab.url} -> ${isPdf}`);
-          sendResponse(successResponse({ isPdf, url: tab.url }));
+          const isLocalFile = tab.url.startsWith('file://');
+          log.debug(`CHECK_IF_PDF: ${tab.url} -> isPdf=${isPdf}, isLocalFile=${isLocalFile}`);
+          sendResponse(successResponse({ isPdf, url: tab.url, isLocalFile }));
         } catch (error) {
           log.error('CHECK_IF_PDF error:', error);
           sendResponse(errorResponse('Failed to check if PDF'));
+        }
+        break;
+      }
+      
+      case 'CHECK_FILE_ACCESS': {
+        // Check if the extension has been granted access to file:// URLs
+        // Users must enable this manually in browser extension settings
+        try {
+          const isAllowed = await chrome.extension.isAllowedFileSchemeAccess();
+          sendResponse(successResponse({ isAllowed }));
+        } catch (error) {
+          log.error('CHECK_FILE_ACCESS error:', error);
+          sendResponse(successResponse({ isAllowed: false }));
         }
         break;
       }
@@ -1597,6 +1611,27 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   
   // Skip chrome:// and extension pages
   if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    return;
+  }
+  
+  // For file:// PDF URLs, auto-scan by opening the PDF scanner instead of
+  // sending to content script (Chrome's built-in PDF viewer doesn't expose text content)
+  if (tab.url.startsWith('file://') && isPdfUrl(tab.url)) {
+    const settings = await getSettings();
+    if (!settings.autoScan) return;
+    if (!detectionEngine || openCTIClients.size === 0) return;
+    
+    try {
+      const isAllowed = await chrome.extension.isAllowedFileSchemeAccess();
+      if (isAllowed) {
+        log.debug(`Auto-opening PDF scanner for local file: ${tab.url}`);
+        const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html') + 
+          '?url=' + encodeURIComponent(tab.url);
+        await chrome.tabs.update(tabId, { url: scannerUrl });
+      }
+    } catch (error) {
+      log.debug('Could not auto-open PDF scanner for local file:', error);
+    }
     return;
   }
   

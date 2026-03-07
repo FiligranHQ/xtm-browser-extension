@@ -94,4 +94,4 @@ For developers and technical users:
 - [OpenAEV Documentation](https://docs.filigran.io/openaev)
 
 ---
-© 2025 Filigran
+© 2026 Filigran

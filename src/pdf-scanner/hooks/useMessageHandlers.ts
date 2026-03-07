@@ -39,8 +39,6 @@ interface UseMessageHandlersOptions {
   scanAndShowPanelRef: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
   /** Reference to panel iframe */
   panelIframeRef: React.MutableRefObject<HTMLIFrameElement | null>;
-  /** PDF URL */
-  pdfUrl: string | null;
   /** PDF metadata title (from PDF document info) */
   pdfMetadataTitle?: string;
   /** Set scan results */
@@ -55,6 +53,10 @@ interface UseMessageHandlersOptions {
   setSplitScreenMode: React.Dispatch<React.SetStateAction<boolean>>;
   /** Close iframe panel callback */
   closeIframePanel: () => void;
+  /** Scroll to first highlighted entity */
+  scrollToFirstHighlight: () => void;
+  /** Scroll to entity by value */
+  scrollToHighlightByValue: (value: string | string[]) => void;
 }
 
 export function useMessageHandlers({
@@ -62,7 +64,6 @@ export function useMessageHandlers({
   pdfUrlRef,
   scanAndShowPanelRef,
   panelIframeRef,
-  pdfUrl,
   pdfMetadataTitle,
   setScanResults,
   setSelectedEntities,
@@ -70,6 +71,8 @@ export function useMessageHandlers({
   setMode,
   setSplitScreenMode,
   closeIframePanel,
+  scrollToFirstHighlight,
+  scrollToHighlightByValue,
 }: UseMessageHandlersOptions): void {
   // Handle Chrome runtime messages
   useEffect(() => {
@@ -151,16 +154,9 @@ export function useMessageHandlers({
         return true;
       } else if (message.type === 'ADD_AI_ENTITIES_TO_PDF') {
         // Add AI-discovered entities from panel to scanResults
-        const aiEntities = message.payload as Array<{
-          id: string;
-          type: string;
-          name: string;
-          value: string;
-          aiReason?: string;
-          aiConfidence?: 'high' | 'medium' | 'low';
-        }>;
+        const aiEntities = message.payload;
         
-        if (aiEntities && aiEntities.length > 0) {
+        if (Array.isArray(aiEntities) && aiEntities.length > 0) {
           setScanResults(prev => {
             if (!prev) return prev;
             return {
@@ -190,6 +186,18 @@ export function useMessageHandlers({
           },
         });
         return true;
+      } else if (message.type === 'XTM_SCROLL_TO_FIRST') {
+        scrollToFirstHighlight();
+        sendResponse({ success: true });
+        return true;
+      } else if (message.type === 'XTM_SCROLL_TO_HIGHLIGHT') {
+        const payload = message.payload as { value?: string | string[] } | undefined;
+        const scrollValue = payload?.value;
+        if (scrollValue) {
+          scrollToHighlightByValue(scrollValue);
+        }
+        sendResponse({ success: true });
+        return true;
       }
       // Return undefined for unhandled messages - don't indicate async response
       return undefined;
@@ -199,7 +207,7 @@ export function useMessageHandlers({
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, [pageTextsRef, pdfUrlRef, pdfMetadataTitle, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, setMode, setSplitScreenMode]);
+  }, [pageTextsRef, pdfUrlRef, pdfMetadataTitle, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, setMode, setSplitScreenMode, scrollToFirstHighlight, scrollToHighlightByValue]);
 
   // Listen for postMessage from the panel iframe
   useEffect(() => {
@@ -232,6 +240,13 @@ export function useMessageHandlers({
       } else if (event.data?.type === 'XTM_DESELECT_ALL') {
         // Panel is deselecting all items - clear PDF scanner's selection state
         setSelectedEntities(new Set());
+      } else if (event.data?.type === 'XTM_SCROLL_TO_FIRST') {
+        scrollToFirstHighlight();
+      } else if (event.data?.type === 'XTM_SCROLL_TO_HIGHLIGHT') {
+        const scrollValue = event.data.payload?.value || event.data.value;
+        if (scrollValue) {
+          scrollToHighlightByValue(scrollValue);
+        }
       } else if (event.data?.type === 'XTM_CHECK_PDF_VIEW') {
         // Panel is checking if it's in PDF view mode (e.g., after tab switch)
         // Respond with SET_PDF_VIEW_MODE to confirm we're in PDF scanner
@@ -266,7 +281,7 @@ export function useMessageHandlers({
       } else if (event.data?.type === 'XTM_GET_PDF_CONTENT') {
         // Panel iframe is requesting PDF content for AI analysis or container creation
         const fullText = pageTextsRef.current.join('\n');
-        const currentUrl = pdfUrl || '';
+        const currentUrl = pdfUrlRef.current || '';
         const filename = extractFilenameFromUrl(currentUrl);
         // Use PDF metadata title if available, otherwise use filename without extension
         const pdfTitle = pdfMetadataTitle || filename.replace(/\.pdf$/i, '') || 'PDF Document';
@@ -301,7 +316,7 @@ export function useMessageHandlers({
 
     window.addEventListener('message', handlePostMessage);
     return () => window.removeEventListener('message', handlePostMessage);
-  }, [pdfUrl, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity]);
+  }, [pdfUrlRef, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, scrollToFirstHighlight, scrollToHighlightByValue]);
   
   // Re-notify panel that it's in PDF view mode when tab becomes visible
   // This handles the case where user switches away from PDF tab and comes back

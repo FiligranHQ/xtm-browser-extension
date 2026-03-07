@@ -161,7 +161,7 @@ const AboutTab: React.FC<AboutTabProps> = ({
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          © 2025 Filigran. Licensed under Apache 2.0.
+          © 2026 Filigran. Licensed under Apache 2.0.
         </Typography>
       </Paper>
 

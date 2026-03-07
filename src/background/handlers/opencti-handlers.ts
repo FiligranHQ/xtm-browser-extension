@@ -43,7 +43,7 @@ const CACHEABLE_OPENCTI_TYPES = [
 ];
 
 /**
- * Get entity details handler
+ * Get entity details handler (used by tests; runtime dispatch goes through entity-handlers)
  */
 export const handleGetEntityDetails: MessageHandler = async (payload, sendResponse) => {
   if (!hasOpenCTIClients()) {
@@ -61,7 +61,6 @@ export const handleGetEntityDetails: MessageHandler = async (payload, sendRespon
     const openCTIClients = getOpenCTIClients();
     
     if (specificPlatformId) {
-      // Single platform request with timeout
       const client = openCTIClients.get(specificPlatformId);
       if (!client) {
         sendResponse(errorResponse('Platform not found'));
@@ -88,7 +87,6 @@ export const handleGetEntityDetails: MessageHandler = async (payload, sendRespon
         sendResponse(errorResponse('Entity not found or timeout'));
       }
     } else {
-      // Search all platforms in parallel
       const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
         const timeoutPromise = new Promise<null>((resolve) =>
           setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)

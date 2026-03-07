@@ -105,6 +105,7 @@ export type MessageType =
   | 'FETCH_IMAGE_AS_DATA_URL'
   // PDF Scanner
   | 'CHECK_IF_PDF'
+  | 'CHECK_FILE_ACCESS'
   | 'OPEN_PDF_SCANNER'
   | 'SCAN_PDF_CONTENT'
   | 'OPEN_PDF_SCANNER_PANEL'

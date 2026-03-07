@@ -2,7 +2,7 @@
  * Popup App - Main popup component for the XTM browser extension
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   ThemeProvider, 
   createTheme,
@@ -13,6 +13,8 @@ import {
   Divider,
   Tooltip,
   keyframes,
+  Alert,
+  Link,
 } from '@mui/material';
 import {
   SettingsOutlined,
@@ -65,6 +67,8 @@ const App: React.FC = () => {
     isPdfPage,
     isPdfScannerPage,
     pdfUrl,
+    isLocalFile,
+    fileAccessGranted,
   } = platformStatus;
 
   // Popover and dialog state
@@ -111,6 +115,17 @@ const App: React.FC = () => {
     isPdfScannerPage,
     pdfUrl,
   });
+
+  // Open browser's extension details page (for enabling file access)
+  const handleOpenExtensionSettings = useCallback(() => {
+    if (typeof chrome === 'undefined' || !chrome.runtime) return;
+    const extensionId = chrome.runtime.id;
+    const isFirefox = typeof browser !== 'undefined' && browser.sidebarAction;
+    const url = isFirefox
+      ? `about:addons`
+      : `chrome://extensions/?id=${extensionId}`;
+    chrome.tabs.create({ url });
+  }, []);
 
   // Theme
   const theme = useMemo(() => {
@@ -204,6 +219,34 @@ const App: React.FC = () => {
             onConnect={() => handleSetupTestAndSave('openaev')}
             onSkip={() => handleSetupSkip('openaev')}
           />
+        )}
+
+        {/* File access warning for local PDF files */}
+        {isLocalFile && isPdfPage && !fileAccessGranted && hasAnyPlatformConfigured && !isInSetupWizard && (
+          <Box sx={{ px: 2, pt: 1.5 }}>
+            <Alert 
+              severity="warning" 
+              sx={{ 
+                fontSize: 12,
+                '& .MuiAlert-message': { fontSize: 12 },
+              }}
+            >
+              <Typography variant="body2" sx={{ fontSize: 12, mb: 0.5, fontWeight: 600 }}>
+                Local file detected
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: 11 }}>
+                To scan local PDFs, enable file access in your browser:
+                <Link 
+                  component="button"
+                  onClick={handleOpenExtensionSettings}
+                  sx={{ fontSize: 11, ml: 0.5, verticalAlign: 'baseline' }}
+                >
+                  Open extension details
+                </Link>
+                {' '}and toggle "Allow access to file URLs".
+              </Typography>
+            </Alert>
+          </Box>
         )}
 
         {/* Main Actions Section */}

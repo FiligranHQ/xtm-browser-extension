@@ -24,7 +24,7 @@ import { PDFToolbar } from './components/PDFToolbar';
 import { EntityTooltip } from './components/EntityTooltip';
 import { usePanelManager } from './hooks/usePanelManager';
 import { useMessageHandlers } from './hooks/useMessageHandlers';
-import { groupTextItemsIntoLines, buildLineTextAndCharMap } from './utils/highlight-utils';
+import { groupTextItemsIntoLines, buildLineTextAndCharMap, getEntityValue } from './utils/highlight-utils';
 
 // Configure PDF.js worker - MUST be embedded in the extension for Chrome Web Store compliance
 if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
@@ -55,6 +55,9 @@ export default function App() {
   // Theme - uses shared hook to reduce duplication
   const { mode, setMode, theme } = useTheme();
   
+  // Highlight positions tracked across all pages for scroll-to-entity support
+  const highlightPositionsRef = useRef<Map<number, Array<{ entityValue: string; x: number; y: number; width: number; height: number }>>>(new Map());
+
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,52 @@ export default function App() {
   useEffect(() => {
     pdfUrlRef.current = pdfUrl || '';
   }, [pdfUrl]);
+
+  // Track highlight positions reported by each PageRenderer
+  const handleHighlightPositions = useCallback((pageNumber: number, positions: Array<{ entityValue: string; x: number; y: number; width: number; height: number }>) => {
+    highlightPositionsRef.current.set(pageNumber, positions);
+  }, []);
+
+  // Scroll to the first highlighted entity in the PDF
+  const scrollToFirstHighlight = useCallback(() => {
+    const container = pagesContainerRef.current;
+    if (!container) return;
+
+    // Find the first page that has highlights
+    const sortedPages = Array.from(highlightPositionsRef.current.entries())
+      .filter(([_, positions]) => positions.length > 0)
+      .sort(([a], [b]) => a - b);
+    
+    if (sortedPages.length === 0) return;
+    
+    const [firstPage] = sortedPages[0];
+    const pageElement = container.querySelector(`[data-page-number="${firstPage}"]`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  // Scroll to a specific entity by value in the PDF
+  const scrollToHighlightByValue = useCallback((value: string | string[]) => {
+    const container = pagesContainerRef.current;
+    if (!container) return;
+
+    const valuesToFind = Array.isArray(value) ? value : [value];
+    
+    // Search all pages for the entity value
+    for (const [pageNumber, positions] of Array.from(highlightPositionsRef.current.entries()).sort(([a], [b]) => a - b)) {
+      const match = positions.find(p => valuesToFind.some(v => 
+        p.entityValue === v || p.entityValue.includes(v) || v.includes(p.entityValue)
+      ));
+      if (match) {
+        const pageElement = container.querySelector(`[data-page-number="${pageNumber}"]`);
+        if (pageElement) {
+          pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
+    }
+  }, []);
 
   // Panel manager hook
   const {
@@ -87,7 +136,6 @@ export default function App() {
     pdfUrlRef,
     scanAndShowPanelRef,
     panelIframeRef,
-    pdfUrl,
     pdfMetadataTitle,
     setScanResults,
     setSelectedEntities,
@@ -95,6 +143,8 @@ export default function App() {
     setMode,
     setSplitScreenMode,
     closeIframePanel,
+    scrollToFirstHighlight,
+    scrollToHighlightByValue,
   });
 
   // Build platform matches for found entities
@@ -126,8 +176,7 @@ export default function App() {
     
     // For OpenAEV-only found entities, clicking anywhere opens entity details (no checkbox)
     if (isOpenAEVOnly && entity.found) {
-      const entityValue = 'value' in entity && entity.value ? entity.value : 
-                         'name' in entity && entity.name ? entity.name : '';
+      const entityValue = getEntityValue(entity);
       const platformMatches = buildEntityPlatformMatches(entity);
       await openPanel(true);
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -160,7 +209,6 @@ export default function App() {
         } else {
           next.add(entityKey);
         }
-        // Notify panel about selection change to sync the scan results list
         sendToPanel({
           type: 'SELECTION_UPDATED',
           payload: {
@@ -174,8 +222,7 @@ export default function App() {
     }
     
     // For found entities (not checkbox click), open panel with entity details
-    const entityValue = 'value' in entity && entity.value ? entity.value : 
-                       'name' in entity && entity.name ? entity.name : '';
+    const entityValue = getEntityValue(entity);
     const platformMatches = buildEntityPlatformMatches(entity);
     await openPanel(true);
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -232,7 +279,7 @@ export default function App() {
   // Keep ref in sync for message handlers
   useEffect(() => {
     scanAndShowPanelRef.current = (content: string) => scanAndShowPanel(content, pdfUrl || '');
-  });
+  }, [scanAndShowPanel, pdfUrl]);
 
   // Toggle panel (called from button click - user gesture)
   const togglePanel = useCallback(async () => {
@@ -268,10 +315,29 @@ export default function App() {
         setLoading(true);
         setError(null);
 
-        const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
-          rangeChunkSize: 65536,
-        });
+        // For file:// URLs, fetch as ArrayBuffer first since pdfjs-dist's
+        // internal fetch may not have permission to access local files.
+        // Extension pages can fetch file:// URLs when the user has enabled
+        // "Allow access to file URLs" in the extension settings.
+        let loadingTask;
+        if (pdfUrl.startsWith('file://')) {
+          try {
+            const response = await fetch(pdfUrl);
+            const data = await response.arrayBuffer();
+            loadingTask = pdfjsLib.getDocument({ data });
+          } catch (_fetchError) {
+            throw new Error(
+              'Cannot access local file. Please enable "Allow access to file URLs" in your browser\'s extension settings.\n\n' +
+              'Chrome: chrome://extensions → Filigran XTM → Details → Allow access to file URLs\n' +
+              'Edge: edge://extensions → Filigran XTM → Details → Allow access to file URLs'
+            );
+          }
+        } else {
+          loadingTask = pdfjsLib.getDocument({
+            url: pdfUrl,
+            rangeChunkSize: 65536,
+          });
+        }
 
         const pdf = await loadingTask.promise;
         if (cancelled) return;
@@ -347,7 +413,7 @@ export default function App() {
     chrome.runtime.sendMessage({
       type: 'FORWARD_TO_PANEL',
       payload: { type: 'CLEAR_SCAN_RESULTS' },
-    });
+    }).catch(() => {});
   }, []);
 
   // Zoom functions
@@ -365,9 +431,8 @@ export default function App() {
   const handleBackgroundClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!splitScreenMode && isIframePanelOpen()) {
       const target = e.target as HTMLElement;
-      const isHighlight = target.hasAttribute?.('data-entity-value') || 
-                          target.closest?.('[data-entity-value]') ||
-                          target.closest?.('.xtm-panel-iframe');
+      const isHighlight = target.closest?.('canvas') ||
+                          target.closest?.('#xtm-pdf-panel-iframe');
       if (!isHighlight) {
         closeIframePanel();
       }
@@ -486,6 +551,7 @@ export default function App() {
               selectedEntities={selectedEntities}
               onEntityClick={handleEntityClick}
               onEntityHover={handleEntityHover}
+              onHighlightPositions={handleHighlightPositions}
             />
           ))}
         </Box>

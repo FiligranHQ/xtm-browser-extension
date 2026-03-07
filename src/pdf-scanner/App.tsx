@@ -55,6 +55,9 @@ export default function App() {
   // Theme - uses shared hook to reduce duplication
   const { mode, setMode, theme } = useTheme();
   
+  // Highlight positions tracked across all pages for scroll-to-entity support
+  const highlightPositionsRef = useRef<Map<number, Array<{ entityValue: string; x: number; y: number; width: number; height: number }>>>(new Map());
+
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,52 @@ export default function App() {
   useEffect(() => {
     pdfUrlRef.current = pdfUrl || '';
   }, [pdfUrl]);
+
+  // Track highlight positions reported by each PageRenderer
+  const handleHighlightPositions = useCallback((pageNumber: number, positions: Array<{ entityValue: string; x: number; y: number; width: number; height: number }>) => {
+    highlightPositionsRef.current.set(pageNumber, positions);
+  }, []);
+
+  // Scroll to the first highlighted entity in the PDF
+  const scrollToFirstHighlight = useCallback(() => {
+    const container = pagesContainerRef.current;
+    if (!container) return;
+
+    // Find the first page that has highlights
+    const sortedPages = Array.from(highlightPositionsRef.current.entries())
+      .filter(([_, positions]) => positions.length > 0)
+      .sort(([a], [b]) => a - b);
+    
+    if (sortedPages.length === 0) return;
+    
+    const [firstPage] = sortedPages[0];
+    const pageElement = container.querySelector(`[data-page-number="${firstPage}"]`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  // Scroll to a specific entity by value in the PDF
+  const scrollToHighlightByValue = useCallback((value: string | string[]) => {
+    const container = pagesContainerRef.current;
+    if (!container) return;
+
+    const valuesToFind = Array.isArray(value) ? value : [value];
+    
+    // Search all pages for the entity value
+    for (const [pageNumber, positions] of Array.from(highlightPositionsRef.current.entries()).sort(([a], [b]) => a - b)) {
+      const match = positions.find(p => valuesToFind.some(v => 
+        p.entityValue === v || p.entityValue.includes(v) || v.includes(p.entityValue)
+      ));
+      if (match) {
+        const pageElement = container.querySelector(`[data-page-number="${pageNumber}"]`);
+        if (pageElement) {
+          pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
+    }
+  }, []);
 
   // Panel manager hook
   const {
@@ -95,6 +144,8 @@ export default function App() {
     setMode,
     setSplitScreenMode,
     closeIframePanel,
+    scrollToFirstHighlight,
+    scrollToHighlightByValue,
   });
 
   // Build platform matches for found entities
@@ -505,6 +556,7 @@ export default function App() {
               selectedEntities={selectedEntities}
               onEntityClick={handleEntityClick}
               onEntityHover={handleEntityHover}
+              onHighlightPositions={handleHighlightPositions}
             />
           ))}
         </Box>

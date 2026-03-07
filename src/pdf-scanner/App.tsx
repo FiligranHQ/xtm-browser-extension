@@ -130,17 +130,6 @@ export default function App() {
     panelIframeRef,
   } = usePanelManager({ splitScreenMode });
 
-  // Notify panel when selection changes (avoids side effects inside setState updaters)
-  useEffect(() => {
-    sendToPanel({
-      type: 'SELECTION_UPDATED',
-      payload: {
-        selectedCount: selectedEntities.size,
-        selectedItems: Array.from(selectedEntities),
-      },
-    });
-  }, [selectedEntities, sendToPanel]);
-
   // Message handlers hook
   useMessageHandlers({
     pageTextsRef,
@@ -220,6 +209,13 @@ export default function App() {
         } else {
           next.add(entityKey);
         }
+        sendToPanel({
+          type: 'SELECTION_UPDATED',
+          payload: {
+            selectedCount: next.size,
+            selectedItems: Array.from(next),
+          },
+        });
         return next;
       });
       return;

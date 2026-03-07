@@ -19,7 +19,7 @@ import {
 import { addEntityToOCTICache, type CachedOCTIEntity } from '../../shared/utils/storage';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { loggers } from '../../shared/utils/logger';
-import { SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
+import { ENTITY_FETCH_TIMEOUT_MS, SEARCH_TIMEOUT_MS, CONTAINER_FETCH_TIMEOUT_MS } from '../../shared/constants';
 import {
   checkClientsConfigured,
   getClientOrError,
@@ -29,6 +29,8 @@ import {
   searchAcrossPlatforms,
   handleError,
 } from './platform-utils';
+import { isObservableType } from '../../shared/utils/entity';
+
 const log = loggers.background;
 
 // List of OpenCTI types that should be cached
@@ -39,6 +41,85 @@ const CACHEABLE_OPENCTI_TYPES = [
   'City', 'Administrative-Area', 'Position', 'Tool', 'Narrative',
   'Channel', 'System'
 ];
+
+/**
+ * Get entity details handler (used by tests; runtime dispatch goes through entity-handlers)
+ */
+export const handleGetEntityDetails: MessageHandler = async (payload, sendResponse) => {
+  if (!hasOpenCTIClients()) {
+    sendResponse(errorResponse('Not configured'));
+    return;
+  }
+
+  const { id, entityType, platformId: specificPlatformId } = payload as {
+    id: string;
+    entityType: string;
+    platformId?: string;
+  };
+
+  try {
+    const openCTIClients = getOpenCTIClients();
+    
+    if (specificPlatformId) {
+      const client = openCTIClients.get(specificPlatformId);
+      if (!client) {
+        sendResponse(errorResponse('Platform not found'));
+        return;
+      }
+
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), ENTITY_FETCH_TIMEOUT_MS)
+      );
+
+      try {
+        const entityPromise = isObservableType(entityType)
+          ? client.getObservableById(id)
+          : client.getSDOById(id);
+
+        const entity = await Promise.race([entityPromise, timeoutPromise]);
+        if (entity) {
+          sendResponse({ success: true, data: { ...entity, platformId: specificPlatformId } });
+        } else {
+          sendResponse(errorResponse('Entity not found'));
+        }
+      } catch {
+        log.debug(`Entity ${id} not found/timeout in platform ${specificPlatformId}`);
+        sendResponse(errorResponse('Entity not found or timeout'));
+      }
+    } else {
+      const fetchPromises = Array.from(openCTIClients.entries()).map(async ([pId, client]) => {
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), ENTITY_FETCH_TIMEOUT_MS)
+        );
+
+        try {
+          const entityPromise = isObservableType(entityType)
+            ? client.getObservableById(id)
+            : client.getSDOById(id);
+
+          const entity = await Promise.race([entityPromise, timeoutPromise]);
+          return { platformId: pId, entity };
+        } catch {
+          return { platformId: pId, entity: null };
+        }
+      });
+
+      const results = await Promise.all(fetchPromises);
+      const found = results.find(r => r.entity !== null);
+
+      if (found && found.entity) {
+        sendResponse({ success: true, data: { ...found.entity, platformId: found.platformId } });
+      } else {
+        sendResponse(errorResponse('Entity not found in any platform'));
+      }
+    }
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get entity',
+    });
+  }
+};
 
 /**
  * Search entities handler

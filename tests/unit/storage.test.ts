@@ -219,7 +219,7 @@ describe('Settings Storage', () => {
       expect(settings).toEqual({
         openctiPlatforms: [],
         openaevPlatforms: [],
-        theme: 'auto',
+        theme: 'dark',
         autoScan: false,
         showNotifications: true,
       });

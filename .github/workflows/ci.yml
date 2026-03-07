@@ -176,6 +176,7 @@ jobs:
             -e APP__ADMIN__EMAIL=admin@opencti.io \
             -e APP__ADMIN__PASSWORD=admin \
             -e APP__ADMIN__TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
+            -e APP__ENCRYPTION_KEY=wbQnxC2ZIoohYzkXW19LiYU2V3lfoCVFkBadFd/dFAY= \
             -e APP__HEALTH_ACCESS_KEY=healthcheck \
             -e REDIS__HOSTNAME=localhost \
             -e REDIS__PORT=6379 \

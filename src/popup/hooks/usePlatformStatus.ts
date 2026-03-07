@@ -117,8 +117,8 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
         const openaevPlatforms = settings.openaevPlatforms || [];
         
         // Check AI configuration
-        const aiSettings = settings.aiSettings;
-        setAiConfigured(!!(aiSettings?.enabled && aiSettings?.provider && aiSettings?.apiKey));
+        const ai = settings.ai;
+        setAiConfigured(!!(ai?.provider && ai?.apiKey));
         
         // Check split screen mode
         setSplitScreenMode(!!settings.splitScreenMode);

@@ -168,7 +168,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
   const entityData = (entity as any).entityData || entity || {};
   const rawType = (entity as any).type || '';
   const oaevType = rawType.replace('oaev-', '');
-  const entityPlatformId = (entity as any).platformId || (entity as any).platformId;
+  const entityPlatformId = (entity as any).platformId;
   
   // Find the platform
   const platform = entityPlatformId 

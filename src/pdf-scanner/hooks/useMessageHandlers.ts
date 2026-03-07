@@ -39,8 +39,6 @@ interface UseMessageHandlersOptions {
   scanAndShowPanelRef: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
   /** Reference to panel iframe */
   panelIframeRef: React.MutableRefObject<HTMLIFrameElement | null>;
-  /** PDF URL */
-  pdfUrl: string | null;
   /** PDF metadata title (from PDF document info) */
   pdfMetadataTitle?: string;
   /** Set scan results */
@@ -66,7 +64,6 @@ export function useMessageHandlers({
   pdfUrlRef,
   scanAndShowPanelRef,
   panelIframeRef,
-  pdfUrl,
   pdfMetadataTitle,
   setScanResults,
   setSelectedEntities,
@@ -157,16 +154,9 @@ export function useMessageHandlers({
         return true;
       } else if (message.type === 'ADD_AI_ENTITIES_TO_PDF') {
         // Add AI-discovered entities from panel to scanResults
-        const aiEntities = message.payload as Array<{
-          id: string;
-          type: string;
-          name: string;
-          value: string;
-          aiReason?: string;
-          aiConfidence?: 'high' | 'medium' | 'low';
-        }>;
+        const aiEntities = message.payload;
         
-        if (aiEntities && aiEntities.length > 0) {
+        if (Array.isArray(aiEntities) && aiEntities.length > 0) {
           setScanResults(prev => {
             if (!prev) return prev;
             return {
@@ -291,7 +281,7 @@ export function useMessageHandlers({
       } else if (event.data?.type === 'XTM_GET_PDF_CONTENT') {
         // Panel iframe is requesting PDF content for AI analysis or container creation
         const fullText = pageTextsRef.current.join('\n');
-        const currentUrl = pdfUrl || '';
+        const currentUrl = pdfUrlRef.current || '';
         const filename = extractFilenameFromUrl(currentUrl);
         // Use PDF metadata title if available, otherwise use filename without extension
         const pdfTitle = pdfMetadataTitle || filename.replace(/\.pdf$/i, '') || 'PDF Document';
@@ -326,7 +316,7 @@ export function useMessageHandlers({
 
     window.addEventListener('message', handlePostMessage);
     return () => window.removeEventListener('message', handlePostMessage);
-  }, [pdfUrl, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, scrollToFirstHighlight, scrollToHighlightByValue]);
+  }, [pdfUrlRef, pdfMetadataTitle, closeIframePanel, pageTextsRef, panelIframeRef, scanAndShowPanelRef, setScanResults, setSelectedEntities, setHoveredEntity, scrollToFirstHighlight, scrollToHighlightByValue]);
   
   // Re-notify panel that it's in PDF view mode when tab becomes visible
   // This handles the case where user switches away from PDF tab and comes back

@@ -96,7 +96,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
   const defaultSettings: ExtensionSettings = {
     openctiPlatforms: [],
     openaevPlatforms: [],
-    theme: 'auto',
+    theme: 'dark',
     autoScan: false,
     showNotifications: true,
   };

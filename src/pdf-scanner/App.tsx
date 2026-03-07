@@ -24,7 +24,7 @@ import { PDFToolbar } from './components/PDFToolbar';
 import { EntityTooltip } from './components/EntityTooltip';
 import { usePanelManager } from './hooks/usePanelManager';
 import { useMessageHandlers } from './hooks/useMessageHandlers';
-import { groupTextItemsIntoLines, buildLineTextAndCharMap } from './utils/highlight-utils';
+import { groupTextItemsIntoLines, buildLineTextAndCharMap, getEntityValue } from './utils/highlight-utils';
 
 // Configure PDF.js worker - MUST be embedded in the extension for Chrome Web Store compliance
 if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
@@ -130,13 +130,23 @@ export default function App() {
     panelIframeRef,
   } = usePanelManager({ splitScreenMode });
 
+  // Notify panel when selection changes (avoids side effects inside setState updaters)
+  useEffect(() => {
+    sendToPanel({
+      type: 'SELECTION_UPDATED',
+      payload: {
+        selectedCount: selectedEntities.size,
+        selectedItems: Array.from(selectedEntities),
+      },
+    });
+  }, [selectedEntities, sendToPanel]);
+
   // Message handlers hook
   useMessageHandlers({
     pageTextsRef,
     pdfUrlRef,
     scanAndShowPanelRef,
     panelIframeRef,
-    pdfUrl,
     pdfMetadataTitle,
     setScanResults,
     setSelectedEntities,
@@ -177,8 +187,7 @@ export default function App() {
     
     // For OpenAEV-only found entities, clicking anywhere opens entity details (no checkbox)
     if (isOpenAEVOnly && entity.found) {
-      const entityValue = 'value' in entity && entity.value ? entity.value : 
-                         'name' in entity && entity.name ? entity.name : '';
+      const entityValue = getEntityValue(entity);
       const platformMatches = buildEntityPlatformMatches(entity);
       await openPanel(true);
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -211,22 +220,13 @@ export default function App() {
         } else {
           next.add(entityKey);
         }
-        // Notify panel about selection change to sync the scan results list
-        sendToPanel({
-          type: 'SELECTION_UPDATED',
-          payload: {
-            selectedCount: next.size,
-            selectedItems: Array.from(next),
-          },
-        });
         return next;
       });
       return;
     }
     
     // For found entities (not checkbox click), open panel with entity details
-    const entityValue = 'value' in entity && entity.value ? entity.value : 
-                       'name' in entity && entity.name ? entity.name : '';
+    const entityValue = getEntityValue(entity);
     const platformMatches = buildEntityPlatformMatches(entity);
     await openPanel(true);
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -283,7 +283,7 @@ export default function App() {
   // Keep ref in sync for message handlers
   useEffect(() => {
     scanAndShowPanelRef.current = (content: string) => scanAndShowPanel(content, pdfUrl || '');
-  });
+  }, [scanAndShowPanel, pdfUrl]);
 
   // Toggle panel (called from button click - user gesture)
   const togglePanel = useCallback(async () => {
@@ -417,7 +417,7 @@ export default function App() {
     chrome.runtime.sendMessage({
       type: 'FORWARD_TO_PANEL',
       payload: { type: 'CLEAR_SCAN_RESULTS' },
-    });
+    }).catch(() => {});
   }, []);
 
   // Zoom functions
@@ -435,9 +435,8 @@ export default function App() {
   const handleBackgroundClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!splitScreenMode && isIframePanelOpen()) {
       const target = e.target as HTMLElement;
-      const isHighlight = target.hasAttribute?.('data-entity-value') || 
-                          target.closest?.('[data-entity-value]') ||
-                          target.closest?.('.xtm-panel-iframe');
+      const isHighlight = target.closest?.('canvas') ||
+                          target.closest?.('#xtm-pdf-panel-iframe');
       if (!isHighlight) {
         closeIframePanel();
       }

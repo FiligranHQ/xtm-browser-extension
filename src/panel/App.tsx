@@ -969,7 +969,7 @@ const App: React.FC = () => {
     
     const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
     const entityType = payload?.entityData?.entity_type || payload?.type || payload?.entity_type;
-    const platformId = payload?.platformId || payload?.platformId;
+    const platformId = payload?.platformId;
     const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
     
     // Build multi-platform results

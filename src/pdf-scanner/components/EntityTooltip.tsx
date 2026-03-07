@@ -7,6 +7,7 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { getPlatformName } from '../../shared/platform/registry';
+import { getEntityValue } from '../utils/highlight-utils';
 import type { HoveredEntityState } from '../types';
 
 interface EntityTooltipProps {
@@ -16,11 +17,7 @@ interface EntityTooltipProps {
 export function EntityTooltip({ hoveredEntity }: EntityTooltipProps) {
   const { entity, x, y } = hoveredEntity;
   
-  const entityValue = 'value' in entity && entity.value 
-    ? entity.value 
-    : 'name' in entity && entity.name
-      ? entity.name
-      : '';
+  const entityValue = getEntityValue(entity);
 
   const statusColor = entity.discoveredByAI 
     ? '#9c27b0' 

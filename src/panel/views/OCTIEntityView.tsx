@@ -165,7 +165,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   // Entity might be a DetectedOCTIEntity/DetectedObservable with entityData, or direct entity data
   const entityData = (entity as any).entityData || entity || {};
   const entityId = (entity as any).entityId || entityData?.id || entity?.id;
-  const entityPlatformId = (entity as any).platformId || (entity as any).platformId;
+  const entityPlatformId = (entity as any).platformId;
   
   const type = entityData.entity_type || entity.type || 'unknown';
   const color = itemColor(type, mode === 'dark');

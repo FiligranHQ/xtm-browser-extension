@@ -7,7 +7,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import type { PageRendererProps, ScanEntity, HighlightRegion } from '../types';
-import { renderHighlightsOnCanvas } from '../utils/highlight-utils';
+import { renderHighlightsOnCanvas, getEntityValue } from '../utils/highlight-utils';
 
 export function PageRenderer({ 
   pdfDocument,
@@ -37,8 +37,7 @@ export function PageRenderer({
   const reportHighlightPositions = useCallback((regions: HighlightRegion[]) => {
     if (onHighlightPositions && regions.length > 0) {
       const positions = regions.map(r => ({
-        entityValue: 'value' in r.entity && r.entity.value ? r.entity.value : 
-                    'name' in r.entity && r.entity.name ? r.entity.name : '',
+        entityValue: getEntityValue(r.entity),
         x: r.x,
         y: r.y,
         width: r.width,
@@ -158,7 +157,7 @@ export function PageRenderer({
     for (const region of highlightRegionsRef.current) {
       if (x >= region.x && x <= region.x + region.width &&
           y >= region.y && y <= region.y + region.height) {
-        // Check if click was on the checkbox area (left ~30px of highlight)
+        e.stopPropagation();
         const checkboxAreaWidth = 30;
         const isCheckboxClick = x < region.x + checkboxAreaWidth;
         onEntityClick(region.entityKey, region.entity, isCheckboxClick);

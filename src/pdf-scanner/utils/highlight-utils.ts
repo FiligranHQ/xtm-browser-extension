@@ -232,35 +232,6 @@ export function buildLineTextAndCharMap(line: TextLine): void {
 }
 
 /**
- * Extract all entities from scan results
- */
-export function extractAllEntities(scanResults: ScanResultPayload): ScanEntity[] {
-  return [
-    ...scanResults.observables.map(o => ({ ...o, type: o.type })),
-    ...scanResults.openctiEntities.map(e => ({ ...e, name: e.name, type: e.type || 'entity' })),
-    ...(scanResults.cves || []).map(c => ({ ...c, type: c.type || 'cve' })),
-    // Include OpenAEV entities
-    ...(scanResults.openaevEntities || []).map(e => ({
-      ...e,
-      name: e.name,
-      type: e.type ? `oaev-${e.type}` : 'oaev-entity',
-      found: e.found ?? true,
-    })),
-    // Include AI-discovered entities
-    ...(scanResults.aiDiscoveredEntities || []).map(e => ({
-      ...e,
-      name: e.name,
-      value: e.value,
-      type: e.type || 'entity',
-      found: false,
-      discoveredByAI: true,
-      aiReason: e.aiReason,
-      aiConfidence: e.aiConfidence,
-    })),
-  ];
-}
-
-/**
  * Build a map of OpenAEV entity values for cross-platform lookup
  * Used to detect mixed state (not in OpenCTI but found in OpenAEV)
  */
@@ -761,19 +732,4 @@ export async function renderHighlightsOnCanvas(
   return regions;
 }
 
-/**
- * Extract text from PDF page using line-based grouping
- * Ensures proper spacing between table columns
- */
-export async function extractPageText(page: pdfjsLib.PDFPageProxy): Promise<string> {
-  const textContent = await page.getTextContent();
-  const lines = groupTextItemsIntoLines(textContent);
-  
-  const lineTexts = lines.map(line => {
-    buildLineTextAndCharMap(line);
-    return line.combinedText;
-  });
-  
-  return lineTexts.join('\n');
-}
 

@@ -1411,7 +1411,9 @@ const App: React.FC = () => {
 
   // Action handlers
   const handleClose = () => {
-    // Always navigate to home (same behavior as "Back to actions")
+    if (!isSplitScreenMode) {
+      window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
+    }
     setPanelMode('empty');
   };
   const handleOpenInPlatform = (entityId: string, draftId?: string) => {

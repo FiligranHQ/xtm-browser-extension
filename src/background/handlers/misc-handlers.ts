@@ -12,8 +12,7 @@ import { successResponse, errorResponse } from '../../shared/types/common';
 import type { MessageHandler } from './types';
 import { loggers } from '../../shared/utils/logger';
 import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction/native-pdf';
-import { savePanelWorkflowState, loadPanelWorkflowState, clearPanelWorkflowState } from '../../shared/utils/storage';
-import type { PanelWorkflowState } from '../../shared/utils/storage';
+import { savePanelWorkflowState, loadPanelWorkflowState, clearPanelWorkflowState, type PanelWorkflowState } from '../../shared/utils/storage';
 
 const log = loggers.background;
 

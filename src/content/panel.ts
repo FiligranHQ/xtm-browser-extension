@@ -14,7 +14,6 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import { PANEL_WIDTH_PX } from '../shared/constants';
 import type { DetectedObservable } from '../shared/types/observables';
 import type { DetectedOCTIEntity } from '../shared/types/opencti';
 import { extractArticleContent, extractFirstParagraph } from './extraction';

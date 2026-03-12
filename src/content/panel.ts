@@ -487,37 +487,15 @@ export function isPanelHidden(): boolean {
 // ============================================================================
 
 /**
- * Document click handler for closing panel when clicking outside
+ * Document click handler - keeps the panel open when clicking the webpage.
+ * The panel only closes via the explicit close button in the panel header.
+ * This allows users to interact with the webpage (e.g. copy text) while
+ * the panel remains open and preserves their workflow state.
  */
-function handleDocumentClickForPanel(e: MouseEvent): void {
-  if (panelFrame?.classList.contains('hidden')) {
-    return;
-  }
-  
-  if (highlightClickInProgress) {
-    return;
-  }
-  
-  const target = e.target as HTMLElement;
-  
-  if (panelFrame && (target === panelFrame || panelFrame.contains(target))) {
-    return;
-  }
-  
-  if (target.closest('.xtm-highlight')) {
-    return;
-  }
-  
-  if (target.closest('[class*="xtm-"]')) {
-    return;
-  }
-  
-  const panelAreaStart = window.innerWidth - PANEL_WIDTH_PX;
-  if (e.clientX >= panelAreaStart) {
-    return;
-  }
-  
-  hidePanel();
+function handleDocumentClickForPanel(_e: MouseEvent): void {
+  // Panel stays open on page clicks - users can interact with the webpage
+  // while maintaining their workflow in the extension panel.
+  // Close is handled by the explicit close button (XTM_CLOSE_PANEL message).
 }
 
 // ============================================================================

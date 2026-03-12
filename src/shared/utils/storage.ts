@@ -83,6 +83,59 @@ export const sessionStorage = {
 };
 
 // ============================================================================
+// Panel Workflow State Persistence
+// ============================================================================
+
+const PANEL_WORKFLOW_STATE_KEY = 'panelWorkflowState';
+const PANEL_WORKFLOW_STATE_TTL = 30 * 60 * 1000; // 30 minutes
+
+export interface PanelWorkflowState {
+  panelMode: string;
+  containerType?: string;
+  containerForm?: { name: string; description: string; content?: string };
+  containerWorkflowOrigin?: string;
+  selectedPlatformId?: string;
+  currentPageUrl?: string;
+  currentPageTitle?: string;
+  currentPdfFileName?: string;
+  isPdfSource?: boolean;
+  scanResultsEntities?: unknown[];
+  selectedScanItems?: string[];
+  scanPageContent?: string;
+  timestamp: number;
+}
+
+/**
+ * Save panel workflow state to session storage.
+ * This preserves the user's place in a workflow (e.g. container creation)
+ * across panel close/reopen cycles.
+ */
+export async function savePanelWorkflowState(state: PanelWorkflowState): Promise<void> {
+  await sessionStorage.set(PANEL_WORKFLOW_STATE_KEY, state);
+}
+
+/**
+ * Load panel workflow state from session storage.
+ * Returns null if no state exists or the state has expired.
+ */
+export async function loadPanelWorkflowState(): Promise<PanelWorkflowState | null> {
+  const state = await sessionStorage.get<PanelWorkflowState>(PANEL_WORKFLOW_STATE_KEY);
+  if (!state) return null;
+  if (Date.now() - state.timestamp > PANEL_WORKFLOW_STATE_TTL) {
+    await sessionStorage.remove(PANEL_WORKFLOW_STATE_KEY);
+    return null;
+  }
+  return state;
+}
+
+/**
+ * Clear panel workflow state (e.g. after completing a workflow).
+ */
+export async function clearPanelWorkflowState(): Promise<void> {
+  await sessionStorage.remove(PANEL_WORKFLOW_STATE_KEY);
+}
+
+// ============================================================================
 // Settings Storage
 // ============================================================================
 

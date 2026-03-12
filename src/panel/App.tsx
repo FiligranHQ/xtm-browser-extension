@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -357,6 +357,57 @@ const App: React.FC = () => {
     showToast,
   });
 
+  // Modes that represent an active workflow worth persisting
+  const PERSISTABLE_MODES = new Set([
+    'scan-results', 'preview', 'platform-select', 'container-type',
+    'container-form', 'existing-containers', 'entity', 'not-found',
+    'investigation', 'scenario-overview', 'scenario-form',
+    'atomic-testing', 'unified-search', 'add', 'add-selection',
+    'add-to-scan-results',
+  ]);
+
+  // Track whether we've restored state to avoid save/restore loops
+  const hasRestoredState = useRef(false);
+
+  // Debounced persistence of panel workflow state
+  useEffect(() => {
+    if (!hasRestoredState.current) return;
+    if (!PERSISTABLE_MODES.has(panelMode)) return;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+
+    const timer = setTimeout(() => {
+      const stateToSave = {
+        panelMode,
+        containerType,
+        containerForm,
+        containerWorkflowOrigin,
+        selectedPlatformId,
+        currentPageUrl,
+        currentPageTitle,
+        currentPdfFileName,
+        isPdfSource,
+        scanResultsEntities: scanResultsEntities.length > 0 ? scanResultsEntities : undefined,
+        selectedScanItems: selectedScanItems.size > 0 ? Array.from(selectedScanItems) : undefined,
+        scanPageContent: scanPageContent || undefined,
+        timestamp: Date.now(),
+      };
+      chrome.runtime.sendMessage({ type: 'SAVE_PANEL_STATE', payload: stateToSave });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelMode, containerType, containerForm, containerWorkflowOrigin,
+      selectedPlatformId, currentPageUrl, currentPageTitle]);
+
+  // Clear persisted state when a workflow completes or user returns to empty
+  useEffect(() => {
+    if (panelMode === 'empty' || panelMode === 'import-results') {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'CLEAR_PANEL_STATE' });
+      }
+    }
+  }, [panelMode]);
+
   // Sync entitiesToAdd with selectedScanItems when in preview mode
   React.useEffect(() => {
     if (panelMode === 'preview' && scanResultsEntitiesRef.current.length > 0) {
@@ -645,7 +696,15 @@ const App: React.FC = () => {
     setTimeout(() => {
       chrome.runtime.sendMessage({ type: 'GET_PANEL_STATE' }, (response) => {
         if (chrome.runtime.lastError) return;
-        if (response?.success && response.data) handlePanelState(response.data);
+        if (response?.success && response.data) {
+          handlePanelState(response.data);
+          // Restore persisted workflow state if available
+          const ws = response.data.workflowState;
+          if (ws && ws.panelMode && ws.panelMode !== 'empty' && ws.panelMode !== 'loading') {
+            restoreWorkflowState(ws);
+          }
+        }
+        hasRestoredState.current = true;
       });
     }, 50);
     
@@ -844,6 +903,45 @@ const App: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelMode, selectedPlatformId]);
+
+  // Restore workflow state from persisted data (called on panel mount)
+  const restoreWorkflowState = (ws: {
+    panelMode?: string;
+    containerType?: string;
+    containerForm?: { name: string; description: string; content?: string };
+    containerWorkflowOrigin?: string;
+    selectedPlatformId?: string;
+    currentPageUrl?: string;
+    currentPageTitle?: string;
+    currentPdfFileName?: string;
+    isPdfSource?: boolean;
+    scanResultsEntities?: unknown[];
+    selectedScanItems?: string[];
+    scanPageContent?: string;
+  }) => {
+    log.debug('[PANEL] Restoring workflow state, mode:', ws.panelMode);
+    if (ws.currentPageUrl) setCurrentPageUrl(ws.currentPageUrl);
+    if (ws.currentPageTitle) setCurrentPageTitle(ws.currentPageTitle);
+    if (ws.currentPdfFileName) setCurrentPdfFileName(ws.currentPdfFileName);
+    if (ws.isPdfSource !== undefined) setIsPdfSource(ws.isPdfSource);
+    if (ws.selectedPlatformId) {
+      setSelectedPlatformId(ws.selectedPlatformId);
+      const platform = availablePlatforms.find(p => p.id === ws.selectedPlatformId);
+      if (platform) setPlatformUrl(platform.url);
+    }
+    if (ws.scanResultsEntities && Array.isArray(ws.scanResultsEntities) && ws.scanResultsEntities.length > 0) {
+      setScanResultsEntities(ws.scanResultsEntities as typeof scanResultsEntities);
+      scanResultsEntitiesRef.current = ws.scanResultsEntities as typeof scanResultsEntities;
+    }
+    if (ws.selectedScanItems && Array.isArray(ws.selectedScanItems)) {
+      setSelectedScanItems(new Set(ws.selectedScanItems));
+    }
+    if (ws.scanPageContent) setScanPageContent(ws.scanPageContent);
+    if (ws.containerType) setOCTIContainerType(ws.containerType as Parameters<typeof setOCTIContainerType>[0]);
+    if (ws.containerForm) setContainerForm(ws.containerForm as Parameters<typeof setContainerForm>[0]);
+    if (ws.containerWorkflowOrigin) setContainerWorkflowOrigin(ws.containerWorkflowOrigin as 'preview' | 'direct' | 'import');
+    if (ws.panelMode) setPanelMode(ws.panelMode as PanelMode);
+  };
 
   const handleMessage = (event: MessageEvent) => {
     const { type, payload } = event.data;

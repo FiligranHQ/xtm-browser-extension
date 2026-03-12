@@ -454,6 +454,8 @@ describe('Handler Registries', () => {
       'INJECT_CONTENT_SCRIPT',
       'INJECT_ALL_TABS',
       'GET_PANEL_STATE',
+      'SAVE_PANEL_STATE',
+      'CLEAR_PANEL_STATE',
       'GENERATE_NATIVE_PDF',
       'FETCH_IMAGE_AS_DATA_URL',
     ];

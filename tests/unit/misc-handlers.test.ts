@@ -299,7 +299,7 @@ describe('handleGetPanelState', () => {
     expect(mockSendResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,
-        data: { ready: true },
+        data: { ready: true, workflowState: null },
       })
     );
   });

@@ -14,7 +14,6 @@
  */
 
 import { loggers } from '../shared/utils/logger';
-import { PANEL_WIDTH_PX } from '../shared/constants';
 import type { DetectedObservable } from '../shared/types/observables';
 import type { DetectedOCTIEntity } from '../shared/types/opencti';
 import { extractArticleContent, extractFirstParagraph } from './extraction';
@@ -29,7 +28,6 @@ let panelFrame: HTMLIFrameElement | null = null;
 let panelOverlay: HTMLDivElement | null = null;
 let isPanelReady = false;
 const panelMessageQueue: Array<{ type: string; payload?: unknown }> = [];
-let documentClickHandlerInstalled = false;
 let highlightClickInProgress = false;
 // Split screen mode - uses browser's native side panel instead of floating iframe
 let splitScreenMode = false;
@@ -431,11 +429,6 @@ export function ensurePanelElements(): void {
     }, 100);
   }
   
-  // Install document click handler
-  if (!documentClickHandlerInstalled) {
-    document.addEventListener('click', handleDocumentClickForPanel, true);
-    documentClickHandlerInstalled = true;
-  }
 }
 
 /**
@@ -480,44 +473,6 @@ export function isPanelHidden(): boolean {
     return false;
   }
   return panelFrame?.classList.contains('hidden') ?? true;
-}
-
-// ============================================================================
-// Click Handling
-// ============================================================================
-
-/**
- * Document click handler for closing panel when clicking outside
- */
-function handleDocumentClickForPanel(e: MouseEvent): void {
-  if (panelFrame?.classList.contains('hidden')) {
-    return;
-  }
-  
-  if (highlightClickInProgress) {
-    return;
-  }
-  
-  const target = e.target as HTMLElement;
-  
-  if (panelFrame && (target === panelFrame || panelFrame.contains(target))) {
-    return;
-  }
-  
-  if (target.closest('.xtm-highlight')) {
-    return;
-  }
-  
-  if (target.closest('[class*="xtm-"]')) {
-    return;
-  }
-  
-  const panelAreaStart = window.innerWidth - PANEL_WIDTH_PX;
-  if (e.clientX >= panelAreaStart) {
-    return;
-  }
-  
-  hidePanel();
 }
 
 // ============================================================================

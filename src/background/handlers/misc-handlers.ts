@@ -12,6 +12,7 @@ import { successResponse, errorResponse } from '../../shared/types/common';
 import type { MessageHandler } from './types';
 import { loggers } from '../../shared/utils/logger';
 import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction/native-pdf';
+import { savePanelWorkflowState, loadPanelWorkflowState, clearPanelWorkflowState, type PanelWorkflowState } from '../../shared/utils/storage';
 
 const log = loggers.background;
 
@@ -182,12 +183,47 @@ export const handleInjectAllTabs: MessageHandler = async (_payload, sendResponse
 };
 
 /**
- * Get panel state
+ * Get panel state - returns any saved workflow state so the panel can restore it
  */
 export const handleGetPanelState: MessageHandler = async (_payload, sendResponse) => {
-  // Panel state is managed by the content script
-  // This just confirms the panel is ready
-  sendResponse(successResponse({ ready: true }));
+  try {
+    const workflowState = await loadPanelWorkflowState();
+    sendResponse(successResponse({ ready: true, workflowState }));
+  } catch (error) {
+    log.warn('Failed to load panel workflow state:', error);
+    sendResponse(successResponse({ ready: true, workflowState: null }));
+  }
+};
+
+/**
+ * Save panel workflow state for persistence across close/reopen
+ */
+export const handleSavePanelState: MessageHandler = async (payload, sendResponse) => {
+  const state = payload as PanelWorkflowState | undefined;
+  if (!state || typeof state !== 'object' || !('panelMode' in state) || !state.panelMode) {
+    sendResponse(errorResponse('Invalid panel state'));
+    return;
+  }
+  try {
+    await savePanelWorkflowState({ ...state, timestamp: Date.now() });
+    sendResponse(successResponse({ saved: true }));
+  } catch (error) {
+    log.warn('Failed to save panel workflow state:', error);
+    sendResponse(errorResponse('Failed to save state'));
+  }
+};
+
+/**
+ * Clear panel workflow state (e.g. after completing a workflow)
+ */
+export const handleClearPanelState: MessageHandler = async (_payload, sendResponse) => {
+  try {
+    await clearPanelWorkflowState();
+    sendResponse(successResponse({ cleared: true }));
+  } catch (error) {
+    log.warn('Failed to clear panel workflow state:', error);
+    sendResponse(errorResponse('Failed to clear state'));
+  }
 };
 
 /**
@@ -293,6 +329,8 @@ export const miscHandlers: Record<string, MessageHandler> = {
   INJECT_CONTENT_SCRIPT: handleInjectContentScript,
   INJECT_ALL_TABS: handleInjectAllTabs,
   GET_PANEL_STATE: handleGetPanelState,
+  SAVE_PANEL_STATE: handleSavePanelState,
+  CLEAR_PANEL_STATE: handleClearPanelState,
   GENERATE_NATIVE_PDF: handleGenerateNativePDF,
   FETCH_IMAGE_AS_DATA_URL: handleFetchImageAsDataURL,
 };

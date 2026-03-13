@@ -915,6 +915,10 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
               // Reset filters
               setScanResultsTypeFilter('all');
               setScanResultsFoundFilter('all');
+              // Clear persisted workflow state so stale results don't restore on reopen
+              if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({ type: 'CLEAR_PANEL_STATE' });
+              }
             }}
             sx={{
               textTransform: 'none',

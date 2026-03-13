@@ -5,6 +5,14 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.22] - 2026-03-13
+
+### Fixed
+- **Panel Stays Open on Page Interaction**: The floating panel no longer auto-closes when clicking on the webpage, allowing users to copy/paste content while keeping their place in the workflow (e.g. report creation) (#86)
+
+### Added
+- **Workflow State Persistence**: Panel workflow state (current mode, container form, scan results, platform selection) is now persisted to session storage. If the panel is explicitly closed and reopened, the in-progress workflow is automatically restored. State expires after 30 minutes and is cleared when a workflow completes
+
 ## [0.0.21] - 2026-03-07
 
 ### Added
@@ -427,6 +435,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.0.22]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.20...v0.0.21
 [0.0.20]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.19...v0.0.20
 [0.0.19]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.18...v0.0.19

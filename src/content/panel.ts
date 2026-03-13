@@ -28,7 +28,6 @@ let panelFrame: HTMLIFrameElement | null = null;
 let panelOverlay: HTMLDivElement | null = null;
 let isPanelReady = false;
 const panelMessageQueue: Array<{ type: string; payload?: unknown }> = [];
-let documentClickHandlerInstalled = false;
 let highlightClickInProgress = false;
 // Split screen mode - uses browser's native side panel instead of floating iframe
 let splitScreenMode = false;
@@ -430,11 +429,6 @@ export function ensurePanelElements(): void {
     }, 100);
   }
   
-  // Install document click handler
-  if (!documentClickHandlerInstalled) {
-    document.addEventListener('click', handleDocumentClickForPanel, true);
-    documentClickHandlerInstalled = true;
-  }
 }
 
 /**
@@ -479,22 +473,6 @@ export function isPanelHidden(): boolean {
     return false;
   }
   return panelFrame?.classList.contains('hidden') ?? true;
-}
-
-// ============================================================================
-// Click Handling
-// ============================================================================
-
-/**
- * Document click handler - keeps the panel open when clicking the webpage.
- * The panel only closes via the explicit close button in the panel header.
- * This allows users to interact with the webpage (e.g. copy text) while
- * the panel remains open and preserves their workflow state.
- */
-function handleDocumentClickForPanel(_e: MouseEvent): void {
-  // Panel stays open on page clicks - users can interact with the webpage
-  // while maintaining their workflow in the extension panel.
-  // Close is handled by the explicit close button (XTM_CLOSE_PANEL message).
 }
 
 // ============================================================================

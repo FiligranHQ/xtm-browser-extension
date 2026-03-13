@@ -368,14 +368,19 @@ const App: React.FC = () => {
 
   // Track whether we've restored state to avoid save/restore loops
   const hasRestoredState = useRef(false);
+  // Platform ID that needs URL resolution once platforms finish loading
+  const pendingPlatformIdRef = useRef<string | null>(null);
 
-  // Debounced persistence of panel workflow state
+  // Debounced persistence of panel workflow state.
+  // Reads scan data from refs to always capture the latest values without
+  // requiring them in the dependency array (which would trigger too-frequent saves).
   useEffect(() => {
     if (!hasRestoredState.current) return;
     if (!PERSISTABLE_MODES.has(panelMode)) return;
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
 
     const timer = setTimeout(() => {
+      const currentScanEntities = scanResultsEntitiesRef.current;
       const stateToSave = {
         panelMode,
         containerType,
@@ -386,7 +391,7 @@ const App: React.FC = () => {
         currentPageTitle,
         currentPdfFileName,
         isPdfSource,
-        scanResultsEntities: scanResultsEntities.length > 0 ? scanResultsEntities : undefined,
+        scanResultsEntities: currentScanEntities.length > 0 ? currentScanEntities : undefined,
         selectedScanItems: selectedScanItems.size > 0 ? Array.from(selectedScanItems) : undefined,
         scanPageContent: scanPageContent || undefined,
         timestamp: Date.now(),
@@ -397,7 +402,20 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelMode, containerType, containerForm, containerWorkflowOrigin,
-      selectedPlatformId, currentPageUrl, currentPageTitle]);
+      selectedPlatformId, currentPageUrl, currentPageTitle,
+      selectedScanItems, scanPageContent]);
+
+  // Resolve deferred platform URL once platforms finish loading
+  useEffect(() => {
+    const pid = pendingPlatformIdRef.current;
+    if (pid && availablePlatforms.length > 0) {
+      const platform = availablePlatforms.find(p => p.id === pid);
+      if (platform) {
+        setPlatformUrl(platform.url);
+        pendingPlatformIdRef.current = null;
+      }
+    }
+  }, [availablePlatforms, setPlatformUrl]);
 
   // Clear persisted state when a workflow completes or user returns to empty
   useEffect(() => {
@@ -926,8 +944,12 @@ const App: React.FC = () => {
     if (ws.isPdfSource !== undefined) setIsPdfSource(ws.isPdfSource);
     if (ws.selectedPlatformId) {
       setSelectedPlatformId(ws.selectedPlatformId);
-      const platform = availablePlatforms.find(p => p.id === ws.selectedPlatformId);
-      if (platform) setPlatformUrl(platform.url);
+      const platform = availablePlatformsRef.current.find(p => p.id === ws.selectedPlatformId);
+      if (platform) {
+        setPlatformUrl(platform.url);
+      } else {
+        pendingPlatformIdRef.current = ws.selectedPlatformId;
+      }
     }
     if (ws.scanResultsEntities && Array.isArray(ws.scanResultsEntities) && ws.scanResultsEntities.length > 0) {
       setScanResultsEntities(ws.scanResultsEntities as typeof scanResultsEntities);

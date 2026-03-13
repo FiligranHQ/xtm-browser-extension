@@ -191,7 +191,7 @@ export const handleGetPanelState: MessageHandler = async (_payload, sendResponse
     sendResponse(successResponse({ ready: true, workflowState }));
   } catch (error) {
     log.warn('Failed to load panel workflow state:', error);
-    sendResponse(successResponse({ ready: true }));
+    sendResponse(successResponse({ ready: true, workflowState: null }));
   }
 };
 
@@ -199,12 +199,12 @@ export const handleGetPanelState: MessageHandler = async (_payload, sendResponse
  * Save panel workflow state for persistence across close/reopen
  */
 export const handleSavePanelState: MessageHandler = async (payload, sendResponse) => {
+  const state = payload as PanelWorkflowState | undefined;
+  if (!state || typeof state !== 'object' || !('panelMode' in state) || !state.panelMode) {
+    sendResponse(errorResponse('Invalid panel state'));
+    return;
+  }
   try {
-    const state = payload as PanelWorkflowState;
-    if (!state || !state.panelMode) {
-      sendResponse(errorResponse('Invalid panel state'));
-      return;
-    }
     await savePanelWorkflowState({ ...state, timestamp: Date.now() });
     sendResponse(successResponse({ saved: true }));
   } catch (error) {

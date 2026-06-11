@@ -272,18 +272,17 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
       log.debug(`Settings saved successfully for ${platformType}, isEnterprise: ${isEnterprise}`);
       
       setSetupSuccess(true);
-      
-      // Inject content scripts into all open tabs
-      try {
-        await chrome.runtime.sendMessage({ type: 'INJECT_ALL_TABS' });
-      } catch (error) {
+      setSetupTesting(false);
+
+      // Inject content scripts into all open tabs without blocking setup flow.
+      // Some environments/tabs may keep this message pending for too long.
+      void chrome.runtime.sendMessage({ type: 'INJECT_ALL_TABS' }).catch((error) => {
         log.debug('Note: Could not inject content scripts into existing tabs:', error);
-      }
+      });
       
       // Move to next step after a short delay
-      setTimeout(async () => {
+      setTimeout(() => {
         resetSetupForm();
-        setSetupTesting(false);
         
         if (platformType === 'opencti') {
           setSetupStepInternal('openaev');
@@ -327,4 +326,3 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
 };
 
 export default useSetupWizard;
-

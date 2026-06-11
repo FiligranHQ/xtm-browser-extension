@@ -272,10 +272,34 @@ export const usePopupActions = ({
     }
   }, [ensureContentScriptAndSendMessage, isPdfScannerPage]);
 
-  const handleOpenSettings = useCallback(() => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.openOptionsPage) return;
-    chrome.runtime.openOptionsPage();
+  const openSettingsPage = useCallback(async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime) return;
+
+    const optionsUrl = chrome.runtime.getURL('options/index.html');
+
+    try {
+      if (chrome.runtime.openOptionsPage) {
+        await chrome.runtime.openOptionsPage();
+        return;
+      }
+    } catch (error) {
+      log.warn('openOptionsPage failed, falling back to direct options URL:', error);
+    }
+
+    try {
+      if (chrome.tabs?.create) {
+        await chrome.tabs.create({ url: optionsUrl });
+      } else {
+        window.open(optionsUrl, '_blank');
+      }
+    } catch (error) {
+      log.error('Failed to open settings page:', error);
+    }
   }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    void openSettingsPage();
+  }, [openSettingsPage]);
 
   const handleOpenPlatform = useCallback((url: string) => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
@@ -295,15 +319,13 @@ export const usePopupActions = ({
     }
     
     if (hasEnterprise) {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
-        chrome.runtime.openOptionsPage();
-      }
+      await openSettingsPage();
       window.close();
       return;
     }
     
     setShowEETrialDialog(true);
-  }, [aiConfigured, hasEnterprise, setShowEETrialDialog]);
+  }, [aiConfigured, hasEnterprise, openSettingsPage, setShowEETrialDialog]);
 
   return {
     ensureContentScriptAndSendMessage,
@@ -322,4 +344,3 @@ export const usePopupActions = ({
 };
 
 export default usePopupActions;
-

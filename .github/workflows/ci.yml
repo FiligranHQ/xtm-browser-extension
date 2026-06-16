@@ -734,13 +734,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers and xvfb
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browser and system dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Install xvfb
         run: |
-          # Install xvfb for virtual display (required for headed Chrome with extensions)
-          sudo apt-get update
-          sudo apt-get install -y xvfb
-          # Install Playwright with Chromium and dependencies
-          npx playwright install chromium --with-deps
+          echo "Installing xvfb for headed Chrome..."
+          sudo apt-get update && sudo apt-get install -y xvfb
+          echo "xvfb install complete."
 
       - name: Build extension with coverage instrumentation
         run: npm run build:coverage

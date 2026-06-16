@@ -70,7 +70,7 @@
     "nyc": "^18.0.0",
     "playwright": "^1.61.0",
     "serve": "^14.2.4",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.0",
     "terser": "^5.44.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.50.0",

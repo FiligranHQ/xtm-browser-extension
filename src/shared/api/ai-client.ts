@@ -1,18 +1,17 @@
 /**
- * AI Client - Unified interface for AI providers (OpenAI, Anthropic, Gemini)
+ * AI Client - XTM One agent invocation
  *
- * Provides AI-powered features for:
- * - Container description generation
- * - Scenario generation
- * - On-the-fly atomic testing
- * 
- * NOTE: Import types from 'shared/api/ai/types' directly, not from this file.
+ * Every AI feature is delegated to a dedicated XTM One agent through
+ * ``POST {xtmOneUrl}/api/v1/extension/execute-task``.
+ *
+ * The extension is a thin client: it serializes the task input as JSON
+ * into the ``content`` field and identifies the target agent by slug.
+ * XTM One resolves the agent, loads its persona, executes via the full
+ * Agent framework, and returns parsed JSON in a ``{ data }`` envelope.
  */
 
-import { AI_DEFAULTS, type AIProvider, type AISettings } from '../types/ai';
+import { AI_DEFAULTS, type AISettings } from '../types/ai';
 import type {
-  AIGenerationRequest,
-  AIGenerationResponse,
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
   FullScenarioGenerationRequest,
@@ -22,519 +21,335 @@ import type {
   RelationshipResolutionRequest,
 } from './ai/types';
 
-// Import prompts
-import {
-  SYSTEM_PROMPTS,
-  buildContainerDescriptionPrompt,
-  buildScenarioPrompt,
-  buildFullScenarioPrompt,
-  buildAtomicTestPrompt,
-  buildEmailGenerationPrompt,
-  buildEmailGenerationSystemPrompt,
-  buildEntityDiscoveryPrompt,
-  buildRelationshipResolutionPrompt,
-} from './ai/prompts';
-
 // ============================================================================
 // Constants
 // ============================================================================
 
-const BASE_URLS = {
-  openai: 'https://api.openai.com/v1',
-  anthropic: 'https://api.anthropic.com/v1',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta',
+const EXECUTE_TASK_PATH = '/api/v1/extension/execute-task';
+const TEST_CONNECTION_PATH = '/api/v1/auth/me';
+const PLATFORM_CONFIG_PATH = '/api/v1/platform/config';
+
+/**
+ * Agent slugs matching the seeded browser-extension agents in XTM One.
+ * Adding a new entry here requires a corresponding agent in XTM One's
+ * ``builtin_agents.py``.
+ */
+export const XTM_ONE_AGENT_SLUGS = {
+  containerDescription: 'browser-container-description',
+  scenarioGeneration: 'browser-scenario-generation',
+  fullScenarioGeneration: 'browser-full-scenario-generation',
+  atomicTestGeneration: 'browser-atomic-test-generation',
+  emailGeneration: 'browser-email-generation',
+  entityDiscovery: 'browser-entity-discovery',
+  relationshipResolution: 'browser-relationship-resolution',
+  scanAll: 'browser-scan-all',
 } as const;
 
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-  openai: 'gpt-5.2',
-  anthropic: 'claude-sonnet-4-5',
-  gemini: 'gemini-2.5-flash-lite',
-  custom: '',
-  'xtm-one': '',
-};
-
-const MAX_MODELS = 20;
+export type XtmOneAgentSlug = (typeof XTM_ONE_AGENT_SLUGS)[keyof typeof XTM_ONE_AGENT_SLUGS];
 
 // ============================================================================
-// AI Client Class
+// Types
+// ============================================================================
+
+export interface XtmOneTaskResponse<T = unknown> {
+  success: boolean;
+  /** Structured payload returned by the XTM One agent. */
+  data?: T;
+  /** Human-readable error message ready to surface to the user. */
+  error?: string;
+  /** HTTP status code from XTM One (when applicable), useful for telemetry. */
+  status?: number;
+}
+
+// ============================================================================
+// AI Client
 // ============================================================================
 
 export class AIClient {
-  private provider: AIProvider;
-  private apiKey: string;
-  private model?: string;
-  private customBaseUrl?: string;
-  private maxTokens: number;
-  private maxContentLength: number;
+  private readonly xtmOneUrl: string;
+  private readonly apiToken: string;
+  private readonly maxTokens: number;
+  private readonly maxContentLength: number;
 
   constructor(settings: AISettings) {
-    if (!settings.provider || !settings.apiKey) {
-      throw new Error('AI provider and API key are required');
+    if (!settings.xtmOneUrl || !settings.apiToken) {
+      throw new Error('XTM One URL and API token are required');
     }
-    if (settings.provider === 'xtm-one') {
-      throw new Error('XTM One is not yet available');
-    }
-    if (settings.provider === 'custom' && !settings.customBaseUrl) {
-      throw new Error('Custom endpoint URL is required for custom provider');
-    }
-    this.provider = settings.provider;
-    this.apiKey = settings.apiKey;
-    this.model = settings.model;
-    this.customBaseUrl = settings.customBaseUrl;
+    this.xtmOneUrl = normalizeUrl(settings.xtmOneUrl);
+    this.apiToken = settings.apiToken;
     this.maxTokens = settings.maxTokens ?? AI_DEFAULTS.maxTokens;
     this.maxContentLength = settings.maxContentLength ?? AI_DEFAULTS.maxContentLength;
   }
 
-  /**
-   * Get the configured max tokens setting
-   */
-  getMaxTokens(): number {
-    return this.maxTokens;
-  }
-
-  /**
-   * Get the configured max content length setting
-   */
   getMaxContentLength(): number {
     return this.maxContentLength;
   }
 
   /**
-   * Get the base URL for the current provider
+   * Probe the XTM One endpoint with the configured credentials.
+   * Calls GET /api/v1/auth/me to verify the token and fetches
+   * platform settings for version/license info.
    */
-  private getBaseUrl(): string {
-    if (this.provider === 'custom' && this.customBaseUrl) {
-      // Normalize the URL - remove trailing slash
-      return this.customBaseUrl.replace(/\/+$/, '');
-    }
-    return BASE_URLS[this.provider as keyof typeof BASE_URLS] || '';
-  }
-
-  private getModel(): string {
-    return this.model || DEFAULT_MODELS[this.provider] || '';
-  }
-
-  // ==========================================================================
-  // Model Discovery
-  // ==========================================================================
-
-  async testConnectionAndFetchModels(): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; description?: string; created?: number }>;
-    error?: string;
-  }> {
+  async testConnection(): Promise<XtmOneTaskResponse<{
+    message?: string;
+    user_email?: string;
+    version?: string;
+    enterprise_edition?: boolean;
+  }>> {
+    const url = `${this.xtmOneUrl}${TEST_CONNECTION_PATH}`;
+    let response: Response;
     try {
-      switch (this.provider) {
-        case 'openai': return await this.fetchOpenAIModels();
-        case 'anthropic': return await this.fetchAnthropicModels();
-        case 'gemini': return await this.fetchGeminiModels();
-        case 'custom': return await this.testCustomEndpoint();
-        default: return { success: false, error: 'Unknown AI provider' };
-      }
+      response = await fetch(url, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+        },
+      });
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch models' };
+      return {
+        success: false,
+        error: error instanceof Error ? `Unable to reach XTM One: ${error.message}` : 'Unable to reach XTM One',
+      };
     }
-  }
-
-  private async fetchOpenAIModels() {
-    const baseUrl = this.getBaseUrl();
-    const response = await fetch(`${baseUrl}/models`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${this.apiKey}` },
-    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      if (response.status === 401) throw new Error('Invalid API key');
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      return {
+        success: false,
+        status: response.status,
+        error: await formatHttpError(response, 'connection-test'),
+      };
     }
 
-    const data = await response.json();
-    const models = (data.data || [])
-      .sort((a: { created: number }, b: { created: number }) => (b.created || 0) - (a.created || 0))
-      .slice(0, MAX_MODELS)
-      .map((m: { id: string; created?: number; owned_by?: string }) => ({
-        id: m.id,
-        name: m.id,
-        description: m.owned_by ? `Owned by: ${m.owned_by}` : undefined,
-        created: m.created,
-      }));
-
-    return { success: true, models };
-  }
-
-  /**
-   * Test custom OpenAI-compatible endpoint
-   * For custom endpoints, we just test that the connection works with a simple models list request
-   * If the endpoint doesn't support /models, we try a simple chat completion test
-   */
-  private async testCustomEndpoint(): Promise<{
-    success: boolean;
-    models?: Array<{ id: string; name: string; description?: string }>;
-    error?: string;
-  }> {
-    const baseUrl = this.getBaseUrl();
-    
-    // First try to fetch models (many OpenAI-compatible APIs support this)
+    // Parse user info from the /auth/me response
+    let meBody: Record<string, unknown> = {};
     try {
-      const response = await fetch(`${baseUrl}/models`, {
-        method: 'GET',
-        headers: { 'Authorization': `Bearer ${this.apiKey}` },
-      });
+      meBody = await response.json();
+    } catch {
+      // Non-JSON response is acceptable — connection still verified
+    }
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data && Array.isArray(data.data)) {
-          const models = data.data
-            .slice(0, MAX_MODELS)
-            .map((m: { id: string; created?: number; owned_by?: string }) => ({
-              id: m.id,
-              name: m.id,
-              description: m.owned_by ? `Owned by: ${m.owned_by}` : undefined,
-            }));
-          return { success: true, models };
-        }
+    // Fetch platform config for version/license (best-effort)
+    let configBody: Record<string, unknown> = {};
+    try {
+      const configResponse = await fetch(`${this.xtmOneUrl}${PLATFORM_CONFIG_PATH}`, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${this.apiToken}` },
+      });
+      if (configResponse.ok) {
+        configBody = await configResponse.json();
       }
     } catch {
-      // If /models fails, fall through to test with a simple completion
+      // Config endpoint may not be available
     }
 
-    // Fallback: Test with a minimal chat completion request
+    const user_email = (meBody.user_email ?? meBody.email ?? meBody.full_name ?? meBody.name) as string | undefined;
+    const version = (configBody.platform_version ?? meBody.platform_version ?? meBody.version) as string | undefined;
+
+    // Determine enterprise status from deployment_tier or xtm_license
+    const deploymentTier = configBody.deployment_tier as string | undefined;
+    const xtmLicense = configBody.xtm_license as Record<string, unknown> | undefined;
+    let enterprise_edition: boolean | undefined;
+    if (deploymentTier) {
+      enterprise_edition = deploymentTier === 'xtm_licensed' || deploymentTier === 'ee_platform';
+    } else if (xtmLicense) {
+      enterprise_edition = xtmLicense.valid === true;
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      data: { message: 'Connection successful', user_email, version, enterprise_edition },
+    };
+  }
+
+  // ==========================================================================
+  // Feature-specific wrappers (1:1 with XTM One agents)
+  // ==========================================================================
+
+  generateContainerDescription(
+    request: ContainerDescriptionRequest,
+  ): Promise<XtmOneTaskResponse<{ description: string }>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.containerDescription, request);
+  }
+
+  generateScenario(
+    request: ScenarioGenerationRequest,
+  ): Promise<XtmOneTaskResponse<Record<string, unknown>>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.scenarioGeneration, request);
+  }
+
+  generateFullScenario(
+    request: FullScenarioGenerationRequest,
+  ): Promise<XtmOneTaskResponse<Record<string, unknown>>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.fullScenarioGeneration, request);
+  }
+
+  generateAtomicTest(
+    request: AtomicTestRequest,
+  ): Promise<XtmOneTaskResponse<Record<string, unknown>>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.atomicTestGeneration, request);
+  }
+
+  generateEmails(
+    request: EmailGenerationRequest,
+  ): Promise<XtmOneTaskResponse<{ emails: Array<Record<string, unknown>> }>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.emailGeneration, request);
+  }
+
+  discoverEntities(
+    request: EntityDiscoveryRequest,
+  ): Promise<XtmOneTaskResponse<{ entities: Array<Record<string, unknown>> }>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.entityDiscovery, request);
+  }
+
+  resolveRelationships(
+    request: RelationshipResolutionRequest,
+  ): Promise<XtmOneTaskResponse<{ relationships: Array<Record<string, unknown>> }>> {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.relationshipResolution, request);
+  }
+
+  scanAll(
+    request: EntityDiscoveryRequest,
+  ): Promise<
+    XtmOneTaskResponse<{
+      entities: Array<Record<string, unknown>>;
+      relationships: Array<Record<string, unknown>>;
+    }>
+  > {
+    return this.executeTask(XTM_ONE_AGENT_SLUGS.scanAll, request);
+  }
+
+  // ==========================================================================
+  // Core HTTP boundary
+  // ==========================================================================
+
+  private async executeTask<TInput, TOutput>(
+    agentSlug: XtmOneAgentSlug,
+    inputData: TInput,
+  ): Promise<XtmOneTaskResponse<TOutput>> {
+    const url = `${this.xtmOneUrl}${EXECUTE_TASK_PATH}`;
+    let response: Response;
     try {
-      const testResponse = await fetch(`${baseUrl}/chat/completions`, {
+      response = await fetch(url, {
         method: 'POST',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiToken}`,
         },
         body: JSON.stringify({
-          model: this.model || 'test',
-          messages: [{ role: 'user', content: 'Hi' }],
-          max_tokens: 5,
+          agent_slug: agentSlug,
+          content: JSON.stringify(inputData),
+          max_tokens: this.maxTokens,
         }),
       });
-
-      if (testResponse.ok) {
-        // Connection works - return success without model list
-        // User will need to enter model name manually
-        return { 
-          success: true, 
-          models: this.model ? [{ id: this.model, name: this.model }] : [],
-        };
-      }
-
-      if (testResponse.status === 401) {
-        throw new Error('Invalid API key or token');
-      }
-
-      const errorData = await testResponse.json().catch(() => ({}));
-      const errorMessage = errorData.error?.message || `API error: ${testResponse.status}`;
-      throw new Error(errorMessage);
     } catch (error) {
-      if (error instanceof Error) throw error;
-      throw new Error('Failed to connect to custom endpoint');
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? `Unable to reach XTM One: ${error.message}`
+            : 'Unable to reach XTM One',
+      };
     }
-  }
 
-  private async fetchAnthropicModels() {
-    const response = await fetch(`${BASE_URLS.anthropic}/models`, {
-      method: 'GET',
-      headers: {
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-    });
+    const status = response.status;
 
     if (!response.ok) {
-      const errorText = await response.text();
-      if (response.status === 401) throw new Error('Invalid API key');
-      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+      return {
+        success: false,
+        status,
+        error: await formatHttpError(response, agentSlug),
+      };
     }
 
-    const data = await response.json();
-    const models = (data.data || [])
-      .sort((a: { created_at?: string }, b: { created_at?: string }) => {
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return dateB - dateA;
-      })
-      .slice(0, MAX_MODELS)
-      .map((m: { id: string; display_name?: string; created_at?: string }) => ({
-        id: m.id,
-        name: m.display_name || m.id,
-        created: m.created_at ? Math.floor(new Date(m.created_at).getTime() / 1000) : undefined,
-      }));
-
-    return { success: true, models };
-  }
-
-  private async fetchGeminiModels() {
-    const response = await fetch(`${BASE_URLS.gemini}/models?key=${this.apiKey}`, { method: 'GET' });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      if (response.status === 401 || response.status === 400) throw new Error('Invalid API key');
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    const models = (data.models || [])
-      .slice(0, MAX_MODELS)
-      .map((m: { name: string; displayName?: string; description?: string }) => ({
-        id: m.name.replace('models/', ''),
-        name: m.displayName || m.name.replace('models/', ''),
-        description: m.description?.substring(0, 100),
-      }));
-
-    return { success: true, models };
-  }
-
-  // ==========================================================================
-  // Core Generation
-  // ==========================================================================
-
-  async generate(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    if (this.provider === 'custom' && !this.model) {
-      return { success: false, error: 'Model name is required for custom provider' };
-    }
+    let body: { data?: TOutput; error?: string } | null;
     try {
-      switch (this.provider) {
-        case 'openai': return await this.generateOpenAI(request);
-        case 'anthropic': return await this.generateAnthropic(request);
-        case 'gemini': return await this.generateGemini(request);
-        case 'custom': return await this.generateCustom(request);
-        default: return { success: false, error: 'Unknown AI provider' };
-      }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'AI generation failed' };
-    }
-  }
-
-  // ==========================================================================
-  // Feature-Specific Generation Methods
-  // ==========================================================================
-
-  async generateContainerDescription(request: ContainerDescriptionRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildContainerDescriptionPrompt(request, this.maxContentLength),
-      systemPrompt: SYSTEM_PROMPTS.containerDescription,
-      maxTokens: this.maxTokens,
-    });
-  }
-
-  async generateScenario(request: ScenarioGenerationRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildScenarioPrompt(request, this.maxContentLength),
-      systemPrompt: SYSTEM_PROMPTS.scenarioGeneration,
-      maxTokens: this.maxTokens,
-      temperature: 0.7,
-    });
-  }
-
-  async generateFullScenario(request: FullScenarioGenerationRequest): Promise<AIGenerationResponse> {
-    const { systemPrompt, prompt } = buildFullScenarioPrompt(request, this.maxContentLength);
-    return this.generate({
-      prompt,
-      systemPrompt,
-      maxTokens: this.maxTokens,
-      temperature: 0.7,
-    });
-  }
-
-  async generateAtomicTest(request: AtomicTestRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildAtomicTestPrompt(request, this.maxContentLength),
-      systemPrompt: SYSTEM_PROMPTS.atomicTest,
-      maxTokens: this.maxTokens,
-      temperature: 0.5,
-    });
-  }
-
-  async generateEmails(request: EmailGenerationRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildEmailGenerationPrompt(request, this.maxContentLength),
-      systemPrompt: buildEmailGenerationSystemPrompt(request.language),
-      maxTokens: this.maxTokens,
-      temperature: 0.7,
-    });
-  }
-
-  async discoverEntities(request: EntityDiscoveryRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildEntityDiscoveryPrompt(request, this.maxContentLength),
-      systemPrompt: SYSTEM_PROMPTS.entityDiscovery,
-      maxTokens: this.maxTokens,
-      temperature: 0.3,
-    });
-  }
-
-  async resolveRelationships(request: RelationshipResolutionRequest): Promise<AIGenerationResponse> {
-    return this.generate({
-      prompt: buildRelationshipResolutionPrompt(request, this.maxContentLength),
-      systemPrompt: SYSTEM_PROMPTS.relationshipResolution,
-      maxTokens: this.maxTokens,
-      temperature: 0.2,
-    });
-  }
-
-  // ==========================================================================
-  // Provider-Specific Implementations
-  // ==========================================================================
-
-  /**
-   * Legacy OpenAI models (gpt-3.5, gpt-4 without -o suffix) use the `max_tokens`
-   * parameter. Recent models (gpt-4o, o-series, gpt-5+) use `max_completion_tokens`.
-   */
-  private isLegacyOpenAIModel(model: string): boolean {
-    const m = model.toLowerCase();
-    if (m.startsWith('gpt-3.5') || m.startsWith('gpt-3')) return true;
-    if (m.startsWith('gpt-4') && !m.startsWith('gpt-4o')) return true;
-    return false;
-  }
-
-  /**
-   * OpenAI reasoning models (o1, o3 series) don't support the `temperature` parameter.
-   */
-  private isOpenAIReasoningModel(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.startsWith('o1') || m.startsWith('o3');
-  }
-
-  private async generateOpenAI(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const baseUrl = this.getBaseUrl();
-    const model = this.getModel();
-    const maxTokens = request.maxTokens || 1500;
-    const isLegacy = this.isLegacyOpenAIModel(model);
-    const isReasoning = this.isOpenAIReasoningModel(model);
-
-    const body: Record<string, unknown> = {
-      model,
-      messages: [
-        ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
-        { role: 'user', content: request.prompt },
-      ],
-    };
-
-    if (isLegacy) {
-      body.max_tokens = maxTokens;
-    } else {
-      body.max_completion_tokens = maxTokens;
+      body = (await response.json()) as { data?: TOutput; error?: string } | null;
+    } catch {
+      return {
+        success: false,
+        status,
+        error: 'XTM One returned a malformed response',
+      };
     }
 
-    if (!isReasoning) {
-      body.temperature = request.temperature || 0.7;
+    if (!body) {
+      return { success: false, status, error: 'Empty response from XTM One' };
     }
-
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+    if (body.error) {
+      return { success: false, status, error: body.error };
     }
-
-    const data = await response.json();
-    return { success: true, content: data.choices?.[0]?.message?.content || '' };
-  }
-
-  /**
-   * Generate using a custom OpenAI-compatible endpoint
-   */
-  private async generateCustom(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const baseUrl = this.getBaseUrl();
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.getModel(),
-        messages: [
-          ...(request.systemPrompt ? [{ role: 'system', content: request.systemPrompt }] : []),
-          { role: 'user', content: request.prompt },
-        ],
-        max_tokens: request.maxTokens || 1500,
-        temperature: request.temperature || 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(error.error?.message || `Custom API error: ${response.status}`);
+    if (body.data === undefined) {
+      return { success: false, status, error: 'XTM One returned no data' };
     }
-
-    const data = await response.json();
-    return { success: true, content: data.choices?.[0]?.message?.content || '' };
-  }
-
-  private async generateAnthropic(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const response = await fetch(`${BASE_URLS.anthropic}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: this.getModel(),
-        max_tokens: request.maxTokens || 1500,
-        system: request.systemPrompt,
-        messages: [{ role: 'user', content: request.prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(error.error?.message || `Anthropic API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return { success: true, content: data.content?.[0]?.text || '' };
-  }
-
-  private async generateGemini(request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    const response = await fetch(
-      `${BASE_URLS.gemini}/models/${this.getModel()}:generateContent?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: request.systemPrompt ? `${request.systemPrompt}\n\n${request.prompt}` : request.prompt }] }],
-          generationConfig: { maxOutputTokens: request.maxTokens || 1500, temperature: request.temperature || 0.7 },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return { success: true, content: data.candidates?.[0]?.content?.parts?.[0]?.text || '' };
+    return { success: true, status, data: body.data };
   }
 }
 
 // ============================================================================
-// Helper Functions
+// Helpers
+// ============================================================================
+
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Map XTM One HTTP statuses to messages we can surface to the user. The
+ * mapping mirrors the contract documented in the integration architecture
+ * (401 invalid token, 422 version mismatch, 429 quota exceeded).
+ */
+async function formatHttpError(response: Response, taskId: string): Promise<string> {
+  const status = response.status;
+  let detail = '';
+  try {
+    const data = (await response.json()) as { detail?: string; error?: string };
+    detail = data.detail || data.error || '';
+  } catch {
+    try {
+      detail = await response.text();
+    } catch {
+      detail = '';
+    }
+  }
+
+  switch (status) {
+    case 401:
+      return 'Your XTM One token is invalid or expired. Please generate a new one.';
+    case 403:
+      return 'Your XTM One token is not authorized to run this task.';
+    case 404:
+      if (taskId === 'connection-test') {
+        return 'This URL does not appear to be an XTM One instance. Please verify the URL.';
+      }
+      return `The XTM One agent for task "${taskId}" was not found. Your XTM One server may need an update.`;
+    case 422:
+      return 'Your XTM One server needs an update to use this feature.';
+    case 429:
+      return 'You have reached your XTM One AI quota. Please try again later.';
+    default:
+      if (status >= 500) {
+        return `XTM One server error (${status}). ${detail || 'Please try again later.'}`;
+      }
+      return detail
+        ? `XTM One error (${status}): ${detail}`
+        : `XTM One error (${status})`;
+  }
+}
+
+// ============================================================================
+// Availability check
 // ============================================================================
 
 /**
- * Check if AI is configured and available
+ * Returns true when the extension has the minimum credentials required to
+ * call XTM One. The connectionTested flag is not required — we want AI
+ * features to light up as soon as the user has supplied configuration, even
+ * if they haven't pressed the "Test connection" button.
  */
 export function isAIAvailable(settings?: AISettings): boolean {
-  if (!settings?.provider || !settings?.apiKey || !settings?.model) {
-    return false;
-  }
-  // For custom provider, also require the custom base URL
-  if (settings.provider === 'custom' && !settings.customBaseUrl) {
-    return false;
-  }
-  return true;
+  return Boolean(settings?.xtmOneUrl?.trim() && settings?.apiToken?.trim());
 }

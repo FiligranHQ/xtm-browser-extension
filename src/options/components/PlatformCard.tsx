@@ -13,6 +13,7 @@ import {
   Card,
   CardContent,
   CardActions,
+  Link,
 } from '@mui/material';
 import {
   VisibilityOutlined,
@@ -26,6 +27,7 @@ import {
   getPlatformUrlPlaceholder, 
   getDefaultPlatformName, 
   getPlatformName,
+  getTokenPageUrl,
   type PlatformType,
 } from '../../shared/platform/registry';
 
@@ -65,6 +67,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
                        platform.name === platformDisplayName ||
                        !platform.name;
   const showNameField = isTested || !isDefaultName;
+  const tokenPageUrl = getTokenPageUrl(type, platform.url);
 
   return (
     <Card variant="outlined" sx={{ mb: 2, borderRadius: 1 }}>
@@ -98,6 +101,18 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
             value={platform.apiToken}
             onChange={(e) => onUpdate({ apiToken: e.target.value })}
             fullWidth
+            helperText={
+              tokenPageUrl ? (
+                <>
+                  Generate a token from your{' '}
+                  <Link href={tokenPageUrl} target="_blank" rel="noopener noreferrer">
+                    {getPlatformName(type)} profile
+                  </Link>
+                </>
+              ) : (
+                `Enter the platform URL above to get a direct link to the token page.`
+              )
+            }
             slotProps={{
               input: {
                 endAdornment: (
@@ -125,7 +140,7 @@ const PlatformCard: React.FC<PlatformCardProps> = ({
           disabled={isTesting || !platform.url || !platform.apiToken || !!urlError}
           startIcon={<CheckOutlined />}
         >
-          {isTesting ? 'Testing...' : 'Test'}
+          {isTesting ? 'Testing...' : 'Test Connection'}
         </Button>
         <Button
           size="small"

@@ -93,10 +93,21 @@ const App: React.FC = () => {
         chrome.runtime.sendMessage(
           { type: 'TEST_PLATFORM_CONNECTION', payload: { platformId: platform.id, platformType: platform.type } },
           (testResponse) => {
-            if (chrome.runtime.lastError || !testResponse?.success) return;
-            setAvailablePlatforms(prev => prev.map(p => 
-              p.id === platform.id ? { ...p, version: testResponse.data?.version, isEnterprise: testResponse.data?.enterprise_edition } : p
-            ));
+            if (chrome.runtime.lastError) {
+              setAvailablePlatforms(prev => prev.map(p =>
+                p.id === platform.id ? { ...p, connected: false } : p
+              ));
+              return;
+            }
+            if (testResponse?.success) {
+              setAvailablePlatforms(prev => prev.map(p => 
+                p.id === platform.id ? { ...p, connected: true, version: testResponse.data?.version, isEnterprise: testResponse.data?.enterprise_edition } : p
+              ));
+            } else {
+              setAvailablePlatforms(prev => prev.map(p =>
+                p.id === platform.id ? { ...p, connected: false } : p
+              ));
+            }
           }
         );
       });
@@ -698,8 +709,8 @@ const App: React.FC = () => {
         }
         
         const ai = response.data?.ai;
-        const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
-        setAiSettings({ enabled: aiAvailable, provider: ai?.provider, available: aiAvailable });
+        const aiAvailable = !!(ai?.xtmOneUrl && ai?.apiToken);
+        setAiSettings({ enabled: aiAvailable, available: aiAvailable });
       }
     });
     
@@ -790,15 +801,15 @@ const App: React.FC = () => {
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
-        const newSettings = changes.settings.newValue as { ai?: { provider?: string; apiKey?: string; model?: string } } | undefined;
+        const newSettings = changes.settings.newValue as { ai?: { xtmOneUrl?: string; apiToken?: string } } | undefined;
         if (newSettings) {
           // Reload platforms via hook (handles platform state updates)
           loadPlatforms();
           
           // Update AI settings
           const ai = newSettings.ai;
-          const aiAvailable = !!(ai?.provider && ai?.apiKey && ai?.model);
-          setAiSettings({ enabled: aiAvailable, provider: ai?.provider, available: aiAvailable });
+          const aiAvailable = !!(ai?.xtmOneUrl && ai?.apiToken);
+          setAiSettings({ enabled: aiAvailable, available: aiAvailable });
         }
       }
     };
@@ -1671,7 +1682,7 @@ const App: React.FC = () => {
       case 'loading': return <CommonLoadingView />;
       default: return isScanning 
         ? <CommonLoadingView message="Scanning page..." /> 
-        : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.length > 0} hasOpenAEV={openaevPlatforms.length > 0} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} isPdfView={isPdfView} />;
+        : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.some(p => p.connected)} hasOpenAEV={openaevPlatforms.some(p => p.connected)} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} isPdfView={isPdfView} />;
     }
   };
 

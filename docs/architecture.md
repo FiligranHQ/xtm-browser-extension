@@ -194,7 +194,7 @@ src/options/
     ├── OpenCTITab.tsx    # OpenCTI platform configuration
     ├── OpenAEVTab.tsx    # OpenAEV platform configuration
     ├── DetectionTab.tsx  # Detection settings
-    ├── AITab.tsx         # AI provider configuration
+    ├── AITab.tsx         # XTM One AI configuration
     ├── AppearanceTab.tsx # Theme settings
     └── AboutTab.tsx      # About and version info
 ```
@@ -211,13 +211,11 @@ Common code shared across all components.
 ```
 src/shared/
 ├── api/                  # API clients
-│   ├── ai-client.ts      # AI provider client (unified interface)
+│   ├── ai-client.ts      # XTM One agent invocation client
 │   ├── opencti-client.ts # OpenCTI GraphQL client
 │   ├── openaev-client.ts # OpenAEV REST client
-│   ├── ai/               # AI provider modules
-│   │   ├── types.ts      # AI request/response types
-│   │   ├── prompts.ts    # AI prompt templates (system prompts, theme configs, builders)
-│   │   └── json-parser.ts # AI response parsing utilities
+│   ├── ai/               # AI type definitions
+│   │   └── types.ts      # AI request/response types
 │   ├── opencti/          # OpenCTI GraphQL modules
 │   │   ├── types.ts      # OpenCTI-specific types (query responses)
 │   │   ├── fragments.ts  # Reusable GraphQL fragments
@@ -237,7 +235,7 @@ src/shared/
 ├── platform/             # Platform abstractions
 │   └── registry.ts       # Platform type registry
 ├── types/                # TypeScript definitions
-│   ├── ai.ts             # AI provider types, model selection, affinities
+│   ├── ai.ts             # AI settings types (XTM One URL, token)
 │   ├── common.ts         # Common response types and utilities
 │   ├── messages.ts       # Extension message types and payloads
 │   ├── observables.ts    # Observable types (IoCs) and detection interfaces
@@ -829,9 +827,9 @@ User clicks "Generate with AI" for scenario
 │    - Inject count & duration        │
 │    - Additional context             │
 │                                     │
-│ 3. Call AI provider                 │
+│ 3. Call XTM One agent               │
 │                                     │
-│ 4. Parse JSON response              │
+│ 4. Receive structured JSON          │
 └────────┬────────────────────────────┘
          │
          ▼
@@ -873,8 +871,8 @@ User clicks "Discover more with AI"
 │   - Page URL                   │
 │   - Page content               │
 │   - Existing entities          │
-│ - Call AI provider             │
-│ - Parse JSON response          │
+│ - Call XTM One agent           │
+│ - Receive structured JSON      │
 └────────┬────────────────────────┘
          │
          ▼
@@ -915,105 +913,34 @@ User clicks "Discover more with AI"
 
 ## AI Integration
 
-### Module Architecture
+### Architecture
 
-The AI client is modularized for maintainability:
+All AI features are routed through **XTM One** — the extension is a thin client that ships raw context to XTM One agents and receives structured JSON back. There is no BYOK (Bring Your Own Key) mode and no direct LLM provider integration. See `docs/features/xtm-one-integration-architecture.md` for the full design rationale.
 
 ```
-src/shared/api/ai/
-├── types.ts       # AI request/response type definitions
-├── prompts.ts     # All prompt templates and builders (system prompts, themes, JSON schemas)
-└── json-parser.ts # Robust AI response parsing (code blocks, malformed JSON)
+src/shared/api/
+├── ai-client.ts   # XTM One execute-task client (AIClient class)
+└── ai/
+    └── types.ts   # AI request/response type definitions
 ```
 
 **Key design decisions:**
-- **Prompt separation**: All prompts extracted to `prompts.ts` (~560 lines) for easy maintenance
-- **Unified interface**: Single `AIClient` class handles OpenAI, Anthropic, and Gemini
-- **Type-safe builders**: Functions like `buildScenarioPrompt()` ensure consistent prompt structure
-
-### Supported Providers
-
-| Provider | Client Class | Models |
-|----------|--------------|--------|
-| OpenAI | `AIClient` | GPT-4o, GPT-4 Turbo, GPT-4 |
-| Anthropic | `AIClient` | Claude 3.5 Sonnet, Claude 3 Opus |
-| Google | `AIClient` | Gemini 1.5 Pro, Gemini 1.5 Flash |
+- **Thin client, thick platform**: The extension owns no prompt logic — XTM One owns prompts, model selection, RBAC, quotas, and structured output.
+- **Single endpoint**: All tasks go through `POST {xtmOneUrl}/api/v1/extension/execute-task` with a `Bearer fcp-…` token.
+- **Agent-per-feature**: Each AI feature maps 1:1 to a dedicated XTM One agent identified by slug.
 
 ### AI Features
 
-| Feature | Message Type | Description |
-|---------|--------------|-------------|
-| Container Description | `AI_GENERATE_DESCRIPTION` | Generate intelligent descriptions from page context |
-| Full Scenario Generation | `AI_GENERATE_FULL_SCENARIO` | Generate complete scenarios with injects |
-| Atomic Test Generation | `AI_GENERATE_ATOMIC_TEST` | Generate test commands for attack patterns |
-| Email Generation | `AI_GENERATE_EMAILS` | Generate email content for table-top exercises |
-| Entity Discovery | `AI_DISCOVER_ENTITIES` | Discover entities pattern matching missed |
-| Relationship Resolution | `AI_RESOLVE_RELATIONSHIPS` | Identify relationships between entities |
-
-### Prompt Templates (in `ai/prompts.ts`)
-
-All prompt templates are centralized for maintainability:
-
-```typescript
-// System prompts for different operations
-export const SYSTEM_PROMPTS = {
-  CONTAINER_DESCRIPTION: '...',
-  SCENARIO_GENERATION: '...',
-  ATOMIC_TEST: '...',
-  EMAIL_GENERATION: '...',
-  ENTITY_DISCOVERY: '...',
-  RELATIONSHIP_RESOLUTION: '...',
-};
-
-// Theme-specific configurations for table-top scenarios
-export const TABLE_TOP_THEMES = {
-  'cybersecurity': { /* ... */ },
-  'physical-security': { /* ... */ },
-  // ... other themes
-};
-
-// Prompt builder functions
-export function buildContainerDescriptionPrompt(request: ContainerDescriptionRequest): string;
-export function buildScenarioPrompt(request: ScenarioGenerationRequest): string;
-export function buildFullScenarioPrompt(request: FullScenarioGenerationRequest): string;
-export function buildAtomicTestPrompt(request: AtomicTestRequest): string;
-export function buildEmailGenerationPrompt(request: EmailGenerationRequest): string;
-export function buildEntityDiscoveryPrompt(request: EntityDiscoveryRequest): string;
-export function buildRelationshipResolutionPrompt(request: RelationshipResolutionRequest): string;
-```
-
-### Scenario Themes
-
-For table-top scenario generation, themes customize the AI prompt. Defined in `ai/prompts.ts`:
-
-```typescript
-export const TABLE_TOP_THEMES = {
-  'cybersecurity': {
-    systemPromptSuffix: 'Focus on cyber attacks, data breaches, ransomware...',
-    exampleTopics: 'cyber attacks, malware outbreaks, data breaches...',
-  },
-  'physical-security': {
-    systemPromptSuffix: 'Focus on physical security threats...',
-    exampleTopics: 'facility intrusions, access control breaches...',
-  },
-  'business-continuity': {
-    systemPromptSuffix: 'Focus on business disruption scenarios...',
-    exampleTopics: 'natural disasters, power outages, supply chain...',
-  },
-  'crisis-communication': {
-    systemPromptSuffix: 'Focus on crisis communication scenarios...',
-    exampleTopics: 'media leaks, social media crises, PR incidents...',
-  },
-  'health-safety': {
-    systemPromptSuffix: 'Focus on health and safety incidents...',
-    exampleTopics: 'workplace injuries, pandemic outbreaks...',
-  },
-  'geopolitical': {
-    systemPromptSuffix: 'Focus on geopolitical and economic scenarios...',
-    exampleTopics: 'sanctions compliance, trade restrictions...',
-  },
-};
-```
+| Feature | Message Type | XTM One Agent Slug | Description |
+|---------|--------------|-------------------|-------------|
+| Container Description | `AI_GENERATE_DESCRIPTION` | `browser-container-description` | Generate descriptions from page context |
+| Scenario Generation | `AI_GENERATE_SCENARIO` | `browser-scenario-generation` | Generate attack scenarios |
+| Full Scenario Generation | `AI_GENERATE_FULL_SCENARIO` | `browser-full-scenario-generation` | Generate complete scenarios with injects |
+| Atomic Test Generation | `AI_GENERATE_ATOMIC_TEST` | `browser-atomic-test-generation` | Generate test commands for attack patterns |
+| Email Generation | `AI_GENERATE_EMAILS` | `browser-email-generation` | Generate email content for table-top exercises |
+| Entity Discovery | `AI_DISCOVER_ENTITIES` | `browser-entity-discovery` | Discover entities pattern matching missed |
+| Relationship Resolution | `AI_RESOLVE_RELATIONSHIPS` | `browser-relationship-resolution` | Identify relationships between entities |
+| Combined Scan | `AI_SCAN_ALL` | `browser-scan-all` | Entity discovery + relationship resolution in one pass |
 
 ## Panel Utilities
 

@@ -32,6 +32,7 @@ import {
   normalizeTypeForComparison,
   formatEntityTypeForDisplay,
   getCanonicalTypeName,
+  getTokenPageUrl,
 } from '../../src/shared/platform/registry';
 
 describe('Platform Registry', () => {
@@ -439,6 +440,46 @@ describe('Platform Registry', () => {
     it('should have URL patterns for OpenCTI', () => {
       const def = getPlatformDefinition('opencti');
       expect(def.urlPatterns.entityPaths['Malware']).toBeDefined();
+    });
+  });
+
+  // ============================================================================
+  // Token Page URL
+  // ============================================================================
+
+  describe('tokenPagePath', () => {
+    it.each(ALL_PLATFORM_TYPES)('should be defined for %s', (platformType) => {
+      const def = getPlatformDefinition(platformType);
+      expect(typeof def.tokenPagePath).toBe('string');
+      expect(def.tokenPagePath.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getTokenPageUrl', () => {
+    it.each([
+      ['opencti', 'https://opencti.example.com', '/dashboard/profile/me'],
+      ['openaev', 'https://openaev.example.com', '/admin/profile'],
+      ['opengrc', 'https://opengrc.example.com', '/admin/profile'],
+    ] as const)('returns correct URL for %s', (platformType, baseUrl, expectedSuffix) => {
+      const url = getTokenPageUrl(platformType, baseUrl);
+      expect(url).toBe(`${baseUrl}${expectedSuffix}`);
+    });
+
+    it('strips trailing slashes from the base URL', () => {
+      expect(getTokenPageUrl('opencti', 'https://opencti.example.com///'))
+        .toBe('https://opencti.example.com/dashboard/profile/me');
+    });
+
+    it.each([
+      ['undefined input', undefined],
+      ['empty string', ''],
+      ['whitespace-only', '   '],
+    ])('returns null for %s', (_label, input) => {
+      expect(getTokenPageUrl('opencti', input as any)).toBeNull();
+    });
+
+    it('returns null for an invalid URL', () => {
+      expect(getTokenPageUrl('opencti', 'not-a-url')).toBeNull();
     });
   });
 });

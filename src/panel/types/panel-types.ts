@@ -101,6 +101,7 @@ export interface PlatformInfo {
   version?: string;
   isEnterprise?: boolean;
   type?: 'opencti' | 'openaev';
+  connected?: boolean;
 }
 
 // Unified search result
@@ -120,7 +121,6 @@ export interface UnifiedSearchResult {
 // AI UI state for the panel (different from shared AISettings which is configuration)
 export interface PanelAIState {
   enabled: boolean;
-  provider?: string;
   available: boolean;
 }
 

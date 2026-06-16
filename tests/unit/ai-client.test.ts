@@ -1,785 +1,502 @@
 /**
- * AI Client Tests
- *
- * Tests for the unified AI provider interface (OpenAI, Anthropic, Gemini, Custom).
+ * AIClient tests — XTM One execute-task contract.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AIClient, isAIAvailable } from '../../src/shared/api/ai-client';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AIClient, isAIAvailable, XTM_ONE_AGENT_SLUGS } from '../../src/shared/api/ai-client';
 import type { AISettings } from '../../src/shared/types/ai';
 
-// Mock fetch globally
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+function jsonResponse(body: unknown, init: { status?: number } = {}) {
+  return {
+    ok: (init.status ?? 200) >= 200 && (init.status ?? 200) < 300,
+    status: init.status ?? 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+function errorResponse(status: number, body: unknown = { detail: 'oops' }) {
+  return jsonResponse(body, { status });
+}
+
+const validSettings: AISettings = {
+  xtmOneUrl: 'https://xtm.example.com',
+  apiToken: 'fcp-test-token',
+};
 
 describe('AIClient', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockFetch.mockReset();
   });
-
-  afterEach(() => {
-    vi.resetAllMocks();
-  });
-
-  // ============================================================================
-  // Constructor Tests
-  // ============================================================================
 
   describe('constructor', () => {
-    it('should create client with valid OpenAI settings', () => {
-      const settings: AISettings = {
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-        model: 'gpt-4',
-      };
-
-      const client = new AIClient(settings);
-      expect(client).toBeInstanceOf(AIClient);
+    it('accepts complete settings', () => {
+      expect(() => new AIClient(validSettings)).not.toThrow();
     });
 
-    it('should create client with valid Anthropic settings', () => {
-      const settings: AISettings = {
-        provider: 'anthropic',
-        apiKey: 'sk-ant-test-key',
-        model: 'claude-3-opus-20240229',
-      };
-
-      const client = new AIClient(settings);
-      expect(client).toBeInstanceOf(AIClient);
+    it('throws when xtmOneUrl is missing', () => {
+      expect(() => new AIClient({ apiToken: 'fcp-test' })).toThrow(/required/i);
     });
 
-    it('should create client with valid Gemini settings', () => {
-      const settings: AISettings = {
-        provider: 'gemini',
-        apiKey: 'gemini-api-key',
-        model: 'gemini-pro',
-      };
-
-      const client = new AIClient(settings);
-      expect(client).toBeInstanceOf(AIClient);
+    it('throws when apiToken is missing', () => {
+      expect(() => new AIClient({ xtmOneUrl: 'https://xtm.example.com' })).toThrow(/required/i);
     });
 
-    it('should create client with valid custom settings', () => {
-      const settings: AISettings = {
-        provider: 'custom',
-        apiKey: 'custom-api-key',
-        model: 'custom-model',
-        customBaseUrl: 'https://my-api.example.com/v1',
-      };
-
-      const client = new AIClient(settings);
-      expect(client).toBeInstanceOf(AIClient);
-    });
-
-    it('should throw error when provider is missing', () => {
-      const settings = {
-        apiKey: 'test-key',
-      } as AISettings;
-
-      expect(() => new AIClient(settings)).toThrow('AI provider and API key are required');
-    });
-
-    it('should throw error when apiKey is missing', () => {
-      const settings = {
-        provider: 'openai',
-      } as AISettings;
-
-      expect(() => new AIClient(settings)).toThrow('AI provider and API key are required');
-    });
-
-    it('should throw error for xtm-one provider', () => {
-      const settings: AISettings = {
-        provider: 'xtm-one',
-        apiKey: 'test-key',
-      };
-
-      expect(() => new AIClient(settings)).toThrow('XTM One is not yet available');
-    });
-
-    it('should throw error for custom provider without customBaseUrl', () => {
-      const settings: AISettings = {
-        provider: 'custom',
-        apiKey: 'test-key',
-        model: 'custom-model',
-      };
-
-      expect(() => new AIClient(settings)).toThrow('Custom endpoint URL is required for custom provider');
-    });
-
-    it('should allow custom provider without model at construction, but fail at generate', async () => {
-      const settings: AISettings = {
-        provider: 'custom',
-        apiKey: 'test-key',
-        customBaseUrl: 'https://my-api.example.com/v1',
-      };
-
-      const client = new AIClient(settings);
-      const result = await client.generate({ prompt: 'test' });
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Model name is required for custom provider');
+    it('normalizes trailing slashes on the URL', async () => {
+      const client = new AIClient({ ...validSettings, xtmOneUrl: 'https://xtm.example.com///' });
+      mockFetch.mockResolvedValueOnce(jsonResponse({}));
+      await client.testConnection();
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://xtm.example.com/api/v1/auth/me',
+        expect.any(Object),
+      );
     });
   });
 
-  // ============================================================================
-  // Model Discovery Tests
-  // ============================================================================
+  describe('executeTask wiring', () => {
+    it('posts to execute-task with bearer header and structured body', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(jsonResponse({ data: { description: 'ok' } }));
 
-  describe('testConnectionAndFetchModels', () => {
-    describe('OpenAI', () => {
-      it('should fetch OpenAI models successfully', async () => {
-        const settings: AISettings = {
-          provider: 'openai',
-          apiKey: 'sk-test-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: [
-              { id: 'gpt-4', created: 1000, owned_by: 'openai' },
-              { id: 'gpt-3.5-turbo', created: 900, owned_by: 'openai' },
-            ],
-          }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(true);
-        expect(result.models).toHaveLength(2);
-        expect(result.models?.[0].id).toBe('gpt-4');
+      await client.generateContainerDescription({
+        pageTitle: 'p',
+        pageUrl: 'u',
+        pageContent: 'c',
+        containerType: 'Report',
+        containerName: 'n',
       });
 
-      it('should handle OpenAI 401 error', async () => {
-        const settings: AISettings = {
-          provider: 'openai',
-          apiKey: 'invalid-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          text: async () => 'Unauthorized',
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid API key');
-      });
-
-      it('should handle OpenAI generic error', async () => {
-        const settings: AISettings = {
-          provider: 'openai',
-          apiKey: 'sk-test-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          text: async () => 'Internal Server Error',
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('OpenAI API error');
-      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(url).toBe('https://xtm.example.com/api/v1/extension/execute-task');
+      expect(init.method).toBe('POST');
+      expect(init.headers.Authorization).toBe('Bearer fcp-test-token');
+      const body = JSON.parse(init.body);
+      expect(body.agent_slug).toBe(XTM_ONE_AGENT_SLUGS.containerDescription);
+      expect(JSON.parse(body.content).containerName).toBe('n');
+      expect(body.max_tokens).toBe(10000);
     });
 
-    describe('Anthropic', () => {
-      it('should fetch Anthropic models successfully', async () => {
-        const settings: AISettings = {
-          provider: 'anthropic',
-          apiKey: 'sk-ant-test-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: [
-              { id: 'claude-3-opus', display_name: 'Claude 3 Opus', created_at: '2024-01-01T00:00:00Z' },
-            ],
-          }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(true);
-        expect(result.models?.[0].name).toBe('Claude 3 Opus');
+    it('returns structured data on success', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(jsonResponse({ data: { description: 'hello' } }));
+      const res = await client.generateContainerDescription({
+        pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
       });
-
-      it('should handle Anthropic 401 error', async () => {
-        const settings: AISettings = {
-          provider: 'anthropic',
-          apiKey: 'invalid-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          text: async () => 'Unauthorized',
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid API key');
-      });
+      expect(res.success).toBe(true);
+      expect(res.data?.description).toBe('hello');
     });
 
-    describe('Gemini', () => {
-      it('should fetch Gemini models successfully', async () => {
-        const settings: AISettings = {
-          provider: 'gemini',
-          apiKey: 'gemini-api-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            models: [
-              { name: 'models/gemini-pro', displayName: 'Gemini Pro', description: 'Advanced model' },
-            ],
-          }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(true);
-        expect(result.models?.[0].id).toBe('gemini-pro');
-        expect(result.models?.[0].name).toBe('Gemini Pro');
-      });
-
-      it('should handle Gemini 401 error', async () => {
-        const settings: AISettings = {
-          provider: 'gemini',
-          apiKey: 'invalid-key',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          text: async () => 'Unauthorized',
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid API key');
-      });
-    });
-
-    describe('Custom', () => {
-      it('should test custom endpoint with models support', async () => {
-        const settings: AISettings = {
-          provider: 'custom',
-          apiKey: 'custom-key',
-          model: 'custom-model',
-          customBaseUrl: 'https://my-api.example.com/v1',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            data: [{ id: 'custom-model', owned_by: 'custom' }],
-          }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(true);
-        expect(result.models?.[0].id).toBe('custom-model');
-      });
-
-      it('should fallback to chat completion test when models endpoint fails', async () => {
-        const settings: AISettings = {
-          provider: 'custom',
-          apiKey: 'custom-key',
-          model: 'custom-model',
-          customBaseUrl: 'https://my-api.example.com/v1',
-        };
-        const client = new AIClient(settings);
-
-        // First call fails (models endpoint not supported)
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        });
-
-        // Second call succeeds (chat completion test)
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { content: 'Hello' } }],
-          }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(true);
-        expect(result.models).toContainEqual({ id: 'custom-model', name: 'custom-model' });
-      });
-
-      it('should handle custom endpoint 401 error', async () => {
-        const settings: AISettings = {
-          provider: 'custom',
-          apiKey: 'invalid-key',
-          model: 'custom-model',
-          customBaseUrl: 'https://my-api.example.com/v1',
-        };
-        const client = new AIClient(settings);
-
-        // Models endpoint fails
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        });
-
-        // Chat completion returns 401
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          json: async () => ({ error: { message: 'Invalid token' } }),
-        });
-
-        const result = await client.testConnectionAndFetchModels();
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Invalid API key or token');
-      });
-
-      it('should normalize custom URL with trailing slash', async () => {
-        const settings: AISettings = {
-          provider: 'custom',
-          apiKey: 'custom-key',
-          model: 'custom-model',
-          customBaseUrl: 'https://my-api.example.com/v1/',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ data: [] }),
-        });
-
-        await client.testConnectionAndFetchModels();
-
-        expect(mockFetch).toHaveBeenCalledWith(
-          'https://my-api.example.com/v1/models',
-          expect.any(Object)
-        );
-      });
-    });
-
-    it('should handle unknown provider', async () => {
-      const settings = {
-        provider: 'unknown' as 'openai',
-        apiKey: 'test-key',
-      };
-      const client = new AIClient(settings);
-
-      const result = await client.testConnectionAndFetchModels();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Unknown AI provider');
-    });
-
-    it('should handle network errors', async () => {
-      const settings: AISettings = {
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-      };
-      const client = new AIClient(settings);
-
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await client.testConnectionAndFetchModels();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Network error');
+    it('reports network errors with a helpful message', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      const res = await client.testConnection();
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/Unable to reach XTM One/i);
     });
   });
 
-  // ============================================================================
-  // Generation Tests
-  // ============================================================================
-
-  describe('generate', () => {
-    describe('OpenAI', () => {
-      it('should generate content successfully', async () => {
-        const settings: AISettings = {
-          provider: 'openai',
-          apiKey: 'sk-test-key',
-          model: 'gpt-4',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { content: 'Generated content' } }],
-          }),
-        });
-
-        const result = await client.generate({
-          prompt: 'Test prompt',
-          systemPrompt: 'You are a helpful assistant',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('Generated content');
-      });
-
-      it('should handle OpenAI generation error', async () => {
-        const settings: AISettings = {
-          provider: 'openai',
-          apiKey: 'sk-test-key',
-          model: 'gpt-4',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: { message: 'Rate limit exceeded' } }),
-        });
-
-        const result = await client.generate({ prompt: 'Test' });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Rate limit exceeded');
-      });
+  describe('HTTP error mapping', () => {
+    it('401 → invalid/expired token message', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(401));
+      const res = await client.testConnection();
+      expect(res.success).toBe(false);
+      expect(res.status).toBe(401);
+      expect(res.error).toMatch(/token is invalid or expired/i);
     });
 
-    describe('Anthropic', () => {
-      it('should generate content successfully', async () => {
-        const settings: AISettings = {
-          provider: 'anthropic',
-          apiKey: 'sk-ant-test-key',
-          model: 'claude-3-opus-20240229',
-        };
-        const client = new AIClient(settings);
+    it('403 → unauthorized message', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(403));
+      const res = await client.testConnection();
+      expect(res.error).toMatch(/not authorized/i);
+    });
 
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            content: [{ text: 'Generated by Claude' }],
-          }),
-        });
-
-        const result = await client.generate({
-          prompt: 'Test prompt',
-          systemPrompt: 'You are a helpful assistant',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('Generated by Claude');
+    it('404 → agent not found message, embeds agent slug', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(404));
+      const res = await client.generateEmails({
+        pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '', attackPatterns: [],
       });
+      expect(res.error).toMatch(/agent for task "browser-email-generation" was not found/i);
     });
 
-    describe('Gemini', () => {
-      it('should generate content successfully', async () => {
-        const settings: AISettings = {
-          provider: 'gemini',
-          apiKey: 'gemini-api-key',
-          model: 'gemini-pro',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            candidates: [{ content: { parts: [{ text: 'Generated by Gemini' }] } }],
-          }),
-        });
-
-        const result = await client.generate({
-          prompt: 'Test prompt',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('Generated by Gemini');
-      });
+    it('422 → server needs update message', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(422));
+      const res = await client.testConnection();
+      expect(res.error).toMatch(/needs an update/i);
     });
 
-    describe('Custom', () => {
-      it('should generate content successfully', async () => {
-        const settings: AISettings = {
-          provider: 'custom',
-          apiKey: 'custom-key',
-          model: 'custom-model',
-          customBaseUrl: 'https://my-api.example.com/v1',
-        };
-        const client = new AIClient(settings);
-
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { content: 'Custom generated content' } }],
-          }),
-        });
-
-        const result = await client.generate({
-          prompt: 'Test prompt',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('Custom generated content');
-      });
+    it('429 → quota exceeded message', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(429));
+      const res = await client.testConnection();
+      expect(res.error).toMatch(/quota/i);
     });
 
-    it('should handle unknown provider', async () => {
-      const settings = {
-        provider: 'unknown' as 'openai',
-        apiKey: 'test-key',
-      };
-      const client = new AIClient(settings);
-
-      const result = await client.generate({ prompt: 'Test' });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Unknown AI provider');
+    it('5xx → generic server error', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(errorResponse(503));
+      const res = await client.testConnection();
+      expect(res.error).toMatch(/server error.*503/i);
     });
 
-    it('should handle network exceptions', async () => {
-      const settings: AISettings = {
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-        model: 'gpt-4',
-      };
-      const client = new AIClient(settings);
-
-      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
-
-      const result = await client.generate({ prompt: 'Test' });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Connection refused');
-    });
-  });
-
-  // ============================================================================
-  // Feature-Specific Generation Methods Tests
-  // ============================================================================
-
-  describe('feature-specific generation methods', () => {
-    let client: AIClient;
-
-    beforeEach(() => {
-      client = new AIClient({
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-        model: 'gpt-4',
-      });
-
-      mockFetch.mockResolvedValue({
+    it('malformed JSON success → reports it', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Generated response' } }],
-        }),
-      });
-    });
-
-    it('should generate container description', async () => {
-      const result = await client.generateContainerDescription({
-        containerTitle: 'Test Report',
-        containerContent: 'Analysis of APT29',
-        pageContent: 'APT29 analysis page content for threat intelligence report.',
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should generate scenario', async () => {
-      const result = await client.generateScenario({
-        scenarioName: 'Phishing Attack',
-        scenarioDescription: 'Test scenario',
-        pageContent: 'A phishing attack scenario involving malicious email attachments.',
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should generate full scenario', async () => {
-      const result = await client.generateFullScenario({
-        scenarioName: 'Advanced Persistent Threat',
-        includeInjects: true,
-        pageContent: 'APT group targeting financial institutions with spear-phishing.',
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should generate atomic test', async () => {
-      const result = await client.generateAtomicTest({
-        attackPattern: {
-          id: 'attack-pattern-123',
-          name: 'Command and Scripting Interpreter',
-          description: 'Test description for command execution',
-          external_id: 'T1059',
+        status: 200,
+        json: async () => {
+          throw new Error('bad json');
         },
-        platformType: 'windows',
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+        text: async () => '',
+      } as unknown as Response);
+      const res = await client.generateContainerDescription({} as any);
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/malformed/i);
     });
 
-    it('should generate emails', async () => {
-      const result = await client.generateEmails({
-        scenarioName: 'Phishing Campaign',
-        scenarioDescription: 'Test phishing scenario',
-        language: 'en',
-        pageContent: 'Threat intelligence report about phishing attacks targeting employees.',
-        attackPatterns: [
-          { name: 'Phishing', externalId: 'T1566' },
-          { name: 'Spearphishing Attachment', externalId: 'T1566.001' },
-        ],
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should discover entities', async () => {
-      const result = await client.discoverEntities({
-        pageContent: 'APT29 used Emotet malware to target financial institutions',
-        existingEntities: [],
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should resolve relationships', async () => {
-      const result = await client.resolveRelationships({
-        contextText: 'APT29 deployed Emotet against banks',
-        entities: [
-          { type: 'Intrusion-Set', name: 'APT29' },
-          { type: 'Malware', name: 'Emotet' },
-        ],
-      });
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+    it('success with no data field → treated as error', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValueOnce(jsonResponse({}));
+      const res = await client.generateContainerDescription({} as any);
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/no data/i);
     });
   });
 
-  // ============================================================================
-  // Default Model Selection Tests
-  // ============================================================================
+  describe('agent slug mapping', () => {
+    const fixtureSettings = validSettings;
+    const minimalRequests = {
+      scenarioGeneration: { pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '' },
+      fullScenarioGeneration: { pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '', typeAffinity: 'ENDPOINT', numberOfInjects: 1 },
+      atomicTestGeneration: { attackPattern: { name: 'x' }, targetPlatform: 'linux' },
+      entityDiscovery: { pageTitle: '', pageUrl: '', pageContent: '' },
+      relationshipResolution: { pageTitle: '', pageUrl: '', pageContent: '', entities: [] },
+      scanAll: { pageTitle: '', pageUrl: '', pageContent: '' },
+    };
 
-  describe('default model selection', () => {
-    it('should use default OpenAI model when not specified', async () => {
-      const client = new AIClient({
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-      });
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Response' } }],
-        }),
-      });
-
-      await client.generate({ prompt: 'Test' });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: expect.stringContaining('gpt-5.2'),
-        })
-      );
-    });
-
-    it('should use specified model over default', async () => {
-      const client = new AIClient({
-        provider: 'openai',
-        apiKey: 'sk-test-key',
-        model: 'gpt-4-turbo',
-      });
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Response' } }],
-        }),
-      });
-
-      await client.generate({ prompt: 'Test' });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: expect.stringContaining('gpt-4-turbo'),
-        })
-      );
+    it.each([
+      ['generateScenario', minimalRequests.scenarioGeneration, XTM_ONE_AGENT_SLUGS.scenarioGeneration],
+      ['generateFullScenario', minimalRequests.fullScenarioGeneration, XTM_ONE_AGENT_SLUGS.fullScenarioGeneration],
+      ['generateAtomicTest', minimalRequests.atomicTestGeneration, XTM_ONE_AGENT_SLUGS.atomicTestGeneration],
+      ['discoverEntities', minimalRequests.entityDiscovery, XTM_ONE_AGENT_SLUGS.entityDiscovery],
+      ['resolveRelationships', minimalRequests.relationshipResolution, XTM_ONE_AGENT_SLUGS.relationshipResolution],
+      ['scanAll', minimalRequests.scanAll, XTM_ONE_AGENT_SLUGS.scanAll],
+    ])('%s posts agent_slug=%s', async (method, payload, expectedSlug) => {
+      const client = new AIClient(fixtureSettings);
+      mockFetch.mockResolvedValueOnce(jsonResponse({ data: {} }));
+      // @ts-expect-error indexed dispatch on client
+      await client[method](payload);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.agent_slug).toBe(expectedSlug);
     });
   });
 });
 
-// ============================================================================
-// isAIAvailable Tests
-// ============================================================================
+describe('AIClient – getMaxContentLength', () => {
+  it('returns default when not configured', () => {
+    const client = new AIClient(validSettings);
+    expect(client.getMaxContentLength()).toBe(50000);
+  });
+
+  it('returns custom value when configured', () => {
+    const client = new AIClient({ ...validSettings, maxContentLength: 12000 });
+    expect(client.getMaxContentLength()).toBe(12000);
+  });
+});
+
+describe('AIClient – executeTask edge cases', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('reports empty body from XTM One', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse(null));
+    const res = await client.generateContainerDescription({
+      pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/empty/i);
+  });
+
+  it('surfaces body.error from a 200 response', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ error: 'Agent quota exceeded' }));
+    const res = await client.generateScenario({
+      pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '',
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('Agent quota exceeded');
+  });
+
+  it('handles non-Error throw from fetch gracefully', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockRejectedValueOnce('network down');
+    const res = await client.generateContainerDescription({
+      pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/Unable to reach XTM One/i);
+  });
+
+  it('handles unknown HTTP status codes', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(errorResponse(418, { detail: "I'm a teapot" }));
+    const res = await client.generateContainerDescription({} as any);
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/418/);
+    expect(res.error).toMatch(/teapot/i);
+  });
+
+  it.each([
+    ['generateContainerDescription', XTM_ONE_AGENT_SLUGS.containerDescription],
+    ['generateEmails', XTM_ONE_AGENT_SLUGS.emailGeneration],
+  ])('%s posts the correct agent_slug (%s)', async (method, expectedSlug) => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: {} }));
+    const dummyPayloads: Record<string, unknown> = {
+      generateContainerDescription: {
+        pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+      },
+      generateEmails: {
+        pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '', attackPatterns: [],
+      },
+    };
+    // @ts-expect-error indexed dispatch
+    await client[method](dummyPayloads[method]);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.agent_slug).toBe(expectedSlug);
+  });
+});
 
 describe('isAIAvailable', () => {
-  it('should return false when settings are undefined', () => {
+  it('returns true when both URL and token are set', () => {
+    expect(isAIAvailable({ xtmOneUrl: 'https://x', apiToken: 'fcp-1' })).toBe(true);
+  });
+
+  it('returns false when URL missing', () => {
+    expect(isAIAvailable({ apiToken: 'fcp-1' })).toBe(false);
+  });
+
+  it('returns false when token missing', () => {
+    expect(isAIAvailable({ xtmOneUrl: 'https://x' })).toBe(false);
+  });
+
+  it('returns false when settings undefined', () => {
     expect(isAIAvailable(undefined)).toBe(false);
   });
 
-  it('should return false when provider is missing', () => {
-    expect(isAIAvailable({ apiKey: 'key', model: 'model' } as AISettings)).toBe(false);
+  it.each([
+    ['empty strings', { xtmOneUrl: '', apiToken: '' }],
+    ['whitespace-only URL', { xtmOneUrl: '   ', apiToken: 'fcp-1' }],
+    ['whitespace-only token', { xtmOneUrl: 'https://x', apiToken: '  ' }],
+  ])('returns false for %s', (_label, settings) => {
+    expect(isAIAvailable(settings)).toBe(false);
+  });
+});
+
+describe('AIClient – constructor normalizeUrl', () => {
+  beforeEach(() => { mockFetch.mockReset(); });
+
+  it.each([
+    ['trailing slashes', 'https://xtm.example.com///', 'https://xtm.example.com'],
+    ['leading/trailing whitespace', '  https://xtm.example.com  ', 'https://xtm.example.com'],
+    ['whitespace + trailing slash', '  https://xtm.example.com/  ', 'https://xtm.example.com'],
+  ])('normalizes %s → %s', async (_label, input, expected) => {
+    const client = new AIClient({ ...validSettings, xtmOneUrl: input });
+    mockFetch.mockResolvedValueOnce(jsonResponse({}));
+    await client.testConnection();
+    expect(mockFetch.mock.calls[0][0]).toBe(`${expected}/api/v1/auth/me`);
+  });
+});
+
+describe('AIClient – maxTokens forwarding', () => {
+  beforeEach(() => { mockFetch.mockReset(); });
+
+  it('forwards custom maxTokens value in the request body', async () => {
+    const client = new AIClient({ ...validSettings, maxTokens: 25000 });
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { description: 'ok' } }));
+    await client.generateContainerDescription({
+      pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(25000);
   });
 
-  it('should return false when apiKey is missing', () => {
-    expect(isAIAvailable({ provider: 'openai', model: 'model' } as AISettings)).toBe(false);
+  it('uses default (10000) when maxTokens is not configured', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: {} }));
+    await client.generateScenario({ pageTitle: '', pageUrl: '', pageContent: '', scenarioName: '' });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(10000);
+  });
+});
+
+describe('AIClient – testConnection', () => {
+  beforeEach(() => { mockFetch.mockReset(); });
+
+  it('returns success with message on 200', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }));
+    const res = await client.testConnection();
+    expect(res.success).toBe(true);
+    expect(res.data?.message).toMatch(/successful/i);
   });
 
-  it('should return false when model is missing', () => {
-    expect(isAIAvailable({ provider: 'openai', apiKey: 'key' } as AISettings)).toBe(false);
+  it('extracts user_email from "user_email" field', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ user_email: 'admin@filigran.io' }));
+    const res = await client.testConnection();
+    expect(res.data?.user_email).toBe('admin@filigran.io');
   });
 
-  it('should return true for valid OpenAI settings', () => {
-    expect(isAIAvailable({
-      provider: 'openai',
-      apiKey: 'sk-test-key',
-      model: 'gpt-4',
-    })).toBe(true);
+  it('extracts user_email from "email" field as fallback', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }));
+    const res = await client.testConnection();
+    expect(res.data?.user_email).toBe('user@test.com');
   });
 
-  it('should return true for valid Anthropic settings', () => {
-    expect(isAIAvailable({
-      provider: 'anthropic',
-      apiKey: 'sk-ant-test-key',
-      model: 'claude-3-opus',
-    })).toBe(true);
+  it('extracts user_email from "name" field as last fallback', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ name: 'John Doe' }));
+    const res = await client.testConnection();
+    expect(res.data?.user_email).toBe('John Doe');
   });
 
-  it('should return false for custom provider without customBaseUrl', () => {
-    expect(isAIAvailable({
-      provider: 'custom',
-      apiKey: 'custom-key',
-      model: 'custom-model',
-    })).toBe(false);
+  it('extracts version from "platform_version" field', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ platform_version: '2.1.0' }));
+    const res = await client.testConnection();
+    expect(res.data?.version).toBe('2.1.0');
   });
 
-  it('should return true for valid custom provider settings', () => {
-    expect(isAIAvailable({
-      provider: 'custom',
-      apiKey: 'custom-key',
-      model: 'custom-model',
-      customBaseUrl: 'https://api.example.com/v1',
-    })).toBe(true);
+  it('extracts version from "version" field as fallback', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ version: '1.0.0' }));
+    const res = await client.testConnection();
+    expect(res.data?.version).toBe('1.0.0');
+  });
+
+  it('enterprise_edition is undefined when config has no license info', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
+      .mockResolvedValueOnce(jsonResponse({ platform_version: '1.0.0' }));
+    const res = await client.testConnection();
+    expect(res.data?.enterprise_edition).toBeUndefined();
+  });
+
+  it('handles non-JSON response body gracefully', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => { throw new Error('not json'); },
+      text: async () => 'OK',
+    } as unknown as Response);
+    const res = await client.testConnection();
+    expect(res.success).toBe(true);
+    expect(res.data?.user_email).toBeUndefined();
+    expect(res.data?.version).toBeUndefined();
+  });
+
+  it('uses GET method with credentials omit', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({}));
+    await client.testConnection();
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.method).toBe('GET');
+    expect(init.credentials).toBe('omit');
+  });
+
+  it('404 returns "does not appear to be XTM One" message', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(errorResponse(404));
+    const res = await client.testConnection();
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/does not appear to be.*XTM One/i);
+  });
+
+  it('fetches /api/v1/platform/config for version and license info', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ user_email: 'admin@filigran.io' }))
+      .mockResolvedValueOnce(jsonResponse({
+        platform_version: '3.0.0',
+        deployment_tier: 'xtm_licensed',
+      }));
+    const res = await client.testConnection();
+    expect(res.data?.user_email).toBe('admin@filigran.io');
+    expect(res.data?.version).toBe('3.0.0');
+    expect(res.data?.enterprise_edition).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1][0]).toBe('https://xtm.example.com/api/v1/platform/config');
+  });
+
+  it('detects EE from xtm_license.valid when deployment_tier is absent', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
+      .mockResolvedValueOnce(jsonResponse({
+        platform_version: '2.0.0',
+        xtm_license: { valid: true, license_type: 'standard' },
+      }));
+    const res = await client.testConnection();
+    expect(res.data?.version).toBe('2.0.0');
+    expect(res.data?.enterprise_edition).toBe(true);
+  });
+
+  it('detects CE from deployment_tier ce_only', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
+      .mockResolvedValueOnce(jsonResponse({
+        deployment_tier: 'ce_only',
+      }));
+    const res = await client.testConnection();
+    expect(res.data?.enterprise_edition).toBe(false);
+  });
+
+  it('still succeeds if config endpoint fails', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ user_email: 'user@test.com' }))
+      .mockRejectedValueOnce(new Error('network error'));
+    const res = await client.testConnection();
+    expect(res.success).toBe(true);
+    expect(res.data?.user_email).toBe('user@test.com');
+    expect(res.data?.version).toBeUndefined();
+  });
+});
+
+describe('AIClient – executeTask fetch options', () => {
+  beforeEach(() => { mockFetch.mockReset(); });
+
+  it('sets credentials to omit on task requests', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: {} }));
+    await client.generateContainerDescription({
+      pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+    });
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.credentials).toBe('omit');
+  });
+
+  it('sends Content-Type application/json', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: {} }));
+    await client.generateContainerDescription({
+      pageTitle: 'p', pageUrl: 'u', pageContent: 'c', containerType: 'Report', containerName: 'n',
+    });
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.headers['Content-Type']).toBe('application/json');
   });
 });

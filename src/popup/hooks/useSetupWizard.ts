@@ -26,6 +26,7 @@ interface PersistedSetupState {
 
 interface UseSetupWizardProps {
   setStatus: React.Dispatch<React.SetStateAction<ConnectionStatus>>;
+  hasAnyPlatformConnected: boolean;
 }
 
 interface UseSetupWizardReturn {
@@ -47,12 +48,12 @@ interface UseSetupWizardReturn {
   setSetupToken: (value: string) => void;
   setSetupName: (value: string) => void;
   setShowSetupToken: (value: boolean) => void;
-  handleSetupTestAndSave: (platformType: 'opencti' | 'openaev') => Promise<void>;
-  handleSetupSkip: (currentStep: 'opencti' | 'openaev') => void;
+  handleSetupTestAndSave: (platformType: 'opencti' | 'openaev' | 'xtm-one') => Promise<void>;
+  handleSetupSkip: (currentStep: 'opencti' | 'openaev' | 'xtm-one') => void;
   startSetupWizard: () => void;
 }
 
-export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWizardReturn => {
+export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupWizardProps): UseSetupWizardReturn => {
   // Setup wizard state
   const [setupStep, setSetupStepInternal] = useState<SetupStep>('welcome');
   const [isInSetupWizard, setIsInSetupWizardInternal] = useState(false);
@@ -147,20 +148,29 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
     setSetupStepInternal('opencti');
   }, []);
 
-  const handleSetupSkip = useCallback((currentStep: 'opencti' | 'openaev') => {
+  const handleSetupSkip = useCallback((currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
     resetSetupForm();
     
     if (currentStep === 'opencti') {
       setSetupStepInternal('openaev');
+    } else if (currentStep === 'openaev') {
+      if (hasAnyPlatformConnected) {
+        setSetupStepInternal('xtm-one');
+      } else {
+        // No platform connected — skip XTM One, end wizard
+        setIsInSetupWizardInternal(false);
+        setSetupStepInternal('welcome');
+        clearPersistedState();
+      }
     } else {
       // Setup complete - clear persisted state
       setIsInSetupWizardInternal(false);
       setSetupStepInternal('welcome');
       clearPersistedState();
     }
-  }, [resetSetupForm, clearPersistedState]);
+  }, [resetSetupForm, clearPersistedState, hasAnyPlatformConnected]);
 
-  const handleSetupTestAndSave = useCallback(async (platformType: 'opencti' | 'openaev') => {
+  const handleSetupTestAndSave = useCallback(async (platformType: 'opencti' | 'openaev' | 'xtm-one') => {
     if (!setupUrl.trim() || !setupToken.trim()) return;
     
     setSetupTesting(true);
@@ -169,6 +179,61 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
     
     try {
       const normalizedUrl = normalizeUrl(setupUrl);
+      
+      // XTM-One has a different test/save flow
+      if (platformType === 'xtm-one') {
+        const testResponse = await chrome.runtime.sendMessage({
+          type: 'AI_TEST_CONNECTION',
+          payload: {
+            xtmOneUrl: normalizedUrl,
+            apiToken: setupToken.trim(),
+          },
+        });
+        
+        if (!testResponse?.success) {
+          throw new Error(testResponse?.error || 'Connection test failed');
+        }
+        
+        // Save to settings.ai
+        const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+        if (!settingsResponse?.success) {
+          throw new Error('Failed to get settings');
+        }
+        
+        const updatedSettings = {
+          ...settingsResponse.data,
+          ai: {
+            ...settingsResponse.data?.ai,
+            xtmOneUrl: normalizedUrl,
+            apiToken: setupToken.trim(),
+            connectionTested: true,
+          },
+        };
+        
+        const saveResponse = await chrome.runtime.sendMessage({
+          type: 'SAVE_SETTINGS',
+          payload: updatedSettings,
+        });
+        
+        if (!saveResponse?.success) {
+          throw new Error(saveResponse?.error || 'Failed to save settings');
+        }
+        
+        log.debug('XTM One settings saved successfully');
+        
+        setSetupSuccess(true);
+        setSetupTesting(false);
+        
+        // Move to completion after a short delay
+        setTimeout(() => {
+          resetSetupForm();
+          setIsInSetupWizardInternal(false);
+          setSetupStepInternal('welcome');
+          clearPersistedState();
+        }, 1000);
+        
+        return;
+      }
       
       // Test connection FIRST without saving (using temp test)
       const testResponse = await chrome.runtime.sendMessage({
@@ -287,10 +352,8 @@ export const useSetupWizard = ({ setStatus }: UseSetupWizardProps): UseSetupWiza
         if (platformType === 'opencti') {
           setSetupStepInternal('openaev');
         } else {
-          // Setup complete - clear persisted state
-          setIsInSetupWizardInternal(false);
-          setSetupStepInternal('welcome');
-          clearPersistedState();
+          // After OAEV: show XTM One step (at least this platform just connected)
+          setSetupStepInternal('xtm-one');
         }
       }, 1000);
       

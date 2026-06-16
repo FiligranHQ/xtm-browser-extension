@@ -108,10 +108,3 @@ export interface AITestResult {
   message: string;
 }
 
-// Available model type
-export interface AvailableModel {
-  id: string;
-  name: string;
-  description?: string;
-}
-

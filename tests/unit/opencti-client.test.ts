@@ -136,13 +136,19 @@ describe('OpenCTIClient', () => {
     it('should throw on HTTP error', async () => {
       mockFetch.mockResolvedValueOnce(createErrorResponse(401, 'Unauthorized'));
 
-      await expect(client.testConnection()).rejects.toThrow('HTTP error: 401 Unauthorized');
+      await expect(client.testConnection()).rejects.toThrow('Invalid token. Please check your OpenCTI API token.');
     });
 
     it('should throw on GraphQL error', async () => {
       mockFetch.mockResolvedValueOnce(createMockResponse(null, [{ message: 'Invalid token' }]));
 
       await expect(client.testConnection()).rejects.toThrow('Invalid token');
+    });
+
+    it('should throw clear message for "logged in" GraphQL auth error', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse(null, [{ message: 'You must be logged in to do this.' }]));
+
+      await expect(client.testConnection()).rejects.toThrow('Invalid token. Please check your OpenCTI API token.');
     });
   });
 

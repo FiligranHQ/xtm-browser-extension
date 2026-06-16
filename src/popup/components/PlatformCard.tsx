@@ -49,7 +49,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
           <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {platform.name || defaultName}
           </Typography>
-          {platform.connected && (
+          {platform.connected && platform.isEnterprise !== undefined && (
             <Box
               sx={{
                 px: 0.5,

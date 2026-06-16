@@ -57,7 +57,7 @@ export const ScanResultsAIButtons: React.FC<ScanResultsAIButtonsProps> = ({
   if (aiDiscoveringEntities) {
     entitiesToolipMessage = 'Analyzing page content...';
   } else if (!aiSettings.available) {
-    entitiesToolipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
+    entitiesToolipMessage = 'AI is not configured. Go to Settings → XTM One to enable.';
   } else if (!hasEnterprisePlatform) {
     entitiesToolipMessage = 'Requires at least one Enterprise Edition platform';
   }
@@ -66,7 +66,7 @@ export const ScanResultsAIButtons: React.FC<ScanResultsAIButtonsProps> = ({
   if (aiResolvingRelationships) {
     relationshipsTooltipMessage = 'Analyzing relationships...';
   } else if (!aiSettings.available) {
-    relationshipsTooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
+    relationshipsTooltipMessage = 'AI is not configured. Go to Settings → XTM One to enable.';
   } else if (!hasEnterprisePlatform) {
     relationshipsTooltipMessage = 'Requires at least one Enterprise Edition platform';
   } else if (octiEligibleEntities.length < 2) {
@@ -77,7 +77,7 @@ export const ScanResultsAIButtons: React.FC<ScanResultsAIButtonsProps> = ({
   if (aiDiscoveringEntities || aiResolvingRelationships) {
     scanAllTooltipMessage = 'Analyzing...';
   } else if (!aiSettings.available) {
-    scanAllTooltipMessage = 'AI is not configured. Go to Settings → Agentic AI to enable.';
+    scanAllTooltipMessage = 'AI is not configured. Go to Settings → XTM One to enable.';
   } else if (!hasEnterprisePlatform) {
     scanAllTooltipMessage = 'Requires at least one Enterprise Edition platform';
   }

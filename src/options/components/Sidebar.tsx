@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import type { TabType } from '../constants';
 import type { ExtensionSettings } from '../../shared/types/settings';
+import { EXTENSION_VERSION } from '../../shared/constants';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -59,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
     },
     { 
       id: 'ai' as TabType, 
-      label: 'Agentic AI', 
+      label: 'XTM One', 
       icon: (
         <img 
           src={`../assets/logos/logo_xtm-one_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
@@ -72,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
           }}
         />
       ),
-      // Agentic AI is only available if at least one platform is Enterprise Edition
+      // XTM One is only available if at least one platform is Enterprise Edition
       disabled: ![
         ...(settings?.openctiPlatforms || []),
         ...(settings?.openaevPlatforms || []),
@@ -163,6 +164,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
           </ListItemButton>
         ))}
       </List>
+
+      {/* Version */}
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          v{EXTENSION_VERSION}
+        </Typography>
+      </Box>
     </Box>
   );
 };

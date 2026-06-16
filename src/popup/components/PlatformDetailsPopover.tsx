@@ -124,6 +124,43 @@ export const PlatformDetailsPopover: React.FC<PlatformDetailsPopoverProps> = ({
 
         <Divider sx={{ my: 1.5 }} />
 
+        {/* XTM One */}
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <img
+              src={`../assets/logos/logo_xtm-one_${logoSuffix}_embleme_square.svg`}
+              alt="XTM One"
+              width={18}
+              height={18}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `../assets/logos/logo_filigran_${logoSuffix}_embleme_square.svg`;
+              }}
+            />
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+              XTM One
+            </Typography>
+            {status.xtmOne && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                ({status.xtmOne.connected ? '1/1' : '0/1'} connected)
+              </Typography>
+            )}
+          </Box>
+          {status.xtmOne ? (
+            <PlatformCard
+              platform={status.xtmOne}
+              mode={mode}
+              defaultName="XTM One"
+              onOpen={onOpenPlatform}
+            />
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic', py: 0.5 }}>
+              Not configured
+            </Typography>
+          )}
+        </Box>
+
+        <Divider sx={{ my: 1.5 }} />
+
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             XTM Browser Extension v{EXTENSION_VERSION}

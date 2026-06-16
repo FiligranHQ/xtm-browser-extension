@@ -91,7 +91,7 @@ const App: React.FC = () => {
     handleSetupTestAndSave,
     handleSetupSkip,
     startSetupWizard,
-  } = useSetupWizard({ setStatus });
+  } = useSetupWizard({ setStatus, hasAnyPlatformConnected: hasOpenCTI || hasOpenAEV });
 
   // Actions
   const {
@@ -221,6 +221,25 @@ const App: React.FC = () => {
           />
         )}
 
+        {/* XTM One Setup Step */}
+        {isInSetupWizard && setupStep === 'xtm-one' && (
+          <PlatformSetupForm
+            platformType="xtm-one"
+            logoSuffix={logoSuffix}
+            url={setupUrl}
+            token={setupToken}
+            showToken={showSetupToken}
+            testing={setupTesting}
+            error={setupError}
+            success={setupSuccess}
+            onUrlChange={setSetupUrl}
+            onTokenChange={setSetupToken}
+            onToggleShowToken={() => setShowSetupToken(!showSetupToken)}
+            onConnect={() => handleSetupTestAndSave('xtm-one')}
+            onSkip={() => handleSetupSkip('xtm-one')}
+          />
+        )}
+
         {/* File access warning for local PDF files */}
         {isLocalFile && isPdfPage && !fileAccessGranted && hasAnyPlatformConfigured && !isInSetupWizard && (
           <Box sx={{ px: 2, pt: 1.5 }}>
@@ -336,6 +355,34 @@ const App: React.FC = () => {
                     ? `OAEV (${status.openaev.filter(p => p.connected).length})`
                     : hasAnyOpenAEVConfigured ? 'OAEV offline' : 'OAEV'
                   }
+                </Typography>
+              </Box>
+              {/* XTM One Status */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: status.xtmOne?.connected
+                      ? '#4caf50'
+                      : (status.xtmOne?.tested && aiConfigured) ? '#f44336' : '#9e9e9e',
+                    animation: status.xtmOne?.connected ? `${pulse} 2s infinite` : undefined,
+                  }}
+                />
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: status.xtmOne?.connected
+                      ? '#4caf50'
+                      : (status.xtmOne?.tested && aiConfigured) ? '#f44336' : '#9e9e9e', 
+                    fontSize: 10,
+                    fontWeight: 500,
+                  }}
+                >
+                  {status.xtmOne?.connected
+                    ? 'XTM1'
+                    : (status.xtmOne?.tested && aiConfigured) ? 'XTM1 offline' : 'XTM1'}
                 </Typography>
               </Box>
             </Box>

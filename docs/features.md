@@ -280,22 +280,19 @@ AI-powered features require at least one Enterprise Edition platform. If not con
 - Configure AI in Settings (if you have EE)
 - Start a free 30-day trial (if you don't have EE)
 
-### Supported LLM Providers
+### XTM One (AI Backend)
 
-| Provider | Description | Model Selection |
-|----------|-------------|-----------------|
-| **OpenAI** | GPT-4, GPT-4 Turbo, GPT-4o models | ✅ Dynamic model list |
-| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus | ✅ Dynamic model list |
-| **Google Gemini** | Gemini 1.5 Pro and Flash | ✅ Dynamic model list |
-| **XTM One** | Filigran Agentic AI Platform (coming soon) | - |
+All AI features are powered by XTM One — no direct LLM provider configuration needed.
 
-### Model Selection
+| Setting | Description |
+|---------|-------------|
+| **XTM One URL** | Base URL of your XTM One instance |
+| **API Token** | Personal Access Token (starts with `fcp-`) |
 
-After configuring your API key, you can:
-1. Click **Test Connection** to validate the API key
-2. The extension fetches available models from the provider
-3. Select your preferred model from the dropdown
-4. Models are cached for future sessions
+### Connection Test
+
+1. Click **Test Connection** to validate your XTM One credentials
+2. AI features become available once connected
 
 ### AI Container Description (OpenCTI)
 When creating containers in OpenCTI, you can use AI to generate intelligent descriptions:

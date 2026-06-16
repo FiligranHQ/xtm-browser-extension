@@ -142,18 +142,29 @@ export class OpenCTIClient {
 
     const response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
+      credentials: 'omit',
       headers,
       body: JSON.stringify({ query, variables }),
     });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('This URL does not appear to be an OpenCTI instance. Please verify the URL.');
+      }
+      if (response.status === 401) {
+        throw new Error('Invalid token. Please check your OpenCTI API token.');
+      }
       throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
     }
 
     const result: GraphQLResponse<T> = await response.json();
 
     if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0].message || 'GraphQL error');
+      const message = result.errors[0].message || 'GraphQL error';
+      if (message.toLowerCase().includes('logged in') || message.toLowerCase().includes('not authenticated')) {
+        throw new Error('Invalid token. Please check your OpenCTI API token.');
+      }
+      throw new Error(message);
     }
 
     return result.data as T;

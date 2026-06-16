@@ -94,6 +94,7 @@ export class OpenAEVClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
+      credentials: 'omit',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
@@ -103,6 +104,12 @@ export class OpenAEVClient {
     });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('This URL does not appear to be an OpenAEV instance. Please verify the URL.');
+      }
+      if (response.status === 401) {
+        throw new Error('Invalid token. Please check your OpenAEV API token.');
+      }
       const error = await response.text();
       throw new Error(`OpenAEV API Error: ${response.status} - ${error}`);
     }

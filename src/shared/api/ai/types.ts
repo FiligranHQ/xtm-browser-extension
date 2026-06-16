@@ -1,24 +1,7 @@
 /**
  * AI Client Types
- * Type definitions for AI providers and generation requests
+ * Type definitions for XTM One agent task requests and responses
  */
-
-// ============================================================================
-// Base Types
-// ============================================================================
-
-export interface AIGenerationRequest {
-  prompt: string;
-  systemPrompt?: string;
-  maxTokens?: number;
-  temperature?: number;
-}
-
-export interface AIGenerationResponse {
-  success: boolean;
-  content?: string;
-  error?: string;
-}
 
 // ============================================================================
 // Container Description Types

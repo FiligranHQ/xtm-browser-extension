@@ -1,18 +1,18 @@
 /**
  * AI Message Handlers
  *
- * Handles AI-related messages from the extension.
- * Uses the AIClient for generation and parseAIJsonResponse for parsing.
- * 
- * Note: Simple handlers use executeSimpleAIRequest from ai-utils.ts to reduce duplication.
- * Complex handlers with custom validation/logging still use inline logic.
+ * Each handler forwards a payload to the matching XTM One agent and either
+ * returns the structured response untouched or applies light post-processing
+ * (entity deduplication, relationship index → value mapping).
+ *
+ * No prompt construction lives in the extension — XTM One owns prompts.
  */
 
 import { getSettings } from '../../shared/utils/storage';
-import { successResponse, errorResponse, type SendResponseFn } from '../../shared/types/common';
+import { errorResponse, successResponse, type SendResponseFn } from '../../shared/types/common';
 import { loggers } from '../../shared/utils/logger';
 import { AIClient, isAIAvailable } from '../../shared/api/ai-client';
-import { AI_DEFAULTS, type AIProvider } from '../../shared/types/ai';
+import type { AISettings } from '../../shared/types/ai';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -22,19 +22,17 @@ import type {
   FullScenarioGenerationRequest,
   EmailGenerationRequest,
 } from '../../shared/api/ai/types';
-import { parseAIJsonResponse } from '../../shared/api/ai/json-parser';
 import type { MessageHandler } from './types';
-import { executeSimpleAIRequest } from './ai-utils';
+import { executeAITask } from './ai-utils';
 
 const log = loggers.background;
 
 type SendResponse = SendResponseFn;
 
 // ============================================================================
-// Helper Types and Functions
+// Entity deduplication helpers
 // ============================================================================
 
-/** Entity with optional identifying fields for deduplication */
 interface DetectedEntity {
   value?: string;
   name?: string;
@@ -44,720 +42,350 @@ interface DetectedEntity {
 }
 
 /**
- * Build a Set of lowercase values from already-detected entities for efficient lookup.
- * Includes: value, name, externalId, and all aliases.
+ * Build a Set of lowercase values from already-detected entities for efficient
+ * lookup. Includes value, name, externalId, and all aliases.
  */
 function buildAlreadyDetectedSet(alreadyDetectedList: DetectedEntity[]): Set<string> {
   const detectedValues = new Set<string>();
-  
   for (const e of alreadyDetectedList) {
     if (e.value) detectedValues.add(e.value.toLowerCase());
     if (e.name) detectedValues.add(e.name.toLowerCase());
     if (e.externalId) detectedValues.add(e.externalId.toLowerCase());
-    if (e.aliases && Array.isArray(e.aliases)) {
+    if (Array.isArray(e.aliases)) {
       for (const alias of e.aliases) {
         if (alias) detectedValues.add(alias.toLowerCase());
       }
     }
   }
-  
   return detectedValues;
 }
 
-/**
- * Filter entities to exclude those that match any already-detected value.
- * Compares lowercase value and name against the detected set.
- */
-function filterNewEntities<T extends DetectedEntity>(
-  entities: T[],
-  alreadyDetectedSet: Set<string>
-): T[] {
-  return entities.filter(e => {
+/** Filter entities that match any already-detected value or name. */
+function filterNewEntities<T extends DetectedEntity>(entities: T[], alreadyDetectedSet: Set<string>): T[] {
+  return entities.filter((e) => {
     const valueLC = (e.value || '').toLowerCase();
     const nameLC = (e.name || '').toLowerCase();
     return !alreadyDetectedSet.has(valueLC) && !alreadyDetectedSet.has(nameLC);
   });
 }
 
+// ============================================================================
+// Connectivity handlers
+// ============================================================================
 
-/**
- * AI_CHECK_STATUS handler
- */
-export async function handleAICheckStatus(
-  sendResponse: SendResponse
-): Promise<void> {
+/** AI_CHECK_STATUS — report whether the user has configured XTM One. */
+export async function handleAICheckStatus(sendResponse: SendResponse): Promise<void> {
   const settings = await getSettings();
   const available = isAIAvailable(settings.ai);
-  sendResponse({ 
-    success: true, 
-    data: { 
+  sendResponse({
+    success: true,
+    data: {
       available,
-      provider: settings.ai?.provider,
       enabled: available,
-    } 
+      provider: 'xtm-one',
+    },
   });
 }
 
-/**
- * AI_TEST_AND_FETCH_MODELS handler
- */
-export async function handleAITestAndFetchModels(
-  payload: { provider: string; apiKey: string; customBaseUrl?: string; model?: string },
-  sendResponse: SendResponse
+/** AI_TEST_CONNECTION — probe the XTM One endpoint with the supplied credentials. */
+export async function handleAITestConnection(
+  payload: Pick<AISettings, 'xtmOneUrl' | 'apiToken'>,
+  sendResponse: SendResponse,
 ): Promise<void> {
+  if (!payload.xtmOneUrl || !payload.apiToken) {
+    sendResponse(errorResponse('XTM One URL and API token are required'));
+    return;
+  }
   try {
-    const aiClient = new AIClient({
-      provider: payload.provider as AIProvider,
-      apiKey: payload.apiKey,
-      ...(payload.customBaseUrl && { customBaseUrl: payload.customBaseUrl }),
-      ...(payload.model && { model: payload.model }),
-    });
-    
-    const result = await aiClient.testConnectionAndFetchModels();
-    
+    const client = new AIClient(payload);
+    const result = await client.testConnection();
     if (result.success) {
-      sendResponse({ 
-        success: true, 
-        data: { 
-          models: result.models,
-        } 
-      });
+      sendResponse(successResponse({
+        message: result.data?.message ?? 'Connected to XTM One',
+        user_email: result.data?.user_email,
+        version: result.data?.version,
+        enterprise_edition: result.data?.enterprise_edition,
+      }));
     } else {
-      sendResponse({ success: false, error: result.error });
+      sendResponse(errorResponse(result.error || 'Failed to connect to XTM One'));
     }
   } catch (error) {
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to test AI connection',
-    });
+    sendResponse(errorResponse(error instanceof Error ? error.message : 'Failed to test XTM One connection'));
   }
 }
 
-/**
- * AI_GENERATE_DESCRIPTION handler
- * Uses executeSimpleAIRequest utility to reduce duplication.
- */
+// ============================================================================
+// Generation handlers — 1:1 with XTM One agents
+// ============================================================================
+
 export async function handleAIGenerateDescription(
   payload: ContainerDescriptionRequest,
-  sendResponse: SendResponse
+  sendResponse: SendResponse,
 ): Promise<void> {
-  await executeSimpleAIRequest(
+  await executeAITask(
     'AI_GENERATE_DESCRIPTION',
     payload,
     (client, req) => client.generateContainerDescription(req),
-    sendResponse
+    sendResponse,
+    {
+      truncateField: 'pageContent',
+      // Existing callers consumed `data` directly as the description string;
+      // unwrap to preserve that shape.
+      transform: (data) => (data && typeof data === 'object' && 'description' in data ? data.description : data),
+    },
+  );
+}
+
+export async function handleAIGenerateScenario(
+  payload: ScenarioGenerationRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  await executeAITask(
+    'AI_GENERATE_SCENARIO',
+    payload,
+    (client, req) => client.generateScenario(req),
+    sendResponse,
+    { truncateField: 'pageContent' },
+  );
+}
+
+export async function handleAIGenerateFullScenario(
+  payload: FullScenarioGenerationRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  log.debug('[AI_GENERATE_FULL_SCENARIO] Request:', {
+    typeAffinity: payload.typeAffinity,
+    numberOfInjects: payload.numberOfInjects,
+    payloadAffinity: payload.payloadAffinity,
+    tableTopDuration: payload.tableTopDuration,
+    attackPatterns: payload.detectedAttackPatterns?.length || 0,
+  });
+
+  await executeAITask<FullScenarioGenerationRequest, { injects?: unknown[] } & Record<string, unknown>, unknown>(
+    'AI_GENERATE_FULL_SCENARIO',
+    payload,
+    (client, req) => client.generateFullScenario(req) as ReturnType<typeof client.generateFullScenario>,
+    sendResponse,
+    {
+      truncateField: 'pageContent',
+      transform: (data) => {
+        if (!data || !Array.isArray(data.injects)) {
+          // The agent contract guarantees injects[]; surface a clear error if it is missing.
+          throw new Error('XTM One scenario response is missing the injects array');
+        }
+        log.debug('[AI_GENERATE_FULL_SCENARIO] Received scenario with', data.injects.length, 'injects');
+        return data;
+      },
+    },
+  );
+}
+
+export async function handleAIGenerateAtomicTest(
+  payload: AtomicTestRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  await executeAITask(
+    'AI_GENERATE_ATOMIC_TEST',
+    payload,
+    (client, req) => client.generateAtomicTest(req),
+    sendResponse,
+    { truncateField: 'context' },
+  );
+}
+
+export async function handleAIGenerateEmails(
+  payload: EmailGenerationRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  log.debug('[AI_GENERATE_EMAILS] Request:', {
+    attackPatterns: payload.attackPatterns?.map((ap) => ({ id: ap.id, name: ap.name, externalId: ap.externalId })),
+  });
+
+  await executeAITask<EmailGenerationRequest, { emails: Array<Record<string, unknown>> }, unknown>(
+    'AI_GENERATE_EMAILS',
+    payload,
+    (client, req) => client.generateEmails(req),
+    sendResponse,
+    {
+      truncateField: 'pageContent',
+      transform: (data) => {
+        if (!data || !Array.isArray(data.emails)) {
+          throw new Error('XTM One email response is missing the emails array');
+        }
+        return data;
+      },
+    },
+  );
+}
+
+export async function handleAIDiscoverEntities(
+  payload: EntityDiscoveryRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  log.debug('[AI_DISCOVER_ENTITIES] Request:', {
+    pageTitle: payload.pageTitle,
+    alreadyDetectedCount: payload.alreadyDetected?.length || 0,
+    contentLength: payload.pageContent?.length || 0,
+  });
+
+  await executeAITask<EntityDiscoveryRequest, { entities: Array<DetectedEntity & Record<string, unknown>> }, { entities: unknown[] }>(
+    'AI_DISCOVER_ENTITIES',
+    payload,
+    (client, req) => client.discoverEntities(req),
+    sendResponse,
+    {
+      truncateField: 'pageContent',
+      transform: (data) => {
+        const rawEntities = Array.isArray(data?.entities) ? data.entities : [];
+        const alreadyDetectedSet = buildAlreadyDetectedSet(payload.alreadyDetected || []);
+        const newEntities = filterNewEntities(rawEntities, alreadyDetectedSet);
+        log.info(`AI discovered ${newEntities.length} new entities (${rawEntities.length} raw, ${(payload.alreadyDetected || []).length} already detected)`);
+        return { entities: newEntities };
+      },
+    },
+  );
+}
+
+export async function handleAIResolveRelationships(
+  payload: RelationshipResolutionRequest,
+  sendResponse: SendResponse,
+): Promise<void> {
+  log.debug('[AI_RESOLVE_RELATIONSHIPS] Request:', {
+    pageTitle: payload.pageTitle,
+    entityCount: payload.entities?.length || 0,
+    contentLength: payload.pageContent?.length || 0,
+  });
+
+  type RawRelationship = {
+    fromIndex: number;
+    toIndex: number;
+    relationshipType: string;
+    confidence?: 'high' | 'medium' | 'low';
+    reason?: string;
+    excerpt?: string;
+  };
+
+  await executeAITask<RelationshipResolutionRequest, { relationships: RawRelationship[] }, { relationships: unknown[] }>(
+    'AI_RESOLVE_RELATIONSHIPS',
+    payload,
+    (client, req) => client.resolveRelationships(req) as ReturnType<typeof client.resolveRelationships> as Promise<import('../../shared/api/ai-client').XtmOneTaskResponse<{ relationships: RawRelationship[] }>>,
+    sendResponse,
+    {
+      truncateField: 'pageContent',
+      transform: (data) => {
+        const raw = Array.isArray(data?.relationships) ? data.relationships : [];
+        const entityCount = payload.entities.length;
+        const valid = raw
+          .filter((r) =>
+            r.fromIndex >= 0 && r.fromIndex < entityCount &&
+            r.toIndex >= 0 && r.toIndex < entityCount &&
+            r.fromIndex !== r.toIndex &&
+            typeof r.relationshipType === 'string' && r.relationshipType.length > 0,
+          )
+          .map((r) => {
+            const fromEntity = payload.entities[r.fromIndex];
+            const toEntity = payload.entities[r.toIndex];
+            return {
+              ...r,
+              fromEntityValue: fromEntity?.value || fromEntity?.name || '',
+              toEntityValue: toEntity?.value || toEntity?.name || '',
+            };
+          })
+          .filter((r) => r.fromEntityValue && r.toEntityValue);
+        log.info(`AI resolved ${valid.length} relationships (${raw.length} raw)`);
+        return { relationships: valid };
+      },
+    },
   );
 }
 
 /**
- * AI_GENERATE_SCENARIO handler
- * Note: Uses inline logic due to custom JSON parsing requirements.
- */
-export async function handleAIGenerateScenario(
-  payload: ScenarioGenerationRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    const response = await aiClient.generateScenario(payload);
-    
-    if (response.success && response.content) {
-      const scenario = parseAIJsonResponse(response.content);
-      sendResponse(successResponse(scenario));
-    } else {
-      sendResponse({ success: false, error: response.error || 'Failed to parse scenario' });
-    }
-  } catch (error) {
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI generation failed' 
-    });
-  }
-}
-
-/**
- * AI_GENERATE_FULL_SCENARIO handler
- */
-export async function handleAIGenerateFullScenario(
-  payload: FullScenarioGenerationRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    const request = { ...payload };
-    
-    log.debug('[AI_GENERATE_FULL_SCENARIO] Request:', {
-      typeAffinity: request.typeAffinity,
-      numberOfInjects: request.numberOfInjects,
-      payloadAffinity: request.payloadAffinity,
-      tableTopDuration: request.tableTopDuration,
-      attackPatterns: request.detectedAttackPatterns?.length || 0,
-    });
-    
-    // Truncate page content if too large (use settings or default)
-    const maxContentLength = settings.ai?.maxContentLength ?? AI_DEFAULTS.maxContentLength;
-    if (request.pageContent && request.pageContent.length > maxContentLength) {
-      log.warn(`[AI_GENERATE_FULL_SCENARIO] Page content too large (${request.pageContent.length} chars), truncating`);
-      request.pageContent = request.pageContent.substring(0, maxContentLength) + '\n\n[Content truncated due to size]';
-    }
-    
-    const response = await aiClient.generateFullScenario(request);
-    
-    log.debug('[AI_GENERATE_FULL_SCENARIO] AI response success:', response.success);
-    
-    if (response.success && response.content) {
-      const scenario = parseAIJsonResponse<{
-        name?: string;
-        description?: string;
-        subtitle?: string;
-        category?: string;
-        injects?: Array<{
-          title: string;
-          description: string;
-          type: string;
-          content?: string;
-          executor?: string;
-          subject?: string;
-          body?: string;
-          delayMinutes?: number;
-        }>;
-      }>(response.content);
-      
-      if (!scenario) {
-        log.error('[AI_GENERATE_FULL_SCENARIO] Failed to parse AI response. Raw (first 1000):', response.content.substring(0, 1000));
-        const contentPreview = response.content.substring(0, 200);
-        const hasJson = response.content.includes('{') && response.content.includes('}');
-        sendResponse({ 
-          success: false, 
-          error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
-        });
-      } else if (!scenario.injects || !Array.isArray(scenario.injects)) {
-        log.error('[AI_GENERATE_FULL_SCENARIO] Parsed scenario missing injects array:', scenario);
-        sendResponse({ 
-          success: false, 
-          error: 'AI generated scenario but injects array is missing. Please try again.' 
-        });
-      } else {
-        log.debug('[AI_GENERATE_FULL_SCENARIO] Parsed scenario with', scenario.injects.length, 'injects');
-        sendResponse(successResponse(scenario));
-      }
-    } else {
-      log.error('[AI_GENERATE_FULL_SCENARIO] AI generation failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'AI failed to generate scenario' });
-    }
-  } catch (error) {
-    log.error('[AI_GENERATE_FULL_SCENARIO] Exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
-    });
-  }
-}
-
-/**
- * AI_GENERATE_ATOMIC_TEST handler
- */
-export async function handleAIGenerateAtomicTest(
-  payload: AtomicTestRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    const request = { ...payload };
-    
-    // Log context size for debugging
-    const contextLength = request.context?.length || 0;
-    log.debug('[AI_GENERATE_ATOMIC_TEST] Context length:', contextLength);
-    
-    // Safeguard: Truncate very large contexts to prevent AI failures (use settings or default)
-    const maxContentLength = settings.ai?.maxContentLength ?? AI_DEFAULTS.maxContentLength;
-    if (request.context && request.context.length > maxContentLength) {
-      log.warn(`[AI_GENERATE_ATOMIC_TEST] Context too large (${request.context.length} chars), truncating to ${maxContentLength}`);
-      request.context = request.context.substring(0, maxContentLength) + '\n\n[Content truncated due to size]';
-    }
-    
-    const response = await aiClient.generateAtomicTest(request);
-    
-    log.debug('[AI_GENERATE_ATOMIC_TEST] AI response success:', response.success, 'content length:', response.content?.length || 0);
-    
-    if (response.success && response.content) {
-      const atomicTest = parseAIJsonResponse(response.content);
-      
-      // Safeguard: Check if parsing was successful
-      if (!atomicTest) {
-        log.error('[AI_GENERATE_ATOMIC_TEST] Failed to parse AI response as JSON. Raw content (first 1000 chars):', response.content.substring(0, 1000));
-        // Provide more context about what was received
-        const contentPreview = response.content.substring(0, 200);
-        const hasJson = response.content.includes('{') && response.content.includes('}');
-        sendResponse({ 
-          success: false, 
-          error: `AI response parsing failed. ${hasJson ? 'JSON found but malformed.' : 'No JSON structure detected.'} Preview: "${contentPreview}..."` 
-        });
-      } else {
-        log.debug('[AI_GENERATE_ATOMIC_TEST] Parsed atomic test:', atomicTest);
-        sendResponse({ success: true, data: atomicTest });
-      }
-    } else {
-      log.error('[AI_GENERATE_ATOMIC_TEST] AI generation failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'AI failed to generate content' });
-    }
-  } catch (error) {
-    log.error('[AI_GENERATE_ATOMIC_TEST] Exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI generation failed unexpectedly' 
-    });
-  }
-}
-
-/**
- * AI_GENERATE_EMAILS handler
- */
-export async function handleAIGenerateEmails(
-  payload: EmailGenerationRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    
-    log.debug(' AI_GENERATE_EMAILS request:', {
-      attackPatterns: payload.attackPatterns?.map(ap => ({ id: ap.id, name: ap.name, externalId: ap.externalId })),
-    });
-    
-    const response = await aiClient.generateEmails(payload);
-    
-    log.debug(' AI raw response success:', response.success);
-    log.debug(' AI raw response content (first 500 chars):', response.content?.substring(0, 500));
-    
-    if (response.success && response.content) {
-      const parsed = parseAIJsonResponse<{ emails: Array<{ attackPatternId: string; subject: string; body: string }> }>(response.content);
-      log.debug(' Parsed AI response:', parsed);
-      
-      if (!parsed || !parsed.emails || !Array.isArray(parsed.emails)) {
-        log.error(' AI response parsing failed or invalid structure. Content:', response.content.substring(0, 1000));
-        const contentPreview = response.content.substring(0, 200);
-        const hasEmails = response.content.includes('"emails"');
-        sendResponse({ 
-          success: false, 
-          error: `AI response parsing failed. ${hasEmails ? 'Found "emails" but array is invalid.' : 'Missing "emails" array.'} Preview: "${contentPreview}..."` 
-        });
-        return;
-      }
-      
-      // The parsed response should be { emails: [...] }
-      // We send the whole object so response.data.emails works in the panel
-      sendResponse(successResponse(parsed));
-    } else {
-      log.error(' AI email generation failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'Failed to parse emails' });
-    }
-  } catch (error) {
-    log.error(' AI email generation exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI generation failed' 
-    });
-  }
-}
-
-/**
- * AI_DISCOVER_ENTITIES handler
- */
-export async function handleAIDiscoverEntities(
-  payload: EntityDiscoveryRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    
-    log.debug('AI_DISCOVER_ENTITIES request:', {
-      pageTitle: payload.pageTitle,
-      alreadyDetectedCount: payload.alreadyDetected?.length || 0,
-      contentLength: payload.pageContent?.length || 0,
-    });
-    
-    const response = await aiClient.discoverEntities(payload);
-    
-    log.debug('AI discovery response success:', response.success);
-    
-    if (response.success && response.content) {
-      const parsed = parseAIJsonResponse<{ entities: Array<{
-        type: string;
-        name: string;
-        value: string;
-        reason: string;
-        confidence: 'high' | 'medium' | 'low';
-        excerpt?: string;
-      }> }>(response.content);
-      
-      log.debug('Parsed AI discovery response:', parsed);
-      
-      if (!parsed || !parsed.entities || !Array.isArray(parsed.entities)) {
-        log.warn('AI discovery returned invalid structure, returning empty');
-        sendResponse(successResponse({ entities: [] }));
-        return;
-      }
-      
-      // Filter out entities that were already detected
-      const alreadyDetectedList = payload.alreadyDetected || [];
-      const alreadyDetectedSet = buildAlreadyDetectedSet(alreadyDetectedList);
-      const newEntities = filterNewEntities(parsed.entities, alreadyDetectedSet);
-      
-      log.info(`AI discovered ${newEntities.length} new entities (${parsed.entities.length} raw, ${alreadyDetectedList.length} already detected)`);
-      
-      sendResponse(successResponse({ entities: newEntities }));
-    } else {
-      log.error('AI entity discovery failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'Failed to discover entities' });
-    }
-  } catch (error) {
-    log.error('AI entity discovery exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI discovery failed' 
-    });
-  }
-}
-
-/**
- * AI_RESOLVE_RELATIONSHIPS handler
- */
-export async function handleAIResolveRelationships(
-  payload: RelationshipResolutionRequest,
-  sendResponse: SendResponse
-): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    
-    log.debug('AI_RESOLVE_RELATIONSHIPS request:', {
-      pageTitle: payload.pageTitle,
-      entityCount: payload.entities?.length || 0,
-      contentLength: payload.pageContent?.length || 0,
-    });
-    
-    const response = await aiClient.resolveRelationships(payload);
-    
-    log.debug('AI relationship resolution response success:', response.success);
-    
-    if (response.success && response.content) {
-      const parsed = parseAIJsonResponse<{ relationships: Array<{
-        fromIndex: number;
-        toIndex: number;
-        relationshipType: string;
-        confidence: 'high' | 'medium' | 'low';
-        reason: string;
-        excerpt?: string;
-      }> }>(response.content);
-      
-      log.debug('Parsed AI relationship response:', parsed);
-      
-      if (!parsed || !parsed.relationships || !Array.isArray(parsed.relationships)) {
-        log.warn('AI relationship resolution returned invalid structure, returning empty');
-        sendResponse(successResponse({ relationships: [] }));
-        return;
-      }
-      
-      // Validate indices are within bounds and enrich with entity values
-      const entityCount = payload.entities.length;
-      const validRelationships = parsed.relationships
-        .filter(r => 
-          r.fromIndex >= 0 && r.fromIndex < entityCount &&
-          r.toIndex >= 0 && r.toIndex < entityCount &&
-          r.fromIndex !== r.toIndex &&
-          r.relationshipType && typeof r.relationshipType === 'string'
-        )
-        .map(r => {
-          const fromEntity = payload.entities[r.fromIndex];
-          const toEntity = payload.entities[r.toIndex];
-          return {
-            ...r,
-            fromEntityValue: fromEntity?.value || fromEntity?.name || '',
-            toEntityValue: toEntity?.value || toEntity?.name || '',
-          };
-        })
-        // Filter out relationships where we couldn't resolve entity values
-        .filter(r => r.fromEntityValue && r.toEntityValue);
-      
-      log.info(`AI resolved ${validRelationships.length} relationships (${parsed.relationships.length} raw)`);
-      
-      sendResponse(successResponse({ relationships: validRelationships }));
-    } else {
-      log.error('AI relationship resolution failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'Failed to resolve relationships' });
-    }
-  } catch (error) {
-    log.error('AI relationship resolution exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI relationship resolution failed' 
-    });
-  }
-}
-
-/**
- * AI_SCAN_ALL handler - discovers both entities and relationships in one call
+ * AI_SCAN_ALL — one shot entity discovery + relationship resolution.
+ *
+ * Delegated to a dedicated XTM One agent (`scan-all`). Indices in the agent
+ * response cover the combined list [already detected entities..., new entities...].
  */
 export async function handleAIScanAll(
   payload: EntityDiscoveryRequest,
-  sendResponse: SendResponse
+  sendResponse: SendResponse,
 ): Promise<void> {
-  const settings = await getSettings();
-  if (!isAIAvailable(settings.ai)) {
-    sendResponse(errorResponse('AI not configured'));
-    return;
-  }
-  
-  try {
-    const aiClient = new AIClient(settings.ai!);
-    
-    log.debug('AI_SCAN_ALL request:', {
-      pageTitle: payload.pageTitle,
-      alreadyDetectedCount: payload.alreadyDetected?.length || 0,
-      contentLength: payload.pageContent?.length || 0,
-    });
-    
-    // Build a combined prompt for both entity discovery and relationship resolution
-    const alreadyDetectedList = payload.alreadyDetected || [];
-    const entitiesContext = alreadyDetectedList.length > 0
-      ? `\n\nALREADY DETECTED ENTITIES (indices 0 to ${alreadyDetectedList.length - 1}):\n${alreadyDetectedList.map((e, idx) => `[${idx}] ${e.type}: ${e.value || e.name}`).join('\n')}`
-      : '\n\nNo entities detected yet - you need to discover ALL entities from scratch.';
-    
-    // Build example that matches the current indexing context
-    const exampleStartIdx = alreadyDetectedList.length;
-    const relationshipExample = alreadyDetectedList.length > 0
-      ? `{
-      "fromIndex": ${exampleStartIdx + 1},
-      "toIndex": ${exampleStartIdx},
-      "relationshipType": "targets",
-      "confidence": "high",
-      "reason": "The article states APT29 has been targeting financial sector"
-    }`
-      : `{
-      "fromIndex": 1,
-      "toIndex": 0,
-      "relationshipType": "targets",
-      "confidence": "high",
-      "reason": "The article states APT29 has been targeting financial sector"
-    }`;
+  log.debug('[AI_SCAN_ALL] Request:', {
+    pageTitle: payload.pageTitle,
+    alreadyDetectedCount: payload.alreadyDetected?.length || 0,
+    contentLength: payload.pageContent?.length || 0,
+  });
 
-    const indexingExplanation = alreadyDetectedList.length > 0
-      ? `IMPORTANT - INDEX NUMBERING:
-- Already detected entities use indices 0 to ${alreadyDetectedList.length - 1} (as shown above)
-- NEW entities you discover use indices starting at ${alreadyDetectedList.length}
-- In your response, your FIRST new entity = index ${alreadyDetectedList.length}, SECOND = index ${alreadyDetectedList.length + 1}, etc.
-- Relationships can reference BOTH already detected entities AND new entities using their respective indices`
-      : `For relationships, use the indices of the entities you discover (first entity = index 0, second = index 1, etc).`;
+  type RawEntity = DetectedEntity & Record<string, unknown>;
+  type RawRelationship = {
+    fromIndex: number;
+    toIndex: number;
+    relationshipType: string;
+    confidence?: 'high' | 'medium' | 'low';
+    reason?: string;
+  };
 
-    const combinedPrompt = `Analyze this content thoroughly for cyber threat intelligence.
-
-PAGE TITLE: ${payload.pageTitle}
-PAGE URL: ${payload.pageUrl}
-${entitiesContext}
-
-=== YOUR TASK ===
-
-1. DISCOVER all relevant entities from the content (excluding any already listed above)
-2. IDENTIFY relationships between ALL entities (both already detected and newly discovered)
-
-=== ENTITY TYPES TO EXTRACT ===
-
-THREAT ENTITIES:
-- Intrusion-Set: APT groups and tracked threat activity clusters (e.g., APT29, APT28, Lazarus Group, FIN7, Cozy Bear, Fancy Bear, Midnight Blizzard). Use this for any group tracked with an APT number or codename.
-- Threat-Actor-Group: ONLY for real-world organizations/groups that exist (e.g., Russian GRU, Chinese MSS, North Korean RGB, Anonymous). These are the actual entities behind intrusion sets.
-- Threat-Actor-Individual: ONLY for real-world individuals with known identities
-- Campaign: Named attack campaigns (e.g., SolarWinds, Operation Aurora)
-- Malware: Named malware families (e.g., Emotet, TrickBot, Cobalt Strike, SUNBURST)
-- Tool: Hacking/security tools (e.g., Mimikatz, Metasploit)
-- Attack-Pattern: MITRE ATT&CK techniques (e.g., T1055, T1566)
-- Vulnerability: CVE identifiers (e.g., CVE-2024-1234)
-- Narrative: Named disinformation/misinformation narratives
-- Channel: Communication channels used for malicious purposes (e.g., Telegram groups, Discord servers, forums)
-
-CONTEXT ENTITIES (IMPORTANT - don't skip these):
-- Sector: Industries mentioned (e.g., Financial Services, Healthcare, Energy, Government, Defense, Manufacturing)
-- Organization: Companies, agencies (e.g., Microsoft, CISA, specific victim organizations)
-- System: IT systems, platforms, security platforms when targeted or relevant
-- Country: Countries (e.g., Russia, China, United States, Iran, North Korea)
-- Region: Geographic regions (e.g., Eastern Europe, Middle East, Asia-Pacific)
-- City: Cities mentioned
-- Software: Software products (e.g., Microsoft Exchange, VMware ESXi)
-
-OBSERVABLES (if present):
-- Domain-Name, IPv4-Addr, IPv6-Addr, Url, Email-Addr, File (hashes), Hostname
-
-=== RELATIONSHIP TYPES ===
-Use STIX types: targets, uses, indicates, attributed-to, related-to, located-at, part-of, exploits, delivers, drops, communicates-with, originates-from
-
-${indexingExplanation}
-
-=== RULES ===
-1. Extract ALL named entities from the content - be thorough
-2. Do NOT include entities already listed above (check carefully by value)
-3. Do NOT include OpenAEV-only types: Team, AssetGroup, Asset, Player
-4. For each relationship, explain WHY based on the content
-5. Include relationships between already-detected entities too (using their indices 0 to ${alreadyDetectedList.length - 1})
-
-=== PAGE CONTENT ===
-${payload.pageContent.substring(0, aiClient.getMaxContentLength())}
-
-=== RESPONSE FORMAT ===
-Return JSON only:
-{
-  "entities": [
+  await executeAITask<
+    EntityDiscoveryRequest,
+    { entities: RawEntity[]; relationships: RawRelationship[] },
+    { entities: unknown[]; relationships: unknown[] }
+  >(
+    'AI_SCAN_ALL',
+    payload,
+    (client, req) => client.scanAll(req) as ReturnType<typeof client.scanAll> as Promise<import('../../shared/api/ai-client').XtmOneTaskResponse<{ entities: RawEntity[]; relationships: RawRelationship[] }>>,
+    sendResponse,
     {
-      "type": "Sector",
-      "value": "Financial Services",
-      "reason": "Article discusses attacks targeting financial institutions",
-      "confidence": "high"
+      truncateField: 'pageContent',
+      transform: (data) => {
+        const alreadyDetectedList = payload.alreadyDetected || [];
+        const entities = Array.isArray(data?.entities) ? data.entities : [];
+        const relationships = Array.isArray(data?.relationships) ? data.relationships : [];
+
+        // Combined list: [already detected..., new entities...]. Relationships from
+        // XTM One reference indices in this combined space.
+        const combinedEntities: Array<{ value: string; type: string }> = [
+          ...alreadyDetectedList.map((e) => ({ value: e.value || e.name || '', type: e.type || '' })),
+          ...entities.map((e) => ({ value: (e.value as string) || (e.name as string) || '', type: (e.type as string) || '' })),
+        ];
+
+        const alreadyDetectedSet = buildAlreadyDetectedSet(alreadyDetectedList);
+        const newEntities = filterNewEntities(entities, alreadyDetectedSet);
+
+        const totalCombinedCount = combinedEntities.length;
+        const validRelationships = relationships
+          .filter((r) =>
+            r.fromIndex >= 0 && r.fromIndex < totalCombinedCount &&
+            r.toIndex >= 0 && r.toIndex < totalCombinedCount &&
+            r.fromIndex !== r.toIndex &&
+            typeof r.relationshipType === 'string' && r.relationshipType.length > 0,
+          )
+          .map((r) => {
+            const fromEntity = combinedEntities[r.fromIndex];
+            const toEntity = combinedEntities[r.toIndex];
+            return {
+              ...r,
+              fromEntityValue: fromEntity?.value || '',
+              toEntityValue: toEntity?.value || '',
+            };
+          })
+          .filter((r) => r.fromEntityValue && r.toEntityValue);
+
+        log.info(`AI scan all: ${newEntities.length} new entities, ${validRelationships.length} relationships`);
+        return { entities: newEntities, relationships: validRelationships };
+      },
     },
-    {
-      "type": "Intrusion-Set",
-      "value": "APT29",
-      "reason": "Main threat activity cluster discussed in the article",
-      "confidence": "high"
-    }
-  ],
-  "relationships": [
-    ${relationshipExample}
-  ]
-}
-
-If the content has no CTI entities, return: {"entities": [], "relationships": []}`;
-
-    const response = await aiClient.generate({
-      systemPrompt: 'You are a cyber threat intelligence analyst. Extract entities and their relationships from the provided content. Return valid JSON only.',
-      prompt: combinedPrompt,
-      maxTokens: aiClient.getMaxTokens(), // Use configured max tokens
-      temperature: 0.3, // Lower temperature for more consistent JSON output
-    });
-    
-    log.debug('AI scan all response success:', response.success);
-    
-    if (response.success && response.content) {
-      const parsed = parseAIJsonResponse<{
-        entities: Array<{
-          type: string;
-          value: string;
-          reason?: string;
-          confidence?: 'high' | 'medium' | 'low';
-        }>;
-        relationships: Array<{
-          fromIndex: number;
-          toIndex: number;
-          relationshipType: string;
-          confidence: 'high' | 'medium' | 'low';
-          reason: string;
-        }>;
-      }>(response.content);
-      
-      log.debug('Parsed AI scan all response:', parsed);
-      
-      const entities = parsed?.entities || [];
-      const relationships = parsed?.relationships || [];
-      
-      // Build combined entity list for index lookup:
-      // Indices [0, alreadyDetectedList.length) = already detected entities
-      // Indices [alreadyDetectedList.length, ...] = new entities from AI (before filtering)
-      const combinedEntities: Array<{ value: string; type: string }> = [
-        ...alreadyDetectedList.map(e => ({ value: e.value || e.name || '', type: e.type })),
-        ...entities.map(e => ({ value: e.value || '', type: e.type })),
-      ];
-      
-      // Filter out entities that were already detected
-      const alreadyDetectedSet = buildAlreadyDetectedSet(alreadyDetectedList);
-      const newEntities = filterNewEntities(entities, alreadyDetectedSet);
-      
-      // Convert relationship indices to entity values using the combined list
-      // This ensures relationships are correct even if entities are filtered out
-      const totalCombinedCount = combinedEntities.length;
-      const validRelationships = relationships
-        .filter(r => 
-          r.fromIndex >= 0 && r.fromIndex < totalCombinedCount &&
-          r.toIndex >= 0 && r.toIndex < totalCombinedCount &&
-          r.fromIndex !== r.toIndex &&
-          r.relationshipType && typeof r.relationshipType === 'string'
-        )
-        .map(r => {
-          const fromEntity = combinedEntities[r.fromIndex];
-          const toEntity = combinedEntities[r.toIndex];
-          return {
-            ...r,
-            fromEntityValue: fromEntity?.value || '',
-            toEntityValue: toEntity?.value || '',
-          };
-        })
-        // Filter out relationships where we couldn't resolve entity values
-        .filter(r => r.fromEntityValue && r.toEntityValue);
-      
-      log.info(`AI scan all: ${newEntities.length} new entities, ${validRelationships.length} relationships`);
-      
-      sendResponse(successResponse({ 
-        entities: newEntities,
-        relationships: validRelationships,
-      }));
-    } else {
-      log.error('AI scan all failed:', response.error);
-      sendResponse({ success: false, error: response.error || 'Failed to scan' });
-    }
-  } catch (error) {
-    log.error('AI scan all exception:', error);
-    sendResponse({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'AI scan failed' 
-    });
-  }
+  );
 }
 
 // ============================================================================
 // Handler Registry Export (for message dispatcher pattern)
 // ============================================================================
 
-/**
- * AI handlers registry for the message dispatcher pattern.
- * Wraps the typed handlers to match the generic MessageHandler signature.
- */
 export const aiHandlers: Record<string, MessageHandler> = {
   AI_CHECK_STATUS: async (_payload, sendResponse) => {
     await handleAICheckStatus(sendResponse);
   },
-  AI_TEST_AND_FETCH_MODELS: async (payload, sendResponse) => {
-    await handleAITestAndFetchModels(payload as { provider: string; apiKey: string }, sendResponse);
+  AI_TEST_CONNECTION: async (payload, sendResponse) => {
+    await handleAITestConnection(payload as Pick<AISettings, 'xtmOneUrl' | 'apiToken'>, sendResponse);
   },
   AI_GENERATE_DESCRIPTION: async (payload, sendResponse) => {
     await handleAIGenerateDescription(payload as ContainerDescriptionRequest, sendResponse);

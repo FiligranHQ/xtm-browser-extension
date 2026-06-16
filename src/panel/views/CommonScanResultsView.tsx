@@ -320,7 +320,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Handle AI entity discovery
   const handleDiscoverEntitiesWithAI = async () => {
     if (!aiSettings.available) {
-      showToast({ type: 'warning', message: 'AI is not configured. Go to Settings → Agentic AI to enable.' });
+      showToast({ type: 'warning', message: 'AI is not configured. Configure XTM One in extension settings.' });
       return;
     }
 
@@ -469,7 +469,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Handle AI relationship discovery
   const handleDiscoverRelationshipsWithAI = async () => {
     if (!aiSettings.available) {
-      showToast({ type: 'warning', message: 'AI is not configured. Go to Settings → Agentic AI to enable.' });
+      showToast({ type: 'warning', message: 'AI is not configured. Configure XTM One in extension settings.' });
       return;
     }
 
@@ -574,7 +574,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
   // Handle AI scan all (entities + relationships at once)
   const handleScanAllWithAI = async () => {
     if (!aiSettings.available) {
-      showToast({ type: 'warning', message: 'AI is not configured. Go to Settings → Agentic AI to enable.' });
+      showToast({ type: 'warning', message: 'AI is not configured. Configure XTM One in extension settings.' });
       return;
     }
 

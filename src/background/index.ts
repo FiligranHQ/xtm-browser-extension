@@ -8,7 +8,7 @@ import { OpenCTIClient, resetOpenCTIClient } from '../shared/api/opencti-client'
 import { OpenAEVClient } from '../shared/api/openaev-client';
 import {
   handleAICheckStatus,
-  handleAITestAndFetchModels,
+  handleAITestConnection,
   handleAIGenerateDescription,
   handleAIGenerateScenario,
   handleAIGenerateFullScenario,
@@ -1444,8 +1444,8 @@ async function handleMessage(
         await handleAICheckStatus(sendResponse);
         break;
       
-      case 'AI_TEST_AND_FETCH_MODELS':
-        await handleAITestAndFetchModels(message.payload as { provider: string; apiKey: string; customBaseUrl?: string; model?: string }, sendResponse);
+      case 'AI_TEST_CONNECTION':
+        await handleAITestConnection(message.payload as { xtmOneUrl?: string; apiToken?: string }, sendResponse);
         break;
       
       case 'AI_GENERATE_DESCRIPTION':

@@ -34,6 +34,12 @@ const PLATFORM_CONFIG = {
     placeholder: 'https://your-openaev.domain.com',
     logoPrefix: 'openaev',
   },
+  'xtm-one': {
+    name: 'XTM One',
+    subtitle: 'Agentic AI Platform',
+    placeholder: 'https://xtm.company.com',
+    logoPrefix: 'xtm-one',
+  },
 } as const;
 
 export const PlatformSetupForm: React.FC<PlatformSetupFormProps> = ({

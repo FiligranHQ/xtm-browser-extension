@@ -530,9 +530,9 @@ export const OCTIContainerFormView: React.FC<ContainerFormViewProps> = ({
 
   let tooltipMessage = '';
   if (!aiSettings.available) {
-    tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+    tooltipMessage = 'AI is not configured. Configure XTM One in extension settings.';
   } else if (!targetPlatform?.isEnterprise) {
-    tooltipMessage = 'AI features require Enterprise Edition. The selected platform is Community Edition.';
+    tooltipMessage = 'AI features require Enterprise Edition.';
   } else {
     tooltipMessage = 'Use AI to generate a summary of the page content as description';
   }

@@ -153,6 +153,15 @@ export const ScenarioFormView: React.FC<ScenarioFormViewProps> = ({
   const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
   const isAIAvailable = aiSettings.available && targetPlatform?.isEnterprise;
 
+  let aiTooltip = '';
+  if (!aiSettings.available) {
+    aiTooltip = 'AI is not configured. Configure XTM One in extension settings.';
+  } else if (!targetPlatform?.isEnterprise) {
+    aiTooltip = 'AI features require Enterprise Edition.';
+  } else {
+    aiTooltip = 'Use AI to generate email content';
+  }
+
   const handleGenerateEmails = async () => {
     if (!isAIAvailable) return;
     
@@ -498,7 +507,7 @@ export const ScenarioFormView: React.FC<ScenarioFormViewProps> = ({
                     <MenuItem value="spanish">Español</MenuItem>
                   </Select>
                 </FormControl>
-                <Tooltip title={isAIAvailable ? 'Use AI to generate email content' : 'AI not available'}>
+                <Tooltip title={aiTooltip}>
                   <span>
                     <Button
                       variant="outlined"

@@ -15,6 +15,8 @@ export interface PlatformStatus {
   version?: string;
   userName?: string;
   isEnterprise?: boolean;
+  /** Whether a connection test has been attempted */
+  tested?: boolean;
   /** Platform type for identification */
   platformType?: PlatformType;
 }
@@ -26,6 +28,7 @@ export interface PlatformStatus {
 export interface ConnectionStatus {
   opencti: PlatformStatus[];
   openaev: PlatformStatus[];
+  xtmOne: PlatformStatus | null;
   // Add new platforms here as they are integrated:
   // opengrc: PlatformStatus[];
 }
@@ -33,13 +36,13 @@ export interface ConnectionStatus {
 /**
  * Setup wizard step
  */
-export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'complete';
+export type SetupStep = 'welcome' | 'opencti' | 'openaev' | 'xtm-one' | 'complete';
 
 /**
  * Props for platform setup form
  */
 export interface PlatformSetupFormProps {
-  platformType: 'opencti' | 'openaev';
+  platformType: 'opencti' | 'openaev' | 'xtm-one';
   logoSuffix: string;
   url: string;
   token: string;

@@ -38,4 +38,3 @@ playwright-results.json
 # Safari extension build artifacts
 safari-extension/build/
 safari-extension/*.xcodeproj/xcuserdata/
-

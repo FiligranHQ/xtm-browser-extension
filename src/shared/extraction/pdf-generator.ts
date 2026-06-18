@@ -1,13 +1,13 @@
 /**
  * Enhanced PDF Generator
  * 
- * Generates high-quality PDFs using:
- * 1. Chrome's native print-to-PDF (via Debugger API) - Best quality
- * 2. Reader-view rendering with jsPDF - Fallback with selectable text
+ * Generates high-quality PDFs using jsPDF with CJK font support
+ * for proper Unicode/CJK character rendering across all browsers.
  */
 
 import { jsPDF } from 'jspdf';
 import type { ExtractedContent, ExtractedImage } from './content-extractor';
+import { registerCJKFont, needsCJKFont, CJK_FONT_FAMILY } from './cjk-font';
 import { loggers } from '../utils/logger';
 
 const log = loggers.extraction;
@@ -15,7 +15,7 @@ const log = loggers.extraction;
 export interface PDFGenerationResult {
   data: string; // Base64 encoded PDF
   filename: string;
-  method: 'native' | 'jspdf' | 'canvas';
+  method: 'jspdf';
 }
 
 export interface PDFOptions {
@@ -47,8 +47,7 @@ const PAPER_SIZES = {
 };
 
 /**
- * Generate PDF from extracted content
- * Tries native print first, falls back to jsPDF
+ * Generate PDF from extracted content using jsPDF
  */
 export async function generatePDF(
   content: ExtractedContent,
@@ -56,34 +55,13 @@ export async function generatePDF(
 ): Promise<PDFGenerationResult | null> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   
-  // Try jsPDF generation (most reliable for extensions)
   const jspdfResult = await generateWithJsPDF(content, opts);
   if (jspdfResult) {
     return jspdfResult;
   }
   
-  log.error('[PDFGenerator] All PDF generation methods failed');
+  log.error('[PDFGenerator] PDF generation failed');
   return null;
-}
-
-/**
- * Request native PDF generation from background script
- * This uses Chrome's Debugger API for best quality
- */
-export async function requestNativePDF(tabId: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: 'GENERATE_NATIVE_PDF', tabId },
-      (response) => {
-        if (response?.success && response.data) {
-          resolve(response.data);
-        } else {
-          log.debug('[PDFGenerator] Native PDF generation failed:', response?.error);
-          resolve(null);
-        }
-      }
-    );
-  });
 }
 
 /**
@@ -101,6 +79,19 @@ async function generateWithJsPDF(
       unit: 'mm',
       format: [paperSize.width, paperSize.height],
     });
+
+    // Only load the CJK font if the content contains non-Latin characters
+    let fontFamily = 'helvetica';
+    if (needsCJKFont((content.title || '') + (content.textContent || '') + (content.content || ''))) {
+      const hasCJK = await registerCJKFont(pdf);
+      if (hasCJK) fontFamily = CJK_FONT_FAMILY;
+    }
+
+    // CJK font only has 'normal' style — ignore bold/italic requests for it
+    const isCJK = fontFamily === CJK_FONT_FAMILY;
+    const setFont = (style: string) => {
+      pdf.setFont(fontFamily, isCJK ? 'normal' : style);
+    };
     
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -123,7 +114,7 @@ async function generateWithJsPDF(
       if (options.headerText) {
         pdf.setFontSize(8);
         pdf.setTextColor(150, 150, 150);
-        pdf.setFont('helvetica', 'normal');
+        setFont('normal');
         pdf.text(options.headerText, margin, 10);
         pdf.setDrawColor(230, 230, 230);
         pdf.line(margin, 12, pageWidth - margin, 12);
@@ -135,7 +126,7 @@ async function generateWithJsPDF(
       const footerY = pageHeight - 8;
       pdf.setFontSize(8);
       pdf.setTextColor(150, 150, 150);
-      pdf.setFont('helvetica', 'normal');
+      setFont('normal');
       
       const pageNum = pdf.getNumberOfPages();
       pdf.text(`Page ${pageNum}`, pageWidth - margin - 15, footerY);
@@ -143,7 +134,10 @@ async function generateWithJsPDF(
       pdf.setDrawColor(230, 230, 230);
       pdf.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
       
-      const hostname = new URL(content.url).hostname;
+      const hostname = (() => {
+        try { return new URL(content.url).hostname; }
+        catch { return content.url; }
+      })();
       pdf.text(hostname, margin, footerY);
     };
     
@@ -235,7 +229,7 @@ async function generateWithJsPDF(
         if (img.caption || img.alt) {
           pdf.setFontSize(9);
           pdf.setTextColor(100, 100, 100);
-          pdf.setFont('helvetica', 'italic');
+          setFont('italic');
           const caption = img.caption || img.alt;
           const captionLines = pdf.splitTextToSize(caption, contentWidth);
           pdf.text(captionLines, margin, yPosition);
@@ -248,12 +242,19 @@ async function generateWithJsPDF(
       }
     };
     
-    // Helper: Get image dimensions from data URL
+    // NOTE: Requires DOM (Image constructor). Only call from content script context.
     const getImageDimensions = (dataUrl: string): Promise<{width: number; height: number} | null> => {
       return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 5000);
         const img = new Image();
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => resolve(null);
+        img.onload = () => {
+          clearTimeout(timeout);
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = () => {
+          clearTimeout(timeout);
+          resolve(null);
+        };
         img.src = dataUrl;
       });
     };
@@ -269,20 +270,20 @@ async function generateWithJsPDF(
     
     pdf.setFontSize(10);
     pdf.setTextColor(0, 27, 218);
-    pdf.setFont('helvetica', 'bold');
+    setFont('bold');
     pdf.text('Filigran XTM Browser Extension', margin, yPosition);
     yPosition += 5;
     
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
-    pdf.setFont('helvetica', 'normal');
+    setFont('normal');
     pdf.text(`Captured on ${new Date().toLocaleDateString()}`, margin, yPosition);
     yPosition += 8;
     
     // === Article title ===
     pdf.setFontSize(20);
     pdf.setTextColor(0, 0, 0);
-    pdf.setFont('helvetica', 'bold');
+    setFont('bold');
     const titleLines = pdf.splitTextToSize(content.title, contentWidth);
     checkPageBreak(titleLines.length * 8);
     pdf.text(titleLines, margin, yPosition);
@@ -292,7 +293,7 @@ async function generateWithJsPDF(
     if (content.byline) {
       pdf.setFontSize(10);
       pdf.setTextColor(80, 80, 80);
-      pdf.setFont('helvetica', 'italic');
+      setFont('italic');
       pdf.text(content.byline, margin, yPosition);
       yPosition += 5;
     }
@@ -300,7 +301,7 @@ async function generateWithJsPDF(
     // === Metadata ===
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
-    pdf.setFont('helvetica', 'normal');
+    setFont('normal');
     
     const metaParts = [content.siteName];
     if (content.publishedDate) metaParts.push(content.publishedDate);
@@ -325,6 +326,9 @@ async function generateWithJsPDF(
     // Parse the HTML content and render it
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content.content;
+    
+    // Remove potentially dangerous or irrelevant elements
+    tempDiv.querySelectorAll('script, style, iframe, noscript').forEach(el => el.remove());
     
     // Track all added image sources to avoid duplicates
     const addedImageSrcs = new Set<string>();
@@ -353,7 +357,7 @@ async function generateWithJsPDF(
           
           pdf.setFontSize(fontSize);
           pdf.setTextColor(0, 0, 0);
-          pdf.setFont('helvetica', 'bold');
+          setFont('bold');
           const lines = pdf.splitTextToSize(text, contentWidth);
           pdf.text(lines, margin, yPosition);
           yPosition += lines.length * (fontSize * 0.4) + 3;
@@ -368,7 +372,7 @@ async function generateWithJsPDF(
           
           pdf.setFontSize(11);
           pdf.setTextColor(30, 30, 30);
-          pdf.setFont('helvetica', 'normal');
+          setFont('normal');
           const lines = pdf.splitTextToSize(text, contentWidth);
           pdf.text(lines, margin, yPosition);
           yPosition += lines.length * 5 + 4;
@@ -388,7 +392,7 @@ async function generateWithJsPDF(
           
           pdf.setFontSize(11);
           pdf.setTextColor(60, 60, 60);
-          pdf.setFont('helvetica', 'italic');
+          setFont('italic');
           const lines = pdf.splitTextToSize(text, contentWidth - 10);
           pdf.text(lines, margin + 8, yPosition);
           yPosition += lines.length * 5 + 2;
@@ -410,7 +414,7 @@ async function generateWithJsPDF(
             checkPageBreak(10);
             
             const bullet = tagName === 'ol' ? `${itemNum}.` : '•';
-            pdf.setFont('helvetica', 'normal');
+            setFont('normal');
             pdf.setFontSize(11);
             pdf.setTextColor(30, 30, 30);
             pdf.text(bullet, margin, yPosition);
@@ -432,7 +436,7 @@ async function generateWithJsPDF(
           
           checkPageBreak(15);
           
-          pdf.setFont('courier', 'normal');
+          pdf.setFont(isCJK ? fontFamily : 'courier', 'normal');
           pdf.setFontSize(9);
           pdf.setTextColor(50, 50, 50);
           
@@ -445,7 +449,7 @@ async function generateWithJsPDF(
           pdf.text(lines, margin + 4, yPosition);
           yPosition += codeHeight + 3;
           
-          pdf.setFont('helvetica', 'normal');
+          setFont('normal');
           break;
         }
         
@@ -522,11 +526,11 @@ async function generateWithJsPDF(
               const text = cell.textContent?.trim() || '';
               
               if (isHeader || cell.tagName === 'TH') {
-                pdf.setFont('helvetica', 'bold');
+                setFont('bold');
                 pdf.setFillColor(245, 245, 245);
                 pdf.rect(x, yPosition - 4, cellWidth, 8, 'F');
               } else {
-                pdf.setFont('helvetica', 'normal');
+                setFont('normal');
               }
               
               pdf.setTextColor(30, 30, 30);
@@ -559,7 +563,7 @@ async function generateWithJsPDF(
             if (text && text.length > 20) {
               pdf.setFontSize(11);
               pdf.setTextColor(30, 30, 30);
-              pdf.setFont('helvetica', 'normal');
+              setFont('normal');
               const lines = pdf.splitTextToSize(text, contentWidth);
               checkPageBreak(lines.length * 5);
               pdf.text(lines, margin, yPosition);
@@ -569,44 +573,6 @@ async function generateWithJsPDF(
         }
       }
     };
-    
-    // First pass: collect image positions from the HTML to understand their context
-    // This helps us render images at their proper location in the document
-    const imagePositions = new Map<string, number>();
-    let elementIndex = 0;
-    
-    function collectImagePositions(element: Element): void {
-      const tagName = element.tagName.toLowerCase();
-      elementIndex++;
-      
-      if (tagName === 'img') {
-        const imgEl = element as HTMLImageElement;
-        const src = imgEl.src || imgEl.getAttribute('data-src') || '';
-        if (src && !src.includes('data:image/svg')) {
-          imagePositions.set(src, elementIndex);
-        }
-      } else if (tagName === 'figure') {
-        const imgEl = element.querySelector('img') as HTMLImageElement;
-        if (imgEl) {
-          const src = imgEl.src || imgEl.getAttribute('data-src') || '';
-          if (src && !src.includes('data:image/svg')) {
-            imagePositions.set(src, elementIndex);
-          }
-        }
-      }
-      
-      // Recurse into children
-      for (const child of element.children) {
-        collectImagePositions(child);
-      }
-    }
-    
-    // Collect positions
-    for (const child of tempDiv.children) {
-      collectImagePositions(child);
-    }
-    
-    log.debug('[PDFGenerator] Found images with positions:', imagePositions.size);
     
     // Process all top-level elements - images are rendered INLINE where they appear
     if (useTextFallback) {
@@ -629,7 +595,7 @@ async function generateWithJsPDF(
           checkPageBreak(20);
           pdf.setFontSize(14);
           pdf.setTextColor(0, 0, 0);
-          pdf.setFont('helvetica', 'bold');
+          setFont('bold');
           const lines = pdf.splitTextToSize(headingText, contentWidth);
           pdf.text(lines, margin, yPosition);
           yPosition += lines.length * 6 + 3;
@@ -637,7 +603,7 @@ async function generateWithJsPDF(
           checkPageBreak(15);
           pdf.setFontSize(11);
           pdf.setTextColor(30, 30, 30);
-          pdf.setFont('helvetica', 'normal');
+          setFont('normal');
           const lines = pdf.splitTextToSize(text, contentWidth);
           pdf.text(lines, margin, yPosition);
           yPosition += lines.length * 5 + 4;
@@ -662,23 +628,11 @@ async function generateWithJsPDF(
           checkPageBreak(15);
           pdf.setFontSize(11);
           pdf.setTextColor(30, 30, 30);
-          pdf.setFont('helvetica', 'normal');
+          setFont('normal');
           const lines = pdf.splitTextToSize(text, contentWidth);
           pdf.text(lines, margin, yPosition);
           yPosition += lines.length * 5 + 4;
         }
-      }
-    }
-    
-    // Only add hero/featured images from extraction if they weren't in HTML
-    // These are images that were found separately (e.g., og:image, hero banners)
-    // and should be added at the beginning if not already present
-    if (options.includeImages && content.images.length > 0) {
-      // Only the first image from extraction might be a hero - add it only if not already rendered
-      const heroImage = content.images[0];
-      if (heroImage && !addedImageSrcs.has(heroImage.src) && !imagePositions.has(heroImage.src)) {
-        log.debug('[PDFGenerator] Hero image not in HTML content, was likely added at the top already');
-        // Hero images are typically added to the HTML by content-extractor, so skip
       }
     }
     
@@ -881,8 +835,10 @@ function processImageToCanvas(
  */
 async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(dataUrl), 5000);
     const img = new Image();
     img.onload = () => {
+      clearTimeout(timeout);
       try {
         const result = processImageToCanvas(img, { maxWidth: 800, maxHeight: 1000 });
         resolve(result ?? dataUrl); // Return original if processing fails
@@ -891,7 +847,10 @@ async function resizeImageDataUrl(dataUrl: string): Promise<string | null> {
         resolve(dataUrl);
       }
     };
-    img.onerror = () => resolve(null);
+    img.onerror = () => {
+      clearTimeout(timeout);
+      resolve(null);
+    };
     img.src = dataUrl;
   });
 }
@@ -936,7 +895,7 @@ function loadImageViaCanvas(src: string, useCors: boolean): Promise<string | nul
 /**
  * Sanitize filename for PDF
  */
-function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string): string {
   return name
     .replace(/[<>:"/\\|?*]/g, '') // Remove invalid characters
     .replace(/\s+/g, '_') // Replace spaces with underscores

@@ -3,13 +3,13 @@
 [![CI](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/FiligranHQ/xtm-browser-extension/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/FiligranHQ/xtm-browser-extension/graph/badge.svg)](https://codecov.io/gh/FiligranHQ/xtm-browser-extension)
 
-The **Filigran XTM Browser Extension** transforms your web browser into a powerful threat intelligence workstation. Seamlessly integrated with [OpenCTI](https://filigran.io/solutions/open-cti/) (Cyber Threat Intelligence) and [OpenAEV](https://filigran.io/solutions/openaev/) (Adversarial Exposure Validation) platforms, this extension enables security analysts to detect, enrich, and operationalize threat data directly from any web page.
+The **Filigran XTM Browser Extension** transforms your web browser into a powerful threat intelligence workstation. Seamlessly integrated with [OpenCTI](https://filigran.io/solutions/open-cti/) (Cyber Threat Intelligence), [OpenAEV](https://filigran.io/solutions/openaev/) (Adversarial Exposure Validation), and [XTM One](https://filigran.io/solutions/xtm-one/) (Agentic AI Platform) platforms, this extension enables security analysts to detect, enrich, and operationalize threat data directly from any web page.
 
 **Turn any threat report into actionable intelligence in seconds.** Automatically scan pages for indicators of compromise (IOCs), threat actors, malware families, MITRE ATT&CK techniques, vulnerabilities, and more. With a single click, create structured reports, launch investigations, or generate attack scenarios—all without leaving your browser.
 
 ### Why Use This Extension?
 
-- 🔗 **Seamless Platform Integration** — Connect to multiple OpenCTI and OpenAEV instances simultaneously
+- 🔗 **Seamless Platform Integration** — Connect to multiple OpenCTI, OpenAEV, and XTM One instances simultaneously
 - ⚡ **Real-Time Detection** — Instantly identify threats, observables, and entities as you browse
 - 🧠 **AI-Powered Analysis** — Generate intelligent descriptions, attack scenarios, and atomic tests (Enterprise Edition)
 - 📄 **One-Click Capture** — Create professional PDF snapshots and structured reports from any article
@@ -20,7 +20,7 @@ The **Filigran XTM Browser Extension** transforms your web browser into a powerf
 ## Quick Start
 
 1. **Install**: Load the extension in your browser (see [Installation](./docs/installation.md))
-2. **Configure**: Add your OpenCTI and/or OpenAEV platform credentials
+2. **Configure**: Add your OpenCTI and/or OpenAEV platform credentials; optionally connect XTM One for AI features
 3. **Scan**: Click "Scan Page" to detect threats and observables
 
 ## Features
@@ -76,8 +76,10 @@ Generate AI-powered table-top exercises across diverse domains:
 - 📋 **Container Attachments** - Optionally attach PDF snapshots to OpenCTI containers
 - 🎨 **Professional Formatting** - Headers, footers, page numbers, and Filigran branding
 
-### AI Features (Enterprise Edition)
-- 🧠 **Multiple LLM Support** - OpenAI, Anthropic (Claude), and Google Gemini
+### XTM One Integration (Enterprise Edition)
+
+[XTM One](https://filigran.io/solutions/xtm-one/) is Filigran's agentic AI platform and the sole AI backend for the extension. All AI features are delegated to dedicated XTM One agents — no BYOK LLM keys required.
+
 - 📝 **Container Description AI** - Generate intelligent descriptions for OpenCTI containers
 - 🎬 **Full Scenario Generation** - Generate complete attack scenarios with AI-created injects, payloads, or email content based on page context
 - 🎭 **Theme-Aware Generation** - AI adapts to selected scenario theme with domain-specific knowledge
@@ -88,8 +90,6 @@ Generate AI-powered table-top exercises across diverse domains:
   - "Relations (AI)" for relationship discovery between entities
   - "Scan All (AI)" for combined entity and relationship discovery
 - 🔗 **Relationship Resolution** - AI identifies relationships using valid STIX 2.1 and OpenCTI relationship types only
-- 📊 **Model Selection** - Browse and select from available models for each provider
-- 🔮 **Coming Soon**: XTM One (Filigran Agentic AI Platform) integration
 
 ### General
 - 🎨 **Theme Integration** - Follows your preferred theme (auto/dark/light)
@@ -205,17 +205,18 @@ Full documentation is available in the [docs](./docs) folder:
 - API token with appropriate permissions
 - Enterprise Edition required for AI features
 
-### AI Configuration (Enterprise Edition Only)
+### AI Configuration (XTM One — Enterprise Edition Only)
 
-AI features require at least one connected Enterprise Edition platform. Configure your preferred LLM provider in Settings > AI Assistant:
+AI features require at least one connected Enterprise Edition platform (OpenCTI or OpenAEV) **and** a configured [XTM One](https://filigran.io/solutions/xtm-one/) instance. XTM One is Filigran's agentic AI platform and the sole AI backend — no BYOK LLM keys required.
 
-| Provider | Models | API Key Required |
-|----------|--------|------------------|
-| OpenAI | GPT-4o, GPT-4 Turbo, GPT-4 | Yes |
-| Anthropic | Claude 3.5 Sonnet, Claude 3 Opus | Yes |
-| Google | Gemini 1.5 Pro, Gemini 1.5 Flash | Yes |
+Configure your XTM One connection in **Settings > AI**:
 
-After entering your API key, click **Test Connection** to validate and fetch available models. Select your preferred model from the dropdown.
+| Field | Description |
+|-------|-------------|
+| **XTM One URL** | Base URL of your XTM One instance (e.g. `https://xtmone.example.com`) |
+| **API Token** | Personal API token generated from your XTM One profile |
+
+After entering your credentials, click **Test Connection** to validate the connection.
 
 > **Note**: If you don't have an Enterprise Edition license, clicking AI buttons will show a dialog to start a free 30-day trial at [filigran.io/enterprise-editions-trial](https://filigran.io/enterprise-editions-trial/)
 
@@ -434,6 +435,7 @@ Apache License 2.0 - See [LICENSE](LICENSE) for details.
 - [Filigran Website](https://filigran.io)
 - [OpenCTI Documentation](https://docs.opencti.io)
 - [OpenAEV Documentation](https://docs.filigran.io/openaev)
+- [XTM One Documentation](https://docs.filigran.io/xtm-one)
 - [Community](https://community.filigran.io)
 - [GitHub Issues](https://github.com/FiligranHQ/xtm-browser-extension/issues)
 

@@ -91,7 +91,7 @@ const App: React.FC = () => {
     handleSetupTestAndSave,
     handleSetupSkip,
     startSetupWizard,
-  } = useSetupWizard({ setStatus, hasAnyPlatformConnected: hasOpenCTI || hasOpenAEV });
+  } = useSetupWizard({ setStatus, hasEnterpriseConfigured: hasEnterprise });
 
   // Actions
   const {

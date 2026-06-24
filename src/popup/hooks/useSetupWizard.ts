@@ -26,7 +26,7 @@ interface PersistedSetupState {
 
 interface UseSetupWizardProps {
   setStatus: React.Dispatch<React.SetStateAction<ConnectionStatus>>;
-  hasAnyPlatformConnected: boolean;
+  hasEnterpriseConfigured: boolean;
 }
 
 interface UseSetupWizardReturn {
@@ -53,7 +53,7 @@ interface UseSetupWizardReturn {
   startSetupWizard: () => void;
 }
 
-export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupWizardProps): UseSetupWizardReturn => {
+export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupWizardProps): UseSetupWizardReturn => {
   // Setup wizard state
   const [setupStep, setSetupStepInternal] = useState<SetupStep>('welcome');
   const [isInSetupWizard, setIsInSetupWizardInternal] = useState(false);
@@ -154,10 +154,10 @@ export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupW
     if (currentStep === 'opencti') {
       setSetupStepInternal('openaev');
     } else if (currentStep === 'openaev') {
-      if (hasAnyPlatformConnected) {
+      if (hasEnterpriseConfigured) {
         setSetupStepInternal('xtm-one');
       } else {
-        // No platform connected — skip XTM One, end wizard
+        // No EE platform configured — skip XTM One, end wizard
         setIsInSetupWizardInternal(false);
         setSetupStepInternal('welcome');
         clearPersistedState();
@@ -168,7 +168,7 @@ export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupW
       setSetupStepInternal('welcome');
       clearPersistedState();
     }
-  }, [resetSetupForm, clearPersistedState, hasAnyPlatformConnected]);
+  }, [resetSetupForm, clearPersistedState, hasEnterpriseConfigured]);
 
   const handleSetupTestAndSave = useCallback(async (platformType: 'opencti' | 'openaev' | 'xtm-one') => {
     if (!setupUrl.trim() || !setupToken.trim()) return;
@@ -352,8 +352,14 @@ export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupW
         if (platformType === 'opencti') {
           setSetupStepInternal('openaev');
         } else {
-          // After OAEV: show XTM One step (at least this platform just connected)
-          setSetupStepInternal('xtm-one');
+          // After OAEV: show XTM One only if this platform or an existing one is EE
+          if (isEnterprise || hasEnterpriseConfigured) {
+            setSetupStepInternal('xtm-one');
+          } else {
+            setIsInSetupWizardInternal(false);
+            setSetupStepInternal('welcome');
+            clearPersistedState();
+          }
         }
       }, 1000);
       
@@ -361,7 +367,7 @@ export const useSetupWizard = ({ setStatus, hasAnyPlatformConnected }: UseSetupW
       setSetupError(error instanceof Error ? error.message : 'Connection failed');
       setSetupTesting(false);
     }
-  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm, clearPersistedState]);
+  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm, clearPersistedState, hasEnterpriseConfigured]);
 
   return {
     // State

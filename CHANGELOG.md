@@ -5,6 +5,12 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.23] - 2026-06-25
+
+### Fixed
+- **OpenAEV CSRF 403**: Omit cookies from OpenAEV API requests to avoid CSRF 403 errors (#170)
+- **DIA Browser Popup Compatibility**: Fixed browser popup compatibility issue with DIA (#132)
+
 ## [0.0.22] - 2026-03-13
 
 ### Fixed

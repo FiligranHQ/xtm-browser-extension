@@ -32,7 +32,8 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
   const [mode, setMode] = useState<'dark' | 'light'>('dark');
   const [status, setStatus] = useState<ConnectionStatus>({ 
     opencti: [], 
-    openaev: [] 
+    openaev: [],
+    xtmOne: null,
   });
   const [aiConfigured, setAiConfigured] = useState(false);
   const [splitScreenMode, setSplitScreenMode] = useState(false);
@@ -116,9 +117,9 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
         const openctiPlatforms = settings.openctiPlatforms || [];
         const openaevPlatforms = settings.openaevPlatforms || [];
         
-        // Check AI configuration
+        // Check AI configuration (XTM One endpoint + token)
         const ai = settings.ai;
-        setAiConfigured(!!(ai?.provider && ai?.apiKey));
+        setAiConfigured(!!(ai?.xtmOneUrl && ai?.apiToken));
         
         // Check split screen mode
         setSplitScreenMode(!!settings.splitScreenMode);
@@ -143,8 +144,16 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
           isEnterprise: p.isEnterprise,
         }));
 
+        // Build XTM One initial status
+        const xtmOneStatus: PlatformStatus | null = (ai?.xtmOneUrl && ai?.apiToken) ? {
+          id: 'xtm-one',
+          name: 'XTM One',
+          url: ai.xtmOneUrl,
+          connected: false,
+        } : null;
+
         // Set initial status first (all disconnected) - UI shows immediately
-        setStatus({ opencti: openctiList, openaev: openaevList });
+        setStatus({ opencti: openctiList, openaev: openaevList, xtmOne: xtmOneStatus });
 
         // Test platforms PROGRESSIVELY - update UI as each responds
         log.debug('Testing', openctiPlatforms.length, 'OpenCTI and', openaevPlatforms.length, 'OpenAEV platforms');
@@ -154,6 +163,11 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
         
         // Test OpenAEV platforms
         testPlatforms(openaevPlatforms, 'openaev');
+
+        // Test XTM One
+        if (ai?.xtmOneUrl && ai?.apiToken) {
+          testXtmOne(ai.xtmOneUrl, ai.apiToken);
+        }
       }
     });
     
@@ -222,9 +236,50 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
       });
   }, []);
 
+  const testXtmOne = useCallback((xtmOneUrl: string, apiToken: string) => {
+    log.debug('Testing XTM One connection');
+    chrome.runtime.sendMessage(
+      { type: 'AI_TEST_CONNECTION', payload: { xtmOneUrl, apiToken } },
+      (testResponse) => {
+        if (chrome.runtime.lastError) {
+          log.error('XTM One connection test error:', chrome.runtime.lastError);
+          setStatus(prev => ({
+            ...prev,
+            xtmOne: prev.xtmOne ? { ...prev.xtmOne, tested: true, connected: false } : null,
+          }));
+          return;
+        }
+        if (testResponse?.success) {
+          log.debug('XTM One connection test SUCCESS');
+          setStatus(prev => ({
+            ...prev,
+            xtmOne: prev.xtmOne ? {
+              ...prev.xtmOne,
+              tested: true,
+              connected: true,
+              version: testResponse.data?.version,
+              userName: testResponse.data?.user_email,
+              isEnterprise: testResponse.data?.enterprise_edition,
+            } : null,
+          }));
+        } else {
+          log.error('XTM One connection test failed:', testResponse?.error);
+          setStatus(prev => ({
+            ...prev,
+            xtmOne: prev.xtmOne ? { ...prev.xtmOne, tested: true, connected: false } : null,
+          }));
+        }
+      }
+    );
+  }, []);
+
   const syncStatusFromSettings = useCallback((newSettings: any) => {
     const openctiPlatforms = newSettings.openctiPlatforms || [];
     const openaevPlatforms = newSettings.openaevPlatforms || [];
+    const ai = newSettings.ai;
+    
+    // Update aiConfigured from new settings
+    setAiConfigured(!!(ai?.xtmOneUrl?.trim() && ai?.apiToken?.trim()));
     
     setStatus(prev => {
       const newOpencti = openctiPlatforms.map((p: any) => {
@@ -260,10 +315,31 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
           isEnterprise: p.isEnterprise ?? anyConnected?.isEnterprise,
         };
       });
+
+      // Update XTM One status: if configured, preserve existing; if removed, clear
+      const xtmOneConfigured = !!(ai?.xtmOneUrl?.trim() && ai?.apiToken?.trim());
+      const xtmOneUrlChanged = prev.xtmOne?.url !== ai?.xtmOneUrl;
+      const newXtmOne: PlatformStatus | null = xtmOneConfigured ? {
+        id: 'xtm-one',
+        name: 'XTM One',
+        url: ai.xtmOneUrl,
+        connected: xtmOneUrlChanged ? false : (prev.xtmOne?.connected || false),
+      } : null;
       
-      return { opencti: newOpencti, openaev: newOpenaev };
+      return { opencti: newOpencti, openaev: newOpenaev, xtmOne: newXtmOne };
     });
-  }, []);
+
+    // Only re-test XTM One when its URL or token changed
+    if (ai?.xtmOneUrl?.trim() && ai?.apiToken?.trim()) {
+      setStatus(prev => {
+        const prevUrl = prev.xtmOne?.url;
+        if (prevUrl !== ai.xtmOneUrl) {
+          testXtmOne(ai.xtmOneUrl, ai.apiToken);
+        }
+        return prev;
+      });
+    }
+  }, [testXtmOne]);
 
   // Computed values
   const hasOpenCTI = status.opencti.some(p => p.connected);

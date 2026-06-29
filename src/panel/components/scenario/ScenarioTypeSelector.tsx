@@ -62,6 +62,8 @@ interface ScenarioTypeSelectorProps {
   scenarioInjectSpacing: number;
   setScenarioInjectSpacing: (spacing: number) => void;
   isAIAvailable: boolean;
+  /** Human-readable reason shown when AI is disabled (empty when available). */
+  aiDisabledReason: string;
   scenarioAIMode: boolean;
   scenarioAIGenerating: boolean;
   onAIGenerate: () => void;
@@ -75,6 +77,7 @@ export const ScenarioTypeSelector: React.FC<ScenarioTypeSelectorProps> = ({
   setScenarioPlatformsAffinity,
   setScenarioInjectSpacing,
   isAIAvailable,
+  aiDisabledReason,
   scenarioAIMode,
   scenarioAIGenerating,
   onAIGenerate,
@@ -189,7 +192,7 @@ export const ScenarioTypeSelector: React.FC<ScenarioTypeSelectorProps> = ({
               Generate Scenario with AI
             </Typography>
             <Typography variant="caption" sx={{ color: isAIAvailable ? 'text.secondary' : 'text.disabled' }}>
-              {isAIAvailable ? 'AI will generate a complete scenario' : 'AI not available'}
+              {isAIAvailable ? 'AI will generate a complete scenario' : aiDisabledReason}
             </Typography>
           </Box>
           <Button

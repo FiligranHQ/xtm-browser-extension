@@ -58,6 +58,8 @@ export interface PlatformDefinition {
   usesGraphQL: boolean;
   /** Platform-specific features */
   features: PlatformFeatures;
+  /** Path to the API token / profile page (appended to platform URL) */
+  tokenPagePath: string;
 }
 
 /**
@@ -162,6 +164,7 @@ const OPENCTI_DEFINITION: PlatformDefinition = {
     fullTextSearch: true,
     entityCache: true,
   },
+  tokenPagePath: '/dashboard/profile/me',
 };
 
 const OPENAEV_DEFINITION: PlatformDefinition = {
@@ -207,6 +210,7 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
     fullTextSearch: true,
     entityCache: true,
   },
+  tokenPagePath: '/admin/profile',
 };
 
 const OPENGRC_DEFINITION: PlatformDefinition = {
@@ -240,10 +244,9 @@ const OPENGRC_DEFINITION: PlatformDefinition = {
     fullTextSearch: true,
     entityCache: true,
   },
+  tokenPagePath: '/admin/profile',
 };
 
-// ============================================================================
-// Platform Registry
 // ============================================================================
 
 /**
@@ -651,6 +654,23 @@ export function getDefaultPlatformName(platformType: PlatformType): string {
 export function getPlatformUrlPlaceholder(platformType: PlatformType): string {
   const name = PLATFORM_REGISTRY[platformType].name.toLowerCase();
   return `https://${name}.example.com`;
+}
+
+/**
+ * Derive the token/profile page URL from a platform base URL.
+ * Returns null if the URL is empty or invalid.
+ */
+export function getTokenPageUrl(platformType: PlatformType, baseUrl: string | undefined): string | null {
+  if (!baseUrl) return null;
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return `${trimmed}${PLATFORM_REGISTRY[platformType].tokenPagePath}`;
+  } catch {
+    return null;
+  }
 }
 
 /**

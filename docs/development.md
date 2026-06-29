@@ -70,13 +70,11 @@ src/
 │   └── main.tsx         # Options entry point
 ├── shared/              # Shared code
 │   ├── api/             # API clients (modular architecture)
-│   │   ├── ai-client.ts         # AI/LLM provider client
+│   │   ├── ai-client.ts         # XTM One agent invocation client
 │   │   ├── opencti-client.ts    # OpenCTI GraphQL client
 │   │   ├── openaev-client.ts    # OpenAEV REST client
 │   │   ├── ai/                  # AI modules
-│   │   │   ├── prompts.ts       # Prompt templates & builders
-│   │   │   ├── types.ts         # AI types
-│   │   │   └── json-parser.ts   # Response parsing
+│   │   │   └── types.ts         # AI types
 │   │   ├── opencti/             # OpenCTI modules
 │   │   │   ├── queries.ts       # GraphQL queries & filters
 │   │   │   ├── fragments.ts     # GraphQL fragments
@@ -103,7 +101,7 @@ src/
 │   ├── theme/           # Theme configuration
 │   ├── types/           # TypeScript type definitions
 │   │   ├── settings.ts      # Platform config, detection settings
-│   │   ├── ai.ts            # AI provider types, model selection
+│   │   ├── ai.ts            # AI settings types (XTM One URL, token)
 │   │   ├── observables.ts   # Observable types (IoCs) and detection
 │   │   ├── platform.ts      # Cross-platform matching types
 │   │   ├── opencti.ts       # OpenCTI types (GraphQL, STIX, entities)
@@ -238,13 +236,11 @@ API clients are organized into modular structures for maintainability:
 
 ```
 src/shared/api/
-├── ai-client.ts          # Main AI client (imports from ai/)
+├── ai-client.ts          # XTM One execute-task client
 ├── opencti-client.ts     # Main OpenCTI client (imports from opencti/)
 ├── openaev-client.ts     # Main OpenAEV client (imports from openaev/)
 ├── ai/
-│   ├── prompts.ts        # All prompt templates (~560 lines)
-│   ├── types.ts          # AI type definitions
-│   └── json-parser.ts    # Response parsing utilities
+│   └── types.ts          # AI type definitions
 ├── opencti/
 │   ├── queries.ts        # GraphQL queries/mutations & filter builders (~350 lines)
 │   ├── fragments.ts      # Reusable GraphQL fragments
@@ -398,21 +394,27 @@ chrome.runtime.sendMessage({
 
 ### Using AI Features
 
+All AI features are routed through XTM One. The extension is a thin client:
+
 ```typescript
 import { AIClient } from './shared/api/ai-client';
 
 const client = new AIClient({
-  provider: 'openai',
-  apiKey: 'sk-...',
-  model: 'gpt-4o',
+  xtmOneUrl: 'https://xtm.company.com',
+  apiToken: 'fcp-...',
 });
 
-// Generate description
-const description = await client.generateDescription(pageContent);
+// Generate description (delegates to XTM One browser-container-description agent)
+const result = await client.generateContainerDescription({
+  pageTitle: 'Threat Report',
+  pageUrl: 'https://example.com/report',
+  pageContent: '...',
+  containerType: 'Report',
+  containerName: 'My Report',
+});
 
-// Fetch available models
-const models = await client.fetchModels();
-// Returns: [{ id: 'gpt-4o', name: 'GPT-4o' }, ...]
+// Test connection
+const status = await client.testConnection();
 ```
 
 ## Message Passing
@@ -457,7 +459,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 | `AI_GENERATE_EMAILS` | Panel → Background | Generate email content for table-top scenarios |
 | `AI_GENERATE_ATOMIC_TEST` | Panel → Background | Generate atomic test payload |
 | `AI_DISCOVER_ENTITIES` | Panel → Background | Discover entities using AI |
-| `AI_TEST_AND_FETCH_MODELS` | Options → Background | Test AI key & fetch models |
+| `AI_TEST_CONNECTION` | Options → Background | Test XTM One connection |
 
 ## Contributing
 

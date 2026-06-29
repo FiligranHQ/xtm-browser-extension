@@ -118,54 +118,31 @@ AI features require at least one connected Enterprise Edition (EE) platform. The
 
 1. Connect to at least one Enterprise Edition platform (OpenCTI EE or OpenAEV EE)
 2. Go to **Settings → AI Assistant**
-3. Select your LLM provider
-4. Enter your API key
-5. Click **Save Settings**
+3. Enter your **XTM One URL** (e.g. `https://xtm.company.com`)
+4. Enter your **XTM One API Token** (starts with `fcp-`)
+5. Click **Test Connection** to validate
+6. Click **Save Settings**
 
-### Supported LLM Providers
+### XTM One Setup
 
-| Provider | API Key | Model Selection |
-|----------|---------|-----------------|
-| **OpenAI** | Required | Dynamic list from API |
-| **Anthropic** | Required | Dynamic list from API |
-| **Google Gemini** | Required | Dynamic list from API |
-| **XTM One** | Coming Soon | Filigran Agentic AI Platform |
+| Field | Description |
+|-------|-------------|
+| **XTM One URL** | Base URL of your XTM One instance |
+| **API Token** | Personal Access Token (generate from your XTM One profile page) |
 
-### Model Selection
+### Connection Test
 
-After entering your API key:
+After entering your credentials:
 
-1. Click **Test Connection** to validate the key
-2. If successful, available models are fetched automatically
-3. Select your preferred model from the dropdown
-4. Click **Save Settings** to persist your selection
+1. Click **Test Connection** to validate the token against XTM One
+2. If successful, AI features become available throughout the extension
+3. Click **Save Settings** to persist your configuration
 
-Popular models by provider:
+### Getting Your API Token
 
-| Provider | Recommended Models |
-|----------|-------------------|
-| OpenAI | `gpt-4o`, `gpt-4-turbo`, `gpt-4` |
-| Anthropic | `claude-3-5-sonnet-latest`, `claude-3-opus-latest` |
-| Google | `gemini-1.5-pro`, `gemini-1.5-flash` |
-
-### Getting API Keys
-
-#### OpenAI
-1. Go to [platform.openai.com](https://platform.openai.com)
-2. Navigate to **API Keys**
-3. Create a new secret key
-4. Copy and paste into the extension settings
-
-#### Anthropic
-1. Go to [console.anthropic.com](https://console.anthropic.com)
-2. Navigate to **API Keys**
-3. Create a new key
-4. Copy and paste into the extension settings
-
-#### Google Gemini
-1. Go to [aistudio.google.com](https://aistudio.google.com)
-2. Navigate to **Get API Key**
-3. Create a new key
+1. Go to your XTM One instance
+2. Navigate to your **Profile → API Keys**
+3. Create a new Personal Access Token
 4. Copy and paste into the extension settings
 
 ### No Enterprise Edition?

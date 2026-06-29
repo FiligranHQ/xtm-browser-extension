@@ -984,6 +984,12 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
   function renderAffinitySelection() {
     const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
     const isAIAvailable = !!(aiSettings.available && targetPlatform?.isEnterprise);
+    let aiDisabledReason = '';
+    if (!aiSettings.available) {
+      aiDisabledReason = 'AI is not configured. Configure XTM One in extension settings.';
+    } else if (!targetPlatform?.isEnterprise) {
+      aiDisabledReason = 'AI features require Enterprise Edition.';
+    }
     
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto' }}>
@@ -1013,6 +1019,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
           scenarioInjectSpacing={scenarioInjectSpacing}
           setScenarioInjectSpacing={setScenarioInjectSpacing}
           isAIAvailable={isAIAvailable}
+          aiDisabledReason={aiDisabledReason}
           scenarioAIMode={scenarioAIMode || false}
           scenarioAIGenerating={scenarioAIGenerating || false}
           onAIGenerate={() => setScenarioAIMode(true)}

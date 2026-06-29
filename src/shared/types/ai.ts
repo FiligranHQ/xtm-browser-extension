@@ -1,32 +1,24 @@
 /**
  * AI Configuration Types
- * 
- * Types for AI provider configuration, model selection, and scenario generation.
+ *
+ * The extension routes every AI feature through XTM One. There is no BYOK
+ * (Bring Your Own Key) mode and no direct LLM provider integration.
  */
 
 // ============================================================================
-// AI Provider Types
+// AI Settings
 // ============================================================================
 
-export type AIProvider = 'openai' | 'anthropic' | 'gemini' | 'custom' | 'xtm-one';
-
-export interface AIModelInfo {
-  id: string;
-  name: string;
-  description?: string;
-}
-
 export interface AISettings {
-  provider?: AIProvider;
-  apiKey?: string;
-  model?: string;
-  availableModels?: AIModelInfo[];
+  /** XTM One base URL (e.g. https://xtm.company.com). Trailing slash tolerated. */
+  xtmOneUrl?: string;
+  /** XTM One Personal Access Token (starts with "fcp-"). */
+  apiToken?: string;
+  /** True once a successful connection test against XTM One has been performed. */
   connectionTested?: boolean;
-  /** Custom OpenAI-compatible endpoint URL (only used when provider is 'custom') */
-  customBaseUrl?: string;
-  /** Maximum tokens for AI response output (default: 10000) */
+  /** Maximum output tokens forwarded to XTM One (default: 10000). */
   maxTokens?: number;
-  /** Maximum page content length in characters (default: 50000) */
+  /** Maximum page content length in characters before truncation (default: 50000). */
   maxContentLength?: number;
 }
 
@@ -35,4 +27,3 @@ export const AI_DEFAULTS = {
   maxTokens: 10000,
   maxContentLength: 50000,
 };
-

@@ -46,7 +46,7 @@ This extension integrates with [OpenCTI](https://filigran.io/solutions/open-cti/
 - **Atomic testing** - Generate command lines for security testing
 - **Entity discovery** - Find entities pattern matching might miss
 - **Relationship resolution** - Identify connections between entities
-- **Multiple LLM providers** - OpenAI, Anthropic, Google Gemini
+- **XTM One AI backend** - All AI features powered by XTM One
 
 ### 🎭 Scenario Themes (Table-Top Exercises)
 

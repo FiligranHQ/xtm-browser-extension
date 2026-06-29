@@ -119,8 +119,8 @@ The extension automatically adapts to your preferred theme settings (auto/dark/l
 │  │  - AI (EE)           │  │  - Scenarios (EE)    │            │
 │  └──────────────────────┘  └──────────────────────┘            │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    LLM Providers (AI)                     │  │
-│  │  OpenAI  │  Anthropic  │  Google Gemini  │  XTM One      │  │
+│  │                    AI Backend                           │  │
+│  │                       XTM One                           │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```

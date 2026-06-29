@@ -99,8 +99,8 @@ export type MessageType =
   | 'CREATE_SCENARIO_FROM_PAGE'
   // Unified scan
   | 'SCAN_ALL'
-  // AI model management
-  | 'AI_TEST_AND_FETCH_MODELS'
+  // XTM One connectivity test
+  | 'AI_TEST_CONNECTION'
   // PDF Generation
   | 'GENERATE_NATIVE_PDF'
   // Image fetching (for CORS bypass)

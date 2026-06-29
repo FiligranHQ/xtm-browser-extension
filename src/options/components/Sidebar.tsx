@@ -10,6 +10,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Tooltip,
 } from '@mui/material';
 import {
   InfoOutlined,
@@ -18,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import type { TabType } from '../constants';
 import type { ExtensionSettings } from '../../shared/types/settings';
+import { EXTENSION_VERSION } from '../../shared/constants';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -59,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
     },
     { 
       id: 'ai' as TabType, 
-      label: 'Agentic AI', 
+      label: 'XTM One', 
       icon: (
         <img 
           src={`../assets/logos/logo_xtm-one_${mode === 'dark' ? 'dark' : 'light'}-theme_embleme_square.svg`}
@@ -72,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
           }}
         />
       ),
-      // Agentic AI is only available if at least one platform is Enterprise Edition
+      // XTM One is only available if at least one platform is Enterprise Edition
       disabled: ![
         ...(settings?.openctiPlatforms || []),
         ...(settings?.openaevPlatforms || []),
@@ -123,46 +125,61 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, mode, settin
       {/* Navigation - OpenCTI-style */}
       <List sx={{ flex: 1, py: 1 }}>
         {navItems.map((item) => (
-          <ListItemButton
+          <Tooltip
             key={item.id}
-            selected={activeTab === item.id}
-            onClick={() => !item.disabled && setActiveTab(item.id)}
-            disabled={item.disabled}
-            sx={{
-              mx: 1,
-              borderRadius: 1,
-              mb: 0.5,
-              height: 40,
-              '&.Mui-selected': {
-                bgcolor: 'rgba(0, 188, 212, 0.08)',
-                borderLeft: '3px solid',
-                borderLeftColor: 'primary.main',
-                '&:hover': {
-                  bgcolor: 'rgba(0, 188, 212, 0.12)',
-                },
-              },
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
-              '&.Mui-disabled': {
-                opacity: 0.5,
-              },
-            }}
+            title={item.disabled && item.id === 'ai' ? 'XTM One requires at least one connected Enterprise Edition platform (OpenCTI EE or OpenAEV EE).' : ''}
+            placement="right"
+            arrow
           >
-            <ListItemIcon sx={{ minWidth: 36, color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.secondary' }}>
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText 
-              primary={item.label} 
-              primaryTypographyProps={{ 
-                fontSize: 13, 
-                fontWeight: activeTab === item.id ? 600 : 400,
-                color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.primary',
-              }} 
-            />
-          </ListItemButton>
+            <span>
+              <ListItemButton
+                selected={activeTab === item.id}
+                onClick={() => !item.disabled && setActiveTab(item.id)}
+                disabled={item.disabled}
+                sx={{
+                  mx: 1,
+                  borderRadius: 1,
+                  mb: 0.5,
+                  height: 40,
+                  '&.Mui-selected': {
+                    bgcolor: 'rgba(0, 188, 212, 0.08)',
+                    borderLeft: '3px solid',
+                    borderLeftColor: 'primary.main',
+                    '&:hover': {
+                      bgcolor: 'rgba(0, 188, 212, 0.12)',
+                    },
+                  },
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  '&.Mui-disabled': {
+                    opacity: 0.5,
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.secondary' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.label} 
+                  primaryTypographyProps={{ 
+                    fontSize: 13, 
+                    fontWeight: activeTab === item.id ? 600 : 400,
+                    color: item.disabled ? 'text.disabled' : activeTab === item.id ? 'primary.main' : 'text.primary',
+                  }} 
+                />
+              </ListItemButton>
+            </span>
+          </Tooltip>
         ))}
       </List>
+
+      {/* Version */}
+      <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          v{EXTENSION_VERSION}
+        </Typography>
+      </Box>
     </Box>
   );
 };

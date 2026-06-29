@@ -125,7 +125,7 @@ const ALL_MESSAGE_TYPES: MessageType[] = [
   'AI_RESOLVE_RELATIONSHIPS',
   'AI_SCAN_ALL',
   'AI_CHECK_STATUS',
-  'AI_TEST_AND_FETCH_MODELS',
+  'AI_TEST_CONNECTION',
   
   // Content script injection
   'INJECT_CONTENT_SCRIPT',
@@ -193,7 +193,7 @@ const DISPATCHER_HANDLED_MESSAGES: MessageType[] = [
   
   // AI handlers (from aiHandlers registry)
   'AI_CHECK_STATUS',
-  'AI_TEST_AND_FETCH_MODELS',
+  'AI_TEST_CONNECTION',
   'AI_GENERATE_DESCRIPTION',
   'AI_GENERATE_SCENARIO',
   'AI_GENERATE_FULL_SCENARIO',
@@ -422,7 +422,7 @@ describe('Handler Registries', () => {
     // These must match exactly what's in aiHandlers registry
     const expectedHandlers = [
       'AI_CHECK_STATUS',
-      'AI_TEST_AND_FETCH_MODELS',
+      'AI_TEST_CONNECTION',
       'AI_GENERATE_DESCRIPTION',
       'AI_GENERATE_SCENARIO',
       'AI_GENERATE_FULL_SCENARIO',

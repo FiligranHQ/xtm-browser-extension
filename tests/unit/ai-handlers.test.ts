@@ -1,11 +1,46 @@
 /**
- * Tests for AI Message Handlers
+ * AI message handler tests (XTM One path).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockClient = {
+  testConnection: vi.fn(),
+  generateContainerDescription: vi.fn(),
+  generateScenario: vi.fn(),
+  generateFullScenario: vi.fn(),
+  generateAtomicTest: vi.fn(),
+  generateEmails: vi.fn(),
+  discoverEntities: vi.fn(),
+  resolveRelationships: vi.fn(),
+  scanAll: vi.fn(),
+  getMaxTokens: vi.fn().mockReturnValue(10000),
+  getMaxContentLength: vi.fn().mockReturnValue(50000),
+};
+
+vi.mock('../../src/shared/utils/storage', () => ({
+  getSettings: vi.fn(),
+}));
+
+vi.mock('../../src/shared/utils/logger', () => ({
+  loggers: { background: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+}));
+
+vi.mock('../../src/shared/api/ai-client', () => {
+  class MockAIClient {
+    constructor() {
+      Object.assign(this, mockClient);
+    }
+  }
+  return {
+    AIClient: MockAIClient,
+    isAIAvailable: vi.fn(),
+  };
+});
+
 import {
   handleAICheckStatus,
-  handleAITestAndFetchModels,
+  handleAITestConnection,
   handleAIGenerateDescription,
   handleAIGenerateScenario,
   handleAIGenerateFullScenario,
@@ -14,572 +49,470 @@ import {
   handleAIDiscoverEntities,
   handleAIResolveRelationships,
   handleAIScanAll,
+  aiHandlers,
 } from '../../src/background/handlers/ai-handlers';
-
-// Create a mock class for AIClient
-const mockAIClientInstance = {
-  testConnectionAndFetchModels: vi.fn(),
-  generateContainerDescription: vi.fn(),
-  generateScenario: vi.fn(),
-  generateFullScenario: vi.fn(),
-  generateAtomicTest: vi.fn(),
-  generateEmails: vi.fn(),
-  discoverEntities: vi.fn(),
-  resolveRelationships: vi.fn(),
-  generate: vi.fn(),
-  getMaxTokens: vi.fn().mockReturnValue(10000),
-  getMaxContentLength: vi.fn().mockReturnValue(50000),
-};
-
-// Mock dependencies
-vi.mock('../../src/shared/utils/storage', () => ({
-  getSettings: vi.fn(),
-}));
-
-vi.mock('../../src/shared/api/ai-client', () => {
-  // Create a proper mock class
-  class MockAIClient {
-    testConnectionAndFetchModels = mockAIClientInstance.testConnectionAndFetchModels;
-    generateContainerDescription = mockAIClientInstance.generateContainerDescription;
-    generateScenario = mockAIClientInstance.generateScenario;
-    generateFullScenario = mockAIClientInstance.generateFullScenario;
-    generateAtomicTest = mockAIClientInstance.generateAtomicTest;
-    generateEmails = mockAIClientInstance.generateEmails;
-    discoverEntities = mockAIClientInstance.discoverEntities;
-    resolveRelationships = mockAIClientInstance.resolveRelationships;
-    generate = mockAIClientInstance.generate;
-    getMaxTokens = mockAIClientInstance.getMaxTokens;
-    getMaxContentLength = mockAIClientInstance.getMaxContentLength;
-  }
-  return {
-    AIClient: MockAIClient,
-    isAIAvailable: vi.fn(),
-  };
-});
-
-vi.mock('../../src/shared/api/ai/json-parser', () => ({
-  parseAIJsonResponse: vi.fn(),
-}));
-
 import { getSettings } from '../../src/shared/utils/storage';
 import { isAIAvailable } from '../../src/shared/api/ai-client';
-import { parseAIJsonResponse } from '../../src/shared/api/ai/json-parser';
 
-describe('AI Handlers', () => {
-  const mockSendResponse = vi.fn();
-  
+const mockedGetSettings = vi.mocked(getSettings);
+const mockedIsAvailable = vi.mocked(isAIAvailable);
+
+const configuredSettings = {
+  openctiPlatforms: [],
+  openaevPlatforms: [],
+  theme: 'dark' as const,
+  autoScan: false,
+  showNotifications: true,
+  splitScreenMode: false,
+  detection: {},
+  ai: { xtmOneUrl: 'https://xtm.example.com', apiToken: 'fcp-test' },
+};
+
+const unconfiguredSettings = { ...configuredSettings, ai: {} };
+
+describe('AI handlers', () => {
+  const sendResponse = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset all mock functions on the instance
-    Object.values(mockAIClientInstance).forEach(fn => {
-      if (typeof fn.mockReset === 'function') {
-        fn.mockReset();
+    Object.values(mockClient).forEach((fn) => {
+      if (typeof (fn as { mockReset?: () => void }).mockReset === 'function') {
+        (fn as { mockReset: () => void }).mockReset();
       }
     });
+    mockClient.getMaxTokens.mockReturnValue(10000);
+    mockClient.getMaxContentLength.mockReturnValue(50000);
   });
 
   describe('handleAICheckStatus', () => {
-    it('should return available=true when AI is configured', async () => {
-      const mockSettings = {
-        ai: { provider: 'openai', apiKey: 'test-key', model: 'gpt-4' }
-      };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
+    it('reports availability when XTM One is configured', async () => {
+      mockedGetSettings.mockResolvedValue(configuredSettings);
+      mockedIsAvailable.mockReturnValue(true);
+      await handleAICheckStatus(sendResponse);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        data: { available: true, enabled: true, provider: 'xtm-one' },
+      });
+    });
 
-      await handleAICheckStatus(mockSendResponse);
+    it('reports unavailable when XTM One is not configured', async () => {
+      mockedGetSettings.mockResolvedValue(unconfiguredSettings);
+      mockedIsAvailable.mockReturnValue(false);
+      await handleAICheckStatus(sendResponse);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        data: { available: false, enabled: false, provider: 'xtm-one' },
+      });
+    });
+  });
 
-      expect(mockSendResponse).toHaveBeenCalledWith({
+  describe('handleAITestConnection', () => {
+    it('rejects empty payload', async () => {
+      await handleAITestConnection({}, sendResponse);
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: expect.stringMatching(/required/i) }),
+      );
+    });
+
+    it('forwards the success message from the client', async () => {
+      mockClient.testConnection.mockResolvedValue({
+        success: true,
+        data: { message: 'pong', user_email: 'admin@filigran.io', version: '1.2.0', enterprise_edition: true },
+      });
+      await handleAITestConnection(
+        { xtmOneUrl: 'https://xtm.example.com', apiToken: 'fcp-test' },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({
         success: true,
         data: {
-          available: true,
-          provider: 'openai',
-          enabled: true,
-        }
+          message: 'pong',
+          user_email: 'admin@filigran.io',
+          version: '1.2.0',
+          enterprise_edition: true,
+        },
       });
     });
 
-    it('should return available=false when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAICheckStatus(mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
+    it('forwards undefined fields when client returns no extra data', async () => {
+      mockClient.testConnection.mockResolvedValue({ success: true, data: { message: 'ok' } });
+      await handleAITestConnection(
+        { xtmOneUrl: 'https://xtm.example.com', apiToken: 'fcp-test' },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({
         success: true,
         data: {
-          available: false,
-          provider: undefined,
-          enabled: false,
-        }
+          message: 'ok',
+          user_email: undefined,
+          version: undefined,
+          enterprise_edition: undefined,
+        },
       });
     });
-  });
 
-  describe('handleAITestAndFetchModels', () => {
-    it('should return models on successful connection', async () => {
-      mockAIClientInstance.testConnectionAndFetchModels.mockResolvedValue({
-        success: true,
-        models: ['gpt-4', 'gpt-3.5-turbo'],
-      });
-
-      await handleAITestAndFetchModels(
-        { provider: 'openai', apiKey: 'test-key' },
-        mockSendResponse
+    it('forwards an error from the client', async () => {
+      mockClient.testConnection.mockResolvedValue({ success: false, error: 'token expired' });
+      await handleAITestConnection(
+        { xtmOneUrl: 'https://xtm.example.com', apiToken: 'fcp-test' },
+        sendResponse,
       );
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: true,
-        data: { models: ['gpt-4', 'gpt-3.5-turbo'] }
-      });
-    });
-
-    it('should return error on failed connection', async () => {
-      mockAIClientInstance.testConnectionAndFetchModels.mockResolvedValue({
-        success: false,
-        error: 'Invalid API key',
-      });
-
-      await handleAITestAndFetchModels(
-        { provider: 'openai', apiKey: 'invalid' },
-        mockSendResponse
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'token expired' }),
       );
+    });
+  });
 
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'Invalid API key'
-      });
+  describe('generation handlers', () => {
+    beforeEach(() => {
+      mockedGetSettings.mockResolvedValue(configuredSettings);
+      mockedIsAvailable.mockReturnValue(true);
     });
 
-    it('should handle exceptions', async () => {
-      mockAIClientInstance.testConnectionAndFetchModels.mockRejectedValue(new Error('Network error'));
-
-      await handleAITestAndFetchModels(
-        { provider: 'openai', apiKey: 'test' },
-        mockSendResponse
+    it('handleAIGenerateDescription unwraps the description string', async () => {
+      mockClient.generateContainerDescription.mockResolvedValue({
+        success: true,
+        data: { description: 'hello' },
+      });
+      await handleAIGenerateDescription(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          containerType: 'Report',
+          containerName: 'n',
+        },
+        sendResponse,
       );
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'Network error'
-      });
-    });
-  });
-
-  describe('handleAIGenerateScenario', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIGenerateScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
+      expect(sendResponse).toHaveBeenCalledWith({ success: true, data: 'hello' });
     });
 
-    it('should generate scenario successfully', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateScenario.mockResolvedValue({
+    it('handleAIGenerateScenario forwards the agent payload', async () => {
+      mockClient.generateScenario.mockResolvedValue({
         success: true,
-        content: '{"name": "Test Scenario"}',
+        data: { name: 's', injects: [] },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Test Scenario' });
+      await handleAIGenerateScenario(
+        { pageTitle: '', pageUrl: '', pageContent: '', scenarioName: 's' },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({ success: true, data: { name: 's', injects: [] } });
+    });
 
-      await handleAIGenerateScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
+    it('handleAIGenerateFullScenario forwards the scenario on success', async () => {
+      mockClient.generateFullScenario.mockResolvedValue({
         success: true,
-        data: { name: 'Test Scenario' }
+        data: { name: 's', injects: [{ title: 'inject-1' }] },
+      });
+      await handleAIGenerateFullScenario(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          scenarioName: 's',
+          typeAffinity: 'ENDPOINT',
+          numberOfInjects: 1,
+        },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        data: { name: 's', injects: [{ title: 'inject-1' }] },
       });
     });
 
-    it('should handle generation failure', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateScenario.mockResolvedValue({
-        success: false,
-        error: 'Rate limit exceeded',
+    it('handleAIGenerateFullScenario errors when injects array is missing', async () => {
+      mockClient.generateFullScenario.mockResolvedValue({
+        success: true,
+        data: { name: 's' },
       });
-
-      await handleAIGenerateScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'Rate limit exceeded'
-      });
-    });
-  });
-
-  describe('handleAIGenerateFullScenario', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIGenerateFullScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
+      await handleAIGenerateFullScenario(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          scenarioName: 's',
+          typeAffinity: 'ENDPOINT',
+          numberOfInjects: 1,
+        },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: expect.stringMatching(/injects array/i) }),
+      );
     });
 
-    it('should generate full scenario with injects', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateFullScenario.mockResolvedValue({
+    it('handleAIGenerateAtomicTest forwards the payload', async () => {
+      mockClient.generateAtomicTest.mockResolvedValue({
         success: true,
-        content: '{"name": "Test", "injects": []}',
+        data: { name: 'test', command: 'whoami' },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Test', injects: [] });
-
-      await handleAIGenerateFullScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
+      await handleAIGenerateAtomicTest(
+        { attackPattern: { name: 'x' }, targetPlatform: 'linux' },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({
         success: true,
-        data: { name: 'Test', injects: [] }
+        data: { name: 'test', command: 'whoami' },
       });
     });
 
-    it('should handle missing injects array', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateFullScenario.mockResolvedValue({
+    it('handleAIGenerateEmails forwards the emails array', async () => {
+      mockClient.generateEmails.mockResolvedValue({
         success: true,
-        content: '{"name": "Test"}',
+        data: { emails: [{ attackPatternId: 'a', subject: 's', body: 'b' }] },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Test' }); // No injects
-
-      await handleAIGenerateFullScenario({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: expect.stringContaining('injects array is missing')
+      await handleAIGenerateEmails(
+        { pageTitle: '', pageUrl: '', pageContent: '', scenarioName: 's', attackPatterns: [] },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        data: { emails: [{ attackPatternId: 'a', subject: 's', body: 'b' }] },
       });
     });
 
-    it('should truncate large page content', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateFullScenario.mockResolvedValue({
-        success: true,
-        content: '{"name": "Test", "injects": []}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Test', injects: [] });
-
-      // Content larger than default maxContentLength (50K)
-      const largeContent = 'x'.repeat(60000);
-      await handleAIGenerateFullScenario({ pageContent: largeContent }, mockSendResponse);
-
-      // Should have called with truncated content
-      expect(mockAIClientInstance.generateFullScenario).toHaveBeenCalled();
-      const callArg = mockAIClientInstance.generateFullScenario.mock.calls[0][0];
-      expect(callArg.pageContent.length).toBeLessThan(largeContent.length);
-    });
-  });
-
-  describe('handleAIGenerateAtomicTest', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIGenerateAtomicTest({ attackPattern: { name: 'T1566' } }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
-    });
-
-    it('should generate atomic test successfully', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateAtomicTest.mockResolvedValue({
-        success: true,
-        content: '{"name": "Phishing Test", "steps": []}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ name: 'Phishing Test', steps: [] });
-
-      await handleAIGenerateAtomicTest({ attackPattern: { name: 'T1566' } }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: true,
-        data: { name: 'Phishing Test', steps: [] }
-      });
-    });
-
-    it('should handle parsing failure', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateAtomicTest.mockResolvedValue({
-        success: true,
-        content: 'invalid json',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue(null);
-
-      await handleAIGenerateAtomicTest({ attackPattern: { name: 'T1566' } }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: expect.stringContaining('parsing failed')
-      });
-    });
-  });
-
-  describe('handleAIGenerateEmails', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIGenerateEmails({ attackPatterns: [] }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
-    });
-
-    it('should generate emails successfully', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateEmails.mockResolvedValue({
-        success: true,
-        content: '{"emails": [{"attackPatternId": "1", "subject": "Test", "body": "Body"}]}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({
-        emails: [{ attackPatternId: '1', subject: 'Test', body: 'Body' }]
-      });
-
-      await handleAIGenerateEmails({ attackPatterns: [{ id: '1', name: 'T1566' }] }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: true,
-        data: { emails: [{ attackPatternId: '1', subject: 'Test', body: 'Body' }] }
-      });
-    });
-
-    it('should handle invalid emails structure', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generateEmails.mockResolvedValue({
-        success: true,
-        content: '{"result": "bad"}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ result: 'bad' });
-
-      await handleAIGenerateEmails({ attackPatterns: [] }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: expect.stringContaining('parsing failed')
-      });
+    it('handleAIGenerateEmails errors when emails array is missing', async () => {
+      mockClient.generateEmails.mockResolvedValue({ success: true, data: {} });
+      await handleAIGenerateEmails(
+        { pageTitle: '', pageUrl: '', pageContent: '', scenarioName: 's', attackPatterns: [] },
+        sendResponse,
+      );
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: expect.stringMatching(/emails array/i) }),
+      );
     });
   });
 
   describe('handleAIDiscoverEntities', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIDiscoverEntities({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
+    beforeEach(() => {
+      mockedGetSettings.mockResolvedValue(configuredSettings);
+      mockedIsAvailable.mockReturnValue(true);
     });
 
-    it('should discover entities and filter already detected', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.discoverEntities.mockResolvedValue({
-        success: true,
-        content: '{"entities": []}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({
-        entities: [
-          { type: 'Malware', value: 'Emotet', confidence: 'high' },
-          { type: 'Malware', value: 'Already Known', confidence: 'high' },
-        ]
-      });
-
-      await handleAIDiscoverEntities({
-        pageContent: 'test',
-        pageTitle: 'Test Page',
-        alreadyDetected: [{ value: 'Already Known', type: 'Malware' }]
-      }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
+    it('deduplicates against alreadyDetected', async () => {
+      mockClient.discoverEntities.mockResolvedValue({
         success: true,
         data: {
-          entities: [{ type: 'Malware', value: 'Emotet', confidence: 'high' }]
-        }
+          entities: [
+            { type: 'Malware', name: 'Emotet', value: 'emotet' },
+            { type: 'Malware', name: 'NewOne', value: 'newone' },
+          ],
+        },
       });
+      await handleAIDiscoverEntities(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          alreadyDetected: [{ type: 'Malware', name: 'Emotet', value: 'emotet' }],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.success).toBe(true);
+      expect(payload.data.entities).toHaveLength(1);
+      expect(payload.data.entities[0].name).toBe('NewOne');
     });
 
-    it('should return empty entities on invalid structure', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.discoverEntities.mockResolvedValue({
+    it('deduplicates case-insensitively across value, name, externalId, and aliases', async () => {
+      mockClient.discoverEntities.mockResolvedValue({
         success: true,
-        content: '{"invalid": true}',
+        data: {
+          entities: [
+            { type: 'Attack-Pattern', name: 'Phishing', value: 'phishing', externalId: 'T1566' },
+            { type: 'Malware', name: 'CozyDuke', value: 'cozyduke' },
+            { type: 'Malware', name: 'Fresh', value: 'fresh' },
+          ],
+        },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ invalid: true });
+      await handleAIDiscoverEntities(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          alreadyDetected: [
+            { type: 'Attack-Pattern', name: 'PHISHING', value: 'PHISHING', externalId: 'T1566' },
+            { type: 'Intrusion-Set', name: 'APT29', value: 'apt29', aliases: ['CozyDuke'] },
+          ],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.data.entities).toHaveLength(1);
+      expect(payload.data.entities[0].name).toBe('Fresh');
+    });
 
-      await handleAIDiscoverEntities({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
+    it('returns all entities when alreadyDetected is empty', async () => {
+      mockClient.discoverEntities.mockResolvedValue({
         success: true,
-        data: { entities: [] }
+        data: { entities: [{ type: 'Malware', name: 'A', value: 'a' }] },
       });
+      await handleAIDiscoverEntities(
+        { pageTitle: '', pageUrl: '', pageContent: '', alreadyDetected: [] },
+        sendResponse,
+      );
+      expect(sendResponse.mock.calls[0][0].data.entities).toHaveLength(1);
     });
   });
 
   describe('handleAIResolveRelationships', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIResolveRelationships({ entities: [], pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
+    beforeEach(() => {
+      mockedGetSettings.mockResolvedValue(configuredSettings);
+      mockedIsAvailable.mockReturnValue(true);
     });
 
-    it('should resolve relationships and validate indices', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.resolveRelationships.mockResolvedValue({
+    it('drops relationships with out-of-range indices and enriches valid ones with entity values', async () => {
+      mockClient.resolveRelationships.mockResolvedValue({
         success: true,
-        content: '{"relationships": []}',
+        data: {
+          relationships: [
+            { fromIndex: 0, toIndex: 1, relationshipType: 'uses' },
+            { fromIndex: 0, toIndex: 99, relationshipType: 'targets' }, // out of range
+            { fromIndex: 0, toIndex: 0, relationshipType: 'related-to' }, // self
+            { fromIndex: 1, toIndex: 0, relationshipType: '' }, // empty type
+          ],
+        },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({
-        relationships: [
-          { fromIndex: 0, toIndex: 1, relationshipType: 'uses', confidence: 'high', reason: 'Test' },
-          { fromIndex: 999, toIndex: 0, relationshipType: 'invalid', confidence: 'high', reason: 'Bad index' }, // Invalid
-        ]
-      });
-
-      await handleAIResolveRelationships({
-        entities: [
-          { value: 'APT29', type: 'Intrusion-Set' },
-          { value: 'Emotet', type: 'Malware' },
-        ],
-        pageContent: 'test'
-      }, mockSendResponse);
-
-      const response = mockSendResponse.mock.calls[0][0];
-      expect(response.success).toBe(true);
-      expect(response.data.relationships).toHaveLength(1); // Only valid relationship
-      expect(response.data.relationships[0].fromEntityValue).toBe('APT29');
-      expect(response.data.relationships[0].toEntityValue).toBe('Emotet');
-    });
-
-    it('should return empty relationships on invalid structure', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.resolveRelationships.mockResolvedValue({
-        success: true,
-        content: '{"bad": true}',
-      });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({ bad: true });
-
-      await handleAIResolveRelationships({ entities: [], pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: true,
-        data: { relationships: [] }
+      await handleAIResolveRelationships(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          entities: [
+            { type: 'Malware', name: 'A', value: 'a', existsInPlatform: false },
+            { type: 'Threat-Actor-Group', name: 'B', value: 'b', existsInPlatform: false },
+          ],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.success).toBe(true);
+      expect(payload.data.relationships).toHaveLength(1);
+      expect(payload.data.relationships[0]).toMatchObject({
+        fromEntityValue: 'a',
+        toEntityValue: 'b',
+        relationshipType: 'uses',
       });
     });
   });
 
   describe('handleAIScanAll', () => {
-    it('should return error when AI is not configured', async () => {
-      vi.mocked(getSettings).mockResolvedValue({});
-      vi.mocked(isAIAvailable).mockReturnValue(false);
-
-      await handleAIScanAll({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'AI not configured'
-      });
+    beforeEach(() => {
+      mockedGetSettings.mockResolvedValue(configuredSettings);
+      mockedIsAvailable.mockReturnValue(true);
     });
 
-    it('should scan all and return entities and relationships', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generate.mockResolvedValue({
+    it('combines already-detected and new entities for relationship lookup', async () => {
+      mockClient.scanAll.mockResolvedValue({
         success: true,
-        content: '{"entities": [], "relationships": []}',
+        data: {
+          entities: [
+            { type: 'Malware', value: 'newmalware' },
+          ],
+          relationships: [
+            // index 0 = already-detected APT29, index 1 = newly discovered Newmalware
+            { fromIndex: 0, toIndex: 1, relationshipType: 'uses' },
+          ],
+        },
       });
-      vi.mocked(parseAIJsonResponse).mockReturnValue({
-        entities: [
-          { type: 'Malware', value: 'Emotet' },
-        ],
-        relationships: [
-          { fromIndex: 0, toIndex: 1, relationshipType: 'uses', confidence: 'high', reason: 'Test' },
-        ]
-      });
-
-      await handleAIScanAll({
-        pageContent: 'test',
-        pageTitle: 'Test',
-        pageUrl: 'http://test.com',
-        alreadyDetected: [{ value: 'APT29', type: 'Intrusion-Set' }]
-      }, mockSendResponse);
-
-      const response = mockSendResponse.mock.calls[0][0];
-      expect(response.success).toBe(true);
-      expect(response.data.entities).toHaveLength(1);
-      expect(response.data.relationships).toHaveLength(1);
+      await handleAIScanAll(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          alreadyDetected: [{ type: 'Intrusion-Set', value: 'APT29' }],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.success).toBe(true);
+      expect(payload.data.entities).toHaveLength(1);
+      expect(payload.data.relationships).toHaveLength(1);
+      expect(payload.data.relationships[0].fromEntityValue).toBe('APT29');
+      expect(payload.data.relationships[0].toEntityValue).toBe('newmalware');
     });
 
-    it('should handle exceptions gracefully', async () => {
-      const mockSettings = { ai: { provider: 'openai', apiKey: 'key' } };
-      vi.mocked(getSettings).mockResolvedValue(mockSettings);
-      vi.mocked(isAIAvailable).mockReturnValue(true);
-      
-      mockAIClientInstance.generate.mockRejectedValue(new Error('Connection error'));
+    it('drops duplicate entities matching the already-detected set', async () => {
+      mockClient.scanAll.mockResolvedValue({
+        success: true,
+        data: {
+          entities: [
+            { type: 'Intrusion-Set', value: 'APT29' },
+            { type: 'Malware', value: 'NewOne' },
+          ],
+          relationships: [],
+        },
+      });
+      await handleAIScanAll(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          alreadyDetected: [{ type: 'Intrusion-Set', value: 'APT29' }],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.data.entities).toHaveLength(1);
+      expect(payload.data.entities[0].value).toBe('NewOne');
+    });
 
-      await handleAIScanAll({ pageContent: 'test' }, mockSendResponse);
-
-      expect(mockSendResponse).toHaveBeenCalledWith({
-        success: false,
-        error: 'Connection error'
+    it('filters out self-referencing, out-of-range, and empty-type relationships', async () => {
+      mockClient.scanAll.mockResolvedValue({
+        success: true,
+        data: {
+          entities: [
+            { type: 'Malware', value: 'X' },
+            { type: 'Malware', value: 'Y' },
+          ],
+          relationships: [
+            // valid: from already-detected (index 0) to new entity (index 1)
+            { fromIndex: 0, toIndex: 1, relationshipType: 'uses' },
+            // self-ref: both indices point to same entity
+            { fromIndex: 0, toIndex: 0, relationshipType: 'related-to' },
+            // out-of-range: index 99 does not exist in the combined entity list
+            { fromIndex: 0, toIndex: 99, relationshipType: 'targets' },
+            // empty type
+            { fromIndex: 1, toIndex: 0, relationshipType: '' },
+          ],
+        },
+      });
+      await handleAIScanAll(
+        {
+          pageTitle: '',
+          pageUrl: '',
+          pageContent: '',
+          alreadyDetected: [{ type: 'Intrusion-Set', value: 'APT29' }],
+        },
+        sendResponse,
+      );
+      const payload = sendResponse.mock.calls[0][0];
+      expect(payload.data.relationships).toHaveLength(1);
+      expect(payload.data.relationships[0]).toMatchObject({
+        fromEntityValue: 'APT29',
+        toEntityValue: 'X',
+        relationshipType: 'uses',
       });
     });
   });
 });
 
+describe('aiHandlers registry', () => {
+  it('exports the expected handler set', () => {
+    expect(Object.keys(aiHandlers).sort()).toEqual(
+      [
+        'AI_CHECK_STATUS',
+        'AI_TEST_CONNECTION',
+        'AI_GENERATE_DESCRIPTION',
+        'AI_GENERATE_SCENARIO',
+        'AI_GENERATE_FULL_SCENARIO',
+        'AI_GENERATE_ATOMIC_TEST',
+        'AI_GENERATE_EMAILS',
+        'AI_DISCOVER_ENTITIES',
+        'AI_RESOLVE_RELATIONSHIPS',
+        'AI_SCAN_ALL',
+      ].sort(),
+    );
+  });
+});

@@ -611,7 +611,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
     
     let tooltipMessage = '';
     if (!aiSettings.available) {
-      tooltipMessage = 'AI is not configured. Configure AI in extension settings.';
+      tooltipMessage = 'AI is not configured. Configure XTM One in extension settings.';
     } else if (!targetPlatform?.isEnterprise) {
       tooltipMessage = 'AI features require Enterprise Edition.';
     }

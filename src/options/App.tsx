@@ -30,7 +30,6 @@ import {
   type TestResult,
   type SnackbarState,
   type AITestResult,
-  type AvailableModel,
 } from './constants';
 
 // Import components
@@ -64,7 +63,6 @@ const App: React.FC = () => {
   // AI state
   const [aiTesting, setAiTesting] = useState(false);
   const [aiTestResult, setAiTestResult] = useState<AITestResult | null>(null);
-  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   
   // Snackbar state
   const [snackbar, setSnackbar] = useState<SnackbarState>({
@@ -457,44 +455,45 @@ const App: React.FC = () => {
     setSettings({ ...settings, [key]: value });
   };
 
-  const handleSave = async () => {
-    if (!settings) return;
+  /** Normalize and persist a settings object to storage. Avoids stale closure by accepting settings explicitly. */
+  const persistSettings = async (settingsToSave: ExtensionSettings): Promise<boolean> => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
       setSnackbar({ open: true, message: 'Settings saved (preview mode)', severity: 'success' });
-      return;
+      return true;
     }
-    
+
     const normalizedSettings = {
-      ...settings,
-      openctiPlatforms: settings.openctiPlatforms.map(p => ({
+      ...settingsToSave,
+      openctiPlatforms: settingsToSave.openctiPlatforms.map(p => ({
         ...p,
         url: normalizeUrl(p.url),
       })),
-      openaevPlatforms: settings.openaevPlatforms.map(p => ({
+      openaevPlatforms: settingsToSave.openaevPlatforms.map(p => ({
         ...p,
         url: normalizeUrl(p.url),
       })),
+      ai: settingsToSave.ai?.xtmOneUrl
+        ? { ...settingsToSave.ai, xtmOneUrl: normalizeUrl(settingsToSave.ai.xtmOneUrl) }
+        : settingsToSave.ai,
     };
-    
-    // Check if platform configs have changed (URLs or tokens)
+
     const platformsChanged = savedSettings && (
       JSON.stringify(normalizedSettings.openctiPlatforms) !== JSON.stringify(savedSettings.openctiPlatforms) ||
       JSON.stringify(normalizedSettings.openaevPlatforms) !== JSON.stringify(savedSettings.openaevPlatforms)
     );
-    
+
     setSettings(normalizedSettings);
-    
+
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'SAVE_SETTINGS',
         payload: normalizedSettings,
       });
-      
+
       if (response?.success) {
         setSavedSettings(JSON.parse(JSON.stringify(normalizedSettings)));
         setSettings(normalizedSettings);
-        setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
-        
+
         // Only poll for cache refresh status if platform settings changed
         if (platformsChanged) {
           setIsRefreshingCache(true);
@@ -513,11 +512,22 @@ const App: React.FC = () => {
             loadCacheStats();
           }, 120000);
         }
+        return true;
       } else {
         setSnackbar({ open: true, message: response?.error || 'Failed to save settings', severity: 'error' });
+        return false;
       }
     } catch (error) {
       setSnackbar({ open: true, message: 'Failed to save settings', severity: 'error' });
+      return false;
+    }
+  };
+
+  const handleSave = async () => {
+    if (!settings) return;
+    const saved = await persistSettings(settings);
+    if (saved) {
+      setSnackbar({ open: true, message: 'Settings saved successfully!', severity: 'success' });
     }
   };
 
@@ -671,23 +681,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleClearAI = () => {
-    if (!settings) return;
-    if (!confirm('Are you sure you want to clear AI configuration? This will disable all AI features.')) {
-      return;
-    }
-    setAiTestResult(null);
-    setAvailableModels([]);
-    updateSetting('ai', {
-      provider: undefined,
-      apiKey: undefined,
-      model: undefined,
-      availableModels: undefined,
-      connectionTested: false,
-    });
-    setSnackbar({ open: true, message: 'AI configuration cleared', severity: 'success' });
-  };
-
   // ============================================================================
   // Cache Handler Functions
   // ============================================================================
@@ -733,50 +726,38 @@ const App: React.FC = () => {
   // AI Handler Functions
   // ============================================================================
 
-  const handleTestAndFetchModels = async () => {
-    if (!settings?.ai?.provider || !settings?.ai?.apiKey) return;
-    
+  const handleAITestConnection = async () => {
+    if (!settings?.ai?.xtmOneUrl || !settings?.ai?.apiToken) return;
+
     setAiTesting(true);
     setAiTestResult(null);
-    
+
     try {
       const response = await chrome.runtime.sendMessage({
-        type: 'AI_TEST_AND_FETCH_MODELS',
+        type: 'AI_TEST_CONNECTION',
         payload: {
-          provider: settings.ai.provider,
-          apiKey: settings.ai.apiKey,
-          ...(settings.ai.provider === 'custom' && {
-            customBaseUrl: settings.ai.customBaseUrl,
-            model: settings.ai.model,
-          }),
+          xtmOneUrl: settings.ai.xtmOneUrl,
+          apiToken: settings.ai.apiToken,
         },
       });
-      
-      if (response?.success && response.data?.models) {
-        setAvailableModels(response.data.models);
-        setAiTestResult({ success: true, message: `Connected! ${response.data.models.length} models available.` });
-        
-        if (!settings.ai.model && response.data.models.length > 0) {
-          updateSetting('ai', {
-            ...settings.ai,
-            model: response.data.models[0].id,
-            availableModels: response.data.models,
-            connectionTested: true,
-          });
-        } else {
-          updateSetting('ai', {
-            ...settings.ai,
-            availableModels: response.data.models,
-            connectionTested: true,
-          });
-        }
+
+      if (response?.success) {
+        const versionSuffix = response.data?.version ? ` v${response.data.version}` : '';
+        setAiTestResult({
+          success: true,
+          message: `Connected to XTM One${versionSuffix}`,
+        });
+        // Persist with connectionTested: true
+        const updatedSettings = { ...settings, ai: { ...settings.ai, connectionTested: true } };
+        await persistSettings(updatedSettings);
+        setSnackbar({ open: true, message: 'XTM One connection successful', severity: 'success' });
       } else {
         setAiTestResult({ success: false, message: response?.error || 'Connection failed' });
       }
     } catch (error) {
-      setAiTestResult({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Connection test failed' 
+      setAiTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Connection test failed',
       });
     } finally {
       setAiTesting(false);
@@ -930,16 +911,12 @@ const App: React.FC = () => {
           {activeTab === 'ai' && (
             <AITab
               settings={settings}
-              mode={mode}
               aiTesting={aiTesting}
               aiTestResult={aiTestResult}
-              availableModels={availableModels}
               onUpdateSetting={updateSetting}
-              onTestAndFetchModels={handleTestAndFetchModels}
-              onClearAI={handleClearAI}
+              onTestConnection={handleAITestConnection}
               onSave={handleSave}
               setAiTestResult={setAiTestResult}
-              setAvailableModels={setAvailableModels}
             />
           )}
 

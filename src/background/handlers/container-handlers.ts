@@ -46,6 +46,8 @@ export async function handleCreateContainer(
     // Step 0: Create any entities that don't exist yet
     const allEntityIds: string[] = [...(payload.entities || [])];
     
+    const failedEntities: Array<{ type: string; value: string; error: string }> = [];
+
     if (payload.entitiesToCreate && payload.entitiesToCreate.length > 0) {
       log.info(`Creating ${payload.entitiesToCreate.length} new entities for container...`);
       
@@ -68,11 +70,12 @@ export async function handleCreateContainer(
           }
         } catch (entityError) {
           log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
-          // Continue with other entities
+          const errorMessage = entityError instanceof Error ? entityError.message : 'Failed to create entity';
+          failedEntities.push({ type: entityToCreate.type, value: entityToCreate.value, error: errorMessage });
         }
       }
-      
-      log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}`);
+
+      log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}, failed: ${failedEntities.length}`);
     }
     
     // Step 1: Create relationships if provided (before container, so we can include them)
@@ -218,7 +221,8 @@ export async function handleCreateContainer(
         ...container, 
         platformId: platformId,
         _createdRelationships: createdRelationships,
-      } 
+        failedEntities: failedEntities.length > 0 ? failedEntities : undefined,
+      }
     });
   } catch (error) {
     sendResponse({

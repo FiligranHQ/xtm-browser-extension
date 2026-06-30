@@ -192,6 +192,7 @@ const App: React.FC = () => {
     updatingContainerId, setUpdatingContainerId,
     updatingContainerDates, setUpdatingContainerDates,
     importResults, setImportResults,
+    containerFailedEntities, setContainerFailedEntities,
     containerWorkflowOrigin, setContainerWorkflowOrigin,
     createIndicators, setCreateIndicators,
     attachPdf, setAttachPdf,
@@ -329,6 +330,7 @@ const App: React.FC = () => {
     setAttachPdf,
     setCreateAsDraft,
     setImportResults,
+    setContainerFailedEntities,
     aiSettings,
     resolvedRelationships,
     setAiGeneratingDescription,
@@ -1661,7 +1663,7 @@ const App: React.FC = () => {
         if (isNonDefaultPlatformEntity) {
           return <OAEVEntityView mode={mode} entity={entity} setEntity={setEntity} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} availablePlatforms={availablePlatforms} multiPlatformResults={multiPlatformResults} setMultiPlatformResults={setMultiPlatformResults} currentPlatformIndex={currentPlatformIndex} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} setPlatformUrl={setPlatformUrl} setSelectedPlatformId={setSelectedPlatformId} entityFromSearchMode={entityFromSearchMode} setEntityFromSearchMode={setEntityFromSearchMode} entityFromScanResults={entityFromScanResults} setEntityFromScanResults={setEntityFromScanResults} setPanelMode={setPanelMode} handleCopyValue={handleCopyValue} />;
         }
-        return <OCTIEntityView mode={mode} entity={entity} setEntity={setEntity} entityContainers={entityContainers} loadingContainers={loadingContainers} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} availablePlatforms={availablePlatforms} multiPlatformResults={multiPlatformResults} setMultiPlatformResults={setMultiPlatformResults} currentPlatformIndex={currentPlatformIndex} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} entityFromSearchMode={entityFromSearchMode} setEntityFromSearchMode={setEntityFromSearchMode} entityFromScanResults={entityFromScanResults} setEntityFromScanResults={setEntityFromScanResults} setPanelMode={setPanelMode} handleCopyValue={handleCopyValue} handleOpenInPlatform={handleOpenInPlatform} />;
+        return <OCTIEntityView mode={mode} entity={entity} setEntity={setEntity} entityContainers={entityContainers} loadingContainers={loadingContainers} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} availablePlatforms={availablePlatforms} multiPlatformResults={multiPlatformResults} setMultiPlatformResults={setMultiPlatformResults} currentPlatformIndex={currentPlatformIndex} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} platformUrl={platformUrl} setPlatformUrl={setPlatformUrl} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} entityFromSearchMode={entityFromSearchMode} setEntityFromSearchMode={setEntityFromSearchMode} entityFromScanResults={entityFromScanResults} setEntityFromScanResults={setEntityFromScanResults} setPanelMode={setPanelMode} handleCopyValue={handleCopyValue} handleOpenInPlatform={handleOpenInPlatform} containerFailedEntities={containerFailedEntities} />;
       }
       case 'not-found': return <CommonNotFoundView entity={entity} mode={mode} entityFromScanResults={entityFromScanResults} setEntityFromScanResults={setEntityFromScanResults} setPanelMode={setPanelMode} setEntitiesToAdd={setEntitiesToAdd} setAddFromNotFound={setAddFromNotFound} />;
       case 'add': return <OCTIAddView setPanelMode={setPanelMode} entitiesToAdd={entitiesToAdd} handleAddEntities={handleAddEntities} submitting={submitting} addFromNotFound={addFromNotFound} setAddFromNotFound={setAddFromNotFound} hasScanResults={scanResultsEntitiesRef.current.length > 0} />;

@@ -68,6 +68,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   setPanelMode,
   handleCopyValue,
   handleOpenInPlatform,
+  containerFailedEntities,
 }) => {
   const logoSuffix = useLogoSuffix(mode);
   const contentTextStyle = useContentTextStyle(mode);
@@ -805,6 +806,40 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             Loading containers...
           </Typography>
+        </Box>
+      )}
+
+      {/* Failed entity imports warning */}
+      {containerFailedEntities && containerFailedEntities.length > 0 && (
+        <Box sx={{ mb: 2.5, border: 1, borderColor: 'warning.main', borderRadius: 1, overflow: 'hidden' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, bgcolor: 'warning.main' }}>
+            <WarningAmberOutlined sx={{ fontSize: 16, color: 'white' }} />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: 'white', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {containerFailedEntities.length} entit{containerFailedEntities.length === 1 ? 'y' : 'ies'} could not be added
+            </Typography>
+          </Box>
+          <Box sx={{ maxHeight: 150, overflow: 'auto' }}>
+            {containerFailedEntities.map((e, idx) => (
+              <Box
+                key={idx}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                  px: 1.5,
+                  py: 1,
+                  borderTop: 1,
+                  borderColor: 'divider',
+                }}
+              >
+                <ItemIcon type={e.type} size="small" color={itemColor(e.type, mode === 'dark')} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-all' }}>{e.value}</Typography>
+                  <Typography variant="caption" sx={{ color: 'error.main' }}>{e.error}</Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
         </Box>
       )}
 

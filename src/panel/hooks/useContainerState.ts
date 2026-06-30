@@ -83,6 +83,10 @@ export interface ContainerStateReturn {
   // Import results
   importResults: ImportResults | null;
   setImportResults: (results: ImportResults | null) => void;
+
+  // Failed entities from last container creation
+  containerFailedEntities: Array<{ type: string; value: string; error: string }>;
+  setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
   
   // Container workflow
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
@@ -165,6 +169,9 @@ export function useContainerState(): ContainerStateReturn {
   
   // Import results
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
+
+  // Failed entities from last container creation
+  const [containerFailedEntities, setContainerFailedEntities] = useState<Array<{ type: string; value: string; error: string }>>([]);
   
   // Container workflow
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
@@ -226,6 +233,8 @@ export function useContainerState(): ContainerStateReturn {
     setUpdatingContainerDates,
     importResults,
     setImportResults,
+    containerFailedEntities,
+    setContainerFailedEntities,
     containerWorkflowOrigin,
     setContainerWorkflowOrigin,
     createIndicators,

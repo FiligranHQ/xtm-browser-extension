@@ -126,6 +126,8 @@ export interface OCTIEntityViewProps {
   handleCopyValue: (value: string) => void;
   /** Open entity in platform */
   handleOpenInPlatform: (entityId: string, draftId?: string) => void;
+  /** Entities that failed to be created during the last container import */
+  containerFailedEntities?: Array<{ type: string; value: string; error: string }>;
 }
 
 /**

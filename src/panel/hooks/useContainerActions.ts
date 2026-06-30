@@ -41,6 +41,9 @@ export interface ContainerActionsProps {
   // Import results
   setImportResults: (results: ImportResults | null) => void;
   
+  // Failed entities
+  setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
+
   // AI state
   aiSettings: PanelAIState;
   resolvedRelationships: ResolvedRelationship[];
@@ -95,6 +98,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     setAttachPdf,
     setCreateAsDraft,
     setImportResults,
+    setContainerFailedEntities,
     aiSettings,
     resolvedRelationships,
     setAiGeneratingDescription,
@@ -198,6 +202,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
 
   const handleCreateContainer = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+    setContainerFailedEntities([]);
     setSubmitting(true);
     
     let pdfData: { data: string; filename: string } | null = null;
@@ -298,6 +303,8 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
           setSelectedPlatformId(platform.id);
         }
       }
+      const failedEntities: Array<{ type: string; value: string; error: string }> = createdContainer.failedEntities || [];
+      setContainerFailedEntities(failedEntities);
       setEntity({
         id: createdContainer.id,
         entity_type: createdContainer.entity_type || containerType,
@@ -316,8 +323,12 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
         _draftId: createdContainer.draftId,
       });
       setEntityContainers([]);
+      if (failedEntities.length > 0) {
+        showToast({ type: 'warning', message: `${containerType} ${updatingContainerId ? 'updated' : 'created'} — ${failedEntities.length} entit${failedEntities.length === 1 ? 'y' : 'ies'} could not be added` });
+      } else {
+        showToast({ type: 'success', message: `${containerType} ${updatingContainerId ? 'updated' : 'created'} successfully` });
+      }
       setPanelMode('entity');
-      showToast({ type: 'success', message: `${containerType} ${updatingContainerId ? 'updated' : 'created'} successfully` });
       setContainerForm({ name: '', description: '', content: '' });
       setEntitiesToAdd([]);
       setContainerWorkflowOrigin(null);
@@ -335,7 +346,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     currentPdfFileName, isPdfSource, containerSpecificFields, createAsDraft, updatingContainerId,
     updatingContainerDates, availablePlatforms, setPlatformUrl, setSelectedPlatformId, setEntity,
     setEntityContainers, setPanelMode, showToast, setContainerForm, setEntitiesToAdd, setContainerWorkflowOrigin,
-    setAttachPdf, setCreateAsDraft, setUpdatingContainerId, setUpdatingContainerDates, setSubmitting
+    setAttachPdf, setCreateAsDraft, setUpdatingContainerId, setUpdatingContainerDates, setSubmitting, setContainerFailedEntities
   ]);
 
   return {

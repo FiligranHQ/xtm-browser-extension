@@ -1,6 +1,6 @@
 /**
  * Container State Hook
- * 
+ *
  * Manages all container-related state for the panel.
  */
 
@@ -23,13 +23,13 @@ export interface ContainerStateReturn {
   setOCTIContainerType: (type: string) => void;
   containerForm: ContainerFormState;
   setContainerForm: React.Dispatch<React.SetStateAction<ContainerFormState>>;
-  
+
   // Entity containers
   entityContainers: ContainerData[];
   setEntityContainers: (containers: ContainerData[]) => void;
   loadingContainers: boolean;
   setLoadingContainers: (loading: boolean) => void;
-  
+
   // Labels and markings
   selectedLabels: LabelOption[];
   setSelectedLabels: (labels: LabelOption[]) => void;
@@ -39,23 +39,23 @@ export interface ContainerStateReturn {
   setAvailableLabels: (labels: LabelOption[]) => void;
   availableMarkings: MarkingOption[];
   setAvailableMarkings: (markings: MarkingOption[]) => void;
-  
+
   // Entities to add
   entitiesToAdd: EntityData[];
   setEntitiesToAdd: React.Dispatch<React.SetStateAction<EntityData[]>>;
-  
+
   // Track if add was triggered from not-found view (for back navigation)
   addFromNotFound: boolean;
   setAddFromNotFound: (fromNotFound: boolean) => void;
-  
+
   // Form submission
   submitting: boolean;
   setSubmitting: (submitting: boolean) => void;
-  
+
   // Container-specific fields
   containerSpecificFields: ContainerSpecificFields;
   setContainerSpecificFields: React.Dispatch<React.SetStateAction<ContainerSpecificFields>>;
-  
+
   // Available vocabulary options
   availableReportTypes: VocabularyOption[];
   setAvailableReportTypes: (types: VocabularyOption[]) => void;
@@ -69,7 +69,7 @@ export interface ContainerStateReturn {
   setAvailableResponseTypes: (types: VocabularyOption[]) => void;
   availableAuthors: AuthorOption[];
   setAvailableAuthors: (authors: AuthorOption[]) => void;
-  
+
   // Existing containers (for upsert)
   existingContainers: ContainerData[];
   setExistingContainers: (containers: ContainerData[]) => void;
@@ -79,7 +79,7 @@ export interface ContainerStateReturn {
   setUpdatingContainerId: (id: string | null) => void;
   updatingContainerDates: { published?: string; created?: string } | null;
   setUpdatingContainerDates: (dates: { published?: string; created?: string } | null) => void;
-  
+
   // Import results
   importResults: ImportResults | null;
   setImportResults: (results: ImportResults | null) => void;
@@ -87,11 +87,11 @@ export interface ContainerStateReturn {
   // Failed entities from last container creation
   containerFailedEntities: Array<{ type: string; value: string; error: string }>;
   setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
-  
+
   // Container workflow
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
   setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
-  
+
   // PDF and indicators options
   createIndicators: boolean;
   setCreateIndicators: (create: boolean) => void;
@@ -101,7 +101,7 @@ export interface ContainerStateReturn {
   setGeneratingPdf: (generating: boolean) => void;
   createAsDraft: boolean;
   setCreateAsDraft: (draft: boolean) => void;
-  
+
   // Labels/markings loaded state
   labelsLoaded: boolean;
   setLabelsLoaded: (loaded: boolean) => void;
@@ -120,26 +120,26 @@ export function useContainerState(): ContainerStateReturn {
     description: '',
     content: '',
   });
-  
+
   // Entity containers
   const [entityContainers, setEntityContainers] = useState<ContainerData[]>([]);
   const [loadingContainers, setLoadingContainers] = useState(false);
-  
+
   // Labels and markings
   const [selectedLabels, setSelectedLabels] = useState<LabelOption[]>([]);
   const [selectedMarkings, setSelectedMarkings] = useState<MarkingOption[]>([]);
   const [availableLabels, setAvailableLabels] = useState<LabelOption[]>([]);
   const [availableMarkings, setAvailableMarkings] = useState<MarkingOption[]>([]);
-  
+
   // Entities to add
   const [entitiesToAdd, setEntitiesToAdd] = useState<EntityData[]>([]);
-  
+
   // Track if add was triggered from not-found view
   const [addFromNotFound, setAddFromNotFound] = useState(false);
-  
+
   // Form submission
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Container-specific fields
   const [containerSpecificFields, setContainerSpecificFields] = useState<ContainerSpecificFields>({
     report_types: [],
@@ -149,7 +149,7 @@ export function useContainerState(): ContainerStateReturn {
     response_types: [],
     createdBy: '',
   });
-  
+
   // Available vocabulary options
   const [availableReportTypes, setAvailableReportTypes] = useState<VocabularyOption[]>([]);
   const [availableContexts, setAvailableContexts] = useState<VocabularyOption[]>([]);
@@ -157,7 +157,7 @@ export function useContainerState(): ContainerStateReturn {
   const [availablePriorities, setAvailablePriorities] = useState<VocabularyOption[]>([]);
   const [availableResponseTypes, setAvailableResponseTypes] = useState<VocabularyOption[]>([]);
   const [availableAuthors, setAvailableAuthors] = useState<AuthorOption[]>([]);
-  
+
   // Existing containers (for upsert)
   const [existingContainers, setExistingContainers] = useState<ContainerData[]>([]);
   const [checkingExisting, setCheckingExisting] = useState(false);
@@ -166,26 +166,26 @@ export function useContainerState(): ContainerStateReturn {
     published?: string;
     created?: string;
   } | null>(null);
-  
+
   // Import results
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
 
   // Failed entities from last container creation
   const [containerFailedEntities, setContainerFailedEntities] = useState<Array<{ type: string; value: string; error: string }>>([]);
-  
+
   // Container workflow
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);
-  
+
   // PDF and indicators options
   const [createIndicators, setCreateIndicators] = useState(true);
   const [attachPdf, setAttachPdf] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [createAsDraft, setCreateAsDraft] = useState(false);
-  
+
   // Labels/markings loaded state
   const [labelsLoaded, setLabelsLoaded] = useState(false);
   const [markingsLoaded, setMarkingsLoaded] = useState(false);
-  
+
   return {
     containerType,
     setOCTIContainerType,
@@ -251,4 +251,3 @@ export function useContainerState(): ContainerStateReturn {
     setMarkingsLoaded,
   };
 }
-

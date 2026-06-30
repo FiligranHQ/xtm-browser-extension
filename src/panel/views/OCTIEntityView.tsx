@@ -1,6 +1,6 @@
 /**
  * OCTIEntityView - Displays entity details for OpenCTI entities
- * 
+ *
  * Handles rendering of both entities and observables with proper styling,
  * platform navigation for multi-platform results, and action buttons.
  */
@@ -27,8 +27,8 @@ import {
 } from '@mui/icons-material';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  inferPlatformTypeFromEntityType, 
+import {
+  inferPlatformTypeFromEntityType,
   getPlatformLogoName,
   getPlatformName,
   parsePrefixedType,
@@ -78,9 +78,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
     const platformType = targetEntity.platformType || inferPlatformTypeFromEntityType(targetEntity.type);
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
     const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
-    
+
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    
+
     setEntityDetailsLoading(true);
     chrome.runtime.sendMessage({
       type: 'GET_ENTITY_DETAILS',
@@ -94,7 +94,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
         setEntityDetailsLoading(false);
         return;
       }
-      
+
       if (response?.success && response.data) {
         const fullEntity = {
           ...targetEntity,
@@ -153,31 +153,31 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 
   // Check if this is a non-default platform entity (any platform other than OpenCTI)
   const entityType = (entity as any).type || '';
-  const isNonDefaultPlatformEntity = (entity as any).isNonDefaultPlatform || 
+  const isNonDefaultPlatformEntity = (entity as any).isNonDefaultPlatform ||
     (entity as any).platformType !== 'opencti' ||
     parsePrefixedType(entityType) !== null;
-  
+
   // If non-default platform entity, this component shouldn't render it
   // (App.tsx handles routing to OAEVEntityView)
   if (isNonDefaultPlatformEntity) {
     return null;
   }
-  
+
   // Entity might be a DetectedOCTIEntity/DetectedObservable with entityData, or direct entity data
   const entityData = (entity as any).entityData || entity || {};
   const entityId = (entity as any).entityId || entityData?.id || entity?.id;
   const entityPlatformId = (entity as any).platformId;
-  
+
   const type = entityData.entity_type || entity.type || 'unknown';
   const color = itemColor(type, mode === 'dark');
   const name = entityData.representative?.main || entityData.name || entity.value || entity.name || 'Unknown';
   const rawDescription = entityData.description || entity.description || '';
   // Truncate description to 500 characters
-  const description = rawDescription.length > 500 
-    ? rawDescription.slice(0, 500) + '...' 
+  const description = rawDescription.length > 500
+    ? rawDescription.slice(0, 500) + '...'
     : rawDescription;
   const aliases = entityData.aliases || entity.aliases;
-  
+
   // Attack Pattern specific: x_mitre_id
   const xMitreId = entityData.x_mitre_id || entity.x_mitre_id;
   const isAttackPattern = type.toLowerCase() === 'attack-pattern';
@@ -185,26 +185,26 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const objectMarking = entityData.objectMarking || entity.objectMarking;
   const created = entityData.created || entity.created;
   const modified = entityData.modified || entity.modified;
-  
+
   // Author and creators
   const author = entityData.createdBy || entity.createdBy;
   const creators = entityData.creators || entity.creators;
-  
+
   // Get current platform info
-  const currentPlatform = entityPlatformId 
+  const currentPlatform = entityPlatformId
     ? availablePlatforms.find(p => p.id === entityPlatformId)
     : availablePlatforms[0];
-  
+
   // Determine if this is an observable or SDO
   const observableTypes = ['IPv4-Addr', 'IPv6-Addr', 'Domain-Name', 'Hostname', 'Url', 'Email-Addr', 'Mac-Addr', 'StixFile', 'Artifact', 'Cryptocurrency-Wallet', 'User-Agent', 'Phone-Number', 'Bank-Account'];
-  const isObservable = observableTypes.some(t => type.toLowerCase().includes(t.toLowerCase().replace(/-/g, ''))) || 
+  const isObservable = observableTypes.some(t => type.toLowerCase().includes(t.toLowerCase().replace(/-/g, ''))) ||
                        type.includes('Addr') || type.includes('Observable');
   const isIndicator = type.toLowerCase() === 'indicator';
-  
+
   // Confidence is for SDOs (not observables or indicators), Score is for observables and indicators
   const confidence = (!isObservable && !isIndicator) ? (entityData.confidence ?? entity.confidence) : undefined;
   const score = (isObservable || isIndicator) ? (entityData.x_opencti_score ?? entity.x_opencti_score) : undefined;
-  
+
   // CVSS fields for vulnerabilities
   const cvssScore = entityData.x_opencti_cvss_base_score;
   const cvssSeverity = entityData.x_opencti_cvss_base_severity;
@@ -227,7 +227,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           size="small"
           startIcon={<ChevronLeftOutlined />}
           onClick={entityFromSearchMode || entityFromScanResults ? handleBackToList : () => setPanelMode('empty')}
-          sx={{ 
+          sx={{
             color: 'text.secondary',
             textTransform: 'none',
             '&:hover': { bgcolor: 'action.hover' },
@@ -236,16 +236,16 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           {entityFromScanResults ? 'Back to scan results' : entityFromSearchMode ? 'Back to search' : 'Back to actions'}
         </Button>
       </Box>
-      
+
       {/* Platform indicator bar */}
       {(availablePlatforms.length > 1 || hasMultiplePlatforms) && (
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
-            mb: 2, 
-            p: 1, 
+            mb: 2,
+            p: 1,
             bgcolor: 'action.hover',
             borderRadius: 1,
             border: 1,
@@ -254,9 +254,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
         >
           {hasMultiplePlatforms ? (
             <>
-              <IconButton 
-                size="small" 
-                onClick={handlePrevPlatform} 
+              <IconButton
+                size="small"
+                onClick={handlePrevPlatform}
                 disabled={currentPlatformIndex === 0 || entityDetailsLoading}
                 sx={{ opacity: currentPlatformIndex === 0 ? 0.3 : 1 }}
               >
@@ -267,7 +267,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                   <CircularProgress size={18} />
                 ) : (
                   <img
-                    src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                    src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
                       ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
                       : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
                     }
@@ -283,9 +283,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                   ({currentPlatformIndex + 1}/{multiPlatformResults.length})
                 </Typography>
               </Box>
-              <IconButton 
-                size="small" 
-                onClick={handleNextPlatform} 
+              <IconButton
+                size="small"
+                onClick={handleNextPlatform}
                 disabled={currentPlatformIndex === multiPlatformResults.length - 1 || entityDetailsLoading}
                 sx={{ opacity: currentPlatformIndex === multiPlatformResults.length - 1 ? 0.3 : 1 }}
               >
@@ -298,7 +298,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                 <CircularProgress size={18} />
               ) : (
                 <img
-                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+                  src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
                     ? chrome.runtime.getURL(`assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`)
                     : `../assets/logos/logo_${platformLogo}_${logoSuffix}_embleme_square.svg`
                   }
@@ -341,16 +341,16 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           {name}
         </Typography>
         {(entity as any)?._draftId && (
-          <Chip 
-            label="Draft" 
-            size="small" 
-            sx={{ 
-              bgcolor: '#ff9800', 
-              color: '#000', 
+          <Chip
+            label="Draft"
+            size="small"
+            sx={{
+              bgcolor: '#ff9800',
+              color: '#000',
               fontWeight: 700,
               fontSize: '0.7rem',
               height: 20,
-            }} 
+            }}
           />
         )}
       </Box>
@@ -361,16 +361,16 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           <Typography variant="caption" sx={sectionTitleStyle}>
             Technique ID
           </Typography>
-          <Chip 
-            label={xMitreId} 
-            size="small" 
-            sx={{ 
-              bgcolor: hexToRGB(color, 0.2), 
+          <Chip
+            label={xMitreId}
+            size="small"
+            sx={{
+              bgcolor: hexToRGB(color, 0.2),
               color,
               fontWeight: 600,
               borderRadius: 1,
               fontSize: '0.875rem',
-            }} 
+            }}
           />
         </Box>
       )}
@@ -448,9 +448,9 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           <Typography variant="caption" sx={sectionTitleStyle}>
             Description
           </Typography>
-          <Box sx={{ 
-            ...contentTextStyle, 
-            '& p': { my: 0.5 }, 
+          <Box sx={{
+            ...contentTextStyle,
+            '& p': { my: 0.5 },
             '& ul, & ol': { pl: 2, my: 0.5 },
             '& a': { color: 'primary.main' },
           }}>
@@ -469,17 +469,17 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
             {aliases.slice(0, 8).map((alias: string, i: number) => (
-              <Chip 
-                key={i} 
-                label={alias} 
-                size="small" 
-                sx={{ borderRadius: 1, bgcolor: 'action.selected', fontWeight: 500 }} 
+              <Chip
+                key={i}
+                label={alias}
+                size="small"
+                sx={{ borderRadius: 1, bgcolor: 'action.selected', fontWeight: 500 }}
               />
             ))}
             {aliases.length > 8 && (
-              <Chip 
-                label={`+${aliases.length - 8}`} 
-                size="small" 
+              <Chip
+                label={`+${aliases.length - 8}`}
+                size="small"
                 sx={{ bgcolor: 'action.hover', fontWeight: 600 }}
               />
             )}
@@ -496,11 +496,11 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                 Author
               </Typography>
               {author.id && currentPlatform?.url ? (
-                <Typography 
-                  variant="body2" 
+                <Typography
+                  variant="body2"
                   onClick={() => handleOpenInPlatform(author.id)}
-                  sx={{ 
-                    fontWeight: 500, 
+                  sx={{
+                    fontWeight: 500,
                     ...contentTextStyle,
                     color: 'primary.main',
                     cursor: 'pointer',
@@ -606,15 +606,15 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                 label={label.value}
                 size="small"
                 variant="outlined"
-                sx={{ 
+                sx={{
                   color: label.color,
                   borderColor: label.color,
                   bgcolor: hexToRGB(label.color, 0.08),
                   fontWeight: 500,
                   borderRadius: 1,
                   maxWidth: 150,
-                  '& .MuiChip-label': { 
-                    overflow: 'hidden', 
+                  '& .MuiChip-label': {
+                    overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   },
@@ -635,10 +635,10 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
             {objectMarking.map((marking: any, i: number) => {
               const markingColor = marking.x_opencti_color || getMarkingColor(marking.definition, mode);
               return (
-                <Chip 
-                  key={i} 
-                  label={marking.definition} 
-                  size="small" 
+                <Chip
+                  key={i}
+                  label={marking.definition}
+                  size="small"
                   sx={{
                     borderRadius: 1,
                     fontWeight: 600,
@@ -648,8 +648,8 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                     color: mode === 'dark' ? '#ffffff' : 'text.primary',
                     border: `2px solid ${markingColor}`,
                     maxWidth: 150,
-                    '& .MuiChip-label': { 
-                      overflow: 'hidden', 
+                    '& .MuiChip-label': {
+                      overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     },
@@ -663,12 +663,12 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
 
       {/* Dates Section */}
       {(created || modified || entityData.created_at || entityData.updated_at || entityData.first_seen || entityData.last_seen) && (
-        <Paper 
-          elevation={0} 
-          sx={{ 
-            mb: 2.5, 
-            p: 2, 
-            borderRadius: 1, 
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 2.5,
+            p: 2,
+            borderRadius: 1,
             bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
             border: 1,
             borderColor: 'divider',
@@ -769,10 +769,10 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
                 >
                   <ItemIcon type={container.entity_type} size="small" color={containerColor} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        fontWeight: 500, 
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 500,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -852,17 +852,17 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
             variant="contained"
             size="small"
             startIcon={
-              <img 
-                src={typeof chrome !== 'undefined' && chrome.runtime?.getURL 
+              <img
+                src={typeof chrome !== 'undefined' && chrome.runtime?.getURL
                   ? chrome.runtime.getURL(`assets/logos/logo_opencti_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`)
                   : `../assets/logos/logo_opencti_${mode === 'dark' ? 'light' : 'dark'}-theme_embleme_square.svg`
-                } 
-                alt="" 
-                style={{ width: 18, height: 18 }} 
+                }
+                alt=""
+                style={{ width: 18, height: 18 }}
               />
             }
             onClick={() => {
-              const url = (entity as any)?._draftId 
+              const url = (entity as any)?._draftId
                 ? `${currentPlatform.url}/dashboard/data/import/draft/${(entity as any)?._draftId}`
                 : `${currentPlatform.url}/dashboard/id/${entityId}`;
               window.open(url, '_blank');

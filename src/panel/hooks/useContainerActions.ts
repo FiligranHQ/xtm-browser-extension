@@ -1,6 +1,6 @@
 /**
  * Container Actions Hook
- * 
+ *
  * Handles container creation, entity addition, and related API calls.
  */
 
@@ -16,7 +16,7 @@ export interface ContainerActionsProps {
   selectedPlatformId: string;
   setPlatformUrl: (url: string) => void;
   setSelectedPlatformId: (id: string) => void;
-  
+
   // Container state
   entitiesToAdd: EntityData[];
   setEntitiesToAdd: React.Dispatch<React.SetStateAction<EntityData[]>>;
@@ -37,10 +37,10 @@ export interface ContainerActionsProps {
   setContainerWorkflowOrigin: (origin: 'preview' | 'direct' | 'import' | null) => void;
   setAttachPdf: (attach: boolean) => void;
   setCreateAsDraft: (draft: boolean) => void;
-  
+
   // Import results
   setImportResults: (results: ImportResults | null) => void;
-  
+
   // Failed entities
   setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
 
@@ -48,17 +48,17 @@ export interface ContainerActionsProps {
   aiSettings: PanelAIState;
   resolvedRelationships: ResolvedRelationship[];
   setAiGeneratingDescription: (generating: boolean) => void;
-  
+
   // Entity state
   setEntity: React.Dispatch<React.SetStateAction<EntityData | null>>;
   setEntityContainers: (containers: any[]) => void;
-  
+
   // Page info
   currentPageUrl: string;
   currentPageTitle: string;
   currentPdfFileName: string;
   isPdfSource: boolean;
-  
+
   // UI
   setSubmitting: (submitting: boolean) => void;
   setPanelMode: React.Dispatch<React.SetStateAction<PanelMode>>;
@@ -116,17 +116,17 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
   const handleAddEntities = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     setSubmitting(true);
-    
+
     const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
     const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
     const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-    
+
     if (!targetPlatform) {
       showToast({ type: 'error', message: 'No OpenCTI platform available' });
       setSubmitting(false);
       return;
     }
-    
+
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_OBSERVABLES_BULK',
       payload: { entities: entitiesToAdd, platformId: targetPlatformId, createIndicator: createIndicators },
@@ -135,29 +135,29 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (response?.success && response.data) {
       const createdEntities = response.data as Array<{ id: string; entity_type?: string; observable_value?: string; value?: string; type?: string }>;
       setImportResults({
-        success: true, 
+        success: true,
         total: entitiesToAdd.length,
-        created: createdEntities.map((e, i) => ({ 
-          id: e.id, 
-          type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown', 
-          value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown' 
+        created: createdEntities.map((e, i) => ({
+          id: e.id,
+          type: e.entity_type || e.type || entitiesToAdd[i]?.type || 'unknown',
+          value: e.observable_value || e.value || entitiesToAdd[i]?.value || entitiesToAdd[i]?.name || 'unknown'
         })),
-        failed: [], 
+        failed: [],
         platformName: targetPlatform.name,
         platformUrl: targetPlatform.url,
       });
       setPanelMode('import-results');
       setEntitiesToAdd([]);
     } else {
-      setImportResults({ 
-        success: false, 
-        total: entitiesToAdd.length, 
-        created: [], 
-        failed: entitiesToAdd.map(e => ({ 
-          type: e.type || 'unknown', 
-          value: e.value || e.name || 'unknown', 
-          error: response?.error || 'Failed to create entity' 
-        })), 
+      setImportResults({
+        success: false,
+        total: entitiesToAdd.length,
+        created: [],
+        failed: entitiesToAdd.map(e => ({
+          type: e.type || 'unknown',
+          value: e.value || e.name || 'unknown',
+          error: response?.error || 'Failed to create entity'
+        })),
         platformName: targetPlatform.name,
         platformUrl: targetPlatform.url,
       });
@@ -171,20 +171,20 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     const selectedIsOpenCTI = openctiPlatforms.some(p => p.id === selectedPlatformId);
     const targetPlatformId = selectedIsOpenCTI ? selectedPlatformId : openctiPlatforms[0]?.id;
     const targetPlatform = availablePlatforms.find(p => p.id === targetPlatformId);
-    
+
     if (!aiSettings.available || !targetPlatform?.isEnterprise) return;
-    
+
     setAiGeneratingDescription(true);
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'AI_GENERATE_DESCRIPTION',
-        payload: { 
-          pageTitle: currentPageTitle, 
-          pageUrl: currentPageUrl, 
-          pageContent: containerForm.content || '', 
-          containerType, 
-          containerName: containerForm.name, 
-          detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean) 
+        payload: {
+          pageTitle: currentPageTitle,
+          pageUrl: currentPageUrl,
+          pageContent: containerForm.content || '',
+          containerType,
+          containerName: containerForm.name,
+          detectedEntities: entitiesToAdd.map(e => e.name || e.value).filter(Boolean)
         },
       });
       if (response?.success && response.data) {
@@ -204,7 +204,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     setContainerFailedEntities([]);
     setSubmitting(true);
-    
+
     let pdfData: { data: string; filename: string } | null = null;
     if (attachPdf) {
       setGeneratingPdf(true);
@@ -218,9 +218,9 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
               const base64 = btoa(
                 new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
               );
-              pdfData = { 
-                data: base64, 
-                filename: currentPdfFileName || 'document.pdf' 
+              pdfData = {
+                data: base64,
+                filename: currentPdfFileName || 'document.pdf'
               };
             }
           } catch {
@@ -242,7 +242,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
       } catch { /* PDF generation/fetch failed */ }
       setGeneratingPdf(false);
     }
-    
+
     const existingEntitiesWithIndex = entitiesToAdd.map((e, i) => ({ entity: e, originalIndex: i })).filter(({ entity }) => entity.id);
     const entitiesToCreateWithIndex = entitiesToAdd.map((e, i) => ({ entity: e, originalIndex: i })).filter(({ entity }) => !entity.id && (entity.value || entity.observable_value));
     const existingEntityIds = existingEntitiesWithIndex.map(({ entity }) => entity.id as string);
@@ -250,18 +250,18 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
       type: entity.type || entity.entity_type || 'Unknown',
       value: entity.value || entity.observable_value || entity.name || '',
     }));
-    
+
     const indexMapping: Record<number, number> = {};
     existingEntitiesWithIndex.forEach(({ originalIndex }, idx) => { indexMapping[originalIndex] = idx; });
     entitiesToCreateWithIndex.forEach(({ originalIndex }, idx) => { indexMapping[originalIndex] = existingEntityIds.length + idx; });
-    
+
     const relationshipsToCreate = resolvedRelationships.map(rel => ({
       fromEntityIndex: indexMapping[rel.fromIndex] ?? -1,
       toEntityIndex: indexMapping[rel.toIndex] ?? -1,
       relationship_type: rel.relationshipType,
       description: rel.reason,
     })).filter(rel => rel.fromEntityIndex >= 0 && rel.toEntityIndex >= 0);
-    
+
     const response = await chrome.runtime.sendMessage({
       type: 'CREATE_CONTAINER',
       payload: {
@@ -355,4 +355,3 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     handleGenerateAIDescription,
   };
 }
-

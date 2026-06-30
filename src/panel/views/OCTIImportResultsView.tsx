@@ -225,16 +225,16 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
             {importResults.created.map((entity, idx) => {
               const color = itemColor(entity.type, mode === 'dark');
               // Construct the OpenCTI URL for the entity
-              const entityUrl = importResults.platformUrl 
+              const entityUrl = importResults.platformUrl
                 ? `${importResults.platformUrl.replace(/\/$/, '')}/dashboard/id/${entity.id}`
                 : null;
-              
+
               const handleOpenEntity = () => {
                 if (entityUrl) {
                   window.open(entityUrl, '_blank', 'noopener,noreferrer');
                 }
               };
-              
+
               return (
                 <Box
                   key={entity.id || idx}
@@ -277,7 +277,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
                         e.stopPropagation();
                         handleOpenEntity();
                       }}
-                      sx={{ 
+                      sx={{
                         color: 'text.secondary',
                         '&:hover': { color: 'primary.main' },
                       }}

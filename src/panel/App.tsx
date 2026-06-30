@@ -79,11 +79,11 @@ const App: React.FC = () => {
     openctiPlatforms, openaevPlatforms,
     loadPlatforms,
   } = usePlatforms();
-  
+
   // Keep ref for openctiPlatforms (used in event handlers)
   const openctiPlatformsRef = React.useRef<PlatformInfo[]>([]);
   React.useEffect(() => { openctiPlatformsRef.current = openctiPlatforms; }, [openctiPlatforms]);
-  
+
   // Test platform connections for EE status when platforms are loaded
   const platformsTestedRef = React.useRef(false);
   React.useEffect(() => {
@@ -100,7 +100,7 @@ const App: React.FC = () => {
               return;
             }
             if (testResponse?.success) {
-              setAvailablePlatforms(prev => prev.map(p => 
+              setAvailablePlatforms(prev => prev.map(p =>
                 p.id === platform.id ? { ...p, connected: true, version: testResponse.data?.version, isEnterprise: testResponse.data?.enterprise_edition } : p
               ));
             } else {
@@ -300,10 +300,10 @@ const App: React.FC = () => {
   const handleInvestigationScanRef = React.useRef<(platformId: string) => Promise<void>>(async () => {});
 
   // Container actions hook
-  const { 
-    handleAddEntities, 
-    handleCreateContainer, 
-    handleGenerateAIDescription 
+  const {
+    handleAddEntities,
+    handleCreateContainer,
+    handleGenerateAIDescription
   } = useContainerActions({
     openctiPlatforms,
     availablePlatforms,
@@ -459,7 +459,7 @@ const App: React.FC = () => {
   const loadLabelsAndMarkings = (platformId?: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     const targetPlatformId = platformId || selectedPlatformId;
-    
+
     if (!labelsLoaded) {
       // Use SEARCH_LABELS with limit of 10 for initial load
       chrome.runtime.sendMessage({ type: 'SEARCH_LABELS', payload: { search: '', first: 10, platformId: targetPlatformId } }, (response) => {
@@ -475,7 +475,7 @@ const App: React.FC = () => {
         }
       });
     }
-    
+
     if (!markingsLoaded) {
       chrome.runtime.sendMessage({ type: 'FETCH_MARKINGS', payload: { platformId: targetPlatformId } }, (response) => {
         if (chrome.runtime.lastError) return;
@@ -485,7 +485,7 @@ const App: React.FC = () => {
         }
       });
     }
-    
+
     // Load vocabularies
     const vocabTypes = [
       { type: 'report_types_ov', setter: setAvailableReportTypes },
@@ -494,14 +494,14 @@ const App: React.FC = () => {
       { type: 'case_priority_ov', setter: setAvailablePriorities },
       { type: 'incident_response_types_ov', setter: setAvailableResponseTypes },
     ];
-    
+
     vocabTypes.forEach(({ type, setter }) => {
       chrome.runtime.sendMessage({ type: 'FETCH_VOCABULARY', payload: { category: type, platformId: targetPlatformId } }, (response) => {
         if (chrome.runtime.lastError) return;
         if (response?.success && response.data) setter(response.data);
       });
     });
-    
+
     chrome.runtime.sendMessage({ type: 'SEARCH_IDENTITIES', payload: { search: '', first: 50, platformId: targetPlatformId } }, (response) => {
       if (chrome.runtime.lastError) return;
       if (response?.success && response.data) setAvailableAuthors(response.data);
@@ -512,7 +512,7 @@ const App: React.FC = () => {
   const fetchEntityContainers = async (entityId: string, platformId?: string) => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     if (!entityId) return;
-    
+
     setLoadingContainers(true);
     setEntityContainers([]);
     try {
@@ -533,20 +533,20 @@ const App: React.FC = () => {
   // Helper to check if current tab is a PDF or PDF scanner page
   const checkAndHandlePdfPage = useCallback(async (): Promise<boolean> => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return false;
-    
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.url) return false;
-      
+
       const url = tab.url;
       const extensionId = chrome.runtime.id;
-      
+
       // Check if already on PDF scanner page
       if (url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
           url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`)) {
         // Already on PDF scanner - trigger rescan
         log.debug('Triggering PDF scanner rescan, isSplitScreenMode:', isSplitScreenMode);
-        
+
         // In iframe mode (panel embedded in PDF scanner), use postMessage directly
         // chrome.tabs.sendMessage doesn't work for extension pages
         if (!isSplitScreenMode) {
@@ -556,9 +556,9 @@ const App: React.FC = () => {
         } else if (tab.id) {
           // In split screen mode, go through background
           try {
-            const response = await chrome.runtime.sendMessage({ 
-              type: 'PDF_SCANNER_RESCAN', 
-              payload: { tabId: tab.id } 
+            const response = await chrome.runtime.sendMessage({
+              type: 'PDF_SCANNER_RESCAN',
+              payload: { tabId: tab.id }
             });
             log.debug('PDF_SCANNER_RESCAN response:', response);
           } catch (e) {
@@ -567,16 +567,16 @@ const App: React.FC = () => {
         }
         return true;
       }
-      
+
       // Check if on a raw PDF page (including Chrome's built-in PDF viewer)
       // Chrome's PDF viewer uses extension ID: mhjfbmdgcfjbbpaeojofohoefgiehjai
       const lowerUrl = url.toLowerCase();
-      const isPdfPage = lowerUrl.endsWith('.pdf') || 
-        lowerUrl.includes('.pdf?') || 
+      const isPdfPage = lowerUrl.endsWith('.pdf') ||
+        lowerUrl.includes('.pdf?') ||
         lowerUrl.includes('.pdf#') ||
         lowerUrl.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai') || // Chrome's built-in PDF viewer
         url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
-      
+
       if (isPdfPage) {
         // Open PDF scanner for this URL
         // For Chrome's PDF viewer, extract the actual PDF URL
@@ -588,7 +588,7 @@ const App: React.FC = () => {
             pdfUrl = decodeURIComponent(match[1]);
           }
         }
-        
+
         const response = await chrome.runtime.sendMessage({
           type: 'OPEN_PDF_SCANNER',
           payload: { pdfUrl },
@@ -598,7 +598,7 @@ const App: React.FC = () => {
         }
         return true;
       }
-      
+
       return false;
     } catch (error) {
       log.error('Error checking PDF page:', error);
@@ -611,18 +611,18 @@ const App: React.FC = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
     const targetPlatformId = platformId || investigationPlatformId;
     if (!targetPlatformId && openctiPlatforms.length > 1) return;
-    
+
     // Check if on PDF page first - PDF pages should use the standard scan which is shown in panel
     const isPdf = await checkAndHandlePdfPage();
     if (isPdf) return;
-    
+
     setInvestigationScanning(true);
     setInvestigationEntities([]);
-    
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { 
+        chrome.tabs.sendMessage(tab.id, {
           type: 'SCAN_FOR_INVESTIGATION',
           payload: { platformId: targetPlatformId || openctiPlatforms[0]?.id },
         });
@@ -651,7 +651,7 @@ const App: React.FC = () => {
       window.parent.postMessage({ type: 'XTM_PDF_SCANNER_RESCAN' }, '*');
       return;
     }
-    
+
     // In split screen mode with PDF view detected, open PDF scanner for the current tab
     // This handles the case when user is on a native PDF page with the sidebar open
     if (isPdfView && isSplitScreenMode) {
@@ -659,11 +659,11 @@ const App: React.FC = () => {
       const isPdf = await checkAndHandlePdfPage();
       if (isPdf) return;
     }
-    
+
     // Check if on PDF page first (fallback for other cases)
     const isPdf = await checkAndHandlePdfPage();
     if (isPdf) return;
-    
+
     setIsScanning(true);
     sendToContentScript('SCAN_ALL');
   };
@@ -702,26 +702,26 @@ const App: React.FC = () => {
         if (response.data?.theme) {
           setMode(response.data.theme === 'light' ? 'light' : 'dark');
         }
-        
+
         // Update split screen mode from settings (fallback if detection fails)
         if (response.data?.splitScreenMode !== undefined) {
           // If in iframe but setting is true, we might be in transition - use detected value
           // If not in iframe, we're definitely in side panel
           setIsSplitScreenMode(isInSidePanel || response.data.splitScreenMode);
         }
-        
+
         const ai = response.data?.ai;
         const aiAvailable = !!(ai?.xtmOneUrl && ai?.apiToken);
         setAiSettings({ enabled: aiAvailable, available: aiAvailable });
       }
     });
-    
+
     // Load platforms via hook
     loadPlatforms();
 
     window.addEventListener('message', handleMessage);
     window.parent.postMessage({ type: 'XTM_PANEL_READY' }, '*');
-    
+
     // Small delay before GET_PANEL_STATE to ensure React is fully initialized
     // This helps with native side panel where timing can be critical
     setTimeout(() => {
@@ -738,7 +738,7 @@ const App: React.FC = () => {
         hasRestoredState.current = true;
       });
     }, 50);
-    
+
     // Listen for runtime messages (for split screen mode)
     // In split screen mode, content script sends messages via chrome.runtime
     const handleRuntimeMessage = (message: { type: string; payload?: unknown }) => {
@@ -748,12 +748,12 @@ const App: React.FC = () => {
         handlePanelState(panelMessage);
       }
     };
-    
+
     chrome.runtime.onMessage.addListener(handleRuntimeMessage);
-    
+
     // Track last processed message timestamp to avoid processing stale messages
     let lastProcessedMessageTime = 0;
-    
+
     // Check for pending panel state from session storage (split screen mode in Chrome/Edge)
     // This handles the case where context menu was used but panel wasn't ready yet
     const checkPendingState = () => {
@@ -771,7 +771,7 @@ const App: React.FC = () => {
         // Session storage not available
       });
     };
-    
+
     // Update handleMessage to use timestamp tracking
     const originalHandleMessage = handleMessage;
     const handleMessageWithTimestamp = (event: MessageEvent) => {
@@ -783,10 +783,10 @@ const App: React.FC = () => {
     };
     window.removeEventListener('message', handleMessage);
     window.addEventListener('message', handleMessageWithTimestamp);
-    
+
     // Initial check after a small delay (same as GET_PANEL_STATE)
     setTimeout(() => checkPendingState(), 100);
-    
+
     // Poll for pending state a few times (for split screen mode in Chrome/Edge)
     // Use shorter intervals for faster response
     let pollCount = 0;
@@ -799,7 +799,7 @@ const App: React.FC = () => {
       }
       checkPendingState();
     }, 200);
-    
+
     // Listen for storage changes
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local' && changes.settings) {
@@ -807,7 +807,7 @@ const App: React.FC = () => {
         if (newSettings) {
           // Reload platforms via hook (handles platform state updates)
           loadPlatforms();
-          
+
           // Update AI settings
           const ai = newSettings.ai;
           const aiAvailable = !!(ai?.xtmOneUrl && ai?.apiToken);
@@ -815,7 +815,7 @@ const App: React.FC = () => {
         }
       }
     };
-    
+
     chrome.storage.onChanged.addListener(handleStorageChange);
 
     return () => {
@@ -840,38 +840,38 @@ const App: React.FC = () => {
           // Ignore - cross-origin issues
         }
       }
-      
+
       // Also try chrome.tabs.query as a fallback (works better in split screen mode)
       if (typeof chrome === 'undefined' || !chrome.tabs?.query) return;
-      
+
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.url) {
           const url = tab.url;
           const extensionId = chrome.runtime.id;
-          
+
           // Check if on PDF scanner page
           const isPdfScannerPage = url.startsWith(`chrome-extension://${extensionId}/pdf-scanner/`) ||
                                    url.startsWith(`moz-extension://${extensionId}/pdf-scanner/`);
-          
+
           // Check if on native PDF page (including Chrome's built-in PDF viewer)
           // Chrome's PDF viewer uses extension ID: mhjfbmdgcfjbbpaeojofohoefgiehjai
           const lowerUrl = url.toLowerCase();
-          const isNativePdf = lowerUrl.endsWith('.pdf') || 
-                              lowerUrl.includes('.pdf?') || 
+          const isNativePdf = lowerUrl.endsWith('.pdf') ||
+                              lowerUrl.includes('.pdf?') ||
                               lowerUrl.includes('.pdf#') ||
                               lowerUrl.includes('mhjfbmdgcfjbbpaeojofohoefgiehjai') || // Chrome's built-in PDF viewer
                               url.match(/\/[^/]+\.pdf($|\?|#)/i) !== null;
-          
+
           setIsPdfView(isPdfScannerPage || isNativePdf);
         }
       } catch (e) {
         // Ignore - may not have tab access
       }
     };
-    
+
     checkPdfView();
-    
+
     // In split screen mode, also check after a delay to handle initial load timing issues
     // The PDF scanner tab might not be fully ready when the panel first loads
     if (isSplitScreenMode) {
@@ -880,13 +880,13 @@ const App: React.FC = () => {
         setTimeout(() => checkPdfView(), delay);
       });
     }
-    
+
     // Re-check when tab changes (listen for tab activation)
     const handleTabActivated = () => checkPdfView();
     if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
       chrome.tabs.onActivated.addListener(handleTabActivated);
     }
-    
+
     // Re-check when the current tab's URL changes (e.g., navigating to a PDF)
     const handleTabUpdated = (tabId: number, changeInfo: { url?: string; status?: string }) => {
       // Only check if URL changed and tab is in the current window
@@ -902,7 +902,7 @@ const App: React.FC = () => {
     if (typeof chrome !== 'undefined' && chrome.tabs?.onUpdated) {
       chrome.tabs.onUpdated.addListener(handleTabUpdated);
     }
-    
+
     // Re-check when page visibility changes (tab becomes active)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -910,7 +910,7 @@ const App: React.FC = () => {
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
         chrome.tabs.onActivated.removeListener(handleTabActivated);
@@ -989,7 +989,7 @@ const App: React.FC = () => {
     if (data.payload?.theme && (data.payload.theme === 'dark' || data.payload.theme === 'light')) {
       if (data.payload.theme !== mode) setMode(data.payload.theme);
     }
-    
+
     switch (data.type) {
       case 'SHOW_ENTITY':
       case 'SHOW_ENTITY_PANEL':
@@ -1086,7 +1086,7 @@ const App: React.FC = () => {
   const handleShowEntity = async (payload: any) => {
     setEntityContainers([]);
     setEntityFromSearchMode(null);
-    
+
     // Restore scan results from payload if available (needed when panel was closed and reopened)
     if (payload?.scanResults) {
       const { entities } = processScanResults(payload.scanResults);
@@ -1095,19 +1095,19 @@ const App: React.FC = () => {
         scanResultsEntitiesRef.current = entities;
       }
     }
-    
+
     // Use fromScanResults flag from payload if available, otherwise check local scan results
     const hasScanResults = payload?.fromScanResults === true || scanResultsEntitiesRef.current.length > 0;
     setEntityFromScanResults(hasScanResults);
-    
+
     const entityId = payload?.entityData?.id || payload?.entityId || payload?.id;
     const entityType = payload?.entityData?.entity_type || payload?.type || payload?.entity_type;
     const platformId = payload?.platformId;
     const platformMatches = payload?.platformMatches || payload?.entityData?.platformMatches;
-    
+
     // Build multi-platform results
     let multiResults: MultiPlatformResult[] = [];
-    
+
     // Handle multi-platform results with platform fallback (same as CommonScanResultsView)
     if (platformMatches && platformMatches.length > 0) {
       for (const match of platformMatches) {
@@ -1117,7 +1117,7 @@ const App: React.FC = () => {
           // Fall back to finding any platform of the same type
           platform = availablePlatforms.find(p => p.type === match.platformType);
         }
-        
+
         const matchPlatformType = (match.platformType || platform?.type || 'opencti') as PlatformType;
         const matchType = match.type || match.entityData?.entity_type || payload?.type || entityType || '';
         // Remove any existing prefix and get the clean type
@@ -1125,10 +1125,10 @@ const App: React.FC = () => {
         const cleanType = parsed ? parsed.entityType : matchType;
         // Apply proper prefix based on platform type
         const displayType = prefixEntityType(cleanType, matchPlatformType);
-        
+
         // Use the found platform's ID if available
         const resolvedPlatformId = platform?.id || match.platformId;
-        
+
         multiResults.push({
           platformId: resolvedPlatformId,
           platformName: platform?.name || match.platformId,
@@ -1148,7 +1148,7 @@ const App: React.FC = () => {
           } as EntityData,
         });
       }
-      
+
       const sorted = sortPlatformResults(multiResults, availablePlatforms);
       multiResults = sorted;
       setMultiPlatformResults(sorted);
@@ -1169,7 +1169,7 @@ const App: React.FC = () => {
       setCurrentPlatformIndex(0);
       updateCurrentPlatformIndexRef(0);
     }
-    
+
     // Update platform URL
     if (platformId && availablePlatforms.length > 0) {
       const platform = availablePlatforms.find(p => p.id === platformId);
@@ -1178,17 +1178,17 @@ const App: React.FC = () => {
         setSelectedPlatformId(platform.id);
       }
     }
-    
+
     // Determine platform type for initial entity
     const parsedType = entityType ? parsePrefixedType(entityType) : null;
     const isNonDefaultPlatform = parsedType !== null;
     const entityPlatformType = parsedType?.platformType || 'opencti';
-    
+
     // Set initial entity and panel mode
     const initialEntity = multiResults[0]?.entity || { ...payload, platformType: entityPlatformType, isNonDefaultPlatform: isNonDefaultPlatform };
     setEntity(initialEntity);
     setPanelMode(payload?.existsInPlatform || multiResults.length > 0 ? 'entity' : 'not-found');
-    
+
     // Always fetch entity details for the first platform if entity exists
     // This ensures fresh data regardless of what's in the cache
     if (multiResults.length > 0 && multiResults[0] && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -1197,10 +1197,10 @@ const App: React.FC = () => {
       const firstEntityType = ((firstResult.entity.entity_type || firstResult.entity.type || '') as string).replace(/^oaev-/, '');
       const firstPlatformId = firstResult.platformId;
       const firstPlatformType = (firstResult.entity.platformType || 'opencti') as string;
-      
+
       if (firstEntityId && firstPlatformId) {
         setEntityDetailsLoading(true);
-        
+
         chrome.runtime.sendMessage({
           type: 'GET_ENTITY_DETAILS',
           payload: { id: firstEntityId, entityType: firstEntityType, platformId: firstPlatformId, platformType: firstPlatformType },
@@ -1208,14 +1208,14 @@ const App: React.FC = () => {
           setEntityDetailsLoading(false);
           if (chrome.runtime.lastError) return;
           if (currentPlatformIndexRef.current !== 0) return;
-          
+
           if (response?.success && response.data) {
-            const fullEntity = { 
+            const fullEntity = {
               ...firstResult.entity, ...response.data, entityData: response.data, existsInPlatform: true,
               platformId: firstPlatformId, platformType: firstPlatformType, isNonDefaultPlatform: firstPlatformType !== 'opencti',
             };
             setEntity(fullEntity);
-            setMultiPlatformResults(prev => prev.map((r, i) => 
+            setMultiPlatformResults(prev => prev.map((r, i) =>
               i === 0 ? { ...r, entity: { ...r.entity, ...response.data, entityData: response.data } } : r
             ));
             multiPlatformResultsRef.current = multiPlatformResultsRef.current.map((r, i) =>
@@ -1240,10 +1240,10 @@ const App: React.FC = () => {
     const pdfFileName = payload?.pdfFileName || '';
     const isPdfSourcePayload = payload?.isPdfSource || false;
     const containerDescription = payload?.pageDescription || generateDescription(pageContent);
-    
+
     // For PDF source, use the PDF title as container name, not the page title (which is "Filigran XTM - PDF scanner")
     const containerName = isPdfSourcePayload && pageTitle ? pageTitle : pageTitle;
-    
+
     setContainerForm({ name: containerName, description: containerDescription, content: cleanHtmlContent(pageHtmlContent) });
     setEntitiesToAdd(payload?.entities || []);
     setCurrentPageUrl(pageUrl);
@@ -1252,7 +1252,7 @@ const App: React.FC = () => {
     setIsPdfSource(isPdfSourcePayload);
     setContainerWorkflowOrigin('direct');
     setExistingContainers([]);
-    
+
     const goToNextStep = () => {
       const platforms = openctiPlatformsRef.current;
       if (platforms.length > 1) {
@@ -1265,11 +1265,11 @@ const App: React.FC = () => {
         setPanelMode('container-type');
       }
     };
-    
+
     if (pageUrl && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       setCheckingExisting(true);
       setPanelMode('loading');
-      
+
       chrome.runtime.sendMessage({ type: 'FIND_CONTAINERS_BY_URL', payload: { url: pageUrl } }, (response) => {
         setCheckingExisting(false);
         if (chrome.runtime.lastError) { goToNextStep(); return; }
@@ -1310,7 +1310,7 @@ const App: React.FC = () => {
     clearEntityState();
     setEntityContainers([]);
     if (payload?.theme && (payload.theme === 'dark' || payload.theme === 'light')) setMode(payload.theme);
-    
+
     setAtomicTestingTargets(payload?.targets || []);
     setSelectedAtomicTarget(null);
     setAtomicTestingPlatformSelected(false);
@@ -1332,14 +1332,14 @@ const App: React.FC = () => {
     clearEntityState();
     setEntityContainers([]);
     const entities = payload?.entities || [];
-    
+
     // Deduplicate entities by type + name/value combination
     const seenEntities = new Map<string, any>();
     for (const e of entities) {
       const type = e.type || e.entity_type;
       const name = e.name || e.value || '';
       const dedupeKey = `${type}:${name.toLowerCase()}`;
-      
+
       if (!seenEntities.has(dedupeKey)) {
         seenEntities.set(dedupeKey, {
           id: e.entityId || e.id,
@@ -1351,7 +1351,7 @@ const App: React.FC = () => {
         });
       }
     }
-    
+
     setInvestigationEntities(Array.from(seenEntities.values()));
     setInvestigationScanning(false);
     setInvestigationTypeFilter('all');
@@ -1362,7 +1362,7 @@ const App: React.FC = () => {
     clearEntityState();
     setEntityContainers([]);
     setEntityFromSearchMode(null);
-    
+
     const { entities, pageContent, pageTitle, pageUrl } = processScanResults(payload || {});
     setScanResultsEntities(entities);
     setScanResultsTypeFilter('all');
@@ -1377,7 +1377,7 @@ const App: React.FC = () => {
   // Handler: Scan Results with initial filter (e.g., from clicking AI highlight)
   const handleScanResultsWithFilter = (payload: any) => {
     const { initialFilter, ...rest } = payload || {};
-    
+
     // If we already have scan results loaded and just need to change filter
     if (scanResultsEntities.length > 0 && panelMode === 'scan-results') {
       // Just update the filter
@@ -1389,7 +1389,7 @@ const App: React.FC = () => {
       clearEntityState();
       setEntityContainers([]);
       setEntityFromSearchMode(null);
-      
+
       const { entities, pageContent, pageTitle, pageUrl } = processScanResults(rest || {});
       setScanResultsEntities(entities);
       setScanResultsTypeFilter('all');
@@ -1430,7 +1430,7 @@ const App: React.FC = () => {
   const handleShowScenario = async (payload: any) => {
     const { attackPatterns, pageTitle, pageUrl, pageDescription, theme: themeFromPayload } = payload || {};
     if (themeFromPayload && (themeFromPayload === 'dark' || themeFromPayload === 'light')) setMode(themeFromPayload);
-    
+
     setCurrentPageUrl(pageUrl || '');
     setCurrentPageTitle(pageTitle || '');
     setScenarioForm({
@@ -1455,7 +1455,7 @@ const App: React.FC = () => {
     setScenarioAIContext('');
     setScenarioAIGeneratedScenario(null);
     setScenarioRawAttackPatterns(attackPatterns || []);
-    
+
     let currentPlatforms = availablePlatformsRef.current;
     if (currentPlatforms.length === 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
@@ -1479,7 +1479,7 @@ const App: React.FC = () => {
         log.warn('Failed to fetch platforms:', error);
       }
     }
-    
+
     const oaevPlatformsList = currentPlatforms.filter(p => p.type === 'openaev');
     if (oaevPlatformsList.length > 1) {
       setScenarioPlatformSelected(false);
@@ -1492,7 +1492,7 @@ const App: React.FC = () => {
       setScenarioPlatformId(singlePlatformId);
       setSelectedPlatformId(singlePlatformId);
       setPlatformUrl(oaevPlatformsList[0].url);
-      
+
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         Promise.all([
           chrome.runtime.sendMessage({ type: 'FETCH_OAEV_ASSETS', payload: { platformId: singlePlatformId } }),
@@ -1504,11 +1504,11 @@ const App: React.FC = () => {
           if (teamsRes?.success) setScenarioTeams(teamsRes.data || []);
         }).catch((error) => log.error('Failed to fetch scenario targets:', error));
       }
-      
+
       setScenarioSelectedAsset(null);
       setScenarioSelectedAssetGroup(null);
       setScenarioSelectedTeam(null);
-      
+
       const filteredPatterns = (attackPatterns || []).filter((ap: any) => !ap.platformId || ap.platformId === singlePlatformId);
       if (filteredPatterns.length > 0 && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         setScenarioLoading(true);
@@ -1596,10 +1596,10 @@ const App: React.FC = () => {
     if (!addToScanResultsText || !addToScanResultsEntityType) return;
 
     const trimmedValue = addToScanResultsText.trim().toLowerCase();
-    
+
     // Check for duplicate: same type and same value (case-insensitive)
-    const isDuplicate = scanResultsEntitiesRef.current.some(entity => 
-      entity.type === addToScanResultsEntityType && 
+    const isDuplicate = scanResultsEntitiesRef.current.some(entity =>
+      entity.type === addToScanResultsEntityType &&
       (entity.name?.toLowerCase() === trimmedValue || entity.value?.toLowerCase() === trimmedValue)
     );
 
@@ -1659,7 +1659,7 @@ const App: React.FC = () => {
       case 'entity': {
         const entityType = (entity as any)?.type || '';
         const isNonDefaultPlatformEntity = (entity as any)?.isNonDefaultPlatform || (entity as any)?.platformType !== 'opencti' || parsePrefixedType(entityType) !== null;
-        
+
         if (isNonDefaultPlatformEntity) {
           return <OAEVEntityView mode={mode} entity={entity} setEntity={setEntity} entityDetailsLoading={entityDetailsLoading} setEntityDetailsLoading={setEntityDetailsLoading} availablePlatforms={availablePlatforms} multiPlatformResults={multiPlatformResults} setMultiPlatformResults={setMultiPlatformResults} currentPlatformIndex={currentPlatformIndex} setCurrentPlatformIndex={setCurrentPlatformIndex} currentPlatformIndexRef={currentPlatformIndexRef} multiPlatformResultsRef={multiPlatformResultsRef} setPlatformUrl={setPlatformUrl} setSelectedPlatformId={setSelectedPlatformId} entityFromSearchMode={entityFromSearchMode} setEntityFromSearchMode={setEntityFromSearchMode} entityFromScanResults={entityFromScanResults} setEntityFromScanResults={setEntityFromScanResults} setPanelMode={setPanelMode} handleCopyValue={handleCopyValue} />;
         }
@@ -1682,8 +1682,8 @@ const App: React.FC = () => {
       case 'scenario-overview':
       case 'scenario-form': return <OAEVScenarioView mode={mode} panelMode={panelMode as 'scenario-overview' | 'scenario-form'} availablePlatforms={availablePlatforms} selectedPlatformId={selectedPlatformId} setSelectedPlatformId={setSelectedPlatformId} setPlatformUrl={setPlatformUrl} setPanelMode={setPanelMode} showToast={showToast} currentPageTitle={currentPageTitle} currentPageUrl={currentPageUrl} aiSettings={aiSettings} submitting={submitting} setSubmitting={setSubmitting} aiSelectingInjects={aiSelectingInjects} setAiSelectingInjects={setAiSelectingInjects} aiFillingEmails={aiFillingEmails} setAiFillingEmails={setAiFillingEmails} handleClose={handleClose} scenarioOverviewData={scenarioOverviewData} setScenarioOverviewData={setScenarioOverviewData} scenarioForm={scenarioForm} setScenarioForm={setScenarioForm} selectedInjects={selectedInjects} setSelectedInjects={setSelectedInjects} scenarioEmails={scenarioEmails} setScenarioEmails={setScenarioEmails} scenarioLoading={scenarioLoading} setScenarioLoading={setScenarioLoading} scenarioStep={scenarioStep} setScenarioStep={setScenarioStep} scenarioTypeAffinity={scenarioTypeAffinity} setScenarioTypeAffinity={setScenarioTypeAffinity} scenarioPlatformsAffinity={scenarioPlatformsAffinity} setScenarioPlatformsAffinity={setScenarioPlatformsAffinity} scenarioInjectSpacing={scenarioInjectSpacing} setScenarioInjectSpacing={setScenarioInjectSpacing} scenarioPlatformSelected={scenarioPlatformSelected} setScenarioPlatformSelected={setScenarioPlatformSelected} scenarioPlatformId={scenarioPlatformId} setScenarioPlatformId={setScenarioPlatformId} scenarioRawAttackPatterns={scenarioRawAttackPatterns} setScenarioRawAttackPatterns={setScenarioRawAttackPatterns} scenarioTargetType={scenarioTargetType} setScenarioTargetType={setScenarioTargetType} scenarioAssets={scenarioAssets} setScenarioAssets={setScenarioAssets} scenarioAssetGroups={scenarioAssetGroups} setScenarioAssetGroups={setScenarioAssetGroups} scenarioTeams={scenarioTeams} setScenarioTeams={setScenarioTeams} scenarioSelectedAsset={scenarioSelectedAsset} setScenarioSelectedAsset={setScenarioSelectedAsset} scenarioSelectedAssetGroup={scenarioSelectedAssetGroup} setScenarioSelectedAssetGroup={setScenarioSelectedAssetGroup} scenarioSelectedTeam={scenarioSelectedTeam} setScenarioSelectedTeam={setScenarioSelectedTeam} scenarioCreating={scenarioCreating} setScenarioCreating={setScenarioCreating} scenarioAIMode={scenarioAIMode} setScenarioAIMode={setScenarioAIMode} scenarioAIGenerating={scenarioAIGenerating} setScenarioAIGenerating={setScenarioAIGenerating} scenarioAINumberOfInjects={scenarioAINumberOfInjects} setScenarioAINumberOfInjects={setScenarioAINumberOfInjects} scenarioAIPayloadAffinity={scenarioAIPayloadAffinity} setScenarioAIPayloadAffinity={setScenarioAIPayloadAffinity} scenarioAITableTopDuration={scenarioAITableTopDuration} setScenarioAITableTopDuration={setScenarioAITableTopDuration} scenarioAIEmailLanguage={scenarioAIEmailLanguage} setScenarioAIEmailLanguage={setScenarioAIEmailLanguage} scenarioAITheme={scenarioAITheme} setScenarioAITheme={setScenarioAITheme} scenarioAIContext={scenarioAIContext} setScenarioAIContext={setScenarioAIContext} scenarioAIGeneratedScenario={scenarioAIGeneratedScenario} setScenarioAIGeneratedScenario={setScenarioAIGeneratedScenario} resetScenarioState={resetScenarioState} />;
       case 'loading': return <CommonLoadingView />;
-      default: return isScanning 
-        ? <CommonLoadingView message="Scanning page..." /> 
+      default: return isScanning
+        ? <CommonLoadingView message="Scanning page..." />
         : <CommonEmptyView logoSuffix={logoSuffix} hasOpenCTI={openctiPlatforms.some(p => p.connected)} hasOpenAEV={openaevPlatforms.some(p => p.connected)} onScan={handleEmptyViewScan} onSearch={handleEmptyViewSearch} onCreateContainer={handleEmptyViewCreateContainer} onInvestigate={handleEmptyViewInvestigate} onAtomicTesting={handleEmptyViewAtomicTesting} onGenerateScenario={handleEmptyViewGenerateScenario} onClearHighlights={handleEmptyViewClearHighlights} isPdfView={isPdfView} />;
     }
   };

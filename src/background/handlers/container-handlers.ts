@@ -1,6 +1,6 @@
 /**
  * Container Message Handlers - Extracted from background/index.ts
- * 
+ *
  * These handlers process container-related messages for OpenCTI.
  * They are called directly from the main message handler switch statement.
  */
@@ -26,31 +26,30 @@ export async function handleCreateContainer(
     sendResponse(errorResponse('Not configured'));
     return;
   }
-  
+
   try {
     // Use specified platform or first available
     const platformId = payload.platformId || openCTIClients.keys().next().value as string | undefined;
-    
+
     if (!platformId) {
       sendResponse(errorResponse('No platform available'));
       return;
     }
-    
+
     const client = openCTIClients.get(platformId);
-    
+
     if (!client) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
-    
+
     // Step 0: Create any entities that don't exist yet
     const allEntityIds: string[] = [...(payload.entities || [])];
-    
     const failedEntities: Array<{ type: string; value: string; error: string }> = [];
 
     if (payload.entitiesToCreate && payload.entitiesToCreate.length > 0) {
       log.info(`Creating ${payload.entitiesToCreate.length} new entities for container...`);
-      
+
       for (const entityToCreate of payload.entitiesToCreate) {
         try {
           // Refang the value before creating (OpenCTI stores clean values)
@@ -63,7 +62,7 @@ export async function handleCreateContainer(
             value: cleanValue,
             name: cleanValue, // For SDOs that use name instead of value
           });
-          
+
           if (created?.id) {
             allEntityIds.push(created.id);
             log.debug(`Created entity: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
@@ -77,30 +76,30 @@ export async function handleCreateContainer(
 
       log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}, failed: ${failedEntities.length}`);
     }
-    
+
     // Step 1: Create relationships if provided (before container, so we can include them)
     const createdRelationships: Array<{ id: string; relationship_type: string }> = [];
     if (payload.relationshipsToCreate && payload.relationshipsToCreate.length > 0 && allEntityIds.length > 0) {
       log.info(`Creating ${payload.relationshipsToCreate.length} relationships...`);
-      
+
       for (const rel of payload.relationshipsToCreate) {
         try {
           // Get entity IDs from indices
           const fromId = allEntityIds[rel.fromEntityIndex];
           const toId = allEntityIds[rel.toEntityIndex];
-          
+
           if (!fromId || !toId) {
             log.warn(`Invalid relationship indices: from=${rel.fromEntityIndex}, to=${rel.toEntityIndex}, available=${allEntityIds.length}`);
             continue;
           }
-          
+
           const relationship = await client.createStixCoreRelationship({
             fromId,
             toId,
             relationship_type: rel.relationship_type,
             description: rel.description,
           });
-          
+
           if (relationship?.id) {
             createdRelationships.push({
               id: relationship.id,
@@ -113,10 +112,10 @@ export async function handleCreateContainer(
           // Continue with other relationships
         }
       }
-      
+
       log.info(`Created ${createdRelationships.length} of ${payload.relationshipsToCreate.length} relationships`);
     }
-    
+
     // Step 2: Create external reference
     // For PDF sources: use external_id (the filename) instead of URL
     // For web pages: use URL as before
@@ -150,15 +149,15 @@ export async function handleCreateContainer(
         // Continue without external reference
       }
     }
-    
+
     // Step 3: Create the container with ALL IDs (entities + relationships)
     const allObjectIds = [
       ...allEntityIds,
       ...createdRelationships.map(r => r.id),
     ];
-    
+
     log.info(`${payload.updateContainerId ? 'Updating' : 'Creating'} container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
-    
+
     const container = await client.createContainer({
       type: payload.type as OCTIContainerType,
       name: payload.name,
@@ -181,7 +180,7 @@ export async function handleCreateContainer(
       published: payload.published,
       created: payload.created,
     });
-    
+
     // Step 4: Attach external reference to the container
     if (externalReferenceId && container.id) {
       try {
@@ -192,7 +191,7 @@ export async function handleCreateContainer(
         // Continue - container was created successfully
       }
     }
-    
+
     // Step 5: Upload PDF attachment if provided
     if (payload.pdfAttachment && container.id) {
       try {
@@ -202,7 +201,7 @@ export async function handleCreateContainer(
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        
+
         await client.uploadFileToEntity(container.id, {
           name: payload.pdfAttachment.filename,
           data: bytes.buffer,
@@ -214,11 +213,11 @@ export async function handleCreateContainer(
         // Don't fail the whole operation, container was created successfully
       }
     }
-    
-    sendResponse({ 
-      success: true, 
-      data: { 
-        ...container, 
+
+    sendResponse({
+      success: true,
+      data: {
+        ...container,
         platformId: platformId,
         _createdRelationships: createdRelationships,
         failedEntities: failedEntities.length > 0 ? failedEntities : undefined,

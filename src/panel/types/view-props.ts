@@ -1,6 +1,6 @@
 /**
  * Panel View Props
- * 
+ *
  * Common prop interfaces shared across panel views.
  * This allows views to be extracted into separate components while maintaining
  * type safety and consistent state management.
@@ -530,4 +530,3 @@ export interface PreviewViewProps extends BaseViewProps, PlatformViewProps {
   /** Set submitting state */
   setSubmitting: (submitting: boolean) => void;
 }
-

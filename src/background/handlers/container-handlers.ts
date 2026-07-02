@@ -9,6 +9,7 @@ import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { errorResponse, type SendResponseFn } from '../../shared/types/common';
 import type { CreateContainerPayload } from '../../shared/types/messages';
+import type { FailedEntityImport } from '../../shared/types/scan';
 import { loggers } from '../../shared/utils/logger';
 import type { OCTIContainerType } from '../../shared/types/opencti';
 
@@ -43,39 +44,41 @@ export async function handleCreateContainer(
       return;
     }
 
-    // Step 0: Create any entities that don't exist yet
-    const allEntityIds: string[] = [...(payload.entities || [])];
-    const failedEntities: Array<{ type: string; value: string; error: string }> = [];
+    // Step 0: Create any entities that don't exist yet.
+    // Each entry maps 1-to-1 with entitiesToCreate so relationship indices stay stable:
+    // a failed creation leaves null in the slot rather than shifting subsequent entries.
+    type CreationResult =
+      | { status: 'created'; id: string }
+      | { status: 'failed'; type: string; value: string; error: string };
 
-    if (payload.entitiesToCreate && payload.entitiesToCreate.length > 0) {
-      log.info(`Creating ${payload.entitiesToCreate.length} new entities for container...`);
-
-      for (const entityToCreate of payload.entitiesToCreate) {
+    const creationResults: CreationResult[] = await Promise.all(
+      (payload.entitiesToCreate || []).map(async (e): Promise<CreationResult> => {
         try {
-          // Refang the value before creating (OpenCTI stores clean values)
-          const cleanValue = refangIndicator(entityToCreate.value);
-          // Use createEntity instead of createObservable to handle both
-          // STIX Domain Objects (SDOs) like Vulnerability, Malware, Threat-Actor
-          // and STIX Cyber Observables (SCOs) like IP, Domain, Hash
-          const created = await client.createEntity({
-            type: entityToCreate.type,
-            value: cleanValue,
-            name: cleanValue, // For SDOs that use name instead of value
-          });
-
-          if (created?.id) {
-            allEntityIds.push(created.id);
-            log.debug(`Created entity: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
-          }
-        } catch (entityError) {
-          log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
-          const errorMessage = entityError instanceof Error ? entityError.message : 'Failed to create entity';
-          failedEntities.push({ type: entityToCreate.type, value: entityToCreate.value, error: errorMessage });
+          const cleanValue = refangIndicator(e.value);
+          const created = await client.createEntity({ type: e.type, value: cleanValue, name: cleanValue });
+          log.debug(`Created entity: ${e.type} = ${cleanValue} -> ${created.id}`);
+          return { status: 'created', id: created.id };
+        } catch (err) {
+          const error = err instanceof Error ? err.message : 'Failed to create entity';
+          log.warn(`Failed to create entity ${e.type}:${e.value}:`, err);
+          return { status: 'failed', type: e.type, value: e.value, error };
         }
-      }
+      })
+    );
 
-      log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}, failed: ${failedEntities.length}`);
-    }
+    const failedEntities: FailedEntityImport[] = creationResults
+      .filter((r) => r.status === 'failed')
+      .map(({ type, value, error }) => ({ type, value, error }));
+
+    // Slot-indexed array for relationship resolution: null where creation failed.
+    // Prefixed with pre-existing entity ids so UI-side indices remain valid.
+    const entitySlots: Array<string | null> = [
+      ...(payload.entities || []),
+      ...creationResults.map(r => (r.status === 'created' ? r.id : null)),
+    ];
+
+    // Flat list of all valid ids for the container objects list.
+    const allEntityIds = entitySlots.filter((id): id is string => id !== null);
 
     // Step 1: Create relationships if provided (before container, so we can include them)
     const createdRelationships: Array<{ id: string; relationship_type: string }> = [];
@@ -84,12 +87,12 @@ export async function handleCreateContainer(
 
       for (const rel of payload.relationshipsToCreate) {
         try {
-          // Get entity IDs from indices
-          const fromId = allEntityIds[rel.fromEntityIndex];
-          const toId = allEntityIds[rel.toEntityIndex];
+          // Get entity IDs from slots — null means that entity failed to create
+          const fromId = entitySlots[rel.fromEntityIndex];
+          const toId = entitySlots[rel.toEntityIndex];
 
           if (!fromId || !toId) {
-            log.warn(`Invalid relationship indices: from=${rel.fromEntityIndex}, to=${rel.toEntityIndex}, available=${allEntityIds.length}`);
+            log.warn(`Skipping relationship: entity at index ${!fromId ? rel.fromEntityIndex : rel.toEntityIndex} was not created`);
             continue;
           }
 

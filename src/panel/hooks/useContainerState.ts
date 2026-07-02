@@ -15,7 +15,7 @@ import type {
   VocabularyOption,
   AuthorOption,
 } from '../types/panel-types';
-import type { ImportResults } from '../../shared/types/scan';
+import type { ImportResults, FailedEntityImport } from '../../shared/types/scan';
 
 export interface ContainerStateReturn {
   // Container type and form
@@ -84,9 +84,9 @@ export interface ContainerStateReturn {
   importResults: ImportResults | null;
   setImportResults: (results: ImportResults | null) => void;
 
-  // Failed entities from last container creation
-  containerFailedEntities: Array<{ type: string; value: string; error: string }>;
-  setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
+  // Failed entities from last container creation, scoped to the container that was created
+  containerFailedEntities: { containerId: string; failed: FailedEntityImport[] } | null;
+  setContainerFailedEntities: (value: { containerId: string; failed: FailedEntityImport[] } | null) => void;
 
   // Container workflow
   containerWorkflowOrigin: 'preview' | 'direct' | 'import' | null;
@@ -170,8 +170,8 @@ export function useContainerState(): ContainerStateReturn {
   // Import results
   const [importResults, setImportResults] = useState<ImportResults | null>(null);
 
-  // Failed entities from last container creation
-  const [containerFailedEntities, setContainerFailedEntities] = useState<Array<{ type: string; value: string; error: string }>>([]);
+  // Failed entities from last container creation, scoped to the container that was created
+  const [containerFailedEntities, setContainerFailedEntities] = useState<{ containerId: string; failed: FailedEntityImport[] } | null>(null);
 
   // Container workflow
   const [containerWorkflowOrigin, setContainerWorkflowOrigin] = useState<'preview' | 'direct' | 'import' | null>(null);

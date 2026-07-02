@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import type { EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, PanelMode } from '../types/panel-types';
-import type { ImportResults } from '../../shared/types/scan';
+import type { ImportResults, FailedEntityImport } from '../../shared/types/scan';
 import type { ResolvedRelationship } from '../../shared/api/ai/types';
 
 export interface ContainerActionsProps {
@@ -42,7 +42,7 @@ export interface ContainerActionsProps {
   setImportResults: (results: ImportResults | null) => void;
 
   // Failed entities
-  setContainerFailedEntities: (entities: Array<{ type: string; value: string; error: string }>) => void;
+  setContainerFailedEntities: (value: { containerId: string; failed: FailedEntityImport[] } | null) => void;
 
   // AI state
   aiSettings: PanelAIState;
@@ -202,7 +202,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
 
   const handleCreateContainer = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
-    setContainerFailedEntities([]);
+    setContainerFailedEntities(null);
     setSubmitting(true);
 
     let pdfData: { data: string; filename: string } | null = null;
@@ -303,8 +303,10 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
           setSelectedPlatformId(platform.id);
         }
       }
-      const failedEntities: Array<{ type: string; value: string; error: string }> = createdContainer.failedEntities || [];
-      setContainerFailedEntities(failedEntities);
+      const failedEntities: FailedEntityImport[] = createdContainer.failedEntities || [];
+      setContainerFailedEntities(
+        failedEntities.length > 0 ? { containerId: createdContainer.id, failed: failedEntities } : null
+      );
       setEntity({
         id: createdContainer.id,
         entity_type: createdContainer.entity_type || containerType,

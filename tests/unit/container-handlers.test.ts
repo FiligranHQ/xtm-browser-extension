@@ -116,6 +116,37 @@ describe('handleCreateContainer', () => {
     }));
   });
 
+  it('should use stable indices for relationships when a preceding entity creation fails', async () => {
+    // entity at index 0 fails, entity at index 1 succeeds.
+    // a relationship between index 1 (entitiesToCreate) and index 0 (existing entity)
+    // must still resolve correctly — index 0 maps to the pre-existing entity.
+    const client = makeClient({
+      createEntity: vi.fn()
+        .mockRejectedValueOnce(new Error('API error'))        // entitiesToCreate[0] fails
+        .mockResolvedValueOnce({ id: 'entity-2', entity_type: 'Domain-Name' }), // entitiesToCreate[1] succeeds
+    });
+    const clients = new Map([['platform-1', client as any]]);
+    const payload = makePayload({
+      entities: ['existing-1'],
+      entitiesToCreate: [
+        { type: 'IPv4-Addr', value: '1.2.3.4' },   // index 1 in combined array (after existing-1)
+        { type: 'Domain-Name', value: 'evil.com' }, // index 2 in combined array
+      ],
+      relationshipsToCreate: [
+        // relationship between existing-1 (index 0) and Domain-Name (index 2)
+        { fromEntityIndex: 0, toEntityIndex: 2, relationship_type: 'related-to' },
+      ],
+    });
+
+    await handleCreateContainer(payload, mockSendResponse, clients);
+
+    expect(client.createStixCoreRelationship).toHaveBeenCalledWith(expect.objectContaining({
+      fromId: 'existing-1',
+      toId: 'entity-2',
+    }));
+    expect(mockSendResponse).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
   it('should report all entities as failed but still create the container', async () => {
     const client = makeClient({
       createEntity: vi.fn().mockRejectedValue(new Error('API error')),

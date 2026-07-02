@@ -25,7 +25,7 @@ import type {
   VocabularyOption,
   AuthorOption,
 } from './panel-types';
-import type { ScanResultEntity, ImportResults } from '../../shared/types/scan';
+import type { ScanResultEntity, ImportResults, FailedEntityImport } from '../../shared/types/scan';
 import type { ResolvedRelationship, GeneratedAtomicTest } from '../../shared/api/ai/types';
 import type {
   OAEVAsset,
@@ -126,8 +126,8 @@ export interface OCTIEntityViewProps {
   handleCopyValue: (value: string) => void;
   /** Open entity in platform */
   handleOpenInPlatform: (entityId: string, draftId?: string) => void;
-  /** Entities that failed to be created during the last container import */
-  containerFailedEntities?: Array<{ type: string; value: string; error: string }>;
+  /** Entities that failed to be created during the last container import, scoped to the created container */
+  containerFailedEntities?: { containerId: string; failed: FailedEntityImport[] } | null;
 }
 
 /**

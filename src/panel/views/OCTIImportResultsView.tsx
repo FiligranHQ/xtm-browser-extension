@@ -298,7 +298,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'error.main', fontWeight: 600 }}>
             FAILED ({importResults.failed.length})
           </Typography>
-          <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.1 }}>
+          <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.5 }}>
             {importResults.failed.map((entity, idx) => (
               <Box
                 key={idx}
@@ -313,11 +313,11 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
               >
                 <ItemIcon type={entity.type} size="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                     {entity.value}
                   </Typography>
                   {entity.error && (
-                    <Typography variant="caption" sx={{ color: 'error.main' }}>
+                    <Typography variant="caption">
                       {entity.error}
                     </Typography>
                   )}

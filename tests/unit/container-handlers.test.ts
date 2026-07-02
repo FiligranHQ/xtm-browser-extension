@@ -16,6 +16,7 @@ vi.mock('../../src/shared/utils/logger', () => ({
 }));
 
 const makeClient = (overrides = {}) => ({
+  createDraftWorkspace: vi.fn().mockResolvedValue({ id: 'draft-ws-1', name: 'Draft - Test Report' }),
   createEntity: vi.fn().mockResolvedValue({ id: 'entity-1', entity_type: 'Malware' }),
   createStixCoreRelationship: vi.fn().mockResolvedValue({ id: 'rel-1' }),
   createExternalReference: vi.fn().mockResolvedValue({ id: 'extref-1' }),
@@ -143,7 +144,7 @@ describe('handleCreateContainer', () => {
     expect(client.createStixCoreRelationship).toHaveBeenCalledWith(expect.objectContaining({
       fromId: 'existing-1',
       toId: 'entity-2',
-    }));
+    }), undefined);
     expect(mockSendResponse).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
@@ -182,5 +183,53 @@ describe('handleCreateContainer', () => {
     await handleCreateContainer(makePayload(), mockSendResponse, clients);
 
     expect(mockSendResponse).toHaveBeenCalledWith({ success: false, error: 'Unauthorized' });
+  });
+
+  describe('draft mode', () => {
+    it('should pre-create draft workspace before entities and thread draftId to all creation calls', async () => {
+      const client = makeClient({
+        createEntity: vi.fn().mockResolvedValue({ id: 'entity-1', entity_type: 'IPv4-Addr' }),
+      });
+      const clients = new Map([['platform-1', client as any]]);
+      const payload = makePayload({
+        createAsDraft: true,
+        entitiesToCreate: [{ type: 'IPv4-Addr', value: '1.2.3.4' }],
+        pageUrl: 'https://example.com',
+        pageTitle: 'Article',
+        relationshipsToCreate: [
+          { fromEntityIndex: 0, toEntityIndex: 0, relationship_type: 'related-to' },
+        ],
+      });
+
+      // Capture call order
+      const callOrder: string[] = [];
+      client.createDraftWorkspace.mockImplementation(async () => { callOrder.push('createDraftWorkspace'); return { id: 'draft-ws-1' }; });
+      client.createEntity.mockImplementation(async () => { callOrder.push('createEntity'); return { id: 'entity-1', entity_type: 'IPv4-Addr' }; });
+      client.createExternalReference.mockImplementation(async () => { callOrder.push('createExternalReference'); return { id: 'extref-1' }; });
+
+      await handleCreateContainer(payload, mockSendResponse, clients);
+
+      // Workspace must be first
+      expect(callOrder[0]).toBe('createDraftWorkspace');
+
+      // draftId threaded into every subsequent call
+      expect(client.createEntity).toHaveBeenCalledWith(expect.anything(), 'draft-ws-1');
+      expect(client.createExternalReference).toHaveBeenCalledWith(expect.anything(), 'draft-ws-1');
+      expect(client.createContainer).toHaveBeenCalledWith(expect.objectContaining({
+        createAsDraft: true,
+        draftId: 'draft-ws-1',
+      }));
+      expect(mockSendResponse).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('should NOT call createDraftWorkspace when createAsDraft is false', async () => {
+      const client = makeClient();
+      const clients = new Map([['platform-1', client as any]]);
+
+      await handleCreateContainer(makePayload({ createAsDraft: false }), mockSendResponse, clients);
+
+      expect(client.createDraftWorkspace).not.toHaveBeenCalled();
+      expect(client.createContainer).toHaveBeenCalledWith(expect.objectContaining({ draftId: undefined }));
+    });
   });
 });

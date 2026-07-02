@@ -1000,6 +1000,35 @@ describe('OpenCTIClient', () => {
       expect(client1).not.toBe(client2);
     });
   });
+
+  // ============================================================================
+  // Draft context propagation
+  // ============================================================================
+
+  describe('draft context propagation', () => {
+    it('should use pre-existing draftId in createContainer: skip workspace creation and send opencti-draft-id header', async () => {
+      // Only ONE fetch expected — workspace already created externally, no createDraftWorkspace call
+      mockFetch.mockResolvedValueOnce(createMockResponse({
+        reportAdd: { id: 'report-1', entity_type: 'Report', name: 'Test' },
+      }));
+
+      const result = await client.createContainer({
+        type: 'Report',
+        name: 'Test',
+        createAsDraft: true,
+        draftId: 'draft-pre-created',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'opencti-draft-id': 'draft-pre-created' }),
+        })
+      );
+      expect(result.draftId).toBe('draft-pre-created');
+    });
+  });
 });
 
 // ============================================================================

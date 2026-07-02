@@ -216,6 +216,7 @@ export interface OCTIContainerCreateInput {
   createdBy?: string;
   externalReferences?: OCTIExternalReferenceInput[];
   createAsDraft?: boolean;
+  draftId?: string;
 }
 
 export interface OCTIExternalReferenceInput {

@@ -51,11 +51,20 @@ export async function handleCreateContainer(
       | { status: 'created'; id: string }
       | { status: 'failed'; type: string; value: string; error: string };
 
+    // Pre-create draft workspace so ALL entities, relationships and external references
+    // are seeded into the draft context before the container itself is created.
+    let draftId: string | undefined;
+    if (payload.createAsDraft) {
+      const draftWorkspace = await client.createDraftWorkspace(`Draft - ${payload.name}`);
+      draftId = draftWorkspace.id;
+      log.debug(`Pre-created draft workspace: ${draftId}`);
+    }
+
     const creationResults: CreationResult[] = await Promise.all(
       (payload.entitiesToCreate || []).map(async (e): Promise<CreationResult> => {
         try {
           const cleanValue = refangIndicator(e.value);
-          const created = await client.createEntity({ type: e.type, value: cleanValue, name: cleanValue });
+          const created = await client.createEntity({ type: e.type, value: cleanValue, name: cleanValue }, draftId);
           log.debug(`Created entity: ${e.type} = ${cleanValue} -> ${created.id}`);
           return { status: 'created', id: created.id };
         } catch (err) {
@@ -101,7 +110,7 @@ export async function handleCreateContainer(
             toId,
             relationship_type: rel.relationship_type,
             description: rel.description,
-          });
+          }, draftId);
 
           if (relationship?.id) {
             createdRelationships.push({
@@ -130,7 +139,7 @@ export async function handleCreateContainer(
           source_name: 'PDF Document',
           description: payload.pageTitle || 'Source PDF document',
           external_id: payload.pdfFileName,
-        });
+        }, draftId);
         externalReferenceId = extRef.id;
         log.debug(`Created external reference with external_id: ${payload.pdfFileName}`);
       } catch (extRefError) {
@@ -144,7 +153,7 @@ export async function handleCreateContainer(
           source_name: 'Web Article',
           description: payload.pageTitle || 'Source article',
           url: payload.pageUrl,
-        });
+        }, draftId);
         externalReferenceId = extRef.id;
         log.debug(`Created external reference: ${externalReferenceId}`);
       } catch (extRefError) {
@@ -176,8 +185,9 @@ export async function handleCreateContainer(
       priority: payload.priority,
       response_types: payload.response_types,
       createdBy: payload.createdBy,
-      // Draft mode
+      // Draft mode: pass pre-created draftId so createContainer skips internal workspace creation
       createAsDraft: payload.createAsDraft,
+      draftId,
       // Update mode: pass original dates to avoid creating duplicates
       // For Reports, use 'published'; for other containers, use 'created'
       published: payload.published,
@@ -187,7 +197,7 @@ export async function handleCreateContainer(
     // Step 4: Attach external reference to the container
     if (externalReferenceId && container.id) {
       try {
-        await client.addExternalReferenceToEntity(container.id, externalReferenceId);
+        await client.addExternalReferenceToEntity(container.id, externalReferenceId, draftId);
         log.debug('Attached external reference to container');
       } catch (attachError) {
         log.warn('Failed to attach external reference to container:', attachError);

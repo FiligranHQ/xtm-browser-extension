@@ -1008,38 +1008,38 @@ describe('OpenCTIClient', () => {
 
 describe('buildValueFilter', () => {
   it('should use key=number (integer) for Autonomous-System, not key=value', () => {
-    const filter = buildValueFilter('AS64496', 'Autonomous-System') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter('AS64496', 'Autonomous-System');
     expect(filter.filters).toContainEqual({ key: 'number', values: [64496] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });
 
   it('should use key=name for StixFile (filename lookup), not key=value', () => {
-    const filter = buildValueFilter('malware.exe', 'StixFile') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter('malware.exe', 'StixFile');
     expect(filter.filters).toContainEqual({ key: 'name', values: ['malware.exe'] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });
 
   it('should use key=iban for Bank-Account (IBAN format), not key=value', () => {
-    const filter = buildValueFilter('GB82WEST12345698765432', 'Bank-Account') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter('GB82WEST12345698765432', 'Bank-Account');
     expect(filter.filters).toContainEqual({ key: 'iban', values: ['GB82WEST12345698765432'] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });
 
   it('should use key=card_number for Payment-Card, not key=value', () => {
-    const filter = buildValueFilter('4111 1111 1111 1111', 'Payment-Card') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter('4111 1111 1111 1111', 'Payment-Card');
     expect(filter.filters).toContainEqual({ key: 'card_number', values: ['4111111111111111'] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });
 
   it('should use key=attribute_key for Windows-Registry-Key, not key=value', () => {
-    const filter = buildValueFilter('HKEY_LOCAL_MACHINE\\Software\\evil', 'Windows-Registry-Key') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter('HKEY_LOCAL_MACHINE\\Software\\evil', 'Windows-Registry-Key');
     expect(filter.filters).toContainEqual({ key: 'attribute_key', values: ['HKEY_LOCAL_MACHINE\\Software\\evil'] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });
 
   it('should use key=hashes.SHA-1 for X509-Certificate fingerprint, not key=value', () => {
     const sha1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
-    const filter = buildValueFilter(sha1, 'X509-Certificate') as { filters: Array<{ key: string; values: unknown[] }> };
+    const filter = buildValueFilter(sha1, 'X509-Certificate');
     expect(filter.filters).toContainEqual({ key: 'hashes.SHA-1', values: [sha1] });
     expect(filter.filters.map(f => f.key)).not.toContain('value');
   });

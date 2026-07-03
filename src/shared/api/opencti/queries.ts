@@ -7,6 +7,7 @@
 
 import { ALL_FRAGMENTS, OBSERVABLE_PROPERTIES, SDO_PROPERTIES } from './fragments';
 import { detectHashType } from './observable-mapping';
+import { OpenctiFilterGroup } from './types';
 
 // ============================================================================
 // Platform Information Queries
@@ -518,8 +519,8 @@ export const FILE_UPLOAD_MUTATION = `
  * Build a simple filter for exact value match.
  * Some types use fields other than 'value' (e.g. Autonomous-System uses 'number', StixFile uses 'name').
  */
-export function buildValueFilter(value: string, type?: string): object {
-  const filters: { mode: string; filters: object[]; filterGroups: object[] } = {
+export function buildValueFilter(value: string, type?: string): OpenctiFilterGroup {
+  const filters: OpenctiFilterGroup = {
     mode: 'and',
     filters: [],
     filterGroups: [],
@@ -587,7 +588,7 @@ export function buildValueFilter(value: string, type?: string): object {
 /**
  * Build a filter for hash lookup
  */
-export function buildHashFilter(hash: string, hashType: string): object {
+export function buildHashFilter(hash: string, hashType: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: `hashes.${hashType}`, values: [hash] }],
@@ -598,7 +599,7 @@ export function buildHashFilter(hash: string, hashType: string): object {
 /**
  * Build a filter for name or alias search
  */
-export function buildNameFilter(name: string, searchByAlias = false): object {
+export function buildNameFilter(name: string, searchByAlias = false): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: searchByAlias ? 'aliases' : 'name', values: [name], operator: 'eq' }],
@@ -609,7 +610,7 @@ export function buildNameFilter(name: string, searchByAlias = false): object {
 /**
  * Build a filter for URL lookup
  */
-export function buildUrlFilter(url: string): object {
+export function buildUrlFilter(url: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'url', values: [url], operator: 'eq' }],
@@ -620,7 +621,7 @@ export function buildUrlFilter(url: string): object {
 /**
  * Build a filter for external reference IDs
  */
-export function buildExternalRefFilter(extRefIds: string[]): object {
+export function buildExternalRefFilter(extRefIds: string[]): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'externalReferences', values: extRefIds, operator: 'eq' }],
@@ -631,7 +632,7 @@ export function buildExternalRefFilter(extRefIds: string[]): object {
 /**
  * Build a filter for objects in a container
  */
-export function buildObjectsFilter(entityId: string): object {
+export function buildObjectsFilter(entityId: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'objects', values: [entityId] }],

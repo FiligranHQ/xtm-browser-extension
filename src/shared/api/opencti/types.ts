@@ -89,6 +89,19 @@ export interface IdentityQueryResult {
   };
 }
 
+export interface OpenctiFilterGroup {
+  mode: string;
+  filters: Filter[];
+  filterGroups: OpenctiFilterGroup[]
+}
+interface Filter {
+  key: string;
+  values: unknown[];
+  operator?: string;
+  mode?: string;
+};
+
+
 // ============================================================================
 // Entity Creation Types
 // ============================================================================
@@ -132,4 +145,3 @@ export interface ContainerQueryResult {
     edges: Array<{ node: ContainerNode }>;
   };
 }
-

@@ -6,16 +6,16 @@ This extension integrates with [OpenCTI](https://filigran.io/solutions/open-cti/
 
 ## Table of Contents
 
-| Document | Description |
-|----------|-------------|
-| [Overview](./overview.md) | Architecture, concepts, and supported platforms |
-| [Architecture](./architecture.md) | Technical architecture, state management, and workflows |
-| [Installation](./installation.md) | Browser-specific installation guides |
-| [Configuration](./configuration.md) | Platform setup, API tokens, AI settings |
-| [Features](./features.md) | Page scanning, highlighting, containers, AI, and scenario themes |
-| [Detection Settings](./detection.md) | Observable, entity type, and defanged IOC configuration |
-| [Development](./development.md) | Development guide, testing, and contributing |
-| [Troubleshooting](./troubleshooting.md) | Common issues and solutions |
+| Document                                | Description                                                      |
+|-----------------------------------------|------------------------------------------------------------------|
+| [Overview](./overview.md)               | Architecture, concepts, and supported platforms                  |
+| [Architecture](./architecture.md)       | Technical architecture, state management, and workflows          |
+| [Installation](./installation.md)       | Browser-specific installation guides                             |
+| [Configuration](./configuration.md)     | Platform setup, API tokens, AI settings                          |
+| [Features](./features.md)               | Page scanning, highlighting, containers, AI, and scenario themes |
+| [Detection Settings](./detection.md)    | Observable, entity type, and defanged IOC configuration          |
+| [Development](./development.md)         | Development guide, testing, and contributing                     |
+| [Troubleshooting](./troubleshooting.md) | Common issues and solutions                                      |
 
 ## Quick Start
 

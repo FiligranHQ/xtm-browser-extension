@@ -5,6 +5,25 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-06-29
+
+### ⚠ BREAKING CHANGE
+- **AI features now powered by XTM One**: AI capabilities are now centralized through XTM One instead of individual bring-your-own LLM API keys (OpenAI, Anthropic, Gemini, or custom endpoints). This unifies prompt management, model routing, and output handling server-side. All AI capabilities (description generation, scenario generation, full scenario, atomic testing, email generation, entity discovery, relationship resolution) now run through an XTM One integration. Users configure an XTM One URL and API token in the extension settings. Previous AI provider settings (`apiKey`, `model`, `customBaseUrl`) have been removed (#149)
+
+### Changed
+- **AI client simplified**: The `AIClient` is now a thin client that sends structured task payloads to `POST /api/v1/extension/execute-task` and receives structured JSON responses. Prompt management, model routing, and output parsing all move server-side to XTM One agents
+- **AI settings UI**: Provider and model dropdowns replaced with XTM One URL + API token fields
+- **AI error messages**: All AI-gated UI surfaces now show "AI is not configured. Configure XTM One in extension settings." when XTM One is not set up
+
+### Removed
+- `AIProvider` type, `apiKey`, `model`, `customBaseUrl`, `availableModels` from `AISettings`
+- Prompt templates (`ai/prompts.ts`), JSON extraction logic (`ai/json-parser.ts`), and their tests
+- LLM retry logic, prompt construction, and raw output parsing from background handlers
+
+### Fixed
+- **OpenCTI credentials**: Added `credentials: 'omit'` to OpenCTI client fetch calls
+- **Error messages**: Added user-friendly 401/404 error messages to OpenCTI and OpenAEV clients
+
 ## [0.0.23] - 2026-06-25
 
 ### Fixed
@@ -441,6 +460,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Side panel for scan results
 - Options page for advanced settings
 
+[0.1.0]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.23...v0.1.0
 [0.0.23]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.22...v0.0.23
 [0.0.22]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/FiligranHQ/xtm-browser-extension/compare/v0.0.20...v0.0.21

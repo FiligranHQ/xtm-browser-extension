@@ -6,6 +6,8 @@
  */
 
 import { ALL_FRAGMENTS, OBSERVABLE_PROPERTIES, SDO_PROPERTIES } from './fragments';
+import { detectHashType } from './observable-mapping';
+import { OpenctiFilterGroup } from './types';
 
 // ============================================================================
 // Platform Information Queries
@@ -514,14 +516,65 @@ export const FILE_UPLOAD_MUTATION = `
 // ============================================================================
 
 /**
- * Build a simple filter for exact value match
+ * Build a simple filter for exact value match.
+ * Some types use fields other than 'value' (e.g. Autonomous-System uses 'number', StixFile uses 'name').
  */
-export function buildValueFilter(value: string, type?: string): object {
-  const filters: { mode: string; filters: object[]; filterGroups: object[] } = {
+export function buildValueFilter(value: string, type?: string): OpenctiFilterGroup {
+  const filters: OpenctiFilterGroup = {
     mode: 'and',
-    filters: [{ key: 'value', values: [value] }],
+    filters: [],
     filterGroups: [],
   };
+
+  // Autonomous-System stores number as integer field, not a 'value' string
+  if (type === 'Autonomous-System') {
+    const asnMatch = value.match(/(?:AS[N]?)?(\d+)/i);
+    const asnNumber = asnMatch ? parseInt(asnMatch[1], 10) : parseInt(value, 10);
+    filters.filters.push({ key: 'number', values: [asnNumber] });
+    filters.filters.push({ key: 'entity_type', values: ['Autonomous-System'] });
+    return filters;
+  }
+
+  // StixFile filename lookup uses 'name' field (hash lookups go through buildHashFilter)
+  if (type === 'StixFile') {
+    filters.filters.push({ key: 'name', values: [value] });
+    filters.filters.push({ key: 'entity_type', values: ['StixFile'] });
+    return filters;
+  }
+
+  // Bank-Account uses iban, bic, or account_number depending on format
+  if (type === 'Bank-Account') {
+    const clean = value.replace(/\s/g, '');
+    const key = /^[A-Z]{2}\d{2}/i.test(clean) ? 'iban' : /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}/i.test(clean) ? 'bic' : 'account_number';
+    filters.filters.push({ key, values: [clean.toUpperCase()] });
+    filters.filters.push({ key: 'entity_type', values: ['Bank-Account'] });
+    return filters;
+  }
+
+  // Payment-Card uses card_number field
+  if (type === 'Payment-Card') {
+    filters.filters.push({ key: 'card_number', values: [value.replace(/[\s-]/g, '')] });
+    filters.filters.push({ key: 'entity_type', values: ['Payment-Card'] });
+    return filters;
+  }
+
+  // Windows-Registry-Key uses attribute_key field
+  if (type === 'Windows-Registry-Key') {
+    filters.filters.push({ key: 'attribute_key', values: [value] });
+    filters.filters.push({ key: 'entity_type', values: ['Windows-Registry-Key'] });
+    return filters;
+  }
+
+  // X509-Certificate fingerprint lookup uses hashes.* field
+  if (type === 'X509-Certificate') {
+    const hashType = detectHashType(value);
+    const key = hashType ? `hashes.${hashType}` : 'serial_number';
+    filters.filters.push({ key, values: [value] });
+    filters.filters.push({ key: 'entity_type', values: ['X509-Certificate'] });
+    return filters;
+  }
+
+  filters.filters.push({ key: 'value', values: [value] });
 
   if (type === 'Domain-Name' || type === 'Hostname') {
     filters.filters.push({ key: 'entity_type', values: ['Domain-Name', 'Hostname'] });
@@ -535,7 +588,7 @@ export function buildValueFilter(value: string, type?: string): object {
 /**
  * Build a filter for hash lookup
  */
-export function buildHashFilter(hash: string, hashType: string): object {
+export function buildHashFilter(hash: string, hashType: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: `hashes.${hashType}`, values: [hash] }],
@@ -546,7 +599,7 @@ export function buildHashFilter(hash: string, hashType: string): object {
 /**
  * Build a filter for name or alias search
  */
-export function buildNameFilter(name: string, searchByAlias = false): object {
+export function buildNameFilter(name: string, searchByAlias = false): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: searchByAlias ? 'aliases' : 'name', values: [name], operator: 'eq' }],
@@ -557,7 +610,7 @@ export function buildNameFilter(name: string, searchByAlias = false): object {
 /**
  * Build a filter for URL lookup
  */
-export function buildUrlFilter(url: string): object {
+export function buildUrlFilter(url: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'url', values: [url], operator: 'eq' }],
@@ -568,7 +621,7 @@ export function buildUrlFilter(url: string): object {
 /**
  * Build a filter for external reference IDs
  */
-export function buildExternalRefFilter(extRefIds: string[]): object {
+export function buildExternalRefFilter(extRefIds: string[]): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'externalReferences', values: extRefIds, operator: 'eq' }],
@@ -579,7 +632,7 @@ export function buildExternalRefFilter(extRefIds: string[]): object {
 /**
  * Build a filter for objects in a container
  */
-export function buildObjectsFilter(entityId: string): object {
+export function buildObjectsFilter(entityId: string): OpenctiFilterGroup {
   return {
     mode: 'and',
     filters: [{ key: 'objects', values: [entityId] }],

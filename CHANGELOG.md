@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-06-29
 
 ### ⚠ BREAKING CHANGE
-- **AI features now require XTM One**: The extension no longer supports bring-your-own LLM API keys (OpenAI, Anthropic, Gemini, or custom endpoints). All AI capabilities (description generation, scenario generation, full scenario, atomic testing, email generation, entity discovery, relationship resolution) now require an XTM One integration. Users must configure an XTM One URL and API token in the extension settings. Previous AI provider settings (`apiKey`, `model`, `customBaseUrl`) have been removed (#149)
+- **AI features now powered by XTM One**: AI capabilities are now centralized through XTM One instead of individual bring-your-own LLM API keys (OpenAI, Anthropic, Gemini, or custom endpoints). This unifies prompt management, model routing, and output handling server-side. All AI capabilities (description generation, scenario generation, full scenario, atomic testing, email generation, entity discovery, relationship resolution) now run through an XTM One integration. Users configure an XTM One URL and API token in the extension settings. Previous AI provider settings (`apiKey`, `model`, `customBaseUrl`) have been removed (#149)
 
 ### Changed
 - **AI client simplified**: The `AIClient` is now a thin client that sends structured task payloads to `POST /api/v1/extension/execute-task` and receives structured JSON responses. Prompt management, model routing, and output parsing all move server-side to XTM One agents

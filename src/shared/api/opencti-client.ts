@@ -468,7 +468,7 @@ export class OpenCTIClient {
     createIndicator?: boolean;
     objectMarking?: string[];
     objectLabel?: string[];
-  }): Promise<OCTIStixCyberObservable> {
+  }, draftId?: string): Promise<OCTIStixCyberObservable> {
     // OpenCTI uses the type as-is (with hyphens) for the 'type' field
     const gqlType = toGraphQLInputType(input.type);
     const observableInput = buildObservableInput(input.type, input.value, input.hashType);
@@ -485,7 +485,8 @@ export class OpenCTIClient {
 
     const data = await this.query<{ stixCyberObservableAdd: OCTIStixCyberObservable }>(
       buildCreateObservableMutation(gqlType),
-      variables
+      variables,
+      draftId,
     );
     return data.stixCyberObservableAdd;
   }
@@ -494,74 +495,74 @@ export class OpenCTIClient {
   // SDO Creation Methods
   // ==========================================================================
 
-  async createIntrusionSet(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_INTRUSION_SET_MUTATION, { input });
+  async createIntrusionSet(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ intrusionSetAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_INTRUSION_SET_MUTATION, { input }, draftId);
     return data.intrusionSetAdd;
   }
 
-  async createThreatActorGroup(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
+  async createThreatActorGroup(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
     const data = await this.query<{ threatActorGroupAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_GROUP_MUTATION, {
       input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
-    });
+    }, draftId);
     return data.threatActorGroupAdd;
   }
 
-  async createThreatActorIndividual(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
+  async createThreatActorIndividual(input: { name: string; description?: string; threat_actor_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
     const data = await this.query<{ threatActorIndividualAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_THREAT_ACTOR_INDIVIDUAL_MUTATION, {
       input: { ...input, threat_actor_types: input.threat_actor_types || ['unknown'] },
-    });
+    }, draftId);
     return data.threatActorIndividualAdd;
   }
 
-  async createMalware(input: { name: string; description?: string; malware_types?: string[]; is_family?: boolean; objectMarking?: string[]; objectLabel?: string[] }) {
+  async createMalware(input: { name: string; description?: string; malware_types?: string[]; is_family?: boolean; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
     const data = await this.query<{ malwareAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_MALWARE_MUTATION, {
       input: { ...input, malware_types: input.malware_types || ['unknown'], is_family: input.is_family ?? true },
-    });
+    }, draftId);
     return data.malwareAdd;
   }
 
-  async createTool(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_TOOL_MUTATION, { input });
+  async createTool(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ toolAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_TOOL_MUTATION, { input }, draftId);
     return data.toolAdd;
   }
 
-  async createCampaign(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CAMPAIGN_MUTATION, { input });
+  async createCampaign(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ campaignAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CAMPAIGN_MUTATION, { input }, draftId);
     return data.campaignAdd;
   }
 
-  async createVulnerability(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_VULNERABILITY_MUTATION, { input });
+  async createVulnerability(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ vulnerabilityAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_VULNERABILITY_MUTATION, { input }, draftId);
     return data.vulnerabilityAdd;
   }
 
-  async createAttackPattern(input: { name: string; description?: string; x_mitre_id?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] } }>(CREATE_ATTACK_PATTERN_MUTATION, { input });
+  async createAttackPattern(input: { name: string; description?: string; x_mitre_id?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ attackPatternAdd: { id: string; standard_id: string; entity_type: string; name: string; x_mitre_id?: string; aliases?: string[] } }>(CREATE_ATTACK_PATTERN_MUTATION, { input }, draftId);
     return data.attackPatternAdd;
   }
 
-  async createCountry(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ countryAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_COUNTRY_MUTATION, { input });
+  async createCountry(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ countryAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_COUNTRY_MUTATION, { input }, draftId);
     return data.countryAdd;
   }
 
-  async createSector(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ sectorAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_SECTOR_MUTATION, { input });
+  async createSector(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ sectorAdd: { id: string; standard_id: string; entity_type: string; name: string } }>(CREATE_SECTOR_MUTATION, { input }, draftId);
     return data.sectorAdd;
   }
 
-  async createNarrative(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ narrativeAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_NARRATIVE_MUTATION, { input });
+  async createNarrative(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ narrativeAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_NARRATIVE_MUTATION, { input }, draftId);
     return data.narrativeAdd;
   }
 
-  async createChannel(input: { name: string; description?: string; channel_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ channelAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CHANNEL_MUTATION, { input });
+  async createChannel(input: { name: string; description?: string; channel_types?: string[]; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ channelAdd: { id: string; standard_id: string; entity_type: string; name: string; aliases?: string[] } }>(CREATE_CHANNEL_MUTATION, { input }, draftId);
     return data.channelAdd;
   }
 
-  async createSystem(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }) {
-    const data = await this.query<{ systemAdd: { id: string; standard_id: string; entity_type: string; name: string; x_opencti_aliases?: string[] } }>(CREATE_SYSTEM_MUTATION, { input });
+  async createSystem(input: { name: string; description?: string; objectMarking?: string[]; objectLabel?: string[] }, draftId?: string) {
+    const data = await this.query<{ systemAdd: { id: string; standard_id: string; entity_type: string; name: string; x_opencti_aliases?: string[] } }>(CREATE_SYSTEM_MUTATION, { input }, draftId);
     return data.systemAdd;
   }
 
@@ -573,7 +574,7 @@ export class OpenCTIClient {
     x_mitre_id?: string;
     objectMarking?: string[];
     objectLabel?: string[];
-  }): Promise<{ id: string; standard_id: string; entity_type: string; name?: string; observable_value?: string; aliases?: string[]; x_mitre_id?: string }> {
+  }, draftId?: string): Promise<{ id: string; standard_id: string; entity_type: string; name?: string; observable_value?: string; aliases?: string[]; x_mitre_id?: string }> {
     const normalizedType = input.type.toLowerCase().replace(/[_\s]/g, '-');
     const entityName = input.name || input.value || 'Unknown';
     
@@ -588,19 +589,19 @@ export class OpenCTIClient {
     }
 
     const sdoTypes: Record<string, () => Promise<{ id: string; standard_id: string; entity_type: string; name: string; aliases?: string[]; x_opencti_aliases?: string[]; x_mitre_id?: string }>> = {
-      'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'threat-actor-group': () => this.createThreatActorGroup({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'threat-actor-individual': () => this.createThreatActorIndividual({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'malware': () => this.createMalware({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'tool': () => this.createTool({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'campaign': () => this.createCampaign({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'vulnerability': () => this.createVulnerability({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, x_mitre_id: mitreId, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'country': () => this.createCountry({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'narrative': () => this.createNarrative({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'channel': () => this.createChannel({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
-      'system': () => this.createSystem({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }),
+      'intrusion-set': () => this.createIntrusionSet({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'threat-actor-group': () => this.createThreatActorGroup({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'threat-actor-individual': () => this.createThreatActorIndividual({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'malware': () => this.createMalware({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'tool': () => this.createTool({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'campaign': () => this.createCampaign({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'vulnerability': () => this.createVulnerability({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'attack-pattern': () => this.createAttackPattern({ name: entityName, description: input.description, x_mitre_id: mitreId, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'country': () => this.createCountry({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'sector': () => this.createSector({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'narrative': () => this.createNarrative({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'channel': () => this.createChannel({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
+      'system': () => this.createSystem({ name: entityName, description: input.description, objectMarking: input.objectMarking, objectLabel: input.objectLabel }, draftId),
     };
 
     if (sdoTypes[normalizedType]) {
@@ -618,7 +619,7 @@ export class OpenCTIClient {
       description: input.description,
       objectMarking: input.objectMarking,
       objectLabel: input.objectLabel,
-    });
+    }, draftId);
 
     return {
       id: observable.id,
@@ -632,13 +633,13 @@ export class OpenCTIClient {
   // External Reference Operations
   // ==========================================================================
 
-  async createExternalReference(input: { source_name: string; url?: string; external_id?: string; description?: string }): Promise<{ id: string; standard_id: string; url?: string }> {
-    const data = await this.query<{ externalReferenceAdd: { id: string; standard_id: string; url?: string } }>(CREATE_EXTERNAL_REFERENCE_MUTATION, { input });
+  async createExternalReference(input: { source_name: string; url?: string; external_id?: string; description?: string }, draftId?: string): Promise<{ id: string; standard_id: string; url?: string }> {
+    const data = await this.query<{ externalReferenceAdd: { id: string; standard_id: string; url?: string } }>(CREATE_EXTERNAL_REFERENCE_MUTATION, { input }, draftId);
     return data.externalReferenceAdd;
   }
 
-  async addExternalReferenceToEntity(entityId: string, externalReferenceId: string): Promise<void> {
-    await this.query(ADD_EXTERNAL_REFERENCE_TO_ENTITY_MUTATION, { id: entityId, input: { toId: externalReferenceId, relationship_type: 'external-reference' } });
+  async addExternalReferenceToEntity(entityId: string, externalReferenceId: string, draftId?: string): Promise<void> {
+    await this.query(ADD_EXTERNAL_REFERENCE_TO_ENTITY_MUTATION, { id: entityId, input: { toId: externalReferenceId, relationship_type: 'external-reference' } }, draftId);
   }
 
   async findExternalReferencesByUrl(url: string): Promise<Array<{ id: string; url: string; source_name: string }>> {
@@ -667,8 +668,14 @@ export class OpenCTIClient {
   async createContainer(input: OCTIContainerCreateInput): Promise<OCTIStixDomainObject & { draftId?: string }> {
     let draftId: string | undefined;
     if (input.createAsDraft) {
-      const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
-      draftId = draftWorkspace.id;
+      // Use pre-created draft workspace if provided (e.g. from container-handlers which
+      // must create the workspace first so entities can be seeded into the same draft).
+      if (input.draftId) {
+        draftId = input.draftId;
+      } else {
+        const draftWorkspace = await this.createDraftWorkspace(`Draft - ${input.name}`);
+        draftId = draftWorkspace.id;
+      }
     }
 
     const containerInput: Record<string, unknown> = {
@@ -861,8 +868,8 @@ export class OpenCTIClient {
     }
   }
 
-  async createStixCoreRelationship(input: { fromId: string; toId: string; relationship_type: string; description?: string; confidence?: number; objectMarking?: string[] }): Promise<{ id: string; standard_id: string }> {
-    const data = await this.query<{ stixCoreRelationshipAdd: { id: string; standard_id: string } }>(CREATE_RELATIONSHIP_MUTATION, { input });
+  async createStixCoreRelationship(input: { fromId: string; toId: string; relationship_type: string; description?: string; confidence?: number; objectMarking?: string[] }, draftId?: string): Promise<{ id: string; standard_id: string }> {
+    const data = await this.query<{ stixCoreRelationshipAdd: { id: string; standard_id: string } }>(CREATE_RELATIONSHIP_MUTATION, { input }, draftId);
     return data.stixCoreRelationshipAdd;
   }
 

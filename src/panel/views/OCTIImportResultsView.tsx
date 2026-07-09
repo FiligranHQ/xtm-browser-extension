@@ -18,6 +18,7 @@ import {
   ErrorOutline,
   OpenInNewOutlined,
   ChevronLeftOutlined,
+  WarningAmberOutlined,
 } from '@mui/icons-material';
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
@@ -59,6 +60,8 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
 
   if (!importResults) return null;
 
+  const partialSuccess = importResults.success && importResults.failed.length > 0;
+
   return (
     <Box sx={{ p: 2 }}>
       {/* Success/Error header */}
@@ -70,23 +73,27 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           textAlign: 'center',
           mb: 2,
           p: 3,
-          bgcolor: importResults.success ? 'success.main' : 'error.main',
+          bgcolor: partialSuccess ? 'warning.main' : importResults.success ? 'success.main' : 'error.main',
           borderRadius: 2,
           color: 'white',
         }}
       >
-        {importResults.success ? (
+        {partialSuccess ? (
+          <WarningAmberOutlined sx={{ fontSize: 48, mb: 1 }} />
+        ) : importResults.success ? (
           <CheckCircleOutlined sx={{ fontSize: 48, mb: 1 }} />
         ) : (
           <ErrorOutline sx={{ fontSize: 48, mb: 1 }} />
         )}
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-          {importResults.success ? 'Import Successful!' : 'Import Failed'}
+          {partialSuccess ? 'Partial Import' : importResults.success ? 'Import Successful!' : 'Import Failed'}
         </Typography>
         <Typography variant="body2" sx={{ opacity: 0.9 }}>
-          {importResults.success
-            ? `${importResults.created.length} entit${importResults.created.length === 1 ? 'y' : 'ies'} created in ${importResults.platformName}`
-            : `Failed to create ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'}`
+          {partialSuccess
+            ? `${importResults.created.length} created, ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'} could not be added`
+            : importResults.success
+              ? `${importResults.created.length} entit${importResults.created.length === 1 ? 'y' : 'ies'} created in ${importResults.platformName}`
+              : `Failed to create ${importResults.failed.length} entit${importResults.failed.length === 1 ? 'y' : 'ies'}`
           }
         </Typography>
       </Box>
@@ -218,16 +225,16 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
             {importResults.created.map((entity, idx) => {
               const color = itemColor(entity.type, mode === 'dark');
               // Construct the OpenCTI URL for the entity
-              const entityUrl = importResults.platformUrl 
+              const entityUrl = importResults.platformUrl
                 ? `${importResults.platformUrl.replace(/\/$/, '')}/dashboard/id/${entity.id}`
                 : null;
-              
+
               const handleOpenEntity = () => {
                 if (entityUrl) {
                   window.open(entityUrl, '_blank', 'noopener,noreferrer');
                 }
               };
-              
+
               return (
                 <Box
                   key={entity.id || idx}
@@ -270,7 +277,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
                         e.stopPropagation();
                         handleOpenEntity();
                       }}
-                      sx={{ 
+                      sx={{
                         color: 'text.secondary',
                         '&:hover': { color: 'primary.main' },
                       }}
@@ -291,7 +298,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
           <Typography variant="subtitle2" sx={{ mb: 1.5, color: 'error.main', fontWeight: 600 }}>
             FAILED ({importResults.failed.length})
           </Typography>
-          <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.1 }}>
+          <Box sx={{ maxHeight: 150, overflow: 'auto', border: 1, borderColor: 'error.main', borderRadius: 1, bgcolor: 'error.dark', opacity: 0.5 }}>
             {importResults.failed.map((entity, idx) => (
               <Box
                 key={idx}
@@ -306,11 +313,11 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
               >
                 <ItemIcon type={entity.type} size="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                     {entity.value}
                   </Typography>
                   {entity.error && (
-                    <Typography variant="caption" sx={{ color: 'error.main' }}>
+                    <Typography variant="caption">
                       {entity.error}
                     </Typography>
                   )}

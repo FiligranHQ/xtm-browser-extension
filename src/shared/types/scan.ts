@@ -72,13 +72,22 @@ export interface ScanResultEntity {
 // ============================================================================
 
 /**
+ * A single entity that failed to be created during an import or container operation.
+ */
+export interface FailedEntityImport {
+  type: string;
+  value: string;
+  error?: string;
+}
+
+/**
  * Results from bulk entity import operation
  */
 export interface ImportResults {
   success: boolean;
   total: number;
   created: Array<{ id: string; type: string; value: string }>;
-  failed: Array<{ type: string; value: string; error?: string }>;
+  failed: FailedEntityImport[];
   platformName: string;
   platformUrl: string;
 }

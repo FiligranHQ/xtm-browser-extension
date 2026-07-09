@@ -1,6 +1,6 @@
 /**
  * Container Message Handlers - Extracted from background/index.ts
- * 
+ *
  * These handlers process container-related messages for OpenCTI.
  * They are called directly from the main message handler switch statement.
  */
@@ -9,6 +9,7 @@ import { OpenCTIClient } from '../../shared/api/opencti-client';
 import { refangIndicator } from '../../shared/detection/patterns';
 import { errorResponse, type SendResponseFn } from '../../shared/types/common';
 import type { CreateContainerPayload } from '../../shared/types/messages';
+import type { FailedEntityImport } from '../../shared/types/scan';
 import { loggers } from '../../shared/utils/logger';
 import type { OCTIContainerType } from '../../shared/types/opencti';
 
@@ -26,78 +27,82 @@ export async function handleCreateContainer(
     sendResponse(errorResponse('Not configured'));
     return;
   }
-  
+
   try {
     // Use specified platform or first available
     const platformId = payload.platformId || openCTIClients.keys().next().value as string | undefined;
-    
+
     if (!platformId) {
       sendResponse(errorResponse('No platform available'));
       return;
     }
-    
+
     const client = openCTIClients.get(platformId);
-    
+
     if (!client) {
       sendResponse(errorResponse('Platform not found'));
       return;
     }
-    
-    // Step 0: Create any entities that don't exist yet
-    const allEntityIds: string[] = [...(payload.entities || [])];
-    
-    if (payload.entitiesToCreate && payload.entitiesToCreate.length > 0) {
-      log.info(`Creating ${payload.entitiesToCreate.length} new entities for container...`);
-      
-      for (const entityToCreate of payload.entitiesToCreate) {
+
+    // Step 0: Create any entities that don't exist yet.
+    // Each entry maps 1-to-1 with entitiesToCreate so relationship indices stay stable:
+    // a failed creation leaves null in the slot rather than shifting subsequent entries.
+    type CreationResult =
+      | { status: 'created'; id: string }
+      | { status: 'failed'; type: string; value: string; error: string };
+
+    const creationResults: CreationResult[] = await Promise.all(
+      (payload.entitiesToCreate || []).map(async (e): Promise<CreationResult> => {
         try {
-          // Refang the value before creating (OpenCTI stores clean values)
-          const cleanValue = refangIndicator(entityToCreate.value);
-          // Use createEntity instead of createObservable to handle both
-          // STIX Domain Objects (SDOs) like Vulnerability, Malware, Threat-Actor
-          // and STIX Cyber Observables (SCOs) like IP, Domain, Hash
-          const created = await client.createEntity({
-            type: entityToCreate.type,
-            value: cleanValue,
-            name: cleanValue, // For SDOs that use name instead of value
-          });
-          
-          if (created?.id) {
-            allEntityIds.push(created.id);
-            log.debug(`Created entity: ${entityToCreate.type} = ${cleanValue} -> ${created.id}`);
-          }
-        } catch (entityError) {
-          log.warn(`Failed to create entity ${entityToCreate.type}:${entityToCreate.value}:`, entityError);
-          // Continue with other entities
+          const cleanValue = refangIndicator(e.value);
+          const created = await client.createEntity({ type: e.type, value: cleanValue, name: cleanValue });
+          log.debug(`Created entity: ${e.type} = ${cleanValue} -> ${created.id}`);
+          return { status: 'created', id: created.id };
+        } catch (err) {
+          const error = err instanceof Error ? err.message : 'Failed to create entity';
+          log.warn(`Failed to create entity ${e.type}:${e.value}:`, err);
+          return { status: 'failed', type: e.type, value: e.value, error };
         }
-      }
-      
-      log.info(`Created entities. Total entity IDs for container: ${allEntityIds.length}`);
-    }
-    
+      })
+    );
+
+    const failedEntities: FailedEntityImport[] = creationResults
+      .filter((r) => r.status === 'failed')
+      .map(({ type, value, error }) => ({ type, value, error }));
+
+    // Slot-indexed array for relationship resolution: null where creation failed.
+    // Prefixed with pre-existing entity ids so UI-side indices remain valid.
+    const entitySlots: Array<string | null> = [
+      ...(payload.entities || []),
+      ...creationResults.map(r => (r.status === 'created' ? r.id : null)),
+    ];
+
+    // Flat list of all valid ids for the container objects list.
+    const allEntityIds = entitySlots.filter((id): id is string => id !== null);
+
     // Step 1: Create relationships if provided (before container, so we can include them)
     const createdRelationships: Array<{ id: string; relationship_type: string }> = [];
     if (payload.relationshipsToCreate && payload.relationshipsToCreate.length > 0 && allEntityIds.length > 0) {
       log.info(`Creating ${payload.relationshipsToCreate.length} relationships...`);
-      
+
       for (const rel of payload.relationshipsToCreate) {
         try {
-          // Get entity IDs from indices
-          const fromId = allEntityIds[rel.fromEntityIndex];
-          const toId = allEntityIds[rel.toEntityIndex];
-          
+          // Get entity IDs from slots — null means that entity failed to create
+          const fromId = entitySlots[rel.fromEntityIndex];
+          const toId = entitySlots[rel.toEntityIndex];
+
           if (!fromId || !toId) {
-            log.warn(`Invalid relationship indices: from=${rel.fromEntityIndex}, to=${rel.toEntityIndex}, available=${allEntityIds.length}`);
+            log.warn(`Skipping relationship: entity at index ${!fromId ? rel.fromEntityIndex : rel.toEntityIndex} was not created`);
             continue;
           }
-          
+
           const relationship = await client.createStixCoreRelationship({
             fromId,
             toId,
             relationship_type: rel.relationship_type,
             description: rel.description,
           });
-          
+
           if (relationship?.id) {
             createdRelationships.push({
               id: relationship.id,
@@ -110,10 +115,10 @@ export async function handleCreateContainer(
           // Continue with other relationships
         }
       }
-      
+
       log.info(`Created ${createdRelationships.length} of ${payload.relationshipsToCreate.length} relationships`);
     }
-    
+
     // Step 2: Create external reference
     // For PDF sources: use external_id (the filename) instead of URL
     // For web pages: use URL as before
@@ -147,15 +152,15 @@ export async function handleCreateContainer(
         // Continue without external reference
       }
     }
-    
+
     // Step 3: Create the container with ALL IDs (entities + relationships)
     const allObjectIds = [
       ...allEntityIds,
       ...createdRelationships.map(r => r.id),
     ];
-    
+
     log.info(`${payload.updateContainerId ? 'Updating' : 'Creating'} container with ${allEntityIds.length} entities and ${createdRelationships.length} relationships`);
-    
+
     const container = await client.createContainer({
       type: payload.type as OCTIContainerType,
       name: payload.name,
@@ -178,7 +183,7 @@ export async function handleCreateContainer(
       published: payload.published,
       created: payload.created,
     });
-    
+
     // Step 4: Attach external reference to the container
     if (externalReferenceId && container.id) {
       try {
@@ -189,7 +194,7 @@ export async function handleCreateContainer(
         // Continue - container was created successfully
       }
     }
-    
+
     // Step 5: Upload PDF attachment if provided
     if (payload.pdfAttachment && container.id) {
       try {
@@ -199,7 +204,7 @@ export async function handleCreateContainer(
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        
+
         await client.uploadFileToEntity(container.id, {
           name: payload.pdfAttachment.filename,
           data: bytes.buffer,
@@ -211,14 +216,15 @@ export async function handleCreateContainer(
         // Don't fail the whole operation, container was created successfully
       }
     }
-    
-    sendResponse({ 
-      success: true, 
-      data: { 
-        ...container, 
+
+    sendResponse({
+      success: true,
+      data: {
+        ...container,
         platformId: platformId,
         _createdRelationships: createdRelationships,
-      } 
+        failedEntities: failedEntities.length > 0 ? failedEntities : undefined,
+      }
     });
   } catch (error) {
     sendResponse({

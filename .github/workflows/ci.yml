@@ -116,7 +116,7 @@ jobs:
           --health-retries 10
 
       rabbitmq:
-        image: rabbitmq:4.2-management
+        image: rabbitmq:4.3-management
         ports:
           - 5672:5672
           - 15672:15672
@@ -440,7 +440,7 @@ jobs:
           --health-retries 10
 
       rabbitmq:
-        image: rabbitmq:4.2-management
+        image: rabbitmq:4.3-management
         ports:
           - 5672:5672
           - 15672:15672

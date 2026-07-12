@@ -41,7 +41,7 @@
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "jspdf": "^4.2.0",
-    "mdi-material-ui": "^7.9.4",
+    "mdi-material-ui": "^8.0.0",
     "pdfjs-dist": "^5.4.449",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

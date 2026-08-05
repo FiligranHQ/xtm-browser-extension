@@ -8,7 +8,8 @@ import {
   extractContent, 
   type ExtractedContent 
 } from '../shared/extraction/content-extractor';
-import { generatePDF } from '../shared/extraction/pdf-generator';
+import { generatePDF, sanitizeFilename } from '../shared/extraction/pdf-generator';
+import { registerCJKFont, needsCJKFont, CJK_FONT_FAMILY } from '../shared/extraction/cjk-font';
 import { jsPDF } from 'jspdf';
 
 const log = loggers.content;
@@ -935,6 +936,17 @@ async function generateFallbackPDF(article: { title: string; content: string; te
       unit: 'mm',
       format: 'a4',
     });
+
+    let fontFamily = 'helvetica';
+    if (needsCJKFont((article.title || '') + (article.textContent || '') + (article.content || ''))) {
+      const hasCJK = await registerCJKFont(pdf);
+      if (hasCJK) fontFamily = CJK_FONT_FAMILY;
+    }
+
+    const isCJK = fontFamily === CJK_FONT_FAMILY;
+    const setFont = (style: string) => {
+      pdf.setFont(fontFamily, isCJK ? 'normal' : style);
+    };
     
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -976,7 +988,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
         if (alt && alt.length > 5) {
           pdf.setFontSize(9);
           pdf.setTextColor(100, 100, 100);
-          pdf.setFont('helvetica', 'italic');
+          setFont('italic');
           const captionLines = pdf.splitTextToSize(alt, contentWidth);
           pdf.text(captionLines, margin, yPosition);
           yPosition += captionLines.length * 4 + 2;
@@ -993,20 +1005,20 @@ async function generateFallbackPDF(article: { title: string; content: string; te
     
     pdf.setFontSize(10);
     pdf.setTextColor(0, 27, 218);
-    pdf.setFont('helvetica', 'bold');
+    setFont('bold');
     pdf.text('Filigran XTM Browser Extension', margin, yPosition);
     yPosition += 5;
     
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
-    pdf.setFont('helvetica', 'normal');
+    setFont('normal');
     pdf.text(`Captured on ${new Date().toLocaleDateString()}`, margin, yPosition);
     yPosition += 10;
     
     // Title
     pdf.setFontSize(18);
     pdf.setTextColor(0, 0, 0);
-    pdf.setFont('helvetica', 'bold');
+    setFont('bold');
     const titleLines = pdf.splitTextToSize(article.title, contentWidth);
     checkPageBreak(titleLines.length * 7);
     pdf.text(titleLines, margin, yPosition);
@@ -1015,7 +1027,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
     // Source URL
     pdf.setFontSize(9);
     pdf.setTextColor(0, 100, 200);
-    pdf.setFont('helvetica', 'normal');
+    setFont('normal');
     const truncatedUrl = window.location.href.length > 80 
       ? window.location.href.substring(0, 77) + '...' 
       : window.location.href;
@@ -1046,7 +1058,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
           else if (isBold) fontStyle = 'bold';
           else if (isItalic) fontStyle = 'italic';
           
-          pdf.setFont('helvetica', fontStyle);
+          setFont(fontStyle);
           pdf.setFontSize(fontSize);
           pdf.setTextColor(30, 30, 30);
           
@@ -1106,7 +1118,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
               const li = listItems[idx];
               checkPageBreak(lineHeight);
               const bullet = tagName === 'ul' ? '•' : `${idx + 1}.`;
-              pdf.setFont('helvetica', 'normal');
+              setFont('normal');
               pdf.setFontSize(11);
               pdf.setTextColor(30, 30, 30);
               pdf.text(bullet, margin, yPosition);
@@ -1133,7 +1145,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
             const linkText = el.textContent?.trim() || '';
             if (linkText && href) {
               pdf.setTextColor(0, 100, 200);
-              pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+              setFont(isBold ? 'bold' : 'normal');
               pdf.setFontSize(fontSize);
               const lines = pdf.splitTextToSize(linkText, contentWidth);
               checkPageBreak(lines.length * lineHeight);
@@ -1154,7 +1166,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
             if (figCaption) {
               pdf.setFontSize(9);
               pdf.setTextColor(100, 100, 100);
-              pdf.setFont('helvetica', 'italic');
+              setFont('italic');
               const captionText = figCaption.textContent?.trim() || '';
               const captionLines = pdf.splitTextToSize(captionText, contentWidth);
               checkPageBreak(captionLines.length * 4);
@@ -1165,14 +1177,14 @@ async function generateFallbackPDF(article: { title: string; content: string; te
           case 'pre':
           case 'code':
             checkPageBreak(lineHeight);
-            pdf.setFont('courier', 'normal');
+            pdf.setFont(isCJK ? fontFamily : 'courier', 'normal');
             pdf.setFontSize(9);
             pdf.setTextColor(50, 50, 50);
             const codeText = el.textContent?.trim() || '';
             const codeLines = pdf.splitTextToSize(codeText, contentWidth);
             pdf.text(codeLines, margin, yPosition);
             yPosition += codeLines.length * 4 + 2;
-            pdf.setFont('helvetica', 'normal');
+            setFont('normal');
             break;
           case 'hr':
             checkPageBreak(6);
@@ -1252,7 +1264,18 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
       unit: 'mm',
       format: 'a4',
     });
-    
+
+    let fontFamily = 'helvetica';
+    if (needsCJKFont(article.title + textContent)) {
+      const hasCJK = await registerCJKFont(pdf);
+      if (hasCJK) fontFamily = CJK_FONT_FAMILY;
+    }
+
+    const isCJK = fontFamily === CJK_FONT_FAMILY;
+    const setFont = (style: string) => {
+      pdf.setFont(fontFamily, isCJK ? 'normal' : style);
+    };
+
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 20;
@@ -1266,17 +1289,20 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
     
     pdf.setFontSize(10);
     pdf.setTextColor(0, 27, 218);
+    setFont('bold');
     pdf.text('XTM Browser Extension', margin, yPosition);
     yPosition += 5;
     
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
+    setFont('normal');
     pdf.text(`Captured on ${new Date().toLocaleDateString()}`, margin, yPosition);
     yPosition += 10;
     
     // Title
     pdf.setFontSize(16);
     pdf.setTextColor(0, 0, 0);
+    setFont('bold');
     const titleLines = pdf.splitTextToSize(article.title, contentWidth);
     pdf.text(titleLines, margin, yPosition);
     yPosition += (titleLines.length * 7) + 5;
@@ -1284,6 +1310,7 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
     // Source
     pdf.setFontSize(9);
     pdf.setTextColor(100, 100, 100);
+    setFont('normal');
     const sourceUrl = window.location.href;
     const truncatedUrl = sourceUrl.length > 80 ? sourceUrl.substring(0, 77) + '...' : sourceUrl;
     pdf.text(`Source: ${truncatedUrl}`, margin, yPosition);
@@ -1298,6 +1325,7 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
     // Content
     pdf.setFontSize(11);
     pdf.setTextColor(30, 30, 30);
+    setFont('normal');
     
     const paragraphs = textContent.split(/\n\n+/).filter(p => p.trim().length > 0);
     
@@ -1338,13 +1366,4 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
   }
 }
 
-/**
- * Sanitize filename for PDF
- */
-export function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*]/g, '')
-    .replace(/\s+/g, '_')
-    .substring(0, 100);
-}
 

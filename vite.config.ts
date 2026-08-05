@@ -91,6 +91,18 @@ export default defineConfig({
           });
         }
 
+        // Copy fonts
+        const fontsDir = resolve(__dirname, 'src/assets/fonts');
+        const destFontsDir = resolve(distDir, 'assets/fonts');
+        mkdirSync(destFontsDir, { recursive: true });
+
+        if (existsSync(fontsDir)) {
+          const fonts = readdirSync(fontsDir);
+          fonts.forEach((font) => {
+            copyFileSync(resolve(fontsDir, font), resolve(destFontsDir, font));
+          });
+        }
+
         // Copy icons for all browsers
         const iconsDir = resolve(__dirname, 'src/assets/icons');
         const destIconsDir = resolve(distDir, 'assets/icons');

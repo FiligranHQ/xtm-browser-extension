@@ -10,6 +10,7 @@ import {
 } from '../shared/extraction/content-extractor';
 import { generatePDF } from '../shared/extraction/pdf-generator';
 import { jsPDF } from 'jspdf';
+import DOMPurify from 'dompurify';
 
 const log = loggers.content;
 
@@ -1029,7 +1030,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
     
     // Parse and render HTML content
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = article.content;
+    tempDiv.innerHTML = DOMPurify.sanitize(article.content);
     
     const removeSelectors = ['script', 'style', 'iframe', 'noscript', 'button', 'input', 'form'];
     removeSelectors.forEach(sel => {

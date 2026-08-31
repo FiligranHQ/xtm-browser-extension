@@ -36,6 +36,7 @@ import {
 import { LockPattern } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { loggers } from '../../shared/utils/logger';
+import { isSafeUrl, openExternalUrl } from '../../shared/utils/safe-url';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import type { PlatformInfo, PanelMode } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
@@ -430,7 +431,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       const targetPlatform = openaevPlatforms.find(p => p.id === scenarioPlatformId);
       if (targetPlatform) {
         const scenarioUrl = `${targetPlatform.url}/admin/scenarios/${scenarioId}`;
-        window.open(scenarioUrl, '_blank');
+        openExternalUrl(scenarioUrl);
       }
       
       // Reset all scenario state and redirect to home
@@ -544,7 +545,7 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       log.info(` Scenario creation complete with ${selectedInjects.length} injects`);
       
       // Open the scenario in the platform
-      if (scenario.url) {
+      if (scenario.url && isSafeUrl(scenario.url)) {
         chrome.tabs.create({ url: scenario.url });
       }
       

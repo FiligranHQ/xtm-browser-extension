@@ -43,6 +43,7 @@ import remarkGfm from 'remark-gfm';
 
 import { hexToRGB } from '../../shared/theme/colors';
 import { formatDateTime } from '../../shared/utils/formatters';
+import { openExternalUrl } from '../../shared/utils/safe-url';
 import { getCvssChipStyle } from '../utils/cvss-helpers';
 import {
   getOAEVEntityName,
@@ -752,7 +753,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
                 style={{ width: 18, height: 18 }} 
               />
             }
-            onClick={() => window.open(entityUrl, '_blank')}
+            onClick={() => openExternalUrl(entityUrl)}
             fullWidth
           >
             Open in OpenAEV

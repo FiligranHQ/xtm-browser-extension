@@ -13,6 +13,7 @@ import {
 import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import { loggers } from '../shared/utils/logger';
+import { openExternalUrl } from '../shared/utils/safe-url';
 import { sessionStorage } from '../shared/utils/storage';
 import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
 import { CommonEmptyView } from './components/CommonEmptyView';
@@ -1552,7 +1553,7 @@ const App: React.FC = () => {
   const handleOpenInPlatform = (entityId: string, draftId?: string) => {
     if (platformUrl && entityId) {
       const url = draftId ? `${platformUrl}/dashboard/data/import/draft/${draftId}` : `${platformUrl}/dashboard/id/${entityId}`;
-      window.open(url, '_blank');
+      openExternalUrl(url);
     }
   };
   const handleCopyValue = (value: string) => window.parent.postMessage({ type: 'XTM_COPY_TO_CLIPBOARD', payload: value }, '*');

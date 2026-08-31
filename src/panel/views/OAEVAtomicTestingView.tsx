@@ -38,6 +38,7 @@ import { LockPattern, Target } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import { loggers } from '../../shared/utils/logger';
+import { isSafeUrl } from '../../shared/utils/safe-url';
 import { AI_DEFAULTS } from '../../shared/types/ai';
 import { AtomicTestingTargetForm } from '../components/atomic-testing/AtomicTestingTargetForm';
 import type { PlatformInfo, PanelMode, PanelAIState } from '../types/panel-types';
@@ -395,7 +396,7 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
       });
       
       if (result?.success && result.data?.url) {
-        chrome.tabs.create({ url: result.data.url });
+        if (isSafeUrl(result.data.url)) chrome.tabs.create({ url: result.data.url });
         window.parent.postMessage({ type: 'XTM_CLOSE_PANEL' }, '*');
         showToast({ type: 'success', message: 'Atomic testing created successfully' });
         
@@ -497,11 +498,11 @@ export const OAEVAtomicTestingView: React.FC<OAEVAtomicTestingViewProps> = (prop
         const atomicTestId = response.data.inject_id || response.data.atomic_id || response.data.id;
         if (atomicTestId && atomicTestingPlatformId) {
           if (response.data.url) {
-            chrome.tabs.create({ url: response.data.url });
+            if (isSafeUrl(response.data.url)) chrome.tabs.create({ url: response.data.url });
           } else {
             const platformUrl = openaevPlatforms.find(p => p.id === atomicTestingPlatformId)?.url || '';
             const atomicUrl = `${platformUrl}/admin/atomic_testings/${atomicTestId}`;
-            chrome.tabs.create({ url: atomicUrl });
+            if (isSafeUrl(atomicUrl)) chrome.tabs.create({ url: atomicUrl });
           }
         }
         

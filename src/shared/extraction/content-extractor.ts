@@ -10,6 +10,7 @@
 
 import { Readability } from '@mozilla/readability';
 import { escapeHtml } from '../utils/formatters';
+import { insertSanitizedHtml, setSanitizedHtml } from '../utils/sanitize';
 import { loggers } from '../utils/logger';
 
 const log = loggers.extraction;
@@ -480,7 +481,7 @@ function extractWithReadability(): ExtractedContent | null {
         const heroHtml = createHeroImageHtml(heroImage);
         finalHtml = heroHtml + finalHtml;
         // Re-create element with hero for image extraction
-        processedContent.element.insertAdjacentHTML('afterbegin', heroHtml);
+        insertSanitizedHtml(processedContent.element, 'afterbegin', heroHtml);
       }
     }
     
@@ -770,7 +771,7 @@ function extractFallback(): ExtractedContent {
       log.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
       const heroHtml = createHeroImageHtml(heroImage);
       finalHtml = heroHtml + finalHtml;
-      clone.insertAdjacentHTML('afterbegin', heroHtml);
+      insertSanitizedHtml(clone, 'afterbegin', heroHtml);
     }
   }
   
@@ -798,7 +799,7 @@ function extractFallback(): ExtractedContent {
  */
 function postProcessContent(html: string): { html: string; element: HTMLElement } {
   const div = document.createElement('div');
-  div.innerHTML = html;
+  setSanitizedHtml(div, html);
   
   // Remove only clearly problematic elements
   POST_PROCESS_REMOVE.forEach(selector => {

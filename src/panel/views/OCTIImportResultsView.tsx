@@ -24,6 +24,7 @@ import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import type { ImportResults } from '../../shared/types/scan';
 import type { PanelMode } from '../types/panel-types';
+import { openExternalUrl } from '../../shared/utils/safe-url';
 
 export interface ImportResultsViewProps {
   mode: 'dark' | 'light';
@@ -231,7 +232,7 @@ export const OCTIImportResultsView: React.FC<ImportResultsViewProps> = ({
 
               const handleOpenEntity = () => {
                 if (entityUrl) {
-                  window.open(entityUrl, '_blank', 'noopener,noreferrer');
+                  openExternalUrl(entityUrl);
                 }
               };
 

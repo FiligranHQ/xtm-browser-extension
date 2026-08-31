@@ -58,21 +58,24 @@ describe('openExternalUrl', () => {
     vi.restoreAllMocks();
   });
 
-  it('should open allowed URLs in a new tab without window access', () => {
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  it('should open allowed URLs in a new tab', () => {
+    const create = vi.fn();
+    (globalThis as any).chrome.tabs.create = create;
     expect(openExternalUrl('https://example.com/dashboard')).toBe(true);
-    expect(open).toHaveBeenCalledWith('https://example.com/dashboard', '_blank', 'noopener,noreferrer');
+    expect(create).toHaveBeenCalledWith({ url: 'https://example.com/dashboard' });
   });
 
   it('should pass the resolved URL to the sink', () => {
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const create = vi.fn();
+    (globalThis as any).chrome.tabs.create = create;
     openExternalUrl('https://example.com/a%20b');
-    expect(open).toHaveBeenCalledWith('https://example.com/a%20b', '_blank', 'noopener,noreferrer');
+    expect(create).toHaveBeenCalledWith({ url: 'https://example.com/a%20b' });
   });
 
   it('should not open disallowed schemes', () => {
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const create = vi.fn();
+    (globalThis as any).chrome.tabs.create = create;
     expect(openExternalUrl('javascript:alert(1)')).toBe(false);
-    expect(open).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 });

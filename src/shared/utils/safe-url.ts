@@ -40,10 +40,15 @@ export function isSafeUrl(url: string, extraSchemes: string[] = []): boolean {
 
 /**
  * Open a URL in a new tab, ignoring it if the scheme is not allowed.
+ *
+ * Opens through the tabs API rather than a page-level popup call: every caller
+ * is an extension page, the panel among them runs as an iframe where popups can
+ * be blocked, and Chrome refuses a dangerous scheme here on its own.
  */
 export function openExternalUrl(url: string, extraSchemes: string[] = []): boolean {
   const safe = resolveSafeUrl(url, extraSchemes);
   if (!safe) return false;
-  window.open(safe, '_blank', 'noopener,noreferrer');
+  if (typeof chrome === 'undefined' || !chrome.tabs?.create) return false;
+  chrome.tabs.create({ url: safe });
   return true;
 }

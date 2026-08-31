@@ -8,7 +8,7 @@ import { useCallback } from 'react';
 import type { EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, PanelMode } from '../types/panel-types';
 import type { ImportResults, FailedEntityImport } from '../../shared/types/scan';
 import type { ResolvedRelationship } from '../../shared/api/ai/types';
-import { isSafeUrl } from '../../shared/utils/safe-url';
+import { resolveSafeUrl } from '../../shared/utils/safe-url';
 
 export interface ContainerActionsProps {
   // Platform state
@@ -210,10 +210,12 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (attachPdf) {
       setGeneratingPdf(true);
       try {
-        if (isPdfSource && currentPageUrl && isSafeUrl(currentPageUrl, ['file:', 'blob:'])) {
+        if (isPdfSource && currentPageUrl) {
           // For PDF source: fetch the actual PDF file directly
           try {
-            const pdfResponse = await fetch(currentPageUrl);
+            const safeUrl = resolveSafeUrl(currentPageUrl, ['file:', 'blob:']);
+            if (!safeUrl) throw new Error('Unsupported PDF URL scheme');
+            const pdfResponse = await fetch(safeUrl);
             if (pdfResponse.ok) {
               const arrayBuffer = await pdfResponse.arrayBuffer();
               const base64 = btoa(

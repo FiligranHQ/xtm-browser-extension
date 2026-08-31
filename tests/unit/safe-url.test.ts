@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { isSafeUrl, openExternalUrl } from '../../src/shared/utils/safe-url';
+import { isSafeUrl, openExternalUrl, resolveSafeUrl } from '../../src/shared/utils/safe-url';
 
 describe('isSafeUrl', () => {
   it('should accept http and https', () => {
@@ -15,8 +15,11 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl('https://opencti.example.com/dashboard/id/abc')).toBe(true);
   });
 
-  it('should accept relative URLs resolved against the page', () => {
-    expect(isSafeUrl('/dashboard/id/abc')).toBe(true);
+  // Resolving a relative path would mean the extension's own origin in a panel
+  // and the visited page's in a content script, so callers pass absolute URLs.
+  it('should reject relative URLs', () => {
+    expect(isSafeUrl('/dashboard/id/abc')).toBe(false);
+    expect(isSafeUrl('dashboard/id/abc')).toBe(false);
   });
 
   it('should reject javascript: and data: URLs', () => {
@@ -36,6 +39,20 @@ describe('isSafeUrl', () => {
   });
 });
 
+describe('resolveSafeUrl', () => {
+  it('should return the parsed URL for allowed schemes', () => {
+    expect(resolveSafeUrl('https://example.com')).toBe('https://example.com/');
+    expect(resolveSafeUrl('file:///tmp/a b.pdf', ['file:'])).toBe('file:///tmp/a%20b.pdf');
+  });
+
+  it('should return null for anything disallowed', () => {
+    expect(resolveSafeUrl('javascript:alert(1)')).toBeNull();
+    expect(resolveSafeUrl('file:///tmp/a.pdf')).toBeNull();
+    expect(resolveSafeUrl('')).toBeNull();
+    expect(resolveSafeUrl('not a url')).toBeNull();
+  });
+});
+
 describe('openExternalUrl', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -43,8 +60,14 @@ describe('openExternalUrl', () => {
 
   it('should open allowed URLs in a new tab without window access', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    expect(openExternalUrl('https://example.com')).toBe(true);
-    expect(open).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer');
+    expect(openExternalUrl('https://example.com/dashboard')).toBe(true);
+    expect(open).toHaveBeenCalledWith('https://example.com/dashboard', '_blank', 'noopener,noreferrer');
+  });
+
+  it('should pass the resolved URL to the sink', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    openExternalUrl('https://example.com/a%20b');
+    expect(open).toHaveBeenCalledWith('https://example.com/a%20b', '_blank', 'noopener,noreferrer');
   });
 
   it('should not open disallowed schemes', () => {

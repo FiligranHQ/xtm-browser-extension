@@ -25,7 +25,7 @@ import { EntityTooltip } from './components/EntityTooltip';
 import { usePanelManager } from './hooks/usePanelManager';
 import { useMessageHandlers } from './hooks/useMessageHandlers';
 import { groupTextItemsIntoLines, buildLineTextAndCharMap, getEntityValue } from './utils/highlight-utils';
-import { isSafeUrl, openExternalUrl } from '../shared/utils/safe-url';
+import { openExternalUrl, resolveSafeUrl } from '../shared/utils/safe-url';
 
 // Configure PDF.js worker - MUST be embedded in the extension for Chrome Web Store compliance
 if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
@@ -300,8 +300,9 @@ export default function App() {
     if (url) {
       // URLSearchParams already decoded it - decoding again would corrupt a
       // URL holding an escaped %-sequence, and throws on a stray %.
-      if (isSafeUrl(url, ['file:', 'blob:'])) {
-        setPdfUrl(url);
+      const safeUrl = resolveSafeUrl(url, ['file:', 'blob:']);
+      if (safeUrl) {
+        setPdfUrl(safeUrl);
       } else {
         setError('Unsupported PDF URL');
         setLoading(false);

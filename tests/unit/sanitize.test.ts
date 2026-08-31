@@ -69,3 +69,30 @@ describe('insertSanitizedHtml', () => {
     expect(div.firstElementChild?.tagName).toBe('FIGURE');
   });
 });
+
+// The extractors read these back off the sanitized DOM (lazy-load fixing,
+// picture/source handling, hero dedupe), so sanitization must not strip them.
+describe('sanitizeHtml preserves what the extractors read', () => {
+  it.each([
+    ['data-src', '<img data-src="https://e.com/a.png">'],
+    ['data-srcset', '<img data-srcset="https://e.com/a.png 1x">'],
+    ['data-lazy-src', '<img data-lazy-src="https://e.com/a.png">'],
+    ['srcset', '<img srcset="https://e.com/a.png 1x, https://e.com/b.png 2x">'],
+    ['picture/source', '<picture><source srcset="https://e.com/a.webp"><img src="https://e.com/a.png"></picture>'],
+    ['figure/figcaption', '<figure><img src="https://e.com/a.png"><figcaption>Cap</figcaption></figure>'],
+    ['style attribute', '<img src="https://e.com/a.png" style="max-width:100%">'],
+    ['class attribute', '<div class="hero-image">x</div>'],
+    ['relative src', '<img src="/img/a.png">'],
+    ['protocol-relative src', '<img src="//e.com/a.png">'],
+    ['data: image src', '<img src="data:image/png;base64,iVBORw0KGgo=">'],
+    ['pre/code', '<pre><code>x = 1</code></pre>'],
+    ['blockquote', '<blockquote>q</blockquote>'],
+    ['headings', '<h1>a</h1><h2>b</h2><h3>c</h3>'],
+  ])('should keep %s unchanged', (_label, html) => {
+    expect(sanitizeHtml(html)).toBe(html);
+  });
+
+  it('should keep table cells, allowing for tbody normalization', () => {
+    expect(sanitizeHtml('<table><tr><td>a</td></tr></table>')).toContain('<td>a</td>');
+  });
+});

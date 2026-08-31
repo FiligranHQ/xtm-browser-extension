@@ -298,9 +298,10 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const url = params.get('url');
     if (url) {
-      const decoded = decodeURIComponent(url);
-      if (isSafeUrl(decoded, ['file:', 'blob:'])) {
-        setPdfUrl(decoded);
+      // URLSearchParams already decoded it - decoding again would corrupt a
+      // URL holding an escaped %-sequence, and throws on a stray %.
+      if (isSafeUrl(url, ['file:', 'blob:'])) {
+        setPdfUrl(url);
       } else {
         setError('Unsupported PDF URL');
         setLoading(false);

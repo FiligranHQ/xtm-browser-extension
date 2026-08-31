@@ -12,7 +12,7 @@ import DOMPurify from 'dompurify';
 // javascript:/data: sources and srcdoc).
 const CONFIG = {
   ADD_TAGS: ['iframe'],
-  ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'target'],
+  ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'],
 };
 
 /**

@@ -40,6 +40,10 @@ describe('sanitizeHtml', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it('should drop target attributes', () => {
+    expect(sanitizeHtml('<a href="https://e.com" target="_blank">l</a>')).not.toContain('target');
+  });
+
   it('should keep video embeds', () => {
     const result = sanitizeHtml('<iframe src="https://www.youtube.com/embed/abc" allowfullscreen></iframe>');
     expect(result).toContain('<iframe');

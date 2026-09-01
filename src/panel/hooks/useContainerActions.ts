@@ -8,6 +8,7 @@ import { useCallback } from 'react';
 import type { EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, PanelMode } from '../types/panel-types';
 import type { ImportResults, FailedEntityImport } from '../../shared/types/scan';
 import type { ResolvedRelationship } from '../../shared/api/ai/types';
+import { resolveSafeUrl } from '../../shared/utils/safe-url';
 
 export interface ContainerActionsProps {
   // Platform state
@@ -69,6 +70,28 @@ export interface ContainerActionsReturn {
   handleAddEntities: () => Promise<void>;
   handleCreateContainer: () => Promise<void>;
   handleGenerateAIDescription: () => Promise<void>;
+}
+
+/**
+ * Resolve the PDF to attach from the active tab.
+ *
+ * The panel's own `currentPageUrl` arrives over window.postMessage, which the
+ * host page can forge (see #208), and this URL is fetched from an extension
+ * origin holding <all_urls> - so take it from chrome.tabs instead, which a page
+ * cannot influence.
+ */
+export async function resolveActivePdfUrl(): Promise<string | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) return null;
+
+  // When the PDF is open in our own scanner, the real URL is its ?url= param.
+  const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html');
+  if (tab.url.startsWith(scannerUrl)) {
+    const param = new URL(tab.url).searchParams.get('url');
+    return param ? resolveSafeUrl(param, ['file:', 'blob:']) : null;
+  }
+
+  return resolveSafeUrl(tab.url, ['file:', 'blob:']);
 }
 
 export function useContainerActions(props: ContainerActionsProps): ContainerActionsReturn {
@@ -209,10 +232,11 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
     if (attachPdf) {
       setGeneratingPdf(true);
       try {
-        if (isPdfSource && currentPageUrl) {
+        const pdfSourceUrl = isPdfSource ? await resolveActivePdfUrl() : null;
+        if (pdfSourceUrl) {
           // For PDF source: fetch the actual PDF file directly
           try {
-            const pdfResponse = await fetch(currentPageUrl);
+            const pdfResponse = await fetch(pdfSourceUrl);
             if (pdfResponse.ok) {
               const arrayBuffer = await pdfResponse.arrayBuffer();
               const base64 = btoa(
@@ -223,14 +247,7 @@ export function useContainerActions(props: ContainerActionsProps): ContainerActi
                 filename: currentPdfFileName || 'document.pdf'
               };
             }
-          } catch {
-            // Fetch failed, try message approach
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab?.id) {
-              const pdfResponse = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PDF_FILE' });
-              if (pdfResponse?.success && pdfResponse.data) pdfData = pdfResponse.data;
-            }
-          }
+          } catch { /* PDF fetch failed - container is created without the attachment */ }
         } else {
           // For regular pages: generate a PDF snapshot
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

@@ -4,13 +4,15 @@
  * Utilities for generating and cleaning descriptions from HTML content.
  */
 
+import { setSanitizedHtml } from '../../shared/utils/sanitize';
+
 /**
  * Generate clean description from HTML
  * Removes non-content elements and extracts meaningful text
  */
 export const generateDescription = (html: string, maxLength = 500): string => {
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  setSanitizedHtml(temp, html);
   
   // Remove non-content elements aggressively
   const selectorsToRemove = [
@@ -75,7 +77,7 @@ export const generateDescription = (html: string, maxLength = 500): string => {
  */
 export const cleanHtmlContent = (html: string): string => {
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  setSanitizedHtml(temp, html);
   
   // Remove ONLY elements that are definitely not content
   // Be conservative - better to include too much than lose actual content

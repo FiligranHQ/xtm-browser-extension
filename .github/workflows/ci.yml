@@ -11,6 +11,9 @@ on:
       - develop
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Lint and type check - run first and fast
   lint:
@@ -21,6 +24,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -47,6 +52,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -132,6 +139,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -166,6 +175,17 @@ jobs:
             sleep 2
           done
 
+      - name: Generate ephemeral platform credentials
+        run: |
+          # The platform under test is torn down with the job, so its admin
+          # credentials are generated per run rather than committed here.
+          TOKEN="$(cat /proc/sys/kernel/random/uuid)"
+          KEY="$(openssl rand -base64 32)"
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$KEY"
+          echo "TEST_ADMIN_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "TEST_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+
       - name: Pull and run OpenCTI
         run: |
           docker run -d --name opencti \
@@ -175,8 +195,8 @@ jobs:
             -e APP__BASE_URL=http://localhost:8080 \
             -e APP__ADMIN__EMAIL=admin@opencti.io \
             -e APP__ADMIN__PASSWORD=admin \
-            -e APP__ADMIN__TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
-            -e APP__ENCRYPTION_KEY=wbQnxC2ZIoohYzkXW19LiYU2V3lfoCVFkBadFd/dFAY= \
+            -e APP__ADMIN__TOKEN="$TEST_ADMIN_TOKEN" \
+            -e APP__ENCRYPTION_KEY="$TEST_ENCRYPTION_KEY" \
             -e APP__HEALTH_ACCESS_KEY=healthcheck \
             -e REDIS__HOSTNAME=localhost \
             -e REDIS__PORT=6379 \
@@ -202,9 +222,9 @@ jobs:
         run: |
           echo "Waiting for OpenCTI to be ready..."
           for i in {1..120}; do
-            if curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json" | grep -q "version"; then
+            if curl -s -H "Authorization: Bearer $TEST_ADMIN_TOKEN" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json" | grep -q "version"; then
               echo "OpenCTI is ready!"
-              curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json"
+              curl -s -H "Authorization: Bearer $TEST_ADMIN_TOKEN" http://localhost:8080/graphql -d '{"query":"{ about { version } }"}' -H "Content-Type: application/json"
               break
             fi
             echo "Attempt $i: OpenCTI not ready yet..."
@@ -216,7 +236,7 @@ jobs:
         run: |
           echo "Creating test data in OpenCTI..."
           API_URL="http://localhost:8080/graphql"
-          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          AUTH_HEADER="Authorization: Bearer $TEST_ADMIN_TOKEN"
           
           # Create Threat Actor Groups (actual organizations)
           echo "Creating Threat Actor Group GRU..."
@@ -338,7 +358,7 @@ jobs:
         run: |
           echo "Verifying test data..."
           API_URL="http://localhost:8080/graphql"
-          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          AUTH_HEADER="Authorization: Bearer $TEST_ADMIN_TOKEN"
           
           echo "Querying Threat Actor Groups..."
           curl -s -X POST "$API_URL" \
@@ -370,7 +390,7 @@ jobs:
       - name: Run OpenCTI integration tests with coverage
         env:
           OPENCTI_URL: http://localhost:8080
-          OPENCTI_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
+          OPENCTI_TOKEN: ${{ env.TEST_ADMIN_TOKEN }}
         run: npm run test:opencti -- --coverage
 
       - name: Upload OpenCTI integration test coverage
@@ -456,6 +476,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -490,6 +512,17 @@ jobs:
             sleep 2
           done
 
+      - name: Generate ephemeral platform credentials
+        run: |
+          # The platform under test is torn down with the job, so its admin
+          # credentials are generated per run rather than committed here.
+          TOKEN="$(cat /proc/sys/kernel/random/uuid)"
+          KEY="$(openssl rand -base64 32)"
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$KEY"
+          echo "TEST_ADMIN_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "TEST_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+
       - name: Pull and run OpenAEV
         run: |
           docker run -d --name openaev \
@@ -498,7 +531,7 @@ jobs:
             -e OPENAEV_AUTH-LOCAL-ENABLE=true \
             -e OPENAEV_ADMIN_EMAIL=admin@openaev.io \
             -e OPENAEV_ADMIN_PASSWORD=admin \
-            -e OPENAEV_ADMIN_TOKEN=bfa014e0-e02e-4aa6-a42b-603b19dcf159 \
+            -e OPENAEV_ADMIN_TOKEN="$TEST_ADMIN_TOKEN" \
             -e OPENAEV_ADMIN_ENCRYPTION_KEY=ChangeMe \
             -e OPENAEV_ADMIN_ENCRYPTION_SALT=ChangeMeSalt \
             -e OPENAEV_HEALTHCHECK_KEY=healthcheck \
@@ -518,9 +551,9 @@ jobs:
         run: |
           echo "Waiting for OpenAEV to be ready..."
           for i in {1..90}; do
-            if curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/api/settings 2>/dev/null | grep -q "platform"; then
+            if curl -s -H "Authorization: Bearer $TEST_ADMIN_TOKEN" http://localhost:8080/api/settings 2>/dev/null | grep -q "platform"; then
               echo "OpenAEV is ready!"
-              curl -s -H "Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159" http://localhost:8080/api/settings
+              curl -s -H "Authorization: Bearer $TEST_ADMIN_TOKEN" http://localhost:8080/api/settings
               break
             fi
             if [ $i -eq 90 ]; then
@@ -535,7 +568,7 @@ jobs:
         run: |
           echo "Creating test data in OpenAEV..."
           API_URL="http://localhost:8080/api"
-          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          AUTH_HEADER="Authorization: Bearer $TEST_ADMIN_TOKEN"
           
           # Check if OpenAEV is available
           if ! curl -s -H "$AUTH_HEADER" "$API_URL/settings" 2>/dev/null | grep -q "platform"; then
@@ -671,7 +704,7 @@ jobs:
         run: |
           echo "Verifying test data..."
           API_URL="http://localhost:8080/api"
-          AUTH_HEADER="Authorization: Bearer bfa014e0-e02e-4aa6-a42b-603b19dcf159"
+          AUTH_HEADER="Authorization: Bearer $TEST_ADMIN_TOKEN"
           
           # Check if OpenAEV is available
           if ! curl -s -H "$AUTH_HEADER" "$API_URL/settings" 2>/dev/null | grep -q "platform"; then
@@ -697,7 +730,7 @@ jobs:
       - name: Run OpenAEV integration tests with coverage
         env:
           OPENAEV_URL: http://localhost:8080
-          OPENAEV_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
+          OPENAEV_TOKEN: ${{ env.TEST_ADMIN_TOKEN }}
         run: npm run test:openaev -- --coverage
 
       - name: Upload OpenAEV integration test coverage
@@ -724,6 +757,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -796,6 +831,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7

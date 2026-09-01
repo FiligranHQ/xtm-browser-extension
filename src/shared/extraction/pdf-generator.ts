@@ -9,6 +9,7 @@
 import { jsPDF } from 'jspdf';
 import type { ExtractedContent, ExtractedImage } from './content-extractor';
 import { loggers } from '../utils/logger';
+import { setSanitizedHtml } from '../utils/sanitize';
 
 const log = loggers.extraction;
 
@@ -324,7 +325,7 @@ async function generateWithJsPDF(
     // === Content ===
     // Parse the HTML content and render it
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content.content;
+    setSanitizedHtml(tempDiv, content.content);
     
     // Track all added image sources to avoid duplicates
     const addedImageSrcs = new Set<string>();

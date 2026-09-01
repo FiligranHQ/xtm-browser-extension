@@ -37,6 +37,7 @@ import {
 import ItemIcon from '../../shared/components/ItemIcon';
 import { itemColor, hexToRGB } from '../../shared/theme/colors';
 import { formatDate } from '../../shared/utils/formatters';
+import { openExternalUrl } from '../../shared/utils/safe-url';
 import { getCvssChipStyle, getSeverityColor, formatEpssScore, formatEpssPercentile } from '../utils/cvss-helpers';
 import { getMarkingColor } from '../utils/marking-helpers';
 import { sectionTitleStyle, useContentTextStyle, useLogoSuffix } from '../hooks/useEntityDisplay';
@@ -867,7 +868,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
               const url = (entity as any)?._draftId
                 ? `${currentPlatform.url}/dashboard/data/import/draft/${(entity as any)?._draftId}`
                 : `${currentPlatform.url}/dashboard/id/${entityId}`;
-              window.open(url, '_blank');
+              openExternalUrl(url);
             }}
             fullWidth
           >

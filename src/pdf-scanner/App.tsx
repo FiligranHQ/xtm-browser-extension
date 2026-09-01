@@ -25,6 +25,7 @@ import { EntityTooltip } from './components/EntityTooltip';
 import { usePanelManager } from './hooks/usePanelManager';
 import { useMessageHandlers } from './hooks/useMessageHandlers';
 import { groupTextItemsIntoLines, buildLineTextAndCharMap, getEntityValue } from './utils/highlight-utils';
+import { openExternalUrl, resolveSafeUrl } from '../shared/utils/safe-url';
 
 // Configure PDF.js worker - MUST be embedded in the extension for Chrome Web Store compliance
 if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
@@ -297,7 +298,15 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const url = params.get('url');
     if (url) {
-      setPdfUrl(decodeURIComponent(url));
+      // URLSearchParams already decoded it - decoding again would corrupt a
+      // URL holding an escaped %-sequence, and throws on a stray %.
+      const safeUrl = resolveSafeUrl(url, ['file:', 'blob:']);
+      if (safeUrl) {
+        setPdfUrl(safeUrl);
+      } else {
+        setError('Unsupported PDF URL');
+        setLoading(false);
+      }
     } else {
       setError('No PDF URL provided');
       setLoading(false);
@@ -423,7 +432,7 @@ export default function App() {
   // Open original PDF
   const openOriginal = useCallback(() => {
     if (pdfUrl) {
-      window.open(pdfUrl, '_blank');
+      openExternalUrl(pdfUrl, ['file:', 'blob:']);
     }
   }, [pdfUrl]);
 

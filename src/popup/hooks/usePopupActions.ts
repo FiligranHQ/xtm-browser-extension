@@ -4,6 +4,7 @@
 
 import { useCallback } from 'react';
 import { loggers } from '../../shared/utils/logger';
+import { isSafeUrl } from '../../shared/utils/safe-url';
 
 const log = loggers.popup;
 
@@ -303,7 +304,7 @@ export const usePopupActions = ({
 
   const handleOpenPlatform = useCallback((url: string) => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
-    chrome.tabs.create({ url });
+    if (isSafeUrl(url)) chrome.tabs.create({ url });
     setPopoverAnchor(null);
   }, [setPopoverAnchor]);
 

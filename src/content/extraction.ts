@@ -10,7 +10,7 @@ import {
 } from '../shared/extraction/content-extractor';
 import { generatePDF } from '../shared/extraction/pdf-generator';
 import { jsPDF } from 'jspdf';
-import DOMPurify from 'dompurify';
+import { setSanitizedHtml } from '../shared/utils/sanitize';
 
 const log = loggers.content;
 
@@ -1030,7 +1030,7 @@ async function generateFallbackPDF(article: { title: string; content: string; te
     
     // Parse and render HTML content
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = DOMPurify.sanitize(article.content);
+    setSanitizedHtml(tempDiv, article.content);
     
     const removeSelectors = ['script', 'style', 'iframe', 'noscript', 'button', 'input', 'form'];
     removeSelectors.forEach(sel => {
@@ -1233,7 +1233,7 @@ async function generateSimpleTextPDF(): Promise<{ data: string; filename: string
     let textContent = article.textContent || '';
     if (!textContent && article.content) {
       const temp = document.createElement('div');
-      temp.innerHTML = article.content;
+      setSanitizedHtml(temp, article.content);
       textContent = temp.textContent || temp.innerText || '';
     }
     

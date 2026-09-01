@@ -42,7 +42,7 @@
     "@mui/material": "^7.3.6",
     "dompurify": "^3.4.10",
     "jspdf": "^4.2.0",
-    "mdi-material-ui": "^7.9.4",
+    "mdi-material-ui": "^8.0.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

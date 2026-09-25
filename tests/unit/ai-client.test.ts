@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AIClient, isAIAvailable, XTM_ONE_AGENT_SLUGS } from '../../src/shared/api/ai-client';
+import { AIClient, isAIAvailable, readEnterpriseEdition, XTM_ONE_AGENT_SLUGS } from '../../src/shared/api/ai-client';
 import type { AISettings } from '../../src/shared/types/ai';
 
 const mockFetch = vi.fn();
@@ -431,7 +431,8 @@ describe('AIClient – testConnection', () => {
       .mockResolvedValueOnce(jsonResponse({ user_email: 'admin@filigran.io' }))
       .mockResolvedValueOnce(jsonResponse({
         platform_version: '3.0.0',
-        deployment_tier: 'xtm_licensed',
+        edition: 'enterprise',
+        agentic_enabled: true,
       }));
     const res = await client.testConnection();
     expect(res.data?.user_email).toBe('admin@filigran.io');
@@ -441,7 +442,38 @@ describe('AIClient – testConnection', () => {
     expect(mockFetch.mock.calls[1][0]).toBe('https://xtm.example.com/api/v1/platform/config');
   });
 
-  it('detects EE from xtm_license.valid when deployment_tier is absent', async () => {
+  it('reports an inherited Enterprise Edition (connected EE platform, no XTM license) as EE', async () => {
+    // The payload XTM One sends when Enterprise Edition comes from a connected
+    // EE OpenCTI / OpenAEV: every AI capability is on, but no license is
+    // installed - so `xtm_license.valid` is false and must NOT be what decides.
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
+      .mockResolvedValueOnce(jsonResponse({
+        platform_version: '3.0.0',
+        edition: 'enterprise',
+        agentic_enabled: true,
+        agentic_source: 'ee_platform',
+        xtm_license: { valid: false },
+      }));
+    const res = await client.testConnection();
+    expect(res.data?.enterprise_edition).toBe(true);
+  });
+
+  it('reports Community Edition as CE', async () => {
+    const client = new AIClient(validSettings);
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
+      .mockResolvedValueOnce(jsonResponse({
+        edition: 'community',
+        agentic_enabled: false,
+        xtm_license: { valid: false },
+      }));
+    const res = await client.testConnection();
+    expect(res.data?.enterprise_edition).toBe(false);
+  });
+
+  it('detects EE from xtm_license.valid on a build that says nothing else', async () => {
     const client = new AIClient(validSettings);
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
@@ -454,7 +486,7 @@ describe('AIClient – testConnection', () => {
     expect(res.data?.enterprise_edition).toBe(true);
   });
 
-  it('detects CE from deployment_tier ce_only', async () => {
+  it('still understands the retired deployment_tier of an older XTM One', async () => {
     const client = new AIClient(validSettings);
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ email: 'user@test.com' }))
@@ -463,6 +495,33 @@ describe('AIClient – testConnection', () => {
       }));
     const res = await client.testConnection();
     expect(res.data?.enterprise_edition).toBe(false);
+  });
+
+  describe('readEnterpriseEdition', () => {
+    it('reads agentic_enabled first - the one licence answer on every build', () => {
+      expect(readEnterpriseEdition({ agentic_enabled: true, xtm_license: { valid: false } })).toBe(true);
+      expect(readEnterpriseEdition({ agentic_enabled: false, xtm_license: { valid: true } })).toBe(false);
+      // The retired payload carried it too, with the same meaning.
+      expect(readEnterpriseEdition({ agentic_enabled: true, deployment_tier: 'ee_platform' })).toBe(true);
+    });
+
+    it('reads edition when agentic_enabled is absent', () => {
+      expect(readEnterpriseEdition({ edition: 'enterprise' })).toBe(true);
+      expect(readEnterpriseEdition({ edition: 'community' })).toBe(false);
+    });
+
+    it('falls back to the retired deployment_tier, then to xtm_license.valid', () => {
+      expect(readEnterpriseEdition({ deployment_tier: 'xtm_licensed' })).toBe(true);
+      expect(readEnterpriseEdition({ deployment_tier: 'ee_platform' })).toBe(true);
+      expect(readEnterpriseEdition({ deployment_tier: 'ce_only' })).toBe(false);
+      expect(readEnterpriseEdition({ xtm_license: { valid: true } })).toBe(true);
+      expect(readEnterpriseEdition({ xtm_license: { valid: false } })).toBe(false);
+    });
+
+    it('is undefined when the payload says nothing about the licence', () => {
+      expect(readEnterpriseEdition({})).toBeUndefined();
+      expect(readEnterpriseEdition({ platform_version: '1.0.0', edition: '' })).toBeUndefined();
+    });
   });
 
   it('still succeeds if config endpoint fails', async () => {

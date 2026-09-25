@@ -47,6 +47,44 @@ export const XTM_ONE_AGENT_SLUGS = {
 
 export type XtmOneAgentSlug = (typeof XTM_ONE_AGENT_SLUGS)[keyof typeof XTM_ONE_AGENT_SLUGS];
 
+/**
+ * Whether the XTM One behind ``GET /api/v1/platform/config`` runs Enterprise
+ * Edition, i.e. whether AI is licensed there. ``undefined`` when the payload
+ * says nothing about it (an unreachable config endpoint, a very old build).
+ *
+ * XTM One has two editions and one licence answer (xtm-one#3711): AI is
+ * licensed by a valid XTM license OR by a connected Enterprise Edition
+ * OpenCTI / OpenAEV / OpenCRQ - and in the second case ``xtm_license.valid`` is
+ * ``false`` while every AI capability is on. So the readings, in order:
+ *
+ * 1. ``agentic_enabled`` - the one licence answer, and the same boolean on
+ *    every XTM One build: the retired three-tier payload already carried it
+ *    as ``true`` on ``xtm_licensed`` / ``ee_platform`` and ``false`` on
+ *    ``ce_only``. Preferred because it is also the answer the platform's own
+ *    UI gates on.
+ * 2. ``edition`` (``enterprise`` / ``community``; empty in Copilot mode).
+ * 3. ``deployment_tier`` - the retired three-tier enum, for older builds.
+ * 4. ``xtm_license.valid`` - last resort; wrong for an inherited Enterprise
+ *    Edition, which is exactly why it must never come before the others.
+ */
+export function readEnterpriseEdition(config: Record<string, unknown>): boolean | undefined {
+  if (typeof config.agentic_enabled === 'boolean') return config.agentic_enabled;
+
+  const edition = config.edition;
+  if (edition === 'enterprise') return true;
+  if (edition === 'community') return false;
+
+  const deploymentTier = config.deployment_tier;
+  if (typeof deploymentTier === 'string' && deploymentTier) {
+    return deploymentTier === 'xtm_licensed' || deploymentTier === 'ee_platform';
+  }
+
+  const xtmLicense = config.xtm_license as Record<string, unknown> | undefined;
+  if (xtmLicense) return xtmLicense.valid === true;
+
+  return undefined;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -147,15 +185,7 @@ export class AIClient {
     const user_email = (meBody.user_email ?? meBody.email ?? meBody.full_name ?? meBody.name) as string | undefined;
     const version = (configBody.platform_version ?? meBody.platform_version ?? meBody.version) as string | undefined;
 
-    // Determine enterprise status from deployment_tier or xtm_license
-    const deploymentTier = configBody.deployment_tier as string | undefined;
-    const xtmLicense = configBody.xtm_license as Record<string, unknown> | undefined;
-    let enterprise_edition: boolean | undefined;
-    if (deploymentTier) {
-      enterprise_edition = deploymentTier === 'xtm_licensed' || deploymentTier === 'ee_platform';
-    } else if (xtmLicense) {
-      enterprise_edition = xtmLicense.valid === true;
-    }
+    const enterprise_edition = readEnterpriseEdition(configBody);
 
     return {
       success: true,

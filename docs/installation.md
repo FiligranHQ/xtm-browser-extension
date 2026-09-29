@@ -1,6 +1,8 @@
 # Installation
 
-## Chrome / Edge
+### From Web Store (Coming Soon)
+
+The extension will soon be available on the Chrome Web Store, Firefox Add-ons store and Microsoft Edge Add-ons store.
 
 ### From Source (Development)
 
@@ -15,39 +17,31 @@
    npm install
    ```
 
-3. Build the extension:
+## Chrome / Edge
+
+3a. Build the extension:
    ```bash
    npm run build:chrome  # For Chrome
    npm run build:edge    # For Edge
    ```
 
-4. Load in browser:
+4a. Load in browser:
    - Open `chrome://extensions/` (Chrome) or `edge://extensions/` (Edge)
    - Enable "Developer mode"
    - Click "Load unpacked"
    - Select the `dist/chrome` or `dist/edge` folder
 
-### From Web Store (Coming Soon)
-
-The extension will be available on the Chrome Web Store and Microsoft Edge Add-ons store.
-
 ## Firefox
 
-### From Source (Development)
-
-1. Build the extension:
+3b. Build the extension:
    ```bash
    npm run build:firefox
    ```
 
-2. Load in Firefox:
+4b. Load in Firefox:
    - Open `about:debugging#/runtime/this-firefox`
    - Click "Load Temporary Add-on"
    - Select any file in the `dist/firefox` folder
-
-### From Add-ons Store (Coming Soon)
-
-The extension will be available on Firefox Add-ons.
 
 ## Safari
 

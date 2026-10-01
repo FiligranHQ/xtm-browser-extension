@@ -176,9 +176,15 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         busyRef.current = true;
         try {
           const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-          hasEnterprise = Boolean(settingsResponse?.success) && settingsHaveEnterprise(settingsResponse.data);
+          if (!settingsResponse?.success) {
+            throw new Error(settingsResponse?.error || 'Failed to get settings');
+          }
+          hasEnterprise = settingsHaveEnterprise(settingsResponse.data);
         } catch (error) {
-          log.debug('Could not read settings to check for an EE platform:', error);
+          // Without the settings we cannot tell whether XTM One applies, so stay on this step
+          log.error('Could not read settings to check for an EE platform:', error);
+          setSetupError(error instanceof Error ? error.message : 'Failed to get settings');
+          return;
         } finally {
           busyRef.current = false;
         }
@@ -327,27 +333,6 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         isEnterprise: newPlatform.isEnterprise,
       });
       
-      // Update the status to show this platform as connected
-      const newPlatformStatus: PlatformStatus = {
-        id: platformId,
-        name: finalName,
-        url: normalizedUrl,
-        connected: true,
-        version: testResponse.data?.version,
-        userName: platformType === 'opencti' 
-          ? (testResponse.data?.me?.name || testResponse.data?.me?.user_email)
-          : testResponse.data?.user?.user_email,
-        isEnterprise: isEnterprise,
-      };
-      
-      setStatus(prev => ({
-        ...prev,
-        [platformType]: [
-          ...prev[platformType].filter(p => p.id !== platformId),
-          newPlatformStatus,
-        ],
-      }));
-      
       if (duplicate) {
         log.debug(`${platformType} platform already configured (${duplicate.id}), not adding it again`);
       } else {
@@ -367,7 +352,28 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         
         log.debug(`Settings saved successfully for ${platformType}, isEnterprise: ${isEnterprise}`);
       }
-      
+
+      // Only show the platform as connected once it is saved
+      const newPlatformStatus: PlatformStatus = {
+        id: platformId,
+        name: finalName,
+        url: normalizedUrl,
+        connected: true,
+        version: testResponse.data?.version,
+        userName: platformType === 'opencti'
+          ? (testResponse.data?.me?.name || testResponse.data?.me?.user_email)
+          : testResponse.data?.user?.user_email,
+        isEnterprise: isEnterprise,
+      };
+
+      setStatus(prev => ({
+        ...prev,
+        [platformType]: [
+          ...prev[platformType].filter(p => p.id !== platformId),
+          newPlatformStatus,
+        ],
+      }));
+
       // After OAEV: show XTM One only if this platform or an existing one is EE
       const nextStep: SetupStep | null = platformType === 'opencti'
         ? 'openaev'

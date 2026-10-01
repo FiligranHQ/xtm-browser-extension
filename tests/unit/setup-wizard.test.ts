@@ -3,7 +3,7 @@
  *
  * Covers the races behind #220: a second Connect or Skip while a save is in
  * flight or finishing, the popup closing before the step transition, duplicate
- * platforms, and when the XTM One step is offered.
+ * platforms, when the XTM One step is offered, and the failure paths around them.
  *
  * @vitest-environment jsdom
  */
@@ -32,6 +32,7 @@ let store: Record<string, unknown>;
 let settings: { openctiPlatforms: StoredPlatform[]; openaevPlatforms: StoredPlatform[]; ai: Record<string, unknown> };
 let connectionTest: { enterprise: boolean; error?: string };
 let heldConnectionTest: Promise<void> | null;
+let failure: { getSettings?: string | Error; saveSettings?: string; storageWrite?: boolean };
 // Unmounted in afterEach so a failing test cannot leak a live hook into the next one
 let mountedRoots: Array<() => void> = [];
 
@@ -47,10 +48,13 @@ function holdConnectionTest(): () => void {
   return release;
 }
 
-function renderWizard(hasEnterpriseConfigured = false) {
+function renderWizard(
+  hasEnterpriseConfigured = false,
+  initialStatus: ConnectionStatus = { opencti: [], openaev: [], xtmOne: null },
+) {
   const view = {} as { wizard: Wizard; status: ConnectionStatus };
   function Harness() {
-    const [status, setStatus] = useState<ConnectionStatus>({ opencti: [], openaev: [], xtmOne: null });
+    const [status, setStatus] = useState<ConnectionStatus>(initialStatus);
     view.status = status;
     view.wizard = useSetupWizard({ setStatus, hasEnterpriseConfigured });
     return null;
@@ -94,10 +98,12 @@ beforeEach(() => {
   settings = { openctiPlatforms: [], openaevPlatforms: [], ai: {} };
   connectionTest = { enterprise: true };
   heldConnectionTest = null;
+  failure = {};
 
   const { storage, runtime } = chromeMock();
   storage.local.get.mockImplementation(async (key: string) => ({ [key]: structuredClone(store[key]) }));
   storage.local.set.mockImplementation(async (items: Record<string, unknown>) => {
+    if (failure.storageWrite) throw new Error('QUOTA_BYTES quota exceeded');
     Object.assign(store, structuredClone(items));
   });
   storage.local.remove.mockImplementation(async (key: string) => { delete store[key]; });
@@ -119,8 +125,11 @@ beforeEach(() => {
           },
         };
       case 'GET_SETTINGS':
+        if (failure.getSettings instanceof Error) throw failure.getSettings;
+        if (failure.getSettings) return { success: false, error: failure.getSettings };
         return { success: true, data: structuredClone(settings) };
       case 'SAVE_SETTINGS':
+        if (failure.saveSettings) return { success: false, error: failure.saveSettings };
         settings = structuredClone(message.payload);
         return { success: true };
       default:
@@ -242,6 +251,50 @@ describe('useSetupWizard — Connect', () => {
     unmount();
   });
 
+  it('keeps the user on the step when saving the platform fails', async () => {
+    failure.saveSettings = 'Failed to save settings';
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+    expect(view.wizard.setupError).toBe('Failed to save settings');
+    expect(view.wizard.setupSuccess).toBe(false);
+    expect(view.status.openaev).toHaveLength(0); // not shown as connected when nothing was saved
+    expect(store[SETUP_STATE_KEY]).toMatchObject({ setupStep: 'openaev', setupUrl: OAEV_URL });
+
+    failure.saveSettings = undefined;
+    await connect(() => view.wizard, 'openaev');
+    expect(settings.openaevPlatforms).toHaveLength(1);
+    expect(view.status.openaev).toHaveLength(1);
+    unmount();
+  });
+
+  it('lists a reconnected platform once in the popup status', async () => {
+    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: TOKEN }];
+    const listed = { id: 'openaev-existing', name: 'OpenAEV', url: OAEV_URL, connected: false };
+    const { view, unmount } = renderWizard(true, { opencti: [], openaev: [listed], xtmOne: null });
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+
+    expect(view.status.openaev).toHaveLength(1);
+    expect(view.status.openaev[0]).toMatchObject({ id: 'openaev-existing', connected: true });
+    unmount();
+  });
+
+  it('still completes the step when the wizard state cannot be persisted', async () => {
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev');
+    failure.storageWrite = true;
+
+    await connect(() => view.wizard, 'openaev');
+    await advance(1000);
+
+    expect(settings.openaevPlatforms).toHaveLength(1);
+    expect(view.wizard.setupStep).toBe('xtm-one');
+    unmount();
+  });
+
   it('saves XTM One and clears the persisted state before the delay', async () => {
     const { view, unmount } = renderWizard(true);
     await openStep(() => view.wizard, 'xtm-one', 'https://xtm-one.example.test', 'fcp-token');
@@ -313,6 +366,25 @@ describe('useSetupWizard — Skip', () => {
     await skip(() => view.wizard, 'openaev');
     expect(view.wizard.setupStep).toBe('xtm-one');
     expect(view.wizard.isInSetupWizard).toBe(true);
+    unmount();
+  });
+
+  it.each([
+    ['returns an error', 'Storage unavailable', 'Storage unavailable'],
+    ['throws', new Error('Extension context invalidated'), 'Extension context invalidated'],
+  ])('stays on OpenAEV and shows the error when reading the settings %s', async (_case, getSettingsFailure, message) => {
+    failure.getSettings = getSettingsFailure;
+    const { view, unmount } = renderWizard(false);
+    await openStep(() => view.wizard, 'openaev');
+
+    await skip(() => view.wizard, 'openaev');
+    expect(view.wizard.setupStep).toBe('openaev');
+    expect(view.wizard.isInSetupWizard).toBe(true);
+    expect(view.wizard.setupError).toBe(message);
+
+    failure.getSettings = undefined;
+    await skip(() => view.wizard, 'openaev');
+    expect(view.wizard.isInSetupWizard).toBe(false);
     unmount();
   });
 

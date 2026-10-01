@@ -142,7 +142,7 @@ export const PlatformSetupForm: React.FC<PlatformSetupFormProps> = ({
         <Button
           variant="outlined"
           onClick={onSkip}
-          disabled={success}
+          disabled={testing || success}
           startIcon={<SkipNextOutlined />}
           sx={{ borderRadius: 1 }}
         >

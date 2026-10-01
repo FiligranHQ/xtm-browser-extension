@@ -24,6 +24,17 @@ interface PersistedSetupState {
   setupName: string;
 }
 
+interface SettingsPlatforms {
+  openctiPlatforms?: Array<{ isEnterprise?: boolean }>;
+  openaevPlatforms?: Array<{ isEnterprise?: boolean }>;
+}
+
+// hasEnterpriseConfigured is filled in asynchronously after the popup opens,
+// so check the saved settings directly before deciding to skip XTM One
+const settingsHaveEnterprise = (settings: SettingsPlatforms | undefined): boolean =>
+  [...(settings?.openctiPlatforms ?? []), ...(settings?.openaevPlatforms ?? [])]
+    .some((p) => p.isEnterprise);
+
 interface UseSetupWizardProps {
   setStatus: React.Dispatch<React.SetStateAction<ConnectionStatus>>;
   hasEnterpriseConfigured: boolean;
@@ -49,7 +60,7 @@ interface UseSetupWizardReturn {
   setSetupName: (value: string) => void;
   setShowSetupToken: (value: boolean) => void;
   handleSetupTestAndSave: (platformType: 'opencti' | 'openaev' | 'xtm-one') => Promise<void>;
-  handleSetupSkip: (currentStep: 'opencti' | 'openaev' | 'xtm-one') => void;
+  handleSetupSkip: (currentStep: 'opencti' | 'openaev' | 'xtm-one') => Promise<void>;
   startSetupWizard: () => void;
 }
 
@@ -152,13 +163,28 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
     setSetupStepInternal('opencti');
   }, []);
 
-  const handleSetupSkip = useCallback((currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
+  const handleSetupSkip = useCallback(async (currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
+    // A Connect in flight or finishing will move the wizard itself
+    if (busyRef.current) return;
     resetSetupForm();
-    
+
     if (currentStep === 'opencti') {
       setSetupStepInternal('openaev');
     } else if (currentStep === 'openaev') {
-      if (hasEnterpriseConfigured) {
+      let hasEnterprise = hasEnterpriseConfigured;
+      if (!hasEnterprise) {
+        busyRef.current = true;
+        try {
+          const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+          hasEnterprise = Boolean(settingsResponse?.success) && settingsHaveEnterprise(settingsResponse.data);
+        } catch (error) {
+          log.debug('Could not read settings to check for an EE platform:', error);
+        } finally {
+          busyRef.current = false;
+        }
+      }
+
+      if (hasEnterprise) {
         setSetupStepInternal('xtm-one');
       } else {
         // No EE platform configured — skip XTM One, end wizard
@@ -345,7 +371,7 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       // After OAEV: show XTM One only if this platform or an existing one is EE
       const nextStep: SetupStep | null = platformType === 'opencti'
         ? 'openaev'
-        : (isEnterprise || hasEnterpriseConfigured) ? 'xtm-one' : null;
+        : (isEnterprise || hasEnterpriseConfigured || settingsHaveEnterprise(currentSettings)) ? 'xtm-one' : null;
       
       // The popup may close before the timeout below fires
       if (nextStep) {

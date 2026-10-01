@@ -117,3 +117,17 @@ export function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Strip URL-encoded fragments (e.g. "2Fwww.w3.org", left over from "%2Fwww.w3.org")
+ * from scanned page text.
+ *
+ * Only tokens that START with a digit followed by an uppercase hex letter are removed,
+ * and tokens that are pure hex of hash length (MD5/SHA-1/SHA-256/SHA-512) are kept:
+ * uppercase hashes such as "54547180A99474B0DBA289D92C4A8F3EEA78B531" contain that
+ * "digit + A-F" sequence too and must survive until observable detection.
+ */
+export function stripUrlEncodedFragments(text: string): string {
+  return text.replace(/(?<!\w)[0-9][A-F][a-zA-Z0-9./-]+/g, (match) =>
+    /^[0-9A-Fa-f]{32,}[./-]*$/.test(match) ? match : ' '
+  );
+}

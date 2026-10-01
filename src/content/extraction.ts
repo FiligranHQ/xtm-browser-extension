@@ -11,6 +11,7 @@ import {
 import { generatePDF } from '../shared/extraction/pdf-generator';
 import { jsPDF } from 'jspdf';
 import { setSanitizedHtml } from '../shared/utils/sanitize';
+import { stripUrlEncodedFragments } from '../shared/detection/text-extraction';
 
 const log = loggers.content;
 
@@ -697,8 +698,8 @@ function filterContentAggressively(content: string): string {
   filtered = filtered.replace(/::[a-z-]+/gi, ' ');
   filtered = filtered.replace(/:[a-z-]+(?:\([^)]*\))?/gi, ' ');
   
-  // URL-encoded fragments (e.g., "2Fwww.w3.org")
-  filtered = filtered.replace(/[0-9][A-F][a-zA-Z0-9./-]+/g, ' ');
+  // URL-encoded fragments (e.g., "2Fwww.w3.org") - keeps uppercase hashes intact
+  filtered = stripUrlEncodedFragments(filtered);
   
   // SVG path data
   filtered = filtered.replace(/\bd="[^"]+"/gi, ' ');

@@ -25,6 +25,7 @@ import { escapeRegex } from './matching';
  * - hxxp:// or hXXp:// → http://
  * - hxxps:// or hXXps:// → https://
  * - [://] or (:/) → ://
+ * - [:] → : (e.g. hxxp[:]//, domain[.]com[:]8080)
  * - [/] → /
  */
 export function refangIndicator(value: string): string {
@@ -33,11 +34,14 @@ export function refangIndicator(value: string): string {
         .replace(/\[\.\]|\(\.\)|\{\.\}/g, '.')
         // Replace bracketed/parenthesized/braced at signs: [@] (@) {@}
         .replace(/\[@\]|\(@\)|\{@\}/g, '@')
+        // Restore the scheme separator before the hxxp replacements below, which expect a plain "://"
+        // Replace [://] or (:/) with ://
+        .replace(/\[:\/\/\]|\(:\/\)/g, '://')
+        // Replace [:] with :
+        .replace(/\[:\]/g, ':')
         // Replace hxxp/hXXp variants with http
         .replace(/hxxps?:\/\//gi, (match) => match.toLowerCase().replace('xx', 'tt'))
         .replace(/h\[xx\]ps?:\/\//gi, (match) => match.toLowerCase().replace('[xx]', 'tt'))
-        // Replace [://] or (:/) with ://
-        .replace(/\[:\/\/\]|\(:\/\)/g, '://')
         // Replace [/] or (/) with /
         .replace(/\[\/\]|\(\/\)/g, '/')
         // Replace meow with http (another common defang)
@@ -50,7 +54,7 @@ export function refangIndicator(value: string): string {
  * Check if a value appears to be defanged
  */
 export function isDefanged(value: string): boolean {
-    return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]/i.test(value);
+    return /\[\.\]|\(\.\)|\{\.\}|\[@\]|\(@\)|hxxp|h\[xx\]p|\[:\/\/\]|\[:\]/i.test(value);
 }
 
 /**
@@ -174,8 +178,8 @@ export const DOMAIN_PATTERN = new RegExp(
 
 // URL: Full URL with protocol AND defanged versions
 // Matches: https://example.com/path?query=value
-// Defanged: hxxps://example[.]com/path, hxxp://evil[.]com
-export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow):\/\/(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=[\]]*)/gi;
+// Defanged: hxxps://example[.]com/path, hxxp://evil[.]com, hxxp[:]//198[.]51[.]100[.]1:8000/path, hxxp[://]evil[.]com
+export const URL_PATTERN = /(?:https?|hxxps?|h\[xx\]ps?|meow)(?::\/\/|\[:\]\/\/|\[:\/\/\])(?:www(?:\.|\[\.\]|\(\.\)))?[-a-zA-Z0-9@:%._+~#=[\](){}]{1,256}(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9()[\]{}]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=[\]]*)/gi;
 
 // ============================================================================
 // Email Pattern
@@ -663,7 +667,7 @@ export function createNamePattern(name: string): RegExp {
 const EXACT_IPV4 = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.|\[\.\]|\(\.\))){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 const EXACT_IPV6 = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^(?:[0-9a-fA-F]{1,4}:)+(?::[0-9a-fA-F]{1,4}){1,6}$/;
 const EXACT_DOMAIN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:(?:\.|\[\.\]|\(\.\))[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-const EXACT_URL = /^(?:https?|hxxps?|h\[xx\]ps?):\/\/.+$/i;
+const EXACT_URL = /^(?:https?|hxxps?|h\[xx\]ps?)(?::\/\/|\[:\]\/\/|\[:\/\/\]).+$/i;
 const EXACT_EMAIL = /^[\w.+-]+(?:@|\[@\]|\(@\))(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.|\[\.\]|\(\.\)))+[a-zA-Z]{2,}$/;
 const EXACT_CVE = /^CVE[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\d{4}[-\u2010\u2011\u2012\u2013\u2014\u2212\u00AD]\d{4,}$/i;
 const EXACT_MD5 = /^[a-fA-F0-9]{32}$/;

@@ -260,6 +260,16 @@ describe('URL_PATTERN', () => {
   it('should match URLs with www', () => {
     expect(matchAll('https://www.example.com')).toContain('https://www.example.com');
   });
+
+  it('should match defanged URLs with a bracketed scheme colon', () => {
+    expect(matchAll('hxxp[:]//198[.]51[.]100[.]1:8000/path')).toContain('hxxp[:]//198[.]51[.]100[.]1:8000/path');
+    expect(matchAll('hxxps[:]//evil[.]example[.]com/malware')).toContain('hxxps[:]//evil[.]example[.]com/malware');
+    expect(matchAll('http[:]//example.com/path')).toContain('http[:]//example.com/path');
+  });
+
+  it('should match defanged URLs with a bracketed scheme separator [://]', () => {
+    expect(matchAll('hxxp[://]evil[.]example[.]com/malware')).toContain('hxxp[://]evil[.]example[.]com/malware');
+  });
 });
 
 // ============================================================================

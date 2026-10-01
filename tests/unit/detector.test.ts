@@ -159,6 +159,17 @@ describe('DetectionEngine', () => {
       expect(ipv4s[0].isDefanged).toBe(true);
     });
 
+    it('should detect defanged URLs with a bracketed scheme colon', () => {
+      const text = 'Payload served from hxxp[:]//198[.]51[.]100[.]1:8000/path by the actor';
+      const results = engine.detectObservables(text);
+
+      const urls = results.filter(r => r.type === 'Url');
+      expect(urls).toHaveLength(1);
+      expect(urls[0].value).toBe('hxxp[:]//198[.]51[.]100[.]1:8000/path');
+      expect(urls[0].refangedValue).toBe('http://198.51.100.1:8000/path');
+      expect(urls[0].isDefanged).toBe(true);
+    });
+
     it('should detect domain names', () => {
       const text = 'Visit example.com or malicious.org';
       const results = engine.detectObservables(text);

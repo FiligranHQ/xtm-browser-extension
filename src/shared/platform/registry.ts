@@ -496,6 +496,16 @@ export function getPlatformName(platformType: PlatformType | string): string {
 }
 
 /**
+ * Whether any platform in the given lists is Enterprise Edition.
+ * Single rule for when EE-only features (such as the XTM One setup step) are offered.
+ */
+export function hasEnterprisePlatform(
+  ...platformLists: Array<ReadonlyArray<{ isEnterprise?: boolean }> | undefined>
+): boolean {
+  return platformLists.some((platforms) => platforms?.some((p) => p.isEnterprise) ?? false);
+}
+
+/**
  * Get the logo name suffix for a platform type
  * Use this instead of: platformType === 'openaev' ? 'openaev' : 'opencti'
  */

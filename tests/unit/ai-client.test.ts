@@ -97,6 +97,23 @@ describe('AIClient', () => {
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/Unable to reach XTM One/i);
     });
+
+    it('bounds the connection test with a timeout signal', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockResolvedValue(jsonResponse({}));
+      await client.testConnection();
+      for (const [, init] of mockFetch.mock.calls) {
+        expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
+      }
+    });
+
+    it('reports a timed-out connection test', async () => {
+      const client = new AIClient(validSettings);
+      mockFetch.mockRejectedValueOnce(new DOMException('signal timed out', 'TimeoutError'));
+      const res = await client.testConnection();
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Unable to reach XTM One: the connection timed out');
+    });
   });
 
   describe('HTTP error mapping', () => {

@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { loggers } from '../../shared/utils/logger';
+import { hasEnterprisePlatform } from '../../shared/platform/registry';
 import type { ConnectionStatus, PlatformStatus } from '../types';
 
 const log = loggers.popup;
@@ -347,7 +348,7 @@ export const usePlatformStatus = (): UsePlatformStatusReturn => {
   const hasAnyOpenCTIConfigured = status.opencti.length > 0;
   const hasAnyOpenAEVConfigured = status.openaev.length > 0;
   const hasAnyPlatformConfigured = hasAnyOpenCTIConfigured || hasAnyOpenAEVConfigured;
-  const hasEnterprise = status.opencti.some(p => p.isEnterprise) || status.openaev.some(p => p.isEnterprise);
+  const hasEnterprise = hasEnterprisePlatform(status.opencti, status.openaev);
 
   return {
     status,

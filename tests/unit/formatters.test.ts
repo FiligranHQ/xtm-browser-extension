@@ -12,6 +12,7 @@ import {
   formatNumberCompact,
   normalizeUrl,
   normalizeUrlForComparison,
+  findPlatformByUrl,
 } from '../../src/shared/utils/formatters';
 
 // ============================================================================
@@ -201,6 +202,24 @@ describe('URL Normalization', () => {
         .not.toBe(normalizeUrlForComparison('https://openaev2.example.test'));
       expect(normalizeUrlForComparison('http://openaev.example.test'))
         .not.toBe(normalizeUrlForComparison('https://openaev.example.test'));
+    });
+  });
+
+  describe('findPlatformByUrl', () => {
+    const platforms = [
+      { id: 'no-url' },
+      { id: 'a', url: 'https://openaev.example.test' },
+      { id: 'b', url: 'https://other.example.test/' },
+    ];
+
+    it('should find the platform for a URL that differs only in case or trailing slash', () => {
+      expect(findPlatformByUrl(platforms, 'HTTPS://OpenAEV.example.test/')?.id).toBe('a');
+      expect(findPlatformByUrl(platforms, 'other.example.test')?.id).toBe('b');
+    });
+
+    it('should skip entries without a URL and return undefined when nothing matches', () => {
+      expect(findPlatformByUrl([{ id: 'no-url' }], 'https://openaev.example.test')).toBeUndefined();
+      expect(findPlatformByUrl(platforms, 'https://unknown.example.test')).toBeUndefined();
     });
   });
 });

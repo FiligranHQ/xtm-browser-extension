@@ -7,8 +7,9 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { loggers } from '../../shared/utils/logger';
-import { normalizeUrl, normalizeUrlForComparison } from '../../shared/utils/formatters';
-import { getPlatformName } from '../../shared/platform/registry';
+import { normalizeUrl, findPlatformByUrl } from '../../shared/utils/formatters';
+import { getPlatformName, hasEnterprisePlatform } from '../../shared/platform/registry';
+import type { PlatformConfig } from '../../shared/types/settings';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
 const log = loggers.popup;
@@ -23,17 +24,6 @@ interface PersistedSetupState {
   setupToken: string;
   setupName: string;
 }
-
-interface SettingsPlatforms {
-  openctiPlatforms?: Array<{ isEnterprise?: boolean }>;
-  openaevPlatforms?: Array<{ isEnterprise?: boolean }>;
-}
-
-// hasEnterpriseConfigured is filled in asynchronously after the popup opens,
-// so check the saved settings directly before deciding to skip XTM One
-const settingsHaveEnterprise = (settings: SettingsPlatforms | undefined): boolean =>
-  [...(settings?.openctiPlatforms ?? []), ...(settings?.openaevPlatforms ?? [])]
-    .some((p) => p.isEnterprise);
 
 interface UseSetupWizardProps {
   setStatus: React.Dispatch<React.SetStateAction<ConnectionStatus>>;
@@ -166,30 +156,40 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
   const handleSetupSkip = useCallback(async (currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
     // A Connect in flight or finishing will move the wizard itself
     if (busyRef.current) return;
+
+    // hasEnterpriseConfigured is filled in asynchronously after the popup opens,
+    // so check the saved settings before skipping XTM One
+    let hasEnterprise = hasEnterpriseConfigured;
+    if (currentStep === 'openaev' && !hasEnterprise) {
+      busyRef.current = true;
+      setSetupTesting(true);
+      setSetupError(null);
+      try {
+        const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+        if (!settingsResponse?.success) {
+          throw new Error(settingsResponse?.error || 'Failed to get settings');
+        }
+        hasEnterprise = hasEnterprisePlatform(
+          settingsResponse.data?.openctiPlatforms,
+          settingsResponse.data?.openaevPlatforms,
+        );
+      } catch (error) {
+        // Without the settings we cannot tell whether XTM One applies, so stay on this
+        // step with the form as typed
+        log.error('Could not read settings to check for an EE platform:', error);
+        setSetupError(error instanceof Error ? error.message : 'Failed to get settings');
+        return;
+      } finally {
+        busyRef.current = false;
+        setSetupTesting(false);
+      }
+    }
+
     resetSetupForm();
 
     if (currentStep === 'opencti') {
       setSetupStepInternal('openaev');
     } else if (currentStep === 'openaev') {
-      let hasEnterprise = hasEnterpriseConfigured;
-      if (!hasEnterprise) {
-        busyRef.current = true;
-        try {
-          const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-          if (!settingsResponse?.success) {
-            throw new Error(settingsResponse?.error || 'Failed to get settings');
-          }
-          hasEnterprise = settingsHaveEnterprise(settingsResponse.data);
-        } catch (error) {
-          // Without the settings we cannot tell whether XTM One applies, so stay on this step
-          log.error('Could not read settings to check for an EE platform:', error);
-          setSetupError(error instanceof Error ? error.message : 'Failed to get settings');
-          return;
-        } finally {
-          busyRef.current = false;
-        }
-      }
-
       if (hasEnterprise) {
         setSetupStepInternal('xtm-one');
       } else {
@@ -309,20 +309,20 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       }
       
       const currentSettings = settingsResponse.data;
-      const existingPlatforms: Array<{ id: string; name?: string; url: string; apiToken: string }> =
+      // Saved entries are not guaranteed to have every field (e.g. older settings)
+      const existingPlatforms: Array<Partial<PlatformConfig>> =
         currentSettings[`${platformType}Platforms`] || [];
       // One platform per URL, compared the same way as the options page
-      const existing = existingPlatforms.find(
-        (p) => normalizeUrlForComparison(p.url) === normalizeUrlForComparison(normalizedUrl)
-      );
-      const platformId = existing?.id ?? `${platformType}-setup-${Date.now()}`;
+      const existing = findPlatformByUrl(existingPlatforms, normalizedUrl);
+      const platformId = existing?.id || `${platformType}-setup-${Date.now()}`;
 
       // Create platform with the final name
       const finalName = setupName.trim() || existing?.name || remotePlatformName || getPlatformName(platformType);
       const newPlatform = {
         id: platformId,
         name: finalName,
-        url: normalizedUrl,
+        // A matched platform keeps its saved URL, even if it was typed with another case
+        url: existing?.url || normalizedUrl,
         apiToken: setupToken.trim(),
         enabled: true,
         isEnterprise: isEnterprise,
@@ -334,12 +334,19 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         isEnterprise: newPlatform.isEnterprise,
       });
 
-      if (existing?.apiToken === newPlatform.apiToken) {
-        log.debug(`${platformType} platform already configured (${existing.id}), not saving it again`);
+      const alreadySaved = existing !== undefined
+        && existing.id === newPlatform.id
+        && existing.apiToken === newPlatform.apiToken
+        && existing.name === newPlatform.name
+        && existing.enabled === newPlatform.enabled
+        && existing.isEnterprise === newPlatform.isEnterprise;
+
+      if (alreadySaved) {
+        log.debug(`${platformType} platform already saved as is (${platformId}), not saving it again`);
       } else {
-        // A known URL with a new token updates that platform instead of adding a second one
+        // A known URL updates that platform (token, EE status...) instead of adding a second one
         const platforms = existing
-          ? existingPlatforms.map((p) => (p.id === existing.id ? { ...p, ...newPlatform } : p))
+          ? existingPlatforms.map((p) => (p === existing ? { ...p, ...newPlatform } : p))
           : [...existingPlatforms, newPlatform];
         const updatedSettings = {
           ...currentSettings,
@@ -362,7 +369,7 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       const newPlatformStatus: PlatformStatus = {
         id: platformId,
         name: finalName,
-        url: normalizedUrl,
+        url: newPlatform.url,
         connected: true,
         version: testResponse.data?.version,
         userName: platformType === 'opencti'
@@ -371,26 +378,27 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         isEnterprise: isEnterprise,
       };
 
-      setStatus(prev => ({
-        ...prev,
-        [platformType]: [
-          ...prev[platformType].filter(p => p.id !== platformId),
-          newPlatformStatus,
-        ],
-      }));
+      // Update a listed platform in place, keeping its position and other fields
+      setStatus(prev => {
+        const list = prev[platformType];
+        return {
+          ...prev,
+          [platformType]: list.some(p => p.id === platformId)
+            ? list.map(p => (p.id === platformId ? { ...p, ...newPlatformStatus } : p))
+            : [...list, newPlatformStatus],
+        };
+      });
 
-      // After OAEV: show XTM One only if this platform or another saved one is EE.
-      // The test just run is authoritative for this platform, so its saved copy is left
-      // out, and hasEnterpriseConfigured (which may include that copy) only counts for
-      // a new platform.
-      const otherSettings = {
-        ...currentSettings,
-        [`${platformType}Platforms`]: existingPlatforms.filter((p) => p.id !== platformId),
-      };
-      const otherIsEnterprise = settingsHaveEnterprise(otherSettings) || (!existing && hasEnterpriseConfigured);
+      // After OAEV: show XTM One if this platform or another saved one is EE. The test
+      // just run is authoritative for this platform; hasEnterpriseConfigured may include
+      // its saved copy, so it only counts for a new platform.
       const nextStep: SetupStep | null = platformType === 'opencti'
         ? 'openaev'
-        : (isEnterprise || otherIsEnterprise) ? 'xtm-one' : null;
+        : (isEnterprise
+          || hasEnterprisePlatform(currentSettings.openctiPlatforms, existingPlatforms.filter((p) => p !== existing))
+          || (!existing && hasEnterpriseConfigured))
+          ? 'xtm-one'
+          : null;
       
       // The popup may close before the timeout below fires
       if (nextStep) {

@@ -21,17 +21,31 @@ const TOKEN = 'token-123';
 type Wizard = ReturnType<typeof useSetupWizard>;
 type PlatformType = 'opencti' | 'openaev' | 'xtm-one';
 
+// Saved entries are not guaranteed to have every field
 interface StoredPlatform {
-  id: string;
-  url: string;
-  apiToken: string;
+  id?: string;
+  name?: string;
+  url?: string;
+  apiToken?: string;
+  enabled?: boolean;
   isEnterprise?: boolean;
 }
+
+/** What the wizard saves for OAEV_URL / TOKEN with the default (EE) connection test */
+const savedOpenAEV = (overrides: StoredPlatform = {}): StoredPlatform => ({
+  id: 'openaev-existing',
+  name: 'OpenAEV',
+  url: OAEV_URL,
+  apiToken: TOKEN,
+  enabled: true,
+  isEnterprise: true,
+  ...overrides,
+});
 
 let store: Record<string, unknown>;
 let settings: { openctiPlatforms: StoredPlatform[]; openaevPlatforms: StoredPlatform[]; ai: Record<string, unknown> };
 let connectionTest: { enterprise: boolean; error?: string };
-let heldConnectionTest: Promise<void> | null;
+let heldMessages: Record<string, Promise<void>>;
 let failure: { getSettings?: string | Error; saveSettings?: string; storageWrite?: boolean };
 // Unmounted in afterEach so a failing test cannot leak a live hook into the next one
 let mountedRoots: Array<() => void> = [];
@@ -41,11 +55,14 @@ const chromeMock = () => (globalThis as any).chrome;
 const sentCount = (type: string) =>
   chromeMock().runtime.sendMessage.mock.calls.filter(([message]: [{ type: string }]) => message.type === type).length;
 
-/** Keep TEST_PLATFORM_CONNECTION pending until the returned function is called */
-function holdConnectionTest(): () => void {
+/** Keep messages of this type pending until the returned function is called */
+function holdMessage(type: string): () => void {
   let release!: () => void;
-  heldConnectionTest = new Promise<void>((resolve) => { release = resolve; });
-  return release;
+  heldMessages[type] = new Promise<void>((resolve) => { release = resolve; });
+  return () => {
+    delete heldMessages[type];
+    release();
+  };
 }
 
 function renderWizard(
@@ -97,7 +114,7 @@ beforeEach(() => {
   store = {};
   settings = { openctiPlatforms: [], openaevPlatforms: [], ai: {} };
   connectionTest = { enterprise: true };
-  heldConnectionTest = null;
+  heldMessages = {};
   failure = {};
 
   const { storage, runtime } = chromeMock();
@@ -108,10 +125,11 @@ beforeEach(() => {
   });
   storage.local.remove.mockImplementation(async (key: string) => { delete store[key]; });
   runtime.sendMessage.mockImplementation(async (message: { type: string; payload?: any }) => {
+    const held = heldMessages[message.type];
+    if (held) await held;
     switch (message.type) {
       case 'TEST_PLATFORM_CONNECTION':
       case 'AI_TEST_CONNECTION':
-        if (heldConnectionTest) await heldConnectionTest;
         if (connectionTest.error) return { success: false, error: connectionTest.error };
         return {
           success: true,
@@ -151,7 +169,7 @@ describe('useSetupWizard — Connect', () => {
     const { view, unmount } = renderWizard();
     await openStep(() => view.wizard, 'openaev');
 
-    const release = holdConnectionTest();
+    const release = holdMessage('TEST_PLATFORM_CONNECTION');
     let first!: Promise<void>;
     let second!: Promise<void>;
     await act(async () => { first = view.wizard.handleSetupTestAndSave('openaev'); });
@@ -204,7 +222,7 @@ describe('useSetupWizard — Connect', () => {
   });
 
   it('reuses the saved platform when Connect is retried after the popup closed mid-request', async () => {
-    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: TOKEN }];
+    settings.openaevPlatforms = [savedOpenAEV()];
     store[SETUP_STATE_KEY] = {
       setupStep: 'openaev',
       isInSetupWizard: true,
@@ -225,14 +243,14 @@ describe('useSetupWizard — Connect', () => {
   });
 
   it('reuses the saved platform when the URL differs only in case', async () => {
-    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: TOKEN }];
+    settings.openaevPlatforms = [savedOpenAEV()];
     const { view, unmount } = renderWizard(true);
     await openStep(() => view.wizard, 'openaev', 'HTTPS://OpenAEV.Example.Test/');
 
     await connect(() => view.wizard, 'openaev');
 
     expect(sentCount('SAVE_SETTINGS')).toBe(0);
-    expect(settings.openaevPlatforms).toHaveLength(1);
+    expect(settings.openaevPlatforms).toEqual([savedOpenAEV()]); // saved URL keeps its case
     expect(view.status.openaev.map((p) => p.id)).toEqual(['openaev-existing']);
     unmount();
   });
@@ -240,7 +258,7 @@ describe('useSetupWizard — Connect', () => {
   it('updates the token of the platform saved for the same URL instead of adding one', async () => {
     settings.openaevPlatforms = [
       { id: 'openaev-other', url: 'https://other.example.test', apiToken: 'kept' },
-      { id: 'openaev-existing', url: OAEV_URL, apiToken: 'expired-token' },
+      savedOpenAEV({ apiToken: 'expired-token' }),
     ];
     const { view, unmount } = renderWizard(true);
     await openStep(() => view.wizard, 'openaev');
@@ -253,6 +271,54 @@ describe('useSetupWizard — Connect', () => {
       ['openaev-existing', TOKEN],
     ]);
     expect(view.status.openaev.map((p) => p.id)).toEqual(['openaev-existing']);
+    unmount();
+  });
+
+  it('saves a changed EE status or disabled flag even when the token is unchanged', async () => {
+    settings.openaevPlatforms = [savedOpenAEV({ isEnterprise: false, enabled: false })];
+    const { view, unmount } = renderWizard(false);
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+
+    expect(sentCount('SAVE_SETTINGS')).toBe(1);
+    expect(settings.openaevPlatforms).toEqual([savedOpenAEV()]);
+    expect(store[SETUP_STATE_KEY]).toMatchObject({ setupStep: 'xtm-one' });
+    unmount();
+  });
+
+  it('ignores saved entries without a URL and gives a matched entry without an id an id', async () => {
+    settings.openaevPlatforms = [
+      { name: 'no url' },
+      { name: 'OpenAEV', url: OAEV_URL, apiToken: 'old-token' },
+      { name: 'other', url: 'https://other.example.test', apiToken: 'kept' },
+    ];
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+
+    expect(view.wizard.setupError).toBeNull();
+    const [noUrl, matched, other] = settings.openaevPlatforms;
+    expect(settings.openaevPlatforms).toHaveLength(3);
+    expect(noUrl).toEqual({ name: 'no url' });
+    expect(matched).toMatchObject({ url: OAEV_URL, apiToken: TOKEN, id: expect.stringMatching(/^openaev-setup-/) });
+    expect(other).toEqual({ name: 'other', url: 'https://other.example.test', apiToken: 'kept' });
+    unmount();
+  });
+
+  it('shows an error and saves nothing when the settings cannot be read on Connect', async () => {
+    failure.getSettings = 'Storage unavailable';
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+    expect(view.wizard.setupError).toBe('Failed to get settings');
+    expect(sentCount('SAVE_SETTINGS')).toBe(0);
+
+    failure.getSettings = undefined;
+    await connect(() => view.wizard, 'openaev');
+    expect(settings.openaevPlatforms).toHaveLength(1);
     unmount();
   });
 
@@ -290,16 +356,19 @@ describe('useSetupWizard — Connect', () => {
     unmount();
   });
 
-  it('lists a reconnected platform once in the popup status', async () => {
-    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: TOKEN }];
-    const listed = { id: 'openaev-existing', name: 'OpenAEV', url: OAEV_URL, connected: false };
-    const { view, unmount } = renderWizard(true, { opencti: [], openaev: [listed], xtmOne: null });
+  it('updates a reconnected platform in place in the popup status', async () => {
+    settings.openaevPlatforms = [savedOpenAEV()];
+    const listed = {
+      id: 'openaev-existing', name: 'OpenAEV', url: OAEV_URL, connected: false, tested: true, platformType: 'openaev' as const,
+    };
+    const second = { id: 'openaev-second', name: 'Second', url: 'https://second.example.test', connected: true };
+    const { view, unmount } = renderWizard(true, { opencti: [], openaev: [listed, second], xtmOne: null });
     await openStep(() => view.wizard, 'openaev');
 
     await connect(() => view.wizard, 'openaev');
 
-    expect(view.status.openaev).toHaveLength(1);
-    expect(view.status.openaev[0]).toMatchObject({ id: 'openaev-existing', connected: true });
+    expect(view.status.openaev.map((p) => p.id)).toEqual(['openaev-existing', 'openaev-second']);
+    expect(view.status.openaev[0]).toMatchObject({ connected: true, tested: true, platformType: 'openaev' });
     unmount();
   });
 
@@ -328,6 +397,43 @@ describe('useSetupWizard — Connect', () => {
     await advance(1000);
     expect(view.wizard.isInSetupWizard).toBe(false);
     expect(store[SETUP_STATE_KEY]).toBeUndefined();
+    unmount();
+  });
+
+  it.each([
+    ['the connection test fails', () => { connectionTest.error = 'Your XTM One token is invalid or expired.'; }, 'Your XTM One token is invalid or expired.'],
+    ['saving fails', () => { failure.saveSettings = 'Failed to save settings'; }, 'Failed to save settings'],
+  ])('keeps the XTM One step and allows a retry when %s', async (_case, fail, message) => {
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'xtm-one', 'https://xtm-one.example.test', 'fcp-token');
+    fail();
+
+    await connect(() => view.wizard, 'xtm-one');
+    expect(view.wizard.setupError).toBe(message);
+    expect(settings.ai).toEqual({});
+    expect(store[SETUP_STATE_KEY]).toMatchObject({ setupStep: 'xtm-one', setupToken: 'fcp-token' });
+
+    connectionTest.error = undefined;
+    failure.saveSettings = undefined;
+    await connect(() => view.wizard, 'xtm-one');
+    expect(settings.ai).toMatchObject({ xtmOneUrl: 'https://xtm-one.example.test' });
+    unmount();
+  });
+
+  it('ignores a second XTM One Connect while the first one is in flight', async () => {
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'xtm-one', 'https://xtm-one.example.test', 'fcp-token');
+
+    const release = holdMessage('AI_TEST_CONNECTION');
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    await act(async () => { first = view.wizard.handleSetupTestAndSave('xtm-one'); });
+    await act(async () => { second = view.wizard.handleSetupTestAndSave('xtm-one'); });
+    release();
+    await act(async () => { await Promise.all([first, second]); });
+
+    expect(sentCount('AI_TEST_CONNECTION')).toBe(1);
+    expect(sentCount('SAVE_SETTINGS')).toBe(1);
     unmount();
   });
 
@@ -392,7 +498,7 @@ describe('useSetupWizard — Skip', () => {
     const { view, unmount } = renderWizard(true);
     await openStep(() => view.wizard, 'opencti', 'https://opencti.example.test');
 
-    const release = holdConnectionTest();
+    const release = holdMessage('TEST_PLATFORM_CONNECTION');
     let pending!: Promise<void>;
     await act(async () => { pending = view.wizard.handleSetupTestAndSave('opencti'); });
     await skip(() => view.wizard, 'opencti');
@@ -430,9 +536,29 @@ describe('useSetupWizard — Skip', () => {
     expect(view.wizard.setupStep).toBe('openaev');
     expect(view.wizard.isInSetupWizard).toBe(true);
     expect(view.wizard.setupError).toBe(message);
+    // the typed form, and its persisted copy, are kept
+    expect(view.wizard.setupUrl).toBe(OAEV_URL);
+    expect(view.wizard.setupToken).toBe(TOKEN);
+    expect(store[SETUP_STATE_KEY]).toMatchObject({ setupUrl: OAEV_URL, setupToken: TOKEN });
 
     failure.getSettings = undefined;
     await skip(() => view.wizard, 'openaev');
+    expect(view.wizard.isInSetupWizard).toBe(false);
+    unmount();
+  });
+
+  it('shows the wizard as busy while Skip reads the settings', async () => {
+    const { view, unmount } = renderWizard(false);
+    await openStep(() => view.wizard, 'openaev');
+
+    const release = holdMessage('GET_SETTINGS');
+    let pending!: Promise<void>;
+    await act(async () => { pending = view.wizard.handleSetupSkip('openaev'); });
+    expect(view.wizard.setupTesting).toBe(true);
+
+    release();
+    await act(async () => { await pending; });
+    expect(view.wizard.setupTesting).toBe(false);
     expect(view.wizard.isInSetupWizard).toBe(false);
     unmount();
   });

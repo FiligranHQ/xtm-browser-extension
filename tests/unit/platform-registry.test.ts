@@ -26,6 +26,7 @@ import {
   getPlatformActionColor,
   isPlatformType,
   isPlatformPrefix,
+  hasEnterprisePlatform,
   getPlatformName,
   getPlatformLogoName,
   getPlatformSettingsKey,
@@ -484,3 +485,14 @@ describe('Platform Registry', () => {
   });
 });
 
+describe('hasEnterprisePlatform', () => {
+  it('is true when any list has an Enterprise platform', () => {
+    expect(hasEnterprisePlatform([{ isEnterprise: false }], [{}, { isEnterprise: true }])).toBe(true);
+  });
+
+  it('is false for community platforms, empty lists and missing lists', () => {
+    expect(hasEnterprisePlatform([{ isEnterprise: false }, {}], [])).toBe(false);
+    expect(hasEnterprisePlatform(undefined, undefined)).toBe(false);
+    expect(hasEnterprisePlatform()).toBe(false);
+  });
+});

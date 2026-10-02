@@ -16,7 +16,7 @@ import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
-import { normalizeUrl, normalizeUrlForComparison } from '../shared/utils/formatters';
+import { normalizeUrl, findPlatformByUrl } from '../shared/utils/formatters';
 import { getDefaultPlatformName, getPlatformSettingsKey, getPlatformName, type PlatformType } from '../shared/platform/registry';
 
 const log = loggers.options;
@@ -210,13 +210,10 @@ const App: React.FC = () => {
   const isDuplicateUrl = (type: PlatformType, platformId: string, url: string): boolean => {
     if (!settings || !url) return false;
     
-    const normalized = normalizeUrlForComparison(url);
     const settingsKey = getPlatformSettingsKey(type);
-    const platforms = settings[settingsKey] || [];
+    const otherPlatforms = (settings[settingsKey] || []).filter(p => p.id !== platformId);
     
-    return platforms.some(p => 
-      p.id !== platformId && normalizeUrlForComparison(p.url) === normalized
-    );
+    return findPlatformByUrl(otherPlatforms, url) !== undefined;
   };
 
   /**

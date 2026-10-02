@@ -270,6 +270,12 @@ describe('URL_PATTERN', () => {
   it('should match defanged URLs with a bracketed scheme separator [://]', () => {
     expect(matchAll('hxxp[://]evil[.]example[.]com/malware')).toContain('hxxp[://]evil[.]example[.]com/malware');
   });
+
+  it('should match defanged URLs with brackets around the scheme slashes', () => {
+    for (const url of ['hxxps:[//]evil[.]com/a', 'hxxp[:/]/evil[.]com/a', 'hxxp[:][/][/]evil[.]com/a']) {
+      expect(matchAll(`see ${url} now`)).toContain(url);
+    }
+  });
 });
 
 // ============================================================================

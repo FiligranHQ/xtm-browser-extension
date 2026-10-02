@@ -98,6 +98,12 @@ describe('refangIndicator', () => {
       expect(refangIndicator('hXXp[:]//example.com')).toBe('http://example.com');
     });
 
+    it('should refang brackets around the scheme slashes', () => {
+      expect(refangIndicator('hxxps:[//]evil[.]com/a')).toBe('https://evil.com/a');
+      expect(refangIndicator('hxxp[:/]/evil[.]com/a')).toBe('http://evil.com/a');
+      expect(refangIndicator('hxxp[:][/][/]evil[.]com/a')).toBe('http://evil.com/a');
+    });
+
     it('should refang a defanged URL with bracketed colon, IP and port', () => {
       expect(refangIndicator('hxxp[:]//198[.]51[.]100[.]1:8000/path')).toBe('http://198.51.100.1:8000/path');
     });
@@ -185,6 +191,12 @@ describe('isDefanged', () => {
     expect(isDefanged('evil.com[:]8080')).toBe(true);
   });
 
+  it('should detect brackets around the scheme slashes', () => {
+    expect(isDefanged('https:[//]evil.com/a')).toBe(true);
+    expect(isDefanged('http[:/]/evil.com/a')).toBe(true);
+    expect(isDefanged('http[:][/][/]evil.com/a')).toBe(true);
+  });
+
   it('should return false for normal indicators', () => {
     expect(isDefanged('192.168.1.1')).toBe(false);
     expect(isDefanged('example.com')).toBe(false);
@@ -209,6 +221,9 @@ describe('detectObservableType', () => {
       expect(detectObservableType('hxxp://evil.com')).toBe('Url');
       expect(detectObservableType('hxxp[:]//198[.]51[.]100[.]1:8000/path')).toBe('Url');
       expect(detectObservableType('hxxp[://]evil[.]com')).toBe('Url');
+      expect(detectObservableType('hxxps:[//]evil[.]com/a')).toBe('Url');
+      expect(detectObservableType('hxxp[:/]/evil[.]com/a')).toBe('Url');
+      expect(detectObservableType('hxxp[:][/][/]evil[.]com/a')).toBe('Url');
     });
   });
 

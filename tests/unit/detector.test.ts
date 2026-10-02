@@ -170,6 +170,14 @@ describe('DetectionEngine', () => {
       expect(urls[0].isDefanged).toBe(true);
     });
 
+    it('should detect defanged URLs with brackets around the scheme slashes', () => {
+      const text = 'Mirrors: hxxps:[//]evil[.]com/a and hxxp[:][/][/]bad[.]org/b';
+      const results = engine.detectObservables(text);
+
+      const urls = results.filter(r => r.type === 'Url');
+      expect(urls.map(u => u.refangedValue)).toEqual(['https://evil.com/a', 'http://bad.org/b']);
+    });
+
     it('should detect domain names', () => {
       const text = 'Visit example.com or malicious.org';
       const results = engine.detectObservables(text);

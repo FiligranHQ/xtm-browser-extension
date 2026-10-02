@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { loggers } from '../../shared/utils/logger';
-import { normalizeUrl } from '../../shared/utils/formatters';
+import { normalizeUrl, normalizeUrlForComparison } from '../../shared/utils/formatters';
 import { getPlatformName } from '../../shared/platform/registry';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
@@ -309,15 +309,16 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       }
       
       const currentSettings = settingsResponse.data;
-      const existingPlatforms: Array<{ id: string; url: string; apiToken: string }> =
+      const existingPlatforms: Array<{ id: string; name?: string; url: string; apiToken: string }> =
         currentSettings[`${platformType}Platforms`] || [];
-      const duplicate = existingPlatforms.find(
-        (p) => normalizeUrl(p.url) === normalizedUrl && p.apiToken === setupToken.trim()
+      // One platform per URL, compared the same way as the options page
+      const existing = existingPlatforms.find(
+        (p) => normalizeUrlForComparison(p.url) === normalizeUrlForComparison(normalizedUrl)
       );
-      const platformId = duplicate?.id ?? `${platformType}-setup-${Date.now()}`;
-      
+      const platformId = existing?.id ?? `${platformType}-setup-${Date.now()}`;
+
       // Create platform with the final name
-      const finalName = setupName.trim() || remotePlatformName || getPlatformName(platformType);
+      const finalName = setupName.trim() || existing?.name || remotePlatformName || getPlatformName(platformType);
       const newPlatform = {
         id: platformId,
         name: finalName,
@@ -326,19 +327,23 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         enabled: true,
         isEnterprise: isEnterprise,
       };
-      
-      log.debug(`Creating new ${platformType} platform:`, {
+
+      log.debug(`${existing ? 'Updating' : 'Creating new'} ${platformType} platform:`, {
         id: newPlatform.id,
         name: newPlatform.name,
         isEnterprise: newPlatform.isEnterprise,
       });
-      
-      if (duplicate) {
-        log.debug(`${platformType} platform already configured (${duplicate.id}), not adding it again`);
+
+      if (existing?.apiToken === newPlatform.apiToken) {
+        log.debug(`${platformType} platform already configured (${existing.id}), not saving it again`);
       } else {
+        // A known URL with a new token updates that platform instead of adding a second one
+        const platforms = existing
+          ? existingPlatforms.map((p) => (p.id === existing.id ? { ...p, ...newPlatform } : p))
+          : [...existingPlatforms, newPlatform];
         const updatedSettings = {
           ...currentSettings,
-          [`${platformType}Platforms`]: [...existingPlatforms, newPlatform],
+          [`${platformType}Platforms`]: platforms,
         };
         
         const saveResponse = await chrome.runtime.sendMessage({

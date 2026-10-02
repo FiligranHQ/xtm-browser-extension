@@ -16,7 +16,7 @@ import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import type { ExtensionSettings, PlatformConfig } from '../shared/types/settings';
 import { loggers } from '../shared/utils/logger';
-import { normalizeUrl } from '../shared/utils/formatters';
+import { normalizeUrl, normalizeUrlForComparison } from '../shared/utils/formatters';
 import { getDefaultPlatformName, getPlatformSettingsKey, getPlatformName, type PlatformType } from '../shared/platform/registry';
 
 const log = loggers.options;
@@ -203,13 +203,6 @@ const App: React.FC = () => {
   // ============================================================================
   // Platform Handler Functions
   // ============================================================================
-
-  /**
-   * Normalize URL for consistent comparison (lowercased)
-   */
-  const normalizeUrlForComparison = (url: string): string => {
-    return normalizeUrl(url).toLowerCase();
-  };
 
   /**
    * Check if a URL already exists in the configured platforms (excluding the current one)

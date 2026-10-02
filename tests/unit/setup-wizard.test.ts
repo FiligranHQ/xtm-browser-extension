@@ -224,14 +224,35 @@ describe('useSetupWizard — Connect', () => {
     unmount();
   });
 
-  it('adds a separate platform for the same URL with another token', async () => {
-    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: 'other-token' }];
+  it('reuses the saved platform when the URL differs only in case', async () => {
+    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: TOKEN }];
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev', 'HTTPS://OpenAEV.Example.Test/');
+
+    await connect(() => view.wizard, 'openaev');
+
+    expect(sentCount('SAVE_SETTINGS')).toBe(0);
+    expect(settings.openaevPlatforms).toHaveLength(1);
+    expect(view.status.openaev.map((p) => p.id)).toEqual(['openaev-existing']);
+    unmount();
+  });
+
+  it('updates the token of the platform saved for the same URL instead of adding one', async () => {
+    settings.openaevPlatforms = [
+      { id: 'openaev-other', url: 'https://other.example.test', apiToken: 'kept' },
+      { id: 'openaev-existing', url: OAEV_URL, apiToken: 'expired-token' },
+    ];
     const { view, unmount } = renderWizard(true);
     await openStep(() => view.wizard, 'openaev');
 
     await connect(() => view.wizard, 'openaev');
 
-    expect(settings.openaevPlatforms.map((p) => p.apiToken)).toEqual(['other-token', TOKEN]);
+    expect(sentCount('SAVE_SETTINGS')).toBe(1);
+    expect(settings.openaevPlatforms.map((p) => [p.id, p.apiToken])).toEqual([
+      ['openaev-other', 'kept'],
+      ['openaev-existing', TOKEN],
+    ]);
+    expect(view.status.openaev.map((p) => p.id)).toEqual(['openaev-existing']);
     unmount();
   });
 

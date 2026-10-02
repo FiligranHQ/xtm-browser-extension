@@ -94,6 +94,14 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
+ * Normalize a platform URL for duplicate detection: one platform per URL,
+ * compared case-insensitively.
+ */
+export function normalizeUrlForComparison(url: string): string {
+  return normalizeUrl(url).toLowerCase();
+}
+
+/**
  * Escape HTML special characters for safe display
  */
 export function escapeHtml(text: string): string {

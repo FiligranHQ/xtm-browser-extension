@@ -370,6 +370,25 @@ describe('stripUrlEncodedFragments', () => {
     expect(stripUrlEncodedFragments(`${sha1}.`)).toBe(`${sha1}.`);
   });
 
+  it('should keep a hash that starts with a digit followed by A-F when a file name or path follows it', () => {
+    const sha1 = '6AEBDFF4D25607D5DB930E5537DE0A9854B168E0';
+    for (const suffix of ['.exe', '.bin', '-sample.zip', '/analysis']) {
+      expect(stripUrlEncodedFragments(`x ${sha1}${suffix} y`)).toBe(`x ${sha1}${suffix} y`);
+    }
+  });
+
+  it('should strip hex runs that are not of hash length', () => {
+    for (const length of [33, 45, 200]) {
+      const hex = '0A' + '1'.repeat(length - 2);
+      expect(stripUrlEncodedFragments(`x ${hex} y`)).not.toContain(hex);
+    }
+  });
+
+  it('should strip fragments glued to a double-encoded %25', () => {
+    const text = 'http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg';
+    expect(stripUrlEncodedFragments(text)).not.toContain('www.w3.org');
+  });
+
   it('should keep lowercase hashes intact', () => {
     const sha1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
     expect(stripUrlEncodedFragments(sha1)).toBe(sha1);

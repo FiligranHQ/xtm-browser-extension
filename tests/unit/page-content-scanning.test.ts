@@ -39,6 +39,17 @@ describe('getPageContentForScanning', () => {
     expect(getPageContentForScanning()).toContain(sha1);
   });
 
+  it('should keep uppercase hashes that start with a digit followed by A-F', () => {
+    const sha1 = '6AEBDFF4D25607D5DB930E5537DE0A9854B168E0';
+    const sha256 = '5A9392784E07EB40CFB3F4A464E0A91451F573EEB59D600983E190BD8AADDCA6';
+    setPageText(`SHA-1 Filename\n${sha1} loader.dll\n${sha1}.exe\nSHA-256:${sha256}`);
+
+    const content = getPageContentForScanning();
+    expect(content).toContain(`${sha1} loader.dll`);
+    expect(content).toContain(`${sha1}.exe`);
+    expect(content).toContain(sha256);
+  });
+
   it('should keep lowercase SHA-1 hashes', () => {
     const sha1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
     setPageText(`hash: ${sha1}`);

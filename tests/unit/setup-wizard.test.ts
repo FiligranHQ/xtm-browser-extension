@@ -345,6 +345,34 @@ describe('useSetupWizard — Connect', () => {
     unmount();
   });
 
+  it('uses the new test result, not the saved copy, when reconnecting a platform that lost EE', async () => {
+    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: 'old-token', isEnterprise: true }];
+    connectionTest.enterprise = false;
+    const { view, unmount } = renderWizard(true); // popup status still shows the saved EE copy
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+    expect(settings.openaevPlatforms[0]).toMatchObject({ id: 'openaev-existing', isEnterprise: false });
+    expect(store[SETUP_STATE_KEY]).toBeUndefined();
+
+    await advance(1000);
+    expect(view.wizard.isInSetupWizard).toBe(false);
+    unmount();
+  });
+
+  it('still offers XTM One when another saved platform is EE', async () => {
+    settings.openctiPlatforms = [{ id: 'opencti-ee', url: 'https://opencti.example.test', apiToken: 't', isEnterprise: true }];
+    settings.openaevPlatforms = [{ id: 'openaev-existing', url: OAEV_URL, apiToken: 'old-token', isEnterprise: true }];
+    connectionTest.enterprise = false;
+    const { view, unmount } = renderWizard(true);
+    await openStep(() => view.wizard, 'openaev');
+
+    await connect(() => view.wizard, 'openaev');
+    await advance(1000);
+    expect(view.wizard.setupStep).toBe('xtm-one');
+    unmount();
+  });
+
   it('ends the wizard after OpenAEV when no platform is Enterprise', async () => {
     connectionTest.enterprise = false;
     const { view, unmount } = renderWizard(false);

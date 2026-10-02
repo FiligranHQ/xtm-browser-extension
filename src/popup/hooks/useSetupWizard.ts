@@ -379,10 +379,18 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         ],
       }));
 
-      // After OAEV: show XTM One only if this platform or an existing one is EE
+      // After OAEV: show XTM One only if this platform or another saved one is EE.
+      // The test just run is authoritative for this platform, so its saved copy is left
+      // out, and hasEnterpriseConfigured (which may include that copy) only counts for
+      // a new platform.
+      const otherSettings = {
+        ...currentSettings,
+        [`${platformType}Platforms`]: existingPlatforms.filter((p) => p.id !== platformId),
+      };
+      const otherIsEnterprise = settingsHaveEnterprise(otherSettings) || (!existing && hasEnterpriseConfigured);
       const nextStep: SetupStep | null = platformType === 'opencti'
         ? 'openaev'
-        : (isEnterprise || hasEnterpriseConfigured || settingsHaveEnterprise(currentSettings)) ? 'xtm-one' : null;
+        : (isEnterprise || otherIsEnterprise) ? 'xtm-one' : null;
       
       // The popup may close before the timeout below fires
       if (nextStep) {

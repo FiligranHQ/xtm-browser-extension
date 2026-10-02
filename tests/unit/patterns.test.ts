@@ -968,6 +968,25 @@ describe('generateDefangedVariants', () => {
       const variants = generateDefangedVariants('https://example.com');
       expect(variants).toContain('hXXps://example.com');
     });
+
+    it('should generate bracketed scheme separator variants combined with a defanged host', () => {
+      const variants = generateDefangedVariants('http://evil.com/p');
+      expect(variants).toContain('hxxp://evil[.]com/p');
+      expect(variants).toContain('hxxp[:]//evil[.]com/p');
+      expect(variants).toContain('hxxp[://]evil[.]com/p');
+      expect(variants).toContain('http[:]//evil.com/p');
+    });
+
+    it('should defang only the last dot of an IP host with a port', () => {
+      const variants = generateDefangedVariants('http://146.70.100.69:8000/php_sess');
+      expect(variants).toContain('hxxp[:]//146.70.100[.]69:8000/php_sess');
+    });
+
+    it('should not return the clean URL or duplicates', () => {
+      const variants = generateDefangedVariants('https://evil.com/p');
+      expect(variants).not.toContain('https://evil.com/p');
+      expect(variants.length).toBe(new Set(variants).size);
+    });
   });
 
   describe('Edge cases', () => {

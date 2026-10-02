@@ -65,9 +65,10 @@ export function isDefanged(value: string): boolean {
  * Common defanging patterns (reverse of refangIndicator):
  * - . → [.] or (.) or {.}
  * - @ → [@] or (@)
- * - http:// → hxxp:// or hXXp://
- * - https:// → hxxps:// or hXXps://
- * 
+ * - http:// → hxxp:// or hXXp://, with :// optionally as [:]// or [://]
+ * - https:// → hxxps:// or hXXps://, with :// optionally as [:]// or [://]
+ * - URLs combine both: hxxp[:]//evil[.]com/p, hxxp://198.51.100[.]1:8000/p
+ *
  * For IPs like 192.168.1.1, common defanging includes:
  * - Last dot only: 192.168.1[.]1 (most common)
  * - All dots: 192[.]168[.]1[.]1
@@ -79,12 +80,29 @@ export function generateDefangedVariants(cleanValue: string): string[] {
     const variants: string[] = [];
     
     // Handle URLs with http/https
-    if (cleanValue.match(/^https?:\/\//i)) {
-        // hxxp/hxxps variants
-        variants.push(cleanValue.replace(/^http:/i, 'hxxp:'));
-        variants.push(cleanValue.replace(/^https:/i, 'hxxps:'));
-        variants.push(cleanValue.replace(/^http:/i, 'hXXp:'));
-        variants.push(cleanValue.replace(/^https:/i, 'hXXps:'));
+    // Reports usually defang the scheme and the host together, so combine both
+    const urlParts = cleanValue.match(/^(https?):\/\/([^/?#]*)(.*)$/i);
+    if (urlParts) {
+        const [, scheme, host, rest] = urlParts;
+        // http, hxxp and hXXp
+        const schemes = [scheme, scheme.replace(/tt/i, 'xx'), scheme.replace(/tt/i, 'XX')];
+        const separators = ['://', '[:]//', '[://]'];
+        // Host as-is, every dot defanged, last dot only defanged (common for IPs)
+        const hosts = [host, host.replace(/\./g, '[.]')];
+        const lastHostDot = host.lastIndexOf('.');
+        if (lastHostDot > 0 && lastHostDot < host.length - 1) {
+            hosts.push(host.slice(0, lastHostDot) + '[.]' + host.slice(lastHostDot + 1));
+        }
+        for (const s of schemes) {
+            for (const separator of separators) {
+                for (const h of hosts) {
+                    const urlVariant = `${s}${separator}${h}${rest}`;
+                    if (urlVariant !== cleanValue && !variants.includes(urlVariant)) {
+                        variants.push(urlVariant);
+                    }
+                }
+            }
+        }
     }
     
     // Handle dots - most important for IPs and domains

@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop
+      - 'legacy/**'
   pull_request:
     branches:
       - main
       - develop
+      - 'legacy/**'
   workflow_dispatch:
 
 jobs:

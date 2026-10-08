@@ -116,6 +116,8 @@ jobs:
           name: v${{ steps.get_version.outputs.VERSION }}
           body_path: release_notes.md
           draft: false
+          # Legacy (0.0.x) releases must never replace the 0.1.x line as GitHub's "Latest".
+          make_latest: false
           prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
           files: |
             filigran-xtm-chrome-${{ steps.get_version.outputs.VERSION }}.zip

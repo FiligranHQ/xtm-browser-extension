@@ -495,7 +495,13 @@ export class AIClient {
     }
 
     const data = await response.json();
-    return { success: true, content: data.content?.[0]?.text || '' };
+    // Models may emit `thinking` / `redacted_thinking` blocks before the answer,
+    // so read the `text` blocks instead of assuming content[0] is the answer.
+    const content = (data.content || [])
+      .filter((block: { type?: string }) => block.type === 'text')
+      .map((block: { text?: string }) => block.text || '')
+      .join('');
+    return { success: true, content };
   }
 
   private async generateGemini(request: AIGenerationRequest): Promise<AIGenerationResponse> {

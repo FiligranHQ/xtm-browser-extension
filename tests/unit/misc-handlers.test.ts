@@ -325,6 +325,31 @@ describe('handleFetchImageAsDataURL', () => {
     );
   });
 
+  it('should return an inline data:image URL as-is without fetching', async () => {
+    const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+    await handleFetchImageAsDataURL({ url: dataUrl }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: { dataUrl } })
+    );
+  });
+
+  it.each([
+    ['file:', 'file:///etc/passwd'],
+    ['javascript:', 'javascript:alert(1)'],
+    ['non-image data:', 'data:text/html,<script>alert(1)</script>'],
+    ['relative', '/images/logo.png'],
+  ])('should refuse a %s URL without fetching', async (_label, url) => {
+    await handleFetchImageAsDataURL({ url }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'Unsupported URL scheme' })
+    );
+  });
+
   it('should return error on fetch failure', async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,

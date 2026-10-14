@@ -287,6 +287,12 @@ export const handleFetchImageAsDataURL: MessageHandler = async (payload, sendRes
     return;
   }
   
+  // An inline image already is the data URL this handler returns: nothing to fetch.
+  if (/^data:image\//i.test(url)) {
+    sendResponse(successResponse({ dataUrl: url }));
+    return;
+  }
+  
   // Page-controlled src, fetched with the worker's <all_urls> and file:///*
   // permissions - keep it to web schemes so it cannot read local files.
   const safeUrl = resolveSafeUrl(url);

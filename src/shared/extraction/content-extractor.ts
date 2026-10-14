@@ -761,6 +761,8 @@ function extractFallback(): ExtractedContent {
   });
   
   cleanFallbackContent(clone);
+  // cleanFallbackContent only drops a few tags and handlers: sanitize like the Readability path.
+  setSanitizedHtml(clone, clone.innerHTML);
   
   // Prepend hero image if not already in content
   let finalHtml = clone.innerHTML;

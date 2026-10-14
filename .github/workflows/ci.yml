@@ -176,15 +176,7 @@ jobs:
           done
 
       - name: Generate ephemeral platform credentials
-        run: |
-          # The platform under test is torn down with the job, so its admin
-          # credentials are generated per run rather than committed here.
-          TOKEN="$(cat /proc/sys/kernel/random/uuid)"
-          KEY="$(openssl rand -base64 32)"
-          echo "::add-mask::$TOKEN"
-          echo "::add-mask::$KEY"
-          echo "TEST_ADMIN_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-          echo "TEST_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+        run: scripts/ci/generate-platform-credentials.sh
 
       - name: Pull and run OpenCTI
         run: |
@@ -513,15 +505,7 @@ jobs:
           done
 
       - name: Generate ephemeral platform credentials
-        run: |
-          # The platform under test is torn down with the job, so its admin
-          # credentials are generated per run rather than committed here.
-          TOKEN="$(cat /proc/sys/kernel/random/uuid)"
-          KEY="$(openssl rand -base64 32)"
-          echo "::add-mask::$TOKEN"
-          echo "::add-mask::$KEY"
-          echo "TEST_ADMIN_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-          echo "TEST_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
+        run: scripts/ci/generate-platform-credentials.sh
 
       - name: Pull and run OpenAEV
         run: |

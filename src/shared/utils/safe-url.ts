@@ -1,24 +1,18 @@
 /**
- * Safe URL helpers
- *
- * Platform URLs, API responses and page URLs all reach navigation and fetch
- * sinks, so they are checked against a scheme allowlist first: `javascript:`
- * and `data:` would otherwise run in the extension's own origin, and the
- * background worker holds `<all_urls>` plus `file:///*`.
- *
- * URLs must be absolute. Every caller builds one from a configured platform URL
- * or reads one from a page, and resolving a relative path against whichever
- * context happens to be running would silently mean the extension's own origin
- * in a panel and the visited page's in a content script.
+ * Safe URL helpers: scheme allowlist (http/https, plus opt-in extras) for URLs
+ * reaching navigation and fetch sinks. Relative URLs are refused, since they would
+ * resolve against whichever context runs (extension origin or visited page).
  */
+
+import { createLogger } from './logger';
+
+const log = createLogger('SafeUrl');
 
 const WEB_SCHEMES = ['http:', 'https:'];
 
 /**
- * Resolve a URL, returning it only if its scheme is allowed.
- *
+ * Return the parsed URL if absolute and its scheme allowed, else null.
  * @param extraSchemes additional schemes to allow, e.g. `file:` for local PDFs
- * @returns the parsed URL, or null if it is relative, malformed or disallowed
  */
 export function resolveSafeUrl(url: string, extraSchemes: string[] = []): string | null {
   if (!url) return null;
@@ -39,16 +33,19 @@ export function isSafeUrl(url: string, extraSchemes: string[] = []): boolean {
 }
 
 /**
- * Open a URL in a new tab, ignoring it if the scheme is not allowed.
- *
- * Opens through the tabs API rather than a page-level popup call: every caller
- * is an extension page, the panel among them runs as an iframe where popups can
- * be blocked, and Chrome refuses a dangerous scheme here on its own.
+ * Open a URL in a new tab through the tabs API (the panel iframe can block popups).
+ * Returns false, with a warning, when the URL is refused or the API is missing.
  */
 export function openExternalUrl(url: string, extraSchemes: string[] = []): boolean {
   const safe = resolveSafeUrl(url, extraSchemes);
-  if (!safe) return false;
-  if (typeof chrome === 'undefined' || !chrome.tabs?.create) return false;
+  if (!safe) {
+    log.warn('Refused to open URL with an unsupported scheme:', String(url).slice(0, 40));
+    return false;
+  }
+  if (typeof chrome === 'undefined' || !chrome.tabs?.create) {
+    log.warn('Cannot open URL: chrome.tabs is unavailable in this context');
+    return false;
+  }
   chrome.tabs.create({ url: safe });
   return true;
 }

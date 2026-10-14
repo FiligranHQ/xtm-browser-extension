@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import type { PlatformInfo, InvestigationEntity, PanelMode } from '../types/panel-types';
-import { isSafeUrl } from '../../shared/utils/safe-url';
+import { openExternalUrl } from '../../shared/utils/safe-url';
 
 export interface InvestigationActionsProps {
   // Platform state
@@ -135,7 +135,7 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
     });
     
     if (response?.success && response.data?.url) {
-      if (isSafeUrl(response.data.url)) chrome.tabs.create({ url: response.data.url });
+      const opened = openExternalUrl(response.data.url);
       if (currentTab?.id) { 
         chrome.tabs.sendMessage(currentTab.id, { type: 'CLEAR_HIGHLIGHTS' }); 
         chrome.tabs.sendMessage(currentTab.id, { type: 'HIDE_PANEL' }); 
@@ -143,7 +143,9 @@ export function useInvestigationActions(props: InvestigationActionsProps): Inves
       setInvestigationEntities([]);
       setInvestigationTypeFilter('all');
       setPanelMode('empty');
-      showToast({ type: 'success', message: 'Workbench created successfully' });
+      showToast(opened
+        ? { type: 'success', message: 'Workbench created successfully' }
+        : { type: 'warning', message: 'Workbench created, but its link could not be opened' });
     } else {
       showToast({ type: 'error', message: response?.error || 'Failed to create workbench' });
     }

@@ -83,4 +83,22 @@ describe('extractContent sanitization', () => {
     expect(result.content).toContain('hero.png');
     expect(result.content).toContain('hero-image');
   });
+
+  it('should keep video embeds and drop iframes that only mention a video host', () => {
+    setPage(`
+      <article>
+        <h1>Loader campaign report</h1>
+        ${PROSE}
+        <iframe src="https://www.youtube.com/embed/abc123"></iframe>
+        <iframe src="https://player.vimeo.com/video/456"></iframe>
+        <iframe src="https://tracker.example.net/frame.html?u=//www.youtube.com/embed/abc123"></iframe>
+      </article>
+    `);
+
+    const result = extractContent();
+
+    expect(result.content).toContain('youtube.com/embed/abc123');
+    expect(result.content).toContain('player.vimeo.com/video/456');
+    expect(result.content).not.toContain('tracker.example.net');
+  });
 });

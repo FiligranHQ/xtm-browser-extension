@@ -19,8 +19,13 @@ import {
   rmSync,
 } from 'fs';
 
-// Get browser from environment variable
+// Get browser from environment variable. It is interpolated into manifest and
+// dist paths, so only known targets are accepted.
+const SUPPORTED_BROWSERS = ['chrome', 'firefox', 'edge'];
 const browser = process.env.BROWSER || 'chrome';
+if (!SUPPORTED_BROWSERS.includes(browser)) {
+  throw new Error(`Unknown BROWSER "${browser}". Expected one of: ${SUPPORTED_BROWSERS.join(', ')}`);
+}
 
 export default defineConfig({
   plugins: [

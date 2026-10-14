@@ -78,4 +78,25 @@ describe('openExternalUrl', () => {
     expect(openExternalUrl('javascript:alert(1)')).toBe(false);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it('should warn instead of failing silently', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (globalThis as any).chrome.tabs.create = vi.fn();
+
+    openExternalUrl('javascript:alert(1)');
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Refused to open URL'), 'javascript:alert(1)');
+  });
+
+  it('should return false with a warning when chrome.tabs is unavailable', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tabs = (globalThis as any).chrome.tabs;
+    (globalThis as any).chrome.tabs = undefined;
+    try {
+      expect(openExternalUrl('https://example.com/dashboard')).toBe(false);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('chrome.tabs is unavailable'));
+    } finally {
+      (globalThis as any).chrome.tabs = tabs;
+    }
+  });
 });

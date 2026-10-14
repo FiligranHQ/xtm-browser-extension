@@ -768,7 +768,7 @@ function extractFallback(): ExtractedContent {
   let finalHtml = clone.innerHTML;
   if (heroImage) {
     const contentHasHero = clone.querySelector(`img[src="${heroImage.src}"]`) ||
-                          clone.innerHTML.includes(heroImage.src);
+                          finalHtml.includes(heroImage.src);
     if (!contentHasHero) {
       log.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
       const heroHtml = createHeroImageHtml(heroImage);

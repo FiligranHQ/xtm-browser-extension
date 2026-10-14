@@ -319,6 +319,15 @@ describe('handleFetchImageAsDataURL', () => {
     );
   });
 
+  it('should refuse a non-string URL without throwing', async () => {
+    await handleFetchImageAsDataURL({ url: 123 }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'No URL provided' })
+    );
+  });
+
   it('should return an inline data:image URL as-is without fetching', async () => {
     const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
 

@@ -15,7 +15,7 @@
 import type { SendResponseFn } from '../../shared/types/common';
 import type { MessageHandler, HandlerContext } from './types';
 import { loggers } from '../../shared/utils/logger';
-import { resolveSafeUrl } from '../../shared/utils/safe-url';
+import { PDF_SCANNER_SCHEMES, resolveSafeUrl } from '../../shared/utils/safe-url';
 
 const log = loggers.background;
 
@@ -29,13 +29,13 @@ export const handleOpenPdfScanner: MessageHandler = async (
 ) => {
   const { pdfUrl } = payload as { pdfUrl: string };
   
-  if (!pdfUrl) {
+  if (!pdfUrl || typeof pdfUrl !== 'string') {
     sendResponse({ success: false, error: 'No PDF URL provided' });
     return;
   }
   
   // Message-supplied URL handed to a privileged extension page: same allowlist as the scanner.
-  const safeUrl = resolveSafeUrl(pdfUrl, ['file:', 'blob:']);
+  const safeUrl = resolveSafeUrl(pdfUrl, PDF_SCANNER_SCHEMES);
   if (!safeUrl) {
     log.warn('Refused PDF scanner for unsupported URL:', pdfUrl.slice(0, 40));
     sendResponse({ success: false, error: 'Unsupported PDF URL' });

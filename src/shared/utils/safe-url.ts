@@ -14,6 +14,9 @@
 
 const WEB_SCHEMES = ['http:', 'https:'];
 
+/** Extra schemes the PDF scanner accepts on top of the web ones (local and in-memory PDFs). */
+export const PDF_SCANNER_SCHEMES = ['file:', 'blob:'];
+
 /**
  * Resolve a URL, returning it only if its scheme is allowed.
  *

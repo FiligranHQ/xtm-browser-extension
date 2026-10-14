@@ -2,7 +2,7 @@
  * Tests for handleOpenPdfScanner in background/handlers/pdf-handlers.ts
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleOpenPdfScanner } from '../../src/background/handlers/pdf-handlers';
 
 vi.mock('../../src/shared/utils/logger', () => {
@@ -19,10 +19,21 @@ describe('handleOpenPdfScanner', () => {
   beforeEach(() => {
     mockSendResponse = vi.fn();
     createTab = vi.fn().mockResolvedValue({ id: 7 });
-    globalThis.chrome = {
+    vi.stubGlobal('chrome', {
       runtime: { getURL: vi.fn().mockReturnValue(SCANNER_PAGE) },
       tabs: { create: createTab },
-    } as unknown as typeof chrome;
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('should refuse a non-string pdfUrl without throwing', async () => {
+    await handleOpenPdfScanner({ pdfUrl: 123 }, mockSendResponse, {});
+
+    expect(createTab).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith({ success: false, error: 'No PDF URL provided' });
   });
 
   it.each([

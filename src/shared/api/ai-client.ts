@@ -501,6 +501,17 @@ export class AIClient {
       .filter((block: { type?: string }) => block.type === 'text')
       .map((block: { text?: string }) => block.text || '')
       .join('');
+    // A thinking-only response (budget spent on thinking) or a refusal has no text block:
+    // fail with the cause instead of an empty success the caller cannot explain.
+    if (!content.trim()) {
+      if (data.stop_reason === 'max_tokens') {
+        throw new Error('Anthropic response hit max_tokens before producing any text');
+      }
+      if (data.stop_reason === 'refusal') {
+        throw new Error('Anthropic declined to answer this request');
+      }
+      throw new Error(`Anthropic returned no text content (stop_reason: ${data.stop_reason ?? 'unknown'})`);
+    }
     return { success: true, content };
   }
 

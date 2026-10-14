@@ -118,6 +118,23 @@ describe('extractContent sanitization (fallback extractor)', () => {
     expect(result.textContent).toContain('Threat actors');
   });
 
+  it('should drop non-video iframes and keep video embeds', () => {
+    setPage(`
+      <article>
+        <h1>Loader campaign report</h1>
+        ${PROSE}
+        <iframe src="https://tracker.example.net/frame.html"></iframe>
+        <iframe src="https://www.youtube.com/embed/abc123"></iframe>
+      </article>
+    `);
+
+    const result = extractContent();
+
+    expect(result.content).not.toContain('tracker.example.net');
+    expect(result.content).toContain('youtube.com/embed/abc123');
+    expect(result.textContent).toContain('Threat actors');
+  });
+
   it('should keep content images', () => {
     setPage(`
       <article>

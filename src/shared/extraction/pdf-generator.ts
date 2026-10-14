@@ -776,7 +776,7 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
 /**
  * Fetch image via background script (bypasses CORS)
  */
-async function fetchImageViaBackground(src: string): Promise<string | null> {
+export async function fetchImageViaBackground(src: string): Promise<string | null> {
   return new Promise((resolve) => {
     // Set timeout in case background script doesn't respond
     const timeoutId = setTimeout(() => {
@@ -796,8 +796,9 @@ async function fetchImageViaBackground(src: string): Promise<string | null> {
             return;
           }
           
-          if (response?.success && response?.dataUrl) {
-            resolve(response.dataUrl);
+          // Handlers answer successResponse(...), i.e. { success, data: { dataUrl } }
+          if (response?.success && response.data?.dataUrl) {
+            resolve(response.data.dataUrl);
           } else {
             log.debug('[PDFGenerator] Background fetch failed:', response?.error);
             resolve(null);

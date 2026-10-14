@@ -8,7 +8,8 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Readability } from '@mozilla/readability';
 import { extractContent } from '../../src/shared/extraction/content-extractor';
 
 const PROSE = `
@@ -82,5 +83,70 @@ describe('extractContent sanitization', () => {
 
     expect(result.content).toContain('hero.png');
     expect(result.content).toContain('hero-image');
+  });
+});
+
+describe('extractContent sanitization (fallback extractor)', () => {
+  beforeEach(() => {
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+    // Force the fallback path: it runs when Readability finds nothing.
+    vi.spyOn(Readability.prototype, 'parse').mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should strip handlers, javascript: links and srcdoc iframes', () => {
+    setPage(`
+      <article>
+        <h1>Loader campaign report</h1>
+        ${PROSE}
+        <p tabindex="0" onfocus="alert(1)">Indicators follow.</p>
+        <a href="javascript:alert(1)">details</a>
+        <iframe srcdoc="<script>alert(1)</script>"></iframe>
+      </article>
+    `);
+
+    const result = extractContent();
+
+    expect(result.content).not.toContain('onfocus');
+    expect(result.content).not.toContain('javascript:');
+    expect(result.content).not.toContain('srcdoc');
+    expect(result.content).toContain('Indicators follow.');
+    expect(result.textContent).toContain('Threat actors');
+  });
+
+  it('should drop non-video iframes and keep video embeds', () => {
+    setPage(`
+      <article>
+        <h1>Loader campaign report</h1>
+        ${PROSE}
+        <iframe src="https://tracker.example.net/frame.html"></iframe>
+        <iframe src="https://www.youtube.com/embed/abc123"></iframe>
+      </article>
+    `);
+
+    const result = extractContent();
+
+    expect(result.content).not.toContain('tracker.example.net');
+    expect(result.content).toContain('youtube.com/embed/abc123');
+    expect(result.textContent).toContain('Threat actors');
+  });
+
+  it('should keep content images', () => {
+    setPage(`
+      <article>
+        <h1>Loader campaign report</h1>
+        <figure><img src="https://cdn.example.com/diagram.png" alt="Staging chain"></figure>
+        ${PROSE}
+      </article>
+    `);
+
+    const result = extractContent();
+
+    expect(result.content).toContain('diagram.png');
+    expect(result.images.some(img => img.src.includes('diagram.png'))).toBe(true);
   });
 });

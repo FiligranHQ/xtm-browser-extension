@@ -8,7 +8,7 @@ import { useCallback } from 'react';
 import type { EntityData, PlatformInfo, ContainerFormState, ContainerSpecificFields, PanelAIState, PanelMode } from '../types/panel-types';
 import type { ImportResults } from '../../shared/types/scan';
 import type { ResolvedRelationship } from '../../shared/api/ai/types';
-import { resolveSafeUrl } from '../../shared/utils/safe-url';
+import { PDF_SCANNER_SCHEMES, resolveSafeUrl } from '../../shared/utils/safe-url';
 
 export interface ContainerActionsProps {
   // Platform state
@@ -85,10 +85,10 @@ export async function resolveActivePdfUrl(): Promise<string | null> {
   const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html');
   if (tab.url.startsWith(scannerUrl)) {
     const param = new URL(tab.url).searchParams.get('url');
-    return param ? resolveSafeUrl(param, ['file:', 'blob:']) : null;
+    return param ? resolveSafeUrl(param, PDF_SCANNER_SCHEMES) : null;
   }
 
-  return resolveSafeUrl(tab.url, ['file:', 'blob:']);
+  return resolveSafeUrl(tab.url, PDF_SCANNER_SCHEMES);
 }
 
 export function useContainerActions(props: ContainerActionsProps): ContainerActionsReturn {

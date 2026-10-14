@@ -761,12 +761,14 @@ function extractFallback(): ExtractedContent {
   });
   
   cleanFallbackContent(clone);
+  // cleanFallbackContent only drops a few tags and handlers: sanitize like the Readability path.
+  sanitizeExtractedContent(clone, clone.innerHTML);
   
   // Prepend hero image if not already in content
   let finalHtml = clone.innerHTML;
   if (heroImage) {
     const contentHasHero = clone.querySelector(`img[src="${heroImage.src}"]`) ||
-                          clone.innerHTML.includes(heroImage.src);
+                          finalHtml.includes(heroImage.src);
     if (!contentHasHero) {
       log.debug('[ContentExtractor] Adding hero image to fallback:', heroImage.src);
       const heroHtml = createHeroImageHtml(heroImage);
@@ -795,18 +797,24 @@ function extractFallback(): ExtractedContent {
 }
 
 /**
+ * Sanitize extracted HTML into an element. The sanitizer keeps iframes for video
+ * embeds, so POST_PROCESS_REMOVE must follow it to drop every other iframe.
+ */
+function sanitizeExtractedContent(element: HTMLElement, html: string): void {
+  setSanitizedHtml(element, html);
+  POST_PROCESS_REMOVE.forEach(selector => {
+    try {
+      element.querySelectorAll(selector).forEach(el => el.remove());
+    } catch { /* Skip invalid selectors */ }
+  });
+}
+
+/**
  * Post-process Readability output - minimal cleaning and image fixing
  */
 function postProcessContent(html: string): { html: string; element: HTMLElement } {
   const div = document.createElement('div');
-  setSanitizedHtml(div, html);
-  
-  // Remove only clearly problematic elements
-  POST_PROCESS_REMOVE.forEach(selector => {
-    try {
-      div.querySelectorAll(selector).forEach(el => el.remove());
-    } catch { /* Skip invalid selectors */ }
-  });
+  sanitizeExtractedContent(div, html);
   
   // Clean up empty elements (but keep structure)
   div.querySelectorAll('div, span').forEach(el => {

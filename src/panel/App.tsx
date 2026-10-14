@@ -583,6 +583,9 @@ const App: React.FC = () => {
         });
         if (response?.success) {
           log.debug('PDF scanner opened for:', pdfUrl);
+        } else {
+          log.warn('PDF scanner refused:', response?.error);
+          showToast({ type: 'error', message: 'This PDF cannot be opened in the scanner' });
         }
         return true;
       }
@@ -592,7 +595,7 @@ const App: React.FC = () => {
       log.error('Error checking PDF page:', error);
       return false;
     }
-  }, [isSplitScreenMode]);
+  }, [isSplitScreenMode, showToast]);
 
   // Handle investigation scan
   const handleInvestigationScan = useCallback(async (platformId?: string) => {

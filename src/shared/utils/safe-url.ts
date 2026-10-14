@@ -25,6 +25,14 @@ export function resolveSafeUrl(url: string, extraSchemes: string[] = []): string
   }
 }
 
+function urlScheme(url: string): string {
+  try {
+    return new URL(url).protocol;
+  } catch {
+    return 'relative or malformed URL';
+  }
+}
+
 /**
  * Whether a URL is safe to navigate to or fetch.
  */
@@ -39,7 +47,8 @@ export function isSafeUrl(url: string, extraSchemes: string[] = []): boolean {
 export function openExternalUrl(url: string, extraSchemes: string[] = []): boolean {
   const safe = resolveSafeUrl(url, extraSchemes);
   if (!safe) {
-    log.warn('Refused to open URL with an unsupported scheme:', String(url).slice(0, 40));
+    // Scheme only: the rest of a refused URL can carry credentials or tokens.
+    log.warn('Refused to open URL with an unsupported scheme:', urlScheme(url));
     return false;
   }
   if (typeof chrome === 'undefined' || !chrome.tabs?.create) {

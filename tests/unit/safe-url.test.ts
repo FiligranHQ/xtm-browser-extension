@@ -83,9 +83,10 @@ describe('openExternalUrl', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (globalThis as any).chrome.tabs.create = vi.fn();
 
-    openExternalUrl('javascript:alert(1)');
+    openExternalUrl('ftp://user:secret@files.example.com/report.pdf');
 
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Refused to open URL'), 'javascript:alert(1)');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Refused to open URL'), 'ftp:');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('secret');
   });
 
   it('should return false with a warning when chrome.tabs is unavailable', () => {

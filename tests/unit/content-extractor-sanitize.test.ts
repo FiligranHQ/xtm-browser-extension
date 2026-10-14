@@ -91,6 +91,7 @@ describe('extractContent sanitization', () => {
         ${PROSE}
         <iframe src="https://www.youtube.com/embed/abc123"></iframe>
         <iframe src="https://player.vimeo.com/video/456"></iframe>
+        <iframe src="https://youtube-nocookie.com/embed/def456"></iframe>
         <iframe src="https://tracker.example.net/frame.html?u=//www.youtube.com/embed/abc123"></iframe>
       </article>
     `);
@@ -99,6 +100,7 @@ describe('extractContent sanitization', () => {
 
     expect(result.content).toContain('youtube.com/embed/abc123');
     expect(result.content).toContain('player.vimeo.com/video/456');
+    expect(result.content).toContain('youtube-nocookie.com/embed/def456');
     expect(result.content).not.toContain('tracker.example.net');
   });
 });

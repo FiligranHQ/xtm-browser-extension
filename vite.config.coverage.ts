@@ -5,7 +5,7 @@
  * for collecting code coverage from E2E tests running in the browser.
  */
 
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import istanbul from 'vite-plugin-istanbul';
 import { resolve } from 'path';
@@ -18,16 +18,9 @@ import {
   existsSync,
   rmSync,
 } from 'fs';
+import { browser, assertBuildBrowser } from './scripts/browser-target';
 
-// Get browser from environment variable. It is interpolated into manifest and
-// dist paths, so only known targets are accepted.
-const SUPPORTED_BROWSERS = ['chrome', 'firefox', 'edge'];
-const browser = process.env.BROWSER || 'chrome';
-if (!SUPPORTED_BROWSERS.includes(browser)) {
-  throw new Error(`Unknown BROWSER "${browser}". Expected one of: ${SUPPORTED_BROWSERS.join(', ')}`);
-}
-
-export default defineConfig({
+const config: UserConfig = {
   plugins: [
     react(),
     // Istanbul instrumentation for coverage collection
@@ -239,5 +232,9 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-});
+};
 
+export default defineConfig(({ command }) => {
+  if (command === 'build') assertBuildBrowser();
+  return config;
+});

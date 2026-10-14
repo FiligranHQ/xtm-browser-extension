@@ -15,6 +15,7 @@
 import type { SendResponseFn } from '../../shared/types/common';
 import type { MessageHandler, HandlerContext } from './types';
 import { loggers } from '../../shared/utils/logger';
+import { PDF_SCANNER_SCHEMES, resolveSafeUrl } from '../../shared/utils/safe-url';
 
 const log = loggers.background;
 
@@ -28,17 +29,25 @@ export const handleOpenPdfScanner: MessageHandler = async (
 ) => {
   const { pdfUrl } = payload as { pdfUrl: string };
   
-  if (!pdfUrl) {
+  if (!pdfUrl || typeof pdfUrl !== 'string') {
     sendResponse({ success: false, error: 'No PDF URL provided' });
+    return;
+  }
+  
+  // Message-supplied URL handed to a privileged extension page: same allowlist as the scanner.
+  const safeUrl = resolveSafeUrl(pdfUrl, PDF_SCANNER_SCHEMES);
+  if (!safeUrl) {
+    log.warn('Refused PDF scanner for unsupported URL:', pdfUrl.slice(0, 40));
+    sendResponse({ success: false, error: 'Unsupported PDF URL' });
     return;
   }
   
   try {
     const scannerUrl = chrome.runtime.getURL('pdf-scanner/index.html') + 
-      '?url=' + encodeURIComponent(pdfUrl);
+      '?url=' + encodeURIComponent(safeUrl);
     
     const tab = await chrome.tabs.create({ url: scannerUrl });
-    log.debug(`Opened PDF scanner for: ${pdfUrl}, tab: ${tab.id}`);
+    log.debug(`Opened PDF scanner for: ${safeUrl}, tab: ${tab.id}`);
     sendResponse({ success: true, data: { tabId: tab.id } });
   } catch (error) {
     log.error('OPEN_PDF_SCANNER error:', error);

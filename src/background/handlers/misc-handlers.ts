@@ -282,8 +282,14 @@ export const handleGenerateNativePDF: MessageHandler = async (payload, sendRespo
 export const handleFetchImageAsDataURL: MessageHandler = async (payload, sendResponse) => {
   const { url } = payload as { url: string };
   
-  if (!url) {
+  if (!url || typeof url !== 'string') {
     sendResponse(errorResponse('No URL provided'));
+    return;
+  }
+  
+  // An inline image already is the data URL this handler returns: nothing to fetch.
+  if (/^data:image\//i.test(url)) {
+    sendResponse(successResponse({ dataUrl: url }));
     return;
   }
   

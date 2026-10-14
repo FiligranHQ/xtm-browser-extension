@@ -15,16 +15,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handlePdfScannerRescan } from '../../src/background/handlers/pdf-handlers';
 
 // Mock chrome APIs
-vi.mock('../../src/shared/utils/logger', () => ({
-  loggers: {
-    background: {
-      info: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  },
-}));
+vi.mock('../../src/shared/utils/logger', () => {
+  const mockLogger = () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() });
+  return { loggers: { background: mockLogger() }, createLogger: mockLogger };
+});
 
 describe('handlePdfScannerRescan', () => {
   let mockSendResponse: ReturnType<typeof vi.fn>;

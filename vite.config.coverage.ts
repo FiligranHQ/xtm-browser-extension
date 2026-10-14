@@ -5,7 +5,7 @@
  * for collecting code coverage from E2E tests running in the browser.
  */
 
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import istanbul from 'vite-plugin-istanbul';
 import { resolve } from 'path';
@@ -18,11 +18,9 @@ import {
   existsSync,
   rmSync,
 } from 'fs';
+import { browser, assertBuildBrowser } from './scripts/browser-target';
 
-// Get browser from environment variable
-const browser = process.env.BROWSER || 'chrome';
-
-export default defineConfig({
+const config: UserConfig = {
   plugins: [
     react(),
     // Istanbul instrumentation for coverage collection
@@ -234,5 +232,9 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-});
+};
 
+export default defineConfig(({ command }) => {
+  if (command === 'build') assertBuildBrowser();
+  return config;
+});

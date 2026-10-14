@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import {
@@ -10,9 +10,7 @@ import {
   existsSync,
   rmSync,
 } from 'fs';
-
-// Get browser from environment variable
-const browser = process.env.BROWSER || 'chrome';
+import { browser, assertBuildBrowser } from './scripts/browser-target';
 
 // CDN URLs that must be removed for Chrome Web Store compliance (Manifest V3)
 // jspdf library contains these URLs for its pdfobjectnewwindow output type feature
@@ -63,7 +61,7 @@ function removeCdnUrls() {
   };
 }
 
-export default defineConfig({
+const config: UserConfig = {
   plugins: [
     react(),
     removeCdnUrls(),
@@ -255,4 +253,9 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+};
+
+export default defineConfig(({ command }) => {
+  if (command === 'build') assertBuildBrowser();
+  return config;
 });

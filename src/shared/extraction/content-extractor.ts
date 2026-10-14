@@ -45,13 +45,21 @@ export interface ExtractedImage {
   dataUrl?: string;
 }
 
+// Video embeds kept by POST_PROCESS_REMOVE, matched as URL prefixes: a substring
+// match would also keep any iframe whose URL merely mentions the host.
+const VIDEO_EMBED_PREFIXES = [
+  'www.youtube.com/embed/', 'youtube.com/embed/',
+  'www.youtube-nocookie.com/embed/', 'youtube-nocookie.com/embed/',
+  'player.vimeo.com/video/',
+].flatMap(path => [`https://${path}`, `//${path}`]);
+
 // Elements to remove ONLY during post-processing (after Readability)
 // Keep this minimal to not interfere with Readability's content detection
 const POST_PROCESS_REMOVE = [
   // Interactive elements that shouldn't be in article
   'script', 'style', 'noscript', 
   'form', 'input', 'button', 'select', 'textarea',
-  'iframe:not([src*="youtube"]):not([src*="vimeo"]):not([src*="youtu.be"])',
+  `iframe${VIDEO_EMBED_PREFIXES.map(prefix => `:not([src^="${prefix}"])`).join('')}`,
   // Tracking and ads
   '[data-ad]', '.adsbygoogle',
 ];

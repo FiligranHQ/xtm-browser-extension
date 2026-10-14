@@ -36,7 +36,7 @@ import {
 import { LockPattern } from 'mdi-material-ui';
 import { hexToRGB } from '../../shared/theme/colors';
 import { loggers } from '../../shared/utils/logger';
-import { isSafeUrl, openExternalUrl } from '../../shared/utils/safe-url';
+import { openExternalUrl } from '../../shared/utils/safe-url';
 import { getAiColor, getPlatformIcon, getPlatformColor } from '../utils/platform-helpers';
 import type { PlatformInfo, PanelMode } from '../types/panel-types';
 import type { ScenarioStateReturn } from '../hooks/useScenarioState';
@@ -545,11 +545,11 @@ export const OAEVScenarioView: React.FC<OAEVScenarioViewProps> = (props) => {
       log.info(` Scenario creation complete with ${selectedInjects.length} injects`);
       
       // Open the scenario in the platform
-      if (scenario.url && isSafeUrl(scenario.url)) {
-        chrome.tabs.create({ url: scenario.url });
-      }
+      const opened = !scenario.url || openExternalUrl(scenario.url);
       
-      showToast({ type: 'success', message: 'Scenario created successfully' });
+      showToast(opened
+        ? { type: 'success', message: 'Scenario created successfully' }
+        : { type: 'warning', message: 'Scenario created, but its link could not be opened' });
       
       // Reset all scenario state and redirect to home
       resetScenarioState();

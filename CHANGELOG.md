@@ -11,12 +11,12 @@ Maintenance release of the legacy BYOK line (#225), for users who keep their own
 
 ### Fixed
 - **Anthropic AI Generation Returning Empty Results**: Responses where the model returns a thinking block before its answer no longer produce an empty result (e.g. "AI description generation failed"); a response without any text now fails with its cause (token limit reached or refusal) (#228)
-- **PDF Snapshot Images**: Images fetched through the background script (to bypass CORS) were never used because of a response format mismatch, and inline `data:` images are embedded again (#234)
+- **PDF Snapshot Images**: Images that need the background script to bypass CORS were missing from PDF snapshots, because the generator misread the background response (#234)
 
 ### Security
 - **Untrusted HTML and URL Sinks**: Page HTML is sanitized before reaching `innerHTML`, including the fallback extractor (non-video iframes removed), and platform/page URLs are scheme-checked or opened through the tabs API (#205, #234)
 - **PDF Scanner URL**: The PDF scanner only opens `http(s)`, `file:` and `blob:` URLs, checked before its tab is created (#234)
-- **Document Write XSS**: Replaced `document.write` usage flagged as an XSS risk (#200)
+- **PDF Fallback HTML**: Article HTML is sanitized with DOMPurify before being injected during PDF generation (#200)
 - **pdfjs-dist 6.x**: Upgraded `pdfjs-dist` to 6.x for GHSA-hq66-cqwq-w95j (#205)
 - **DOMPurify**: Updated `dompurify` to 3.4.16 (#212)
 - **CI Hardening**: Pinned third-party GitHub Actions, disabled persisted checkout credentials and generated CI platform credentials per run (#201, #205)

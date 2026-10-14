@@ -5,16 +5,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleOpenPdfScanner } from '../../src/background/handlers/pdf-handlers';
 
-vi.mock('../../src/shared/utils/logger', () => ({
-  loggers: {
-    background: {
-      info: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  },
-}));
+vi.mock('../../src/shared/utils/logger', () => {
+  const mockLogger = () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() });
+  return { loggers: { background: mockLogger() }, createLogger: mockLogger };
+});
 
 const SCANNER_PAGE = 'chrome-extension://test-extension-id/pdf-scanner/index.html';
 

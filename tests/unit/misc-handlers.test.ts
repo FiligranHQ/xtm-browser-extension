@@ -14,16 +14,10 @@ import {
 } from '../../src/background/handlers/misc-handlers';
 
 // Mock chrome APIs
-vi.mock('../../src/shared/utils/logger', () => ({
-  loggers: {
-    background: {
-      info: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  },
-}));
+vi.mock('../../src/shared/utils/logger', () => {
+  const mockLogger = () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() });
+  return { loggers: { background: mockLogger() }, createLogger: mockLogger };
+});
 
 vi.mock('../../src/shared/extraction/native-pdf', () => ({
   generateNativePDF: vi.fn(),

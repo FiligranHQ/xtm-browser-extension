@@ -495,7 +495,24 @@ export class AIClient {
     }
 
     const data = await response.json();
-    return { success: true, content: data.content?.[0]?.text || '' };
+    // Models may emit `thinking` / `redacted_thinking` blocks before the answer,
+    // so read the `text` blocks instead of assuming content[0] is the answer.
+    const content = (data.content || [])
+      .filter((block: { type?: string }) => block.type === 'text')
+      .map((block: { text?: string }) => block.text || '')
+      .join('');
+    // A thinking-only response (budget spent on thinking) or a refusal has no text block:
+    // fail with the cause instead of an empty success the caller cannot explain.
+    if (!content.trim()) {
+      if (data.stop_reason === 'max_tokens') {
+        throw new Error('Anthropic response hit max_tokens before producing any text');
+      }
+      if (data.stop_reason === 'refusal') {
+        throw new Error('Anthropic declined to answer this request');
+      }
+      throw new Error(`Anthropic returned no text content (stop_reason: ${data.stop_reason ?? 'unknown'})`);
+    }
+    return { success: true, content };
   }
 
   private async generateGemini(request: AIGenerationRequest): Promise<AIGenerationResponse> {

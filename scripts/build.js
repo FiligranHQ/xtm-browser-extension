@@ -13,7 +13,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 
+const SUPPORTED_BROWSERS = ['chrome', 'firefox', 'edge'];
+
+// The target name is interpolated into manifest/dist paths, so reject anything
+// outside the known set instead of letting it walk the filesystem.
 const browser = process.argv[2] || 'chrome';
+if (!SUPPORTED_BROWSERS.includes(browser)) {
+  console.error(`Unknown browser "${browser}". Expected one of: ${SUPPORTED_BROWSERS.join(', ')}`);
+  process.exit(1);
+}
 
 console.log(`Building for ${browser}...`);
 

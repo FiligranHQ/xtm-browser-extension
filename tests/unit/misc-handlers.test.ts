@@ -14,16 +14,10 @@ import {
 } from '../../src/background/handlers/misc-handlers';
 
 // Mock chrome APIs
-vi.mock('../../src/shared/utils/logger', () => ({
-  loggers: {
-    background: {
-      info: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  },
-}));
+vi.mock('../../src/shared/utils/logger', () => {
+  const mockLogger = () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() });
+  return { loggers: { background: mockLogger() }, createLogger: mockLogger };
+});
 
 vi.mock('../../src/shared/extraction/native-pdf', () => ({
   generateNativePDF: vi.fn(),
@@ -322,6 +316,40 @@ describe('handleFetchImageAsDataURL', () => {
         success: false,
         error: 'No URL provided',
       })
+    );
+  });
+
+  it('should refuse a non-string URL without throwing', async () => {
+    await handleFetchImageAsDataURL({ url: 123 }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'No URL provided' })
+    );
+  });
+
+  it('should return an inline data:image URL as-is without fetching', async () => {
+    const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+    await handleFetchImageAsDataURL({ url: dataUrl }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: { dataUrl } })
+    );
+  });
+
+  it.each([
+    ['file:', 'file:///etc/passwd'],
+    ['javascript:', 'javascript:alert(1)'],
+    ['non-image data:', 'data:text/html,<script>alert(1)</script>'],
+    ['relative', '/images/logo.png'],
+  ])('should refuse a %s URL without fetching', async (_label, url) => {
+    await handleFetchImageAsDataURL({ url }, mockSendResponse);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockSendResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'Unsupported URL scheme' })
     );
   });
 

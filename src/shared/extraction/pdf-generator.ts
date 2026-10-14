@@ -9,6 +9,7 @@
 import { jsPDF } from 'jspdf';
 import type { ExtractedContent, ExtractedImage } from './content-extractor';
 import { loggers } from '../utils/logger';
+import { setSanitizedHtml } from '../utils/sanitize';
 
 const log = loggers.extraction;
 
@@ -324,7 +325,7 @@ async function generateWithJsPDF(
     // === Content ===
     // Parse the HTML content and render it
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content.content;
+    setSanitizedHtml(tempDiv, content.content);
     
     // Track all added image sources to avoid duplicates
     const addedImageSrcs = new Set<string>();
@@ -775,7 +776,7 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
 /**
  * Fetch image via background script (bypasses CORS)
  */
-async function fetchImageViaBackground(src: string): Promise<string | null> {
+export async function fetchImageViaBackground(src: string): Promise<string | null> {
   return new Promise((resolve) => {
     // Set timeout in case background script doesn't respond
     const timeoutId = setTimeout(() => {
@@ -795,8 +796,9 @@ async function fetchImageViaBackground(src: string): Promise<string | null> {
             return;
           }
           
-          if (response?.success && response?.dataUrl) {
-            resolve(response.dataUrl);
+          // Handlers answer successResponse(...), i.e. { success, data: { dataUrl } }
+          if (response?.success && response.data?.dataUrl) {
+            resolve(response.data.dataUrl);
           } else {
             log.debug('[PDFGenerator] Background fetch failed:', response?.error);
             resolve(null);

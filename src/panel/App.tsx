@@ -13,6 +13,7 @@ import {
 import themeDark from '../shared/theme/theme-dark';
 import themeLight from '../shared/theme/theme-light';
 import { loggers } from '../shared/utils/logger';
+import { openExternalUrl } from '../shared/utils/safe-url';
 import { sessionStorage } from '../shared/utils/storage';
 import { cleanHtmlContent, generateDescription } from './utils/description-helpers';
 import { CommonEmptyView } from './components/CommonEmptyView';
@@ -582,6 +583,9 @@ const App: React.FC = () => {
         });
         if (response?.success) {
           log.debug('PDF scanner opened for:', pdfUrl);
+        } else {
+          log.warn('PDF scanner refused:', response?.error);
+          showToast({ type: 'error', message: 'This PDF cannot be opened in the scanner' });
         }
         return true;
       }
@@ -591,7 +595,7 @@ const App: React.FC = () => {
       log.error('Error checking PDF page:', error);
       return false;
     }
-  }, [isSplitScreenMode]);
+  }, [isSplitScreenMode, showToast]);
 
   // Handle investigation scan
   const handleInvestigationScan = useCallback(async (platformId?: string) => {
@@ -1539,7 +1543,7 @@ const App: React.FC = () => {
   const handleOpenInPlatform = (entityId: string, draftId?: string) => {
     if (platformUrl && entityId) {
       const url = draftId ? `${platformUrl}/dashboard/data/import/draft/${draftId}` : `${platformUrl}/dashboard/id/${entityId}`;
-      window.open(url, '_blank');
+      openExternalUrl(url);
     }
   };
   const handleCopyValue = (value: string) => window.parent.postMessage({ type: 'XTM_COPY_TO_CLIPBOARD', payload: value }, '*');

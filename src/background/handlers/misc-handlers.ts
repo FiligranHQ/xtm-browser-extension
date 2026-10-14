@@ -13,6 +13,7 @@ import type { MessageHandler } from './types';
 import { loggers } from '../../shared/utils/logger';
 import { generateNativePDF, isNativePDFAvailable } from '../../shared/extraction/native-pdf';
 import { savePanelWorkflowState, loadPanelWorkflowState, clearPanelWorkflowState, type PanelWorkflowState } from '../../shared/utils/storage';
+import { resolveSafeUrl } from '../../shared/utils/safe-url';
 
 const log = loggers.background;
 
@@ -281,14 +282,29 @@ export const handleGenerateNativePDF: MessageHandler = async (payload, sendRespo
 export const handleFetchImageAsDataURL: MessageHandler = async (payload, sendResponse) => {
   const { url } = payload as { url: string };
   
-  if (!url) {
+  if (!url || typeof url !== 'string') {
     sendResponse(errorResponse('No URL provided'));
     return;
   }
   
+  // An inline image already is the data URL this handler returns: nothing to fetch.
+  if (/^data:image\//i.test(url)) {
+    sendResponse(successResponse({ dataUrl: url }));
+    return;
+  }
+  
+  // Page-controlled src, fetched with the worker's <all_urls> and file:///*
+  // permissions - keep it to web schemes so it cannot read local files.
+  const safeUrl = resolveSafeUrl(url);
+  if (!safeUrl) {
+    log.warn('Refused image fetch for unsupported scheme:', url.slice(0, 40));
+    sendResponse(errorResponse('Unsupported URL scheme'));
+    return;
+  }
+  
   try {
-    log.debug(`Fetching image: ${url}`);
-    const response = await fetch(url, {
+    log.debug(`Fetching image: ${safeUrl}`);
+    const response = await fetch(safeUrl, {
       mode: 'cors',
       credentials: 'omit',
       headers: {

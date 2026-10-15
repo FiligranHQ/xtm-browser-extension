@@ -5,6 +5,22 @@ All notable changes to the Filigran XTM Browser Extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.24] - 2026-10-14
+
+Maintenance release of the legacy BYOK line (#225), for users who keep their own LLM provider keys. Use 0.1.x if you use XTM One for AI features.
+
+### Fixed
+- **Anthropic AI Generation Returning Empty Results**: Responses where the model returns a thinking block before its answer no longer produce an empty result (e.g. "AI description generation failed"); a response without any text now fails with its cause (token limit reached or refusal) (#228)
+- **PDF Snapshot Images**: Images that need the background script to bypass CORS were missing from PDF snapshots, because the generator misread the background response (#234)
+
+### Security
+- **Untrusted HTML and URL Sinks**: Page HTML is sanitized before reaching `innerHTML`, including the fallback extractor (non-video iframes removed), and platform/page URLs are scheme-checked or opened through the tabs API (#205, #234)
+- **PDF Scanner URL**: The PDF scanner only opens `http(s)`, `file:` and `blob:` URLs, checked before its tab is created (#234)
+- **PDF Fallback HTML**: Article HTML is sanitized with DOMPurify before being injected during PDF generation (#200)
+- **pdfjs-dist 6.x**: Upgraded `pdfjs-dist` to 6.x for GHSA-hq66-cqwq-w95j (#205)
+- **DOMPurify**: Updated `dompurify` to 3.4.16 (#212)
+- **CI Hardening**: Pinned third-party GitHub Actions, disabled persisted checkout credentials and generated CI platform credentials per run (#201, #205)
+
 ## [0.0.23] - 2026-06-25
 
 ### Fixed

@@ -58,7 +58,7 @@ export const PlatformSetupForm: React.FC<PlatformSetupFormProps> = ({
   onSkip,
 }) => {
   const config = PLATFORM_CONFIG[platformType];
-  const isDisabled = !url.trim() || !token.trim() || testing;
+  const isDisabled = !url.trim() || !token.trim() || testing || success;
 
   return (
     <Box sx={{ p: 2.5, flex: 1 }}>
@@ -142,6 +142,7 @@ export const PlatformSetupForm: React.FC<PlatformSetupFormProps> = ({
         <Button
           variant="outlined"
           onClick={onSkip}
+          disabled={testing || success}
           startIcon={<SkipNextOutlined />}
           sx={{ borderRadius: 1 }}
         >

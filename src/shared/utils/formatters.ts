@@ -94,6 +94,23 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
+ * Normalize a platform URL for duplicate detection: one platform per URL,
+ * compared case-insensitively.
+ */
+export function normalizeUrlForComparison(url: string): string {
+  return normalizeUrl(url).toLowerCase();
+}
+
+/**
+ * Find the platform configured for a URL, compared with normalizeUrlForComparison.
+ * Entries without a URL never match.
+ */
+export function findPlatformByUrl<T extends { url?: string }>(platforms: readonly T[], url: string): T | undefined {
+  const target = normalizeUrlForComparison(url);
+  return platforms.find((p) => !!p.url && normalizeUrlForComparison(p.url) === target);
+}
+
+/**
  * Escape HTML special characters for safe display
  */
 export function escapeHtml(text: string): string {

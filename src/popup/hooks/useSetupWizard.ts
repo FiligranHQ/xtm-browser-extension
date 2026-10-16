@@ -5,10 +5,11 @@
  * input if the popup closes (e.g., when copying a token from another window).
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { loggers } from '../../shared/utils/logger';
-import { normalizeUrl } from '../../shared/utils/formatters';
-import { getPlatformName } from '../../shared/platform/registry';
+import { normalizeUrl, findPlatformByUrl } from '../../shared/utils/formatters';
+import { getPlatformName, hasEnterprisePlatform } from '../../shared/platform/registry';
+import type { PlatformConfig } from '../../shared/types/settings';
 import type { SetupStep, ConnectionStatus, PlatformStatus } from '../types';
 
 const log = loggers.popup;
@@ -49,7 +50,7 @@ interface UseSetupWizardReturn {
   setSetupName: (value: string) => void;
   setShowSetupToken: (value: boolean) => void;
   handleSetupTestAndSave: (platformType: 'opencti' | 'openaev' | 'xtm-one') => Promise<void>;
-  handleSetupSkip: (currentStep: 'opencti' | 'openaev' | 'xtm-one') => void;
+  handleSetupSkip: (currentStep: 'opencti' | 'openaev' | 'xtm-one') => Promise<void>;
   startSetupWizard: () => void;
 }
 
@@ -65,6 +66,7 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const busyRef = useRef(false);
 
   // Load persisted state on mount
   useEffect(() => {
@@ -85,24 +87,27 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
     });
   }, []);
 
+  const persistState = useCallback((state: PersistedSetupState) => {
+    chrome.storage.local.set({ [SETUP_STATE_KEY]: state }).catch((error) => {
+      log.error('Failed to save setup state:', error);
+    });
+  }, []);
+
   // Save state to storage whenever it changes (after initialization)
   useEffect(() => {
-    if (!initialized) return;
-    
-    const state: PersistedSetupState = {
-      setupStep,
-      isInSetupWizard,
-      setupUrl,
-      setupToken,
-      setupName,
-    };
+    // On success the next step is already persisted
+    if (!initialized || setupSuccess) return;
     
     if (isInSetupWizard) {
-      chrome.storage.local.set({ [SETUP_STATE_KEY]: state }).catch((error) => {
-        log.error('Failed to save setup state:', error);
+      persistState({
+        setupStep,
+        isInSetupWizard,
+        setupUrl,
+        setupToken,
+        setupName,
       });
     }
-  }, [initialized, setupStep, isInSetupWizard, setupUrl, setupToken, setupName]);
+  }, [initialized, setupSuccess, setupStep, isInSetupWizard, setupUrl, setupToken, setupName, persistState]);
 
   // Clear persisted state
   const clearPersistedState = useCallback(() => {
@@ -148,13 +153,44 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
     setSetupStepInternal('opencti');
   }, []);
 
-  const handleSetupSkip = useCallback((currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
+  const handleSetupSkip = useCallback(async (currentStep: 'opencti' | 'openaev' | 'xtm-one') => {
+    // A Connect in flight or finishing will move the wizard itself
+    if (busyRef.current) return;
+
+    // hasEnterpriseConfigured is filled in asynchronously after the popup opens,
+    // so check the saved settings before skipping XTM One
+    let hasEnterprise = hasEnterpriseConfigured;
+    if (currentStep === 'openaev' && !hasEnterprise) {
+      busyRef.current = true;
+      setSetupTesting(true);
+      setSetupError(null);
+      try {
+        const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+        if (!settingsResponse?.success) {
+          throw new Error(settingsResponse?.error || 'Failed to get settings');
+        }
+        hasEnterprise = hasEnterprisePlatform(
+          settingsResponse.data?.openctiPlatforms,
+          settingsResponse.data?.openaevPlatforms,
+        );
+      } catch (error) {
+        // Without the settings we cannot tell whether XTM One applies, so stay on this
+        // step with the form as typed
+        log.error('Could not read settings to check for an EE platform:', error);
+        setSetupError(error instanceof Error ? error.message : 'Failed to get settings');
+        return;
+      } finally {
+        busyRef.current = false;
+        setSetupTesting(false);
+      }
+    }
+
     resetSetupForm();
-    
+
     if (currentStep === 'opencti') {
       setSetupStepInternal('openaev');
     } else if (currentStep === 'openaev') {
-      if (hasEnterpriseConfigured) {
+      if (hasEnterprise) {
         setSetupStepInternal('xtm-one');
       } else {
         // No EE platform configured — skip XTM One, end wizard
@@ -171,7 +207,8 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
   }, [resetSetupForm, clearPersistedState, hasEnterpriseConfigured]);
 
   const handleSetupTestAndSave = useCallback(async (platformType: 'opencti' | 'openaev' | 'xtm-one') => {
-    if (!setupUrl.trim() || !setupToken.trim()) return;
+    if (!setupUrl.trim() || !setupToken.trim() || busyRef.current) return;
+    busyRef.current = true;
     
     setSetupTesting(true);
     setSetupError(null);
@@ -221,6 +258,7 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
         
         log.debug('XTM One settings saved successfully');
         
+        clearPersistedState();
         setSetupSuccess(true);
         setSetupTesting(false);
         
@@ -229,7 +267,7 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
           resetSetupForm();
           setIsInSetupWizardInternal(false);
           setSetupStepInternal('welcome');
-          clearPersistedState();
+          busyRef.current = false;
         }, 1000);
         
         return;
@@ -271,70 +309,103 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       }
       
       const currentSettings = settingsResponse.data;
-      const platformId = `${platformType}-setup-${Date.now()}`;
-      
+      // Saved entries are not guaranteed to have every field (e.g. older settings)
+      const existingPlatforms: Array<Partial<PlatformConfig>> =
+        currentSettings[`${platformType}Platforms`] || [];
+      // One platform per URL, compared the same way as the options page
+      const existing = findPlatformByUrl(existingPlatforms, normalizedUrl);
+      const platformId = existing?.id || `${platformType}-setup-${Date.now()}`;
+
       // Create platform with the final name
-      const finalName = setupName.trim() || remotePlatformName || getPlatformName(platformType);
+      const finalName = setupName.trim() || existing?.name || remotePlatformName || getPlatformName(platformType);
       const newPlatform = {
         id: platformId,
         name: finalName,
-        url: normalizedUrl,
+        // A matched platform keeps its saved URL, even if it was typed with another case
+        url: existing?.url || normalizedUrl,
         apiToken: setupToken.trim(),
         enabled: true,
         isEnterprise: isEnterprise,
       };
-      
-      log.debug(`Creating new ${platformType} platform:`, {
+
+      log.debug(`${existing ? 'Updating' : 'Creating new'} ${platformType} platform:`, {
         id: newPlatform.id,
         name: newPlatform.name,
         isEnterprise: newPlatform.isEnterprise,
       });
-      
-      // Update the status to show this platform as connected
+
+      const alreadySaved = existing !== undefined
+        && existing.id === newPlatform.id
+        && existing.apiToken === newPlatform.apiToken
+        && existing.name === newPlatform.name
+        && existing.enabled === newPlatform.enabled
+        && existing.isEnterprise === newPlatform.isEnterprise;
+
+      if (alreadySaved) {
+        log.debug(`${platformType} platform already saved as is (${platformId}), not saving it again`);
+      } else {
+        // A known URL updates that platform (token, EE status...) instead of adding a second one
+        const platforms = existing
+          ? existingPlatforms.map((p) => (p === existing ? { ...p, ...newPlatform } : p))
+          : [...existingPlatforms, newPlatform];
+        const updatedSettings = {
+          ...currentSettings,
+          [`${platformType}Platforms`]: platforms,
+        };
+        
+        const saveResponse = await chrome.runtime.sendMessage({
+          type: 'SAVE_SETTINGS',
+          payload: updatedSettings,
+        });
+        
+        if (!saveResponse?.success) {
+          throw new Error(saveResponse?.error || 'Failed to save settings');
+        }
+        
+        log.debug(`Settings saved successfully for ${platformType}, isEnterprise: ${isEnterprise}`);
+      }
+
+      // Only show the platform as connected once it is saved
       const newPlatformStatus: PlatformStatus = {
         id: platformId,
         name: finalName,
-        url: normalizedUrl,
+        url: newPlatform.url,
         connected: true,
         version: testResponse.data?.version,
-        userName: platformType === 'opencti' 
+        userName: platformType === 'opencti'
           ? (testResponse.data?.me?.name || testResponse.data?.me?.user_email)
           : testResponse.data?.user?.user_email,
         isEnterprise: isEnterprise,
       };
-      
-      if (platformType === 'opencti') {
-        setStatus(prev => ({
+
+      // Update a listed platform in place, keeping its position and other fields
+      setStatus(prev => {
+        const list = prev[platformType];
+        return {
           ...prev,
-          opencti: [...prev.opencti, newPlatformStatus],
-        }));
-      } else {
-        setStatus(prev => ({
-          ...prev,
-          openaev: [...prev.openaev, newPlatformStatus],
-        }));
-      }
-      
-      // Add the new platform to settings
-      const updatedSettings = {
-        ...currentSettings,
-        [`${platformType}Platforms`]: [
-          ...(currentSettings[`${platformType}Platforms`] || []),
-          newPlatform,
-        ],
-      };
-      
-      // Save settings
-      const saveResponse = await chrome.runtime.sendMessage({
-        type: 'SAVE_SETTINGS',
-        payload: updatedSettings,
+          [platformType]: list.some(p => p.id === platformId)
+            ? list.map(p => (p.id === platformId ? { ...p, ...newPlatformStatus } : p))
+            : [...list, newPlatformStatus],
+        };
       });
+
+      // After OAEV: show XTM One if this platform or another saved one is EE. The test
+      // just run is authoritative for this platform; hasEnterpriseConfigured may include
+      // its saved copy, so it only counts for a new platform.
+      const nextStep: SetupStep | null = platformType === 'opencti'
+        ? 'openaev'
+        : (isEnterprise
+          || hasEnterprisePlatform(currentSettings.openctiPlatforms, existingPlatforms.filter((p) => p !== existing))
+          || (!existing && hasEnterpriseConfigured))
+          ? 'xtm-one'
+          : null;
       
-      if (!saveResponse?.success) {
-        throw new Error(saveResponse?.error || 'Failed to save settings');
+      // The popup may close before the timeout below fires
+      if (nextStep) {
+        persistState({ setupStep: nextStep, isInSetupWizard: true, setupUrl: '', setupToken: '', setupName: '' });
+      } else {
+        clearPersistedState();
       }
-      
-      log.debug(`Settings saved successfully for ${platformType}, isEnterprise: ${isEnterprise}`);
       
       setSetupSuccess(true);
       setSetupTesting(false);
@@ -349,25 +420,21 @@ export const useSetupWizard = ({ setStatus, hasEnterpriseConfigured }: UseSetupW
       setTimeout(() => {
         resetSetupForm();
         
-        if (platformType === 'opencti') {
-          setSetupStepInternal('openaev');
+        if (nextStep) {
+          setSetupStepInternal(nextStep);
         } else {
-          // After OAEV: show XTM One only if this platform or an existing one is EE
-          if (isEnterprise || hasEnterpriseConfigured) {
-            setSetupStepInternal('xtm-one');
-          } else {
-            setIsInSetupWizardInternal(false);
-            setSetupStepInternal('welcome');
-            clearPersistedState();
-          }
+          setIsInSetupWizardInternal(false);
+          setSetupStepInternal('welcome');
         }
+        busyRef.current = false;
       }, 1000);
       
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : 'Connection failed');
       setSetupTesting(false);
+      busyRef.current = false;
     }
-  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm, clearPersistedState, hasEnterpriseConfigured]);
+  }, [setupUrl, setupToken, setupName, setStatus, resetSetupForm, persistState, clearPersistedState, hasEnterpriseConfigured]);
 
   return {
     // State

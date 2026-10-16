@@ -11,6 +11,7 @@
  */
 
 import { AI_DEFAULTS, type AISettings } from '../types/ai';
+import { CONNECTION_TIMEOUT_MS } from '../constants';
 import type {
   ContainerDescriptionRequest,
   ScenarioGenerationRequest,
@@ -143,8 +144,13 @@ export class AIClient {
         headers: {
           Authorization: `Bearer ${this.apiToken}`,
         },
+        // A black-holed URL must not keep the connection test (and the setup wizard) waiting
+        signal: AbortSignal.timeout(CONNECTION_TIMEOUT_MS),
       });
     } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        return { success: false, error: 'Unable to reach XTM One: the connection timed out' };
+      }
       return {
         success: false,
         error: error instanceof Error ? `Unable to reach XTM One: ${error.message}` : 'Unable to reach XTM One',
@@ -174,6 +180,7 @@ export class AIClient {
         method: 'GET',
         credentials: 'omit',
         headers: { Authorization: `Bearer ${this.apiToken}` },
+        signal: AbortSignal.timeout(CONNECTION_TIMEOUT_MS),
       });
       if (configResponse.ok) {
         configBody = await configResponse.json();

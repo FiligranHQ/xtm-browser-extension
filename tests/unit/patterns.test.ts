@@ -260,6 +260,22 @@ describe('URL_PATTERN', () => {
   it('should match URLs with www', () => {
     expect(matchAll('https://www.example.com')).toContain('https://www.example.com');
   });
+
+  it('should match defanged URLs with a bracketed scheme colon', () => {
+    expect(matchAll('hxxp[:]//198[.]51[.]100[.]1:8000/path')).toContain('hxxp[:]//198[.]51[.]100[.]1:8000/path');
+    expect(matchAll('hxxps[:]//evil[.]example[.]com/malware')).toContain('hxxps[:]//evil[.]example[.]com/malware');
+    expect(matchAll('http[:]//example.com/path')).toContain('http[:]//example.com/path');
+  });
+
+  it('should match defanged URLs with a bracketed scheme separator [://]', () => {
+    expect(matchAll('hxxp[://]evil[.]example[.]com/malware')).toContain('hxxp[://]evil[.]example[.]com/malware');
+  });
+
+  it('should match defanged URLs with brackets around the scheme slashes', () => {
+    for (const url of ['hxxps:[//]evil[.]com/a', 'hxxp[:/]/evil[.]com/a', 'hxxp[:][/][/]evil[.]com/a']) {
+      expect(matchAll(`see ${url} now`)).toContain(url);
+    }
+  });
 });
 
 // ============================================================================
@@ -951,6 +967,25 @@ describe('generateDefangedVariants', () => {
     it('should generate hXXps variant', () => {
       const variants = generateDefangedVariants('https://example.com');
       expect(variants).toContain('hXXps://example.com');
+    });
+
+    it('should generate bracketed scheme separator variants combined with a defanged host', () => {
+      const variants = generateDefangedVariants('http://evil.com/p');
+      expect(variants).toContain('hxxp://evil[.]com/p');
+      expect(variants).toContain('hxxp[:]//evil[.]com/p');
+      expect(variants).toContain('hxxp[://]evil[.]com/p');
+      expect(variants).toContain('http[:]//evil.com/p');
+    });
+
+    it('should defang only the last dot of an IP host with a port', () => {
+      const variants = generateDefangedVariants('http://146.70.100.69:8000/php_sess');
+      expect(variants).toContain('hxxp[:]//146.70.100[.]69:8000/php_sess');
+    });
+
+    it('should not return the clean URL or duplicates', () => {
+      const variants = generateDefangedVariants('https://evil.com/p');
+      expect(variants).not.toContain('https://evil.com/p');
+      expect(variants.length).toBe(new Set(variants).size);
     });
   });
 

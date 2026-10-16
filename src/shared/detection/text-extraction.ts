@@ -117,3 +117,22 @@ export function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+// A whole MD5 (32), SHA-1 (40), SHA-256 (64) or SHA-512 (128) hex run, not followed by more letters or digits
+const HASH_AT_START = '(?:[0-9A-Fa-f]{128}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{32})(?![0-9A-Za-z])';
+
+// Starts at a token start, or right after a double-encoded "%25" ("%252Fwww.w3.org"),
+// and never at a hash, whatever follows it ("<hash>.exe", "<hash>/analysis")
+const URL_ENCODED_FRAGMENT = new RegExp(`(?:(?<!\\w)|(?<=%25))(?!${HASH_AT_START})[0-9][A-F][a-zA-Z0-9./-]+`, 'g');
+
+/**
+ * Strip URL-encoded fragments (e.g. "2Fwww.w3.org", left over from "%2Fwww.w3.org")
+ * from scanned page text.
+ *
+ * Only tokens that START with a digit followed by an uppercase hex letter are removed,
+ * and tokens that start with a hash (MD5/SHA-1/SHA-256/SHA-512) are kept: uppercase
+ * hashes such as "54547180A99474B0DBA289D92C4A8F3EEA78B531" contain that
+ * "digit + A-F" sequence too and must survive until observable detection.
+ */
+export function stripUrlEncodedFragments(text: string): string {
+  return text.replace(URL_ENCODED_FRAGMENT, ' ');
+}

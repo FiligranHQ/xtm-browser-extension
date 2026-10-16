@@ -11,6 +11,7 @@ import {
   extractTextFromHTML,
   getTextNodes,
   normalizeText,
+  stripUrlEncodedFragments,
 } from '../../src/shared/detection/text-extraction';
 
 // ============================================================================
@@ -339,3 +340,61 @@ describe('Edge Cases', () => {
   });
 });
 
+
+// ============================================================================
+// stripUrlEncodedFragments Tests
+// ============================================================================
+
+describe('stripUrlEncodedFragments', () => {
+  it('should strip URL-encoded fragments left over from percent-encoding', () => {
+    expect(stripUrlEncodedFragments('see 2Fwww.w3.org here').replace(/\s+/g, ' ')).toBe('see here');
+  });
+
+  it('should keep uppercase SHA-1 hashes intact', () => {
+    const sha1 = '54547180A99474B0DBA289D92C4A8F3EEA78B531';
+    expect(stripUrlEncodedFragments(`SHA-1: ${sha1} 2Gk8.exe`)).toContain(sha1);
+  });
+
+  it('should keep uppercase MD5, SHA-256 and SHA-512 hashes intact', () => {
+    const md5 = '0A1B2C3D4E5F60718293A4B5C6D7E8F9';
+    const sha256 = '3E0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855A';
+    const sha512 = 'A'.repeat(128);
+    for (const hash of [md5, sha256, sha512]) {
+      expect(stripUrlEncodedFragments(`hash ${hash} end`)).toContain(hash);
+    }
+  });
+
+  it('should keep an uppercase hash that starts with a digit followed by A-F', () => {
+    const sha1 = '0A99474B0DBA289D92C4A8F3EEA78B531C0FFEE1';
+    expect(stripUrlEncodedFragments(`${sha1}`)).toBe(sha1);
+    expect(stripUrlEncodedFragments(`${sha1}.`)).toBe(`${sha1}.`);
+  });
+
+  it('should keep a hash that starts with a digit followed by A-F when a file name or path follows it', () => {
+    const sha1 = '6AEBDFF4D25607D5DB930E5537DE0A9854B168E0';
+    for (const suffix of ['.exe', '.bin', '-sample.zip', '/analysis']) {
+      expect(stripUrlEncodedFragments(`x ${sha1}${suffix} y`)).toBe(`x ${sha1}${suffix} y`);
+    }
+  });
+
+  it('should strip hex runs that are not of hash length', () => {
+    for (const length of [33, 45, 200]) {
+      const hex = '0A' + '1'.repeat(length - 2);
+      expect(stripUrlEncodedFragments(`x ${hex} y`)).not.toContain(hex);
+    }
+  });
+
+  it('should strip fragments glued to a double-encoded %25', () => {
+    const text = 'http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg';
+    expect(stripUrlEncodedFragments(text)).not.toContain('www.w3.org');
+  });
+
+  it('should keep lowercase hashes intact', () => {
+    const sha1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709';
+    expect(stripUrlEncodedFragments(sha1)).toBe(sha1);
+  });
+
+  it('should not cut tokens in the middle', () => {
+    expect(stripUrlEncodedFragments('abc1Ffoo')).toBe('abc1Ffoo');
+  });
+});

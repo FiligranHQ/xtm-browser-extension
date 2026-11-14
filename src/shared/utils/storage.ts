@@ -5,6 +5,7 @@
  */
 
 import type { ExtensionSettings } from '../types/settings';
+import { LEGACY_PLATFORM_SETTINGS_KEYS } from '../platform/registry';
 import { loggers } from './logger';
 
 const log = loggers.storage;
@@ -144,7 +145,7 @@ export async function clearPanelWorkflowState(): Promise<void> {
  */
 export async function getSettings(): Promise<ExtensionSettings> {
   const result = await chrome.storage.local.get('settings');
-  const settings = result.settings || {};
+  const settings = migrateLegacySettings((result.settings || {}) as Record<string, unknown>);
   
   const defaultSettings: ExtensionSettings = {
     openctiPlatforms: [],
@@ -155,6 +156,29 @@ export async function getSettings(): Promise<ExtensionSettings> {
   };
   
   return { ...defaultSettings, ...settings };
+}
+
+/**
+ * Carry settings stored under a renamed key over to the current key
+ * (OpenGRC was renamed OpenCRQ: 'opengrcPlatforms' -> 'opencrqPlatforms').
+ * A user's saved platforms are never dropped: entries under the legacy key are
+ * appended to the current key (deduplicated by id) and the legacy key is removed
+ * from the returned object only. The next saveSettings persists the new shape.
+ */
+export function migrateLegacySettings(stored: Record<string, unknown>): Record<string, unknown> {
+  const migrated: Record<string, unknown> = { ...stored };
+  for (const [legacyKey, currentKey] of Object.entries(LEGACY_PLATFORM_SETTINGS_KEYS)) {
+    const legacy = migrated[legacyKey];
+    if (legacy === undefined) continue;
+    if (Array.isArray(legacy)) {
+      const current = Array.isArray(migrated[currentKey]) ? (migrated[currentKey] as Array<{ id?: string }>) : [];
+      const known = new Set(current.map(p => p?.id).filter(Boolean));
+      const carried = (legacy as Array<{ id?: string }>).filter(p => !p?.id || !known.has(p.id));
+      migrated[currentKey] = [...current, ...carried];
+    }
+    delete migrated[legacyKey];
+  }
+  return migrated;
 }
 
 /**

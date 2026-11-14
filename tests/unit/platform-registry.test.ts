@@ -51,9 +51,9 @@ describe('Platform Registry', () => {
       expect(PLATFORM_REGISTRY.openaev.name).toBe('OpenAEV');
     });
 
-    it('should have opengrc platform defined', () => {
-      expect(PLATFORM_REGISTRY.opengrc).toBeDefined();
-      expect(PLATFORM_REGISTRY.opengrc.name).toBe('OpenGRC');
+    it('should have opencrq platform defined', () => {
+      expect(PLATFORM_REGISTRY.opencrq).toBeDefined();
+      expect(PLATFORM_REGISTRY.opencrq.name).toBe('OpenCRQ');
     });
   });
 
@@ -66,8 +66,8 @@ describe('Platform Registry', () => {
       expect(PREFIX_TO_PLATFORM.oaev).toBe('openaev');
     });
 
-    it('should map ogrc to opengrc', () => {
-      expect(PREFIX_TO_PLATFORM.ogrc).toBe('opengrc');
+    it('should map ocrq to opencrq', () => {
+      expect(PREFIX_TO_PLATFORM.ocrq).toBe('opencrq');
     });
   });
 
@@ -75,7 +75,7 @@ describe('Platform Registry', () => {
     it('should include all platform types', () => {
       expect(ALL_PLATFORM_TYPES).toContain('opencti');
       expect(ALL_PLATFORM_TYPES).toContain('openaev');
-      expect(ALL_PLATFORM_TYPES).toContain('opengrc');
+      expect(ALL_PLATFORM_TYPES).toContain('opencrq');
     });
   });
 
@@ -83,7 +83,7 @@ describe('Platform Registry', () => {
     it('should include all platform prefixes', () => {
       expect(ALL_PLATFORM_PREFIXES).toContain('octi');
       expect(ALL_PLATFORM_PREFIXES).toContain('oaev');
-      expect(ALL_PLATFORM_PREFIXES).toContain('ogrc');
+      expect(ALL_PLATFORM_PREFIXES).toContain('ocrq');
     });
   });
 
@@ -161,9 +161,9 @@ describe('Platform Registry', () => {
       expect(result).toBe('Malware');
     });
 
-    it('should create prefixed type for OpenGRC', () => {
-      const result = createPrefixedType('Control', 'opengrc');
-      expect(result).toBe('ogrc-Control');
+    it('should create prefixed type for OpenCRQ', () => {
+      const result = createPrefixedType('Control', 'opencrq');
+      expect(result).toBe('ocrq-Control');
     });
   });
 
@@ -459,7 +459,7 @@ describe('Platform Registry', () => {
     it.each([
       ['opencti', 'https://opencti.example.com', '/dashboard/profile/me'],
       ['openaev', 'https://openaev.example.com', '/admin/profile'],
-      ['opengrc', 'https://opengrc.example.com', '/admin/profile'],
+      ['opencrq', 'https://opencrq.example.com', '/admin/profile'],
     ] as const)('returns correct URL for %s', (platformType, baseUrl, expectedSuffix) => {
       const url = getTokenPageUrl(platformType, baseUrl);
       expect(url).toBe(`${baseUrl}${expectedSuffix}`);

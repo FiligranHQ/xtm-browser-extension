@@ -154,7 +154,7 @@ export default function App() {
       return entity.platformMatches;
     }
     const entityType = entity.type || '';
-    const cleanType = entityType.replace(/^(oaev|ogrc)-/, '');
+    const cleanType = entityType.replace(/^(oaev|ocrq)-/, '');
     const platformType = inferPlatformTypeFromEntityType(entityType);
     const entityId = entity.entityId || (entity as unknown as { id?: string }).id || '';
     const platformId = entity.platformId || '';

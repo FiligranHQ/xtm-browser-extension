@@ -68,7 +68,7 @@ export const DEFAULT_DETECTION = {
 
 // Settings navigation tabs - add new platform tabs here when integrating new platforms
 export type TabType = 'opencti' | 'openaev' | 'detection' | 'ai' | 'appearance' | 'about';
-// When adding new platform: type TabType = 'opencti' | 'openaev' | 'opengrc' | 'detection' | ...;
+// When adding new platform: type TabType = 'opencti' | 'openaev' | 'opencrq' | 'detection' | ...;
 
 // Platform cache stats sub-type
 export interface PlatformCacheStats {

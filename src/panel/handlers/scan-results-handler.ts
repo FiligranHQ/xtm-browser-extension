@@ -193,7 +193,7 @@ export function processScanResults(payload: {
       const matchedStr = (entity as any).matchedValue || entity.value || entity.name;
       addOrMergeEntity({
         id: oaevEntityId || `${platformType}-${entity.name}`,
-        type: prefixEntityType(entityType, platformType as 'opencti' | 'openaev' | 'opengrc'),
+        type: prefixEntityType(entityType, platformType as 'opencti' | 'openaev' | 'opencrq'),
         name: entity.name,
         value: entity.value || entity.name,
         found: entity.found ?? true,

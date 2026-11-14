@@ -1,5 +1,5 @@
 # Canonical Filigran label palette — shared across all Filigran repositories
-# (FiligranHQ, OpenCTI-Platform, OpenAEV-Platform, XTM-One-Platform, OpenGRC-Platform).
+# (FiligranHQ, OpenCTI-Platform, OpenAEV-Platform, XTM-One-Platform, OpenCRQ-Platform).
 #
 # This file is the machine-readable companion to .github/LABELS.md and the source
 # of truth for the *shared* labels' name, color and description. Repositories may

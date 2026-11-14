@@ -74,8 +74,8 @@ export interface OAEVFinding {
 }
 
 /**
- * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenGRC)
- * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ogrc-Control')
+ * Generic detected platform entity (for non-OpenCTI platforms like OpenAEV, OpenCRQ)
+ * Platform is identified by the type prefix (e.g., 'oaev-Asset', 'ocrq-Scenario')
  */
 export interface DetectedOAEVEntity {
   /** Entity type with platform prefix (e.g., 'oaev-Asset') */

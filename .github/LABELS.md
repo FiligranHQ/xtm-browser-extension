@@ -3,7 +3,7 @@
 This document is the **source of truth** for how commits, pull requests and issues
 are titled and labeled in this repository. It is shared across all Filigran
 repositories (FiligranHQ, OpenCTI-Platform, OpenAEV-Platform, XTM-One-Platform,
-OpenGRC-Platform) so the whole ecosystem stays consistent.
+OpenCRQ-Platform) so the whole ecosystem stays consistent.
 
 The machine-readable companion — each shared label's exact name, color and
 description — lives in [`.github/labels.yml`](labels.yml). Keep the two in sync
@@ -28,7 +28,7 @@ type(scope?)!?: description (#issue)
 - `!` is optional and marks a breaking change (e.g. `feat(api)!: ...`), optionally
   with a `BREAKING CHANGE:` footer.
 - `description` **starts with a lowercase letter** and has **no trailing period**.
-  Preserve acronyms and proper nouns: `OpenCTI`, `OpenAEV`, `XTM One`, `OpenGRC`,
+  Preserve acronyms and proper nouns: `OpenCTI`, `OpenAEV`, `XTM One`, `OpenCRQ`,
   `STIX`, `LLM`, `Docker`, `Redis`.
 - `(#issue)` is a **required reference on pull request titles** (the PR title
   becomes the squash-merge commit, so the reference lands on `master`/`main`).

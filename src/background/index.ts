@@ -105,7 +105,7 @@ import type {
 // Global State - Multi-Platform Architecture
 // ============================================================================
 // Platform clients are stored in Maps keyed by platform instance ID
-// Each platform type (opencti, openaev, opengrc, etc.) has its own client map
+// Each platform type (opencti, openaev, opencrq, etc.) has its own client map
 // When adding a new platform, add a new client map and initialization logic
 // ============================================================================
 
@@ -118,7 +118,7 @@ type PlatformClientRegistry = {
   opencti: Map<string, OpenCTIClient>;
   openaev: Map<string, OpenAEVClient>;
   // Add new platform client maps here as they are integrated
-  // opengrc: Map<string, OpenGRCClient>;
+  // opencrq: Map<string, OpenCRQClient>;
 };
 
 // Platform clients - each platform type has its own client map

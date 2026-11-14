@@ -78,7 +78,7 @@ export const OCTIEntityView: React.FC<OCTIEntityViewProps> = ({
   const fetchEntityDetailsInBackground = React.useCallback((targetEntity: EntityData, targetPlatformId: string, targetIdx: number) => {
     const platformType = targetEntity.platformType || inferPlatformTypeFromEntityType(targetEntity.type);
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
-    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ogrc)-/, '');
+    const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '').replace(/^(oaev|ocrq)-/, '');
 
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
 

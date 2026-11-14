@@ -92,7 +92,7 @@ export const OAEVEntityView: React.FC<OAEVEntityViewProps> = ({
     const entityIdToFetch = targetEntity.entityId || targetEntity.id;
     // Remove prefix based on platform type
     const entityTypeToFetch = (targetEntity.entity_type || targetEntity.type || '')
-      .replace(/^(oaev|ogrc)-/, '');
+      .replace(/^(oaev|ocrq)-/, '');
     
     if (!entityIdToFetch || typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
     

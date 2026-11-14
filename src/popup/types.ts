@@ -30,7 +30,7 @@ export interface ConnectionStatus {
   openaev: PlatformStatus[];
   xtmOne: PlatformStatus | null;
   // Add new platforms here as they are integrated:
-  // opengrc: PlatformStatus[];
+  // opencrq: PlatformStatus[];
 }
 
 /**

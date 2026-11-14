@@ -41,6 +41,8 @@ export interface DetectionSettings {
 export interface ExtensionSettings {
   openctiPlatforms: PlatformConfig[];
   openaevPlatforms: PlatformConfig[];
+  opencrqPlatforms?: PlatformConfig[];
+  /** @deprecated OpenGRC was renamed OpenCRQ; read once and carried over to opencrqPlatforms by migrateLegacySettings */
   opengrcPlatforms?: PlatformConfig[];
   theme: 'light' | 'dark' | 'auto';
   autoScan: boolean;

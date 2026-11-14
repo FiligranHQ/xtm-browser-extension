@@ -24,7 +24,7 @@ export interface PlatformClientRegistry {
   opencti: Map<string, OpenCTIClient>;
   openaev: Map<string, OpenAEVClient>;
   // Add new platform client maps here as they are integrated
-  // opengrc: Map<string, OpenGRCClient>;
+  // opencrq: Map<string, OpenCRQClient>;
 }
 
 // Re-export all client registry functions for backwards compatibility

@@ -77,17 +77,17 @@ export const getPlatformColor = (platform: string): string => {
 };
 
 /**
- * Get platform type color for OpenCTI/OpenAEV/OpenGRC chips and badges
+ * Get platform type color for OpenCTI/OpenAEV/OpenCRQ chips and badges
  * Colors are chosen to be distinct from status colors (green=found, amber=new)
  * and from the primary theme color (blue/cyan)
  */
-export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'opengrc' | string): string => {
+export const getPlatformTypeColor = (platformType: 'opencti' | 'openaev' | 'opencrq' | string): string => {
   switch (platformType) {
     case 'opencti':
       return '#5c6bc0'; // Indigo - distinct from green (found) and amber (new)
     case 'openaev':
       return '#e91e63'; // Pink - distinct from primary blue
-    case 'opengrc':
+    case 'opencrq':
       return '#ff9800'; // Orange
     default:
       return '#757575';

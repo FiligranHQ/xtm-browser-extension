@@ -763,7 +763,7 @@ export const CommonScanResultsView: React.FC<ExtendedScanResultsViewProps> = ({
     const entitiesToImport: EntityData[] = selectedEntities.map(e => {
       // For entities found in OpenCTI (the default platform), get the OpenCTI entity ID
       const octiMatch = e.platformMatches?.find(pm => pm.platformType === 'opencti');
-      const octiEntityId = octiMatch?.entityId || (isDefaultPlatform(e.platformType as 'opencti' | 'openaev' | 'opengrc') ? e.entityId : undefined);
+      const octiEntityId = octiMatch?.entityId || (isDefaultPlatform(e.platformType as 'opencti' | 'openaev' | 'opencrq') ? e.entityId : undefined);
       
       return {
         type: e.type,

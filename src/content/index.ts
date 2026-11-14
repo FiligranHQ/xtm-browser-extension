@@ -813,7 +813,7 @@ async function handleMixedStatePlatformClick(target: HTMLElement, value: string)
       const platformType = rawData.platformType || platformEntity.platformType || 'openaev';
       
       // Prefix entity type if not already prefixed
-      const prefixedType = entityType.startsWith('oaev-') || entityType.startsWith('ogrc-') 
+      const prefixedType = entityType.startsWith('oaev-') || entityType.startsWith('ocrq-') 
         ? entityType 
         : prefixEntityType(entityType, platformType);
       const platformId = rawData.platformId || rawData.platformId || '';
@@ -845,7 +845,7 @@ async function handleMixedStatePlatformClick(target: HTMLElement, value: string)
           const peData = pe.data || {};
           const peCacheData = (peData.entityData || {}) as Record<string, unknown>;
           const peType = pe.type || (peData.type as string) || (peCacheData.type as string) || '';
-          const peCleanType = peType.replace(/^(oaev|ogrc)-/, '');
+          const peCleanType = peType.replace(/^(oaev|ocrq)-/, '');
           const pePlatformType = inferPlatformTypeFromEntityType(peType);
           const peId = (peData.entityId as string) || (peData.id as string) || (peCacheData.id as string) || '';
           const pePlatformId = (peData.platformId as string) || (peCacheData.platformId as string) || '';
@@ -889,7 +889,7 @@ function buildPlatformMatches(
     const otherPlatformEntities = JSON.parse(target.getAttribute('data-platform-entities') || '[]');
     const primaryPlatformType = inferPlatformTypeFromEntityType(entity.type);
     const primaryType = entity.type || '';
-    const primaryCleanType = primaryType.replace(/^(oaev|ogrc)-/, '');
+    const primaryCleanType = primaryType.replace(/^(oaev|ocrq)-/, '');
     const primaryPlatformId = entity.platformId || 'primary';
     
     const seenPlatformIds = new Set<string>();
@@ -911,7 +911,7 @@ function buildPlatformMatches(
     for (const p of otherPlatformEntities) {
       const pData = p.data || {};
       const pType = p.type || pData.type || '';
-      const cleanType = pType.replace(/^(oaev|ogrc)-/, '');
+      const cleanType = pType.replace(/^(oaev|ocrq)-/, '');
       const pPlatformType = inferPlatformTypeFromEntityType(pType);
       const pPlatformId = pData.platformId || 'unknown';
       

@@ -2,7 +2,7 @@
 // Platform Registry - Multi-Platform Support System
 // ============================================================================
 // This module provides a centralized registry for all supported platforms.
-// When adding a new platform (e.g., OpenGRC), only this file needs to be
+// When adding a new platform (e.g., OpenCRQ), only this file needs to be
 // updated with the platform definition.
 // ============================================================================
 
@@ -16,13 +16,13 @@ import { normalizeUrl } from '../utils/formatters';
  * Unique identifier for each platform type
  * Add new platforms here when integrating new products
  */
-export type PlatformType = 'opencti' | 'openaev' | 'opengrc';
+export type PlatformType = 'opencti' | 'openaev' | 'opencrq';
 
 /**
  * Entity type prefix used for internal identification
  * Format: lowercase platform identifier
  */
-export type PlatformPrefix = 'octi' | 'oaev' | 'ogrc';
+export type PlatformPrefix = 'octi' | 'oaev' | 'ocrq';
 
 /**
  * Platform definition containing all metadata and configuration
@@ -213,27 +213,27 @@ const OPENAEV_DEFINITION: PlatformDefinition = {
   tokenPagePath: '/admin/profile',
 };
 
-const OPENGRC_DEFINITION: PlatformDefinition = {
-  type: 'opengrc',
-  prefix: 'ogrc',
-  name: 'OpenGRC',
-  shortName: 'OGRC',
-  fullName: 'OpenGRC',
-  tagline: 'Governance, Risk & Compliance',
+const OPENCRQ_DEFINITION: PlatformDefinition = {
+  type: 'opencrq',
+  prefix: 'ocrq',
+  name: 'OpenCRQ',
+  shortName: 'OCRQ',
+  fullName: 'OpenCRQ',
+  tagline: 'Cyber Risk Quantification',
   primaryColor: '#ff9800', // Orange
   secondaryColor: '#e65100',
-  logoSuffix: 'opengrc',
-  settingsKey: 'opengrcPlatforms',
-  cacheKeyPrefix: 'ogrc_cache',
+  logoSuffix: 'opencrq',
+  settingsKey: 'opencrqPlatforms',
+  cacheKeyPrefix: 'ocrq_cache',
   urlPatterns: {
     basePath: '/admin',
     entityPaths: {
-      // To be defined when OpenGRC is integrated
+      // To be defined when OpenCRQ is integrated
       '_default': '',
     },
   },
   entityTypes: [
-    // To be defined when OpenGRC is integrated
+    // To be defined when OpenCRQ is integrated
   ],
   usesGraphQL: false,
   features: {
@@ -256,7 +256,7 @@ const OPENGRC_DEFINITION: PlatformDefinition = {
 export const PLATFORM_REGISTRY: Record<PlatformType, PlatformDefinition> = {
   opencti: OPENCTI_DEFINITION,
   openaev: OPENAEV_DEFINITION,
-  opengrc: OPENGRC_DEFINITION,
+  opencrq: OPENCRQ_DEFINITION,
 };
 
 /**
@@ -265,7 +265,7 @@ export const PLATFORM_REGISTRY: Record<PlatformType, PlatformDefinition> = {
 export const PREFIX_TO_PLATFORM: Record<PlatformPrefix, PlatformType> = {
   octi: 'opencti',
   oaev: 'openaev',
-  ogrc: 'opengrc',
+  ocrq: 'opencrq',
 };
 
 /**
@@ -508,7 +508,7 @@ export function getPlatformLogoName(platformType: PlatformType | string): string
 
 /**
  * Get the entity type prefix for a platform
- * Returns 'oaev' for openaev, 'ogrc' for opengrc, empty string for opencti
+ * Returns 'oaev' for openaev, 'ocrq' for opencrq, empty string for opencti
  */
 export function getEntityTypePrefix(platformType: PlatformType): string {
   if (platformType === 'opencti') {
@@ -532,7 +532,7 @@ export function prefixEntityType(entityType: string, platformType: PlatformType)
 
 /**
  * Infer platform type from entity type string
- * Returns 'openaev' if type starts with 'oaev-', 'opengrc' if starts with 'ogrc-', etc.
+ * Returns 'openaev' if type starts with 'oaev-', 'opencrq' if starts with 'ocrq-', etc.
  */
 export function inferPlatformTypeFromEntityType(entityType: string | undefined): PlatformType {
   if (!entityType) return 'opencti';
@@ -632,7 +632,16 @@ export function areTypesEquivalent(type1: string, type2: string): boolean {
 /**
  * Platform settings key type for type-safe access
  */
-export type PlatformSettingsKey = 'openctiPlatforms' | 'openaevPlatforms' | 'opengrcPlatforms';
+export type PlatformSettingsKey = 'openctiPlatforms' | 'openaevPlatforms' | 'opencrqPlatforms';
+
+/**
+ * Settings keys renamed across releases: legacy key -> current key.
+ * OpenGRC was renamed OpenCRQ (Nov 2026); a user's saved platforms under the
+ * legacy key are carried over on load by migrateLegacySettings and never dropped.
+ */
+export const LEGACY_PLATFORM_SETTINGS_KEYS: Record<string, PlatformSettingsKey> = {
+  opengrcPlatforms: 'opencrqPlatforms',
+};
 
 /**
  * Get the settings key for a platform type
